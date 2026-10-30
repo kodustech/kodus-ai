@@ -224,7 +224,7 @@ describe('PR external links → web route coverage', () => {
             },
             {
                 source: 'validate-prerequisites.stage.ts (BYOK missing)',
-                pathname: '/organization/byok',
+                pathname: '/byok',
             },
         ];
 

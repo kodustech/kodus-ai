@@ -1,13 +1,15 @@
 /**
- * Per-token rate with an optional tier breakpoint. When `tier` is set, calls
- * whose input exceeds `tier.threshold` tokens are billed at `tier.rate`; calls
- * at or below the threshold use `default`. The threshold is per-model (Gemini
- * Pro uses 200K today; others may differ). Prices are per-token (NOT per
- * million) to match the cost math, which multiplies raw counts by these rates.
+ * Per-token rate with optional context tiers. `tiers` is sorted ascending by
+ * `threshold`: a call whose input exceeds `tiers[k].threshold` (and no higher
+ * one) is billed entirely at `tiers[k].rate`; a call at or below the first
+ * threshold uses `default`. This is per-request-total tiering (how Gemini,
+ * Doubao, … bill), NOT graduated. Most models have one tier (Gemini Pro's
+ * 200K); a few have several (Doubao's 32K + 128K). Prices are per-token (NOT
+ * per million) to match the cost math, which multiplies raw counts by these.
  */
 export interface TokenRate {
     default: number;
-    tier?: { threshold: number; rate: number };
+    tiers?: Array<{ threshold: number; rate: number }>;
 }
 
 export interface ModelTokenRates {

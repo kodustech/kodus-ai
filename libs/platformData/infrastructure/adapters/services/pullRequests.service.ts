@@ -7,6 +7,7 @@ import {
 import { IPullRequestsService } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import {
+    IApprovalReasonDeliveryFailure,
     ICommit,
     IFile,
     IPullRequests,
@@ -15,7 +16,13 @@ import {
     IPullRequestWithDeliveredSuggestions,
     ISuggestion,
     ISuggestionByPR,
+    SuggestionCountsBySeverity,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    budgetPatchForPersist,
+    utf8ByteLength,
+    MAX_TOTAL_EMBEDDED_PATCH_BYTES,
+} from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 import { PlatformType, PullRequestState } from '@libs/core/domain/enums';
 import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -97,6 +104,20 @@ export class PullRequestsService implements IPullRequestsService {
 
     getNativeCollection() {
         throw new Error('Method not implemented.');
+    }
+
+    setApprovalReasonDeliveryFailure(
+        organizationId: string,
+        repositoryId: string,
+        prNumber: number,
+        failure: IApprovalReasonDeliveryFailure | null,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.setApprovalReasonDeliveryFailure(
+            organizationId,
+            repositoryId,
+            prNumber,
+            failure,
+        );
     }
 
     //#region Create
@@ -193,6 +214,18 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    findNumbersByRepositoryId(
+        organizationId: string,
+        repositoryId: string,
+        until?: Date,
+    ): Promise<number[]> {
+        return this.pullRequestsRepository.findNumbersByRepositoryId(
+            organizationId,
+            repositoryId,
+            until,
+        );
+    }
+
     /**
      * PERF: Returns only suggestion counts using MongoDB aggregation.
      * Much faster than findManyByNumbersAndRepositoryIds when you only need counts.
@@ -203,10 +236,60 @@ export class PullRequestsService implements IPullRequestsService {
             repositoryId: string;
         }>,
         organizationId: string,
-    ): Promise<Map<string, { sent: number; filtered: number }>> {
+    ): Promise<Map<string, SuggestionCountsBySeverity>> {
         return this.pullRequestsRepository.findSuggestionCountsByNumbersAndRepositoryIds(
             criteria,
             organizationId,
+        );
+    }
+
+    findOpenPullRequestKeysOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds?: string[],
+    ): Promise<Array<{ number: number; repositoryId: string }>> {
+        return this.pullRequestsRepository.findOpenPullRequestKeysOpenedSince(
+            since,
+            organizationId,
+            repositoryIds,
+        );
+    }
+
+    findDistinctAuthorsByRepositoryIds(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        search?: string,
+        limit?: number,
+    ): Promise<
+        Array<{
+            id: string;
+            name: string;
+            username: string;
+            count: number;
+        }>
+    > {
+        return this.pullRequestsRepository.findDistinctAuthorsByRepositoryIds(
+            organizationId,
+            repositoryIds,
+            search,
+            limit,
+        );
+    }
+
+    countDeliveredPullRequests(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: {
+            severities?: string[];
+            authorEmail?: string;
+            unresolvedOnly?: boolean;
+            openOnly?: boolean;
+        },
+    ): Promise<number> {
+        return this.pullRequestsRepository.countDeliveredPullRequests(
+            organizationId,
+            repositoryIds,
+            opts,
         );
     }
 
@@ -221,6 +304,54 @@ export class PullRequestsService implements IPullRequestsService {
             repoFullName,
             filename,
             organizationAndTeamData,
+        );
+    }
+
+    async findSuggestionsByPRAndFilenames(
+        prNumber: number,
+        repoFullName: string,
+        filenames: readonly string[],
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+    ): Promise<ISuggestion[]> {
+        return this.pullRequestsRepository.findSuggestionsByPRAndFilenames(
+            prNumber,
+            repoFullName,
+            filenames,
+            organizationId,
+            deliveryStatus,
+        );
+    }
+
+    async findSuggestionsOnPR(
+        prNumber: number,
+        repoFullName: string,
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+        limit: number,
+    ): Promise<ISuggestion[]> {
+        return this.pullRequestsRepository.findSuggestionsOnPR(
+            prNumber,
+            repoFullName,
+            organizationId,
+            deliveryStatus,
+            limit,
+        );
+    }
+
+    async findPrLevelSuggestionsByPR(
+        prNumber: number,
+        repoFullName: string,
+        organizationId: string,
+        deliveryStatus: DeliveryStatus,
+        limit?: number,
+    ): Promise<ISuggestionByPR[]> {
+        return this.pullRequestsRepository.findPrLevelSuggestionsByPR(
+            prNumber,
+            repoFullName,
+            organizationId,
+            deliveryStatus,
+            limit,
         );
     }
 
@@ -254,6 +385,18 @@ export class PullRequestsService implements IPullRequestsService {
         return this.pullRequestsRepository.findPullRequestsWithDeliveredSuggestions(
             organizationId,
             prNumbers,
+            status,
+        );
+    }
+
+    async findPullRequestsWithoutDeliveredSuggestionsForApproval(
+        organizationId: string,
+        prRefs: Array<{ repositoryId: string; pullRequestNumber: number }>,
+        status: string,
+    ): Promise<IPullRequestWithDeliveredSuggestions[]> {
+        return this.pullRequestsRepository.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+            organizationId,
+            prRefs,
             status,
         );
     }
@@ -352,8 +495,19 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    computeEmbeddedPatchBytes(prUuid: string, organizationId: string) {
+        return this.pullRequestsRepository.computeEmbeddedPatchBytes(
+            prUuid,
+            organizationId,
+        );
+    }
+
     newSubDocumentId(): string {
         return this.pullRequestsRepository.newSubDocumentId();
+    }
+
+    newSuggestionId(): string {
+        return this.pullRequestsRepository.newSuggestionId();
     }
 
     async findRecentByRepositoryId(
@@ -370,14 +524,21 @@ export class PullRequestsService implements IPullRequestsService {
 
     async addPrLevelSuggestions(
         pullRequestNumber: number,
+        repositoryId: string,
         repositoryName: string,
         prLevelSuggestions: ISuggestionByPR[],
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<PullRequestsEntity | null> {
         try {
-            const existingPR = await this.findByNumberAndRepositoryName(
+            // Resolved by ID first, with the name as a guarded fallback: a
+            // name hit is only taken when the stored row carries no id, or this
+            // repository's, so it stays safe in the #2059 case where two
+            // repositories of one organization share a name - while a legacy
+            // document that has no id is still appended to instead of missed
+            // (#2076 review).
+            const existingPR = await this.findExistingPullRequest(
                 pullRequestNumber,
-                repositoryName,
+                { id: repositoryId, name: repositoryName },
                 organizationAndTeamData,
             );
 
@@ -387,6 +548,7 @@ export class PullRequestsService implements IPullRequestsService {
                     context: PullRequestsService.name,
                     metadata: {
                         pullRequestNumber,
+                        repositoryId,
                         repositoryName,
                         organizationAndTeamData,
                     },
@@ -394,17 +556,13 @@ export class PullRequestsService implements IPullRequestsService {
                 return null;
             }
 
-            const existingPrLevelSuggestions =
-                existingPR.prLevelSuggestions || [];
-            const updatedPrLevelSuggestions = [
-                ...existingPrLevelSuggestions,
-                ...prLevelSuggestions,
-            ];
-
-            return this.update(existingPR, {
-                prLevelSuggestions: updatedPrLevelSuggestions,
-                updatedAt: new Date().toISOString(),
-            });
+            // Appended atomically to the document the identity lookup
+            // resolved: nothing is re-read between that decision and the
+            // write, so a concurrent writer's append survives (#2076 review).
+            return this.appendPrLevelSuggestions(
+                existingPR,
+                prLevelSuggestions,
+            );
         } catch (error) {
             this.logger.error({
                 message: `Failed to add PR level suggestions to PR#${pullRequestNumber}`,
@@ -412,6 +570,7 @@ export class PullRequestsService implements IPullRequestsService {
                 error,
                 metadata: {
                     pullRequestNumber,
+                    repositoryId,
                     repositoryName,
                     suggestionsCount: prLevelSuggestions.length,
                     organizationAndTeamData,
@@ -420,14 +579,22 @@ export class PullRequestsService implements IPullRequestsService {
             return null;
         }
     }
-    //#endregion
 
-    //#region Update
     async update(
         pullRequest: PullRequestsEntity,
         updateData: Partial<IPullRequests>,
     ): Promise<PullRequestsEntity | null> {
         return this.pullRequestsRepository.update(pullRequest, updateData);
+    }
+
+    async appendPrLevelSuggestions(
+        pullRequest: PullRequestsEntity,
+        suggestions: ISuggestionByPR[],
+    ): Promise<PullRequestsEntity | null> {
+        return this.pullRequestsRepository.appendPrLevelSuggestions(
+            pullRequest,
+            suggestions,
+        );
     }
 
     async updateFile(
@@ -494,6 +661,7 @@ export class PullRequestsService implements IPullRequestsService {
         organizationAndTeamData: OrganizationAndTeamData,
         commits: ICommit[],
         prLevelSuggestions?: ISuggestionByPR[],
+        options?: { keepStoredState?: boolean },
     ): Promise<IPullRequests | null> {
         // Gate from issue #1107 / fix A. Very large PRs hit the BSON
         // 16MB document cap and waste the worker on every webhook
@@ -529,6 +697,7 @@ export class PullRequestsService implements IPullRequestsService {
                     organizationAndTeamData,
                     commits,
                     prLevelSuggestions,
+                    options,
                 ),
                 PullRequestsService.SAVE_TIMEOUT_MS,
                 `aggregateAndSaveDataStructure (PR#${pullRequest?.number})`,
@@ -558,6 +727,7 @@ export class PullRequestsService implements IPullRequestsService {
         organizationAndTeamData: OrganizationAndTeamData,
         commits: ICommit[],
         prLevelSuggestions?: ISuggestionByPR[],
+        options?: { keepStoredState?: boolean },
     ): Promise<IPullRequests | null> {
         const organizationId = organizationAndTeamData?.organizationId;
 
@@ -621,12 +791,16 @@ export class PullRequestsService implements IPullRequestsService {
             platformType,
         );
 
-        const existingPR =
-            await this.pullRequestsRepository.findByNumberAndRepositoryName(
-                pullRequest?.number,
-                repository.name,
-                organizationAndTeamData,
-            );
+        // Identity is the repository ID — the column the unique index
+        // (`number_1_repository.id_1_organizationId_1`) already enforces — not
+        // the repository name (see `findExistingPullRequest`). The name is only
+        // a fallback: for a provider that hands us no id, and for a stored
+        // document whose id column is absent or differently formatted.
+        const existingPR = await this.findExistingPullRequest(
+            pullRequest?.number,
+            repository,
+            organizationAndTeamData,
+        );
 
         if (!existingPR) {
             return this.handleInitialPullRequest(
@@ -641,11 +815,18 @@ export class PullRequestsService implements IPullRequestsService {
             );
         }
 
+        // The review passes the PR as it was when it started: a close or merge
+        // stored meanwhile must not be overwritten with `open`.
+        const lifecycle = options?.keepStoredState
+            ? {}
+            : {
+                  status: await this.identifyPullRequestStatus(pullRequest),
+                  merged: this.extractMergedStatus(pullRequest),
+                  closedAt: this.extractClosedAt(pullRequest),
+              };
         await this.update(existingPR, {
-            status: await this.identifyPullRequestStatus(pullRequest),
-            merged: this.extractMergedStatus(pullRequest),
+            ...lifecycle,
             updatedAt: new Date().toISOString(),
-            closedAt: this.extractClosedAt(pullRequest),
             user: await this.extractUser(
                 pullRequest.user,
                 organizationAndTeamData,
@@ -691,12 +872,39 @@ export class PullRequestsService implements IPullRequestsService {
         });
 
         if (prLevelSuggestions && prLevelSuggestions.length > 0) {
-            await this.addPrLevelSuggestions(
-                pullRequest.number,
-                repository.name,
-                prLevelSuggestions,
-                organizationAndTeamData,
-            );
+            // Append to the record the identity lookup already resolved rather
+            // than looking it up again by repository name: in the #2059 scenario
+            // two repositories of one organization share a name, and a name
+            // lookup can return the OTHER repository's document, splitting this
+            // save's suggestions onto a foreign record (#2076 review).
+            //
+            // Appended in one atomic statement, targeted at the document the
+            // identity lookup already resolved. A re-read followed by a
+            // whole-array `$set` dropped whatever a concurrent writer (the
+            // review stage, or a second webhook) appended between the read and
+            // the write, and re-resolving by name could land on another
+            // repository's record (#2076 review). Appending stays non-fatal:
+            // the main save is already committed, so a rejection here is logged
+            // and the event still reported as handled.
+            try {
+                await this.appendPrLevelSuggestions(
+                    existingPR,
+                    prLevelSuggestions,
+                );
+            } catch (error) {
+                this.logger.error({
+                    message: 'Failed to append PR level suggestions',
+                    context: PullRequestsService.name,
+                    error,
+                    metadata: {
+                        pullRequestNumber: pullRequest?.number,
+                        repositoryId: existingPR.repository?.id,
+                        suggestionsCount: prLevelSuggestions.length,
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                    },
+                });
+            }
         }
 
         return this.handleExistingPullRequest(
@@ -917,6 +1125,120 @@ export class PullRequestsService implements IPullRequestsService {
         }
     }
 
+    /**
+     * The stored PR this save must UPDATE, or null when it is a PR we have not
+     * seen before.
+     *
+     * Identity is the repository ID — the column the unique index
+     * (`number_1_repository.id_1_organizationId_1`) already enforces — not the
+     * repository name: two repositories in one organization can share a name
+     * across owners or providers, and matching on the name merged their records
+     * (#2059).
+     *
+     * The name is the fallback, used in two cases: a provider that hands us no
+     * id at all, and an id lookup that MISSED because the stored document
+     * carries no id (or a different representation of it) — retrying by name
+     * before creating keeps those documents updated instead of duplicated.
+     * With neither an id nor a name there is nothing to bound the query to, so
+     * the name lookup is never issued on its own: `{number, organizationId}`
+     * alone can match a DIFFERENT repository's PR and contaminate it — the path
+     * the previous TypeError used to abort (#2076 review).
+     */
+    private async findExistingPullRequest(
+        pullRequestNumber: number,
+        repository: any,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<any> {
+        // The write paths store `repository.id?.toString()` on a Mixed path
+        // Mongoose does not cast, so a numeric provider id (GitHub webhook
+        // `repository.id`, GitLab `project.id`) must be stringified here too or
+        // the query never matches the stored value and the id key is a silent
+        // no-op (#2076 review).
+        const repositoryId = repository?.id ? String(repository.id) : undefined;
+
+        if (repositoryId) {
+            const byId =
+                await this.pullRequestsRepository.findByNumberAndRepositoryId(
+                    pullRequestNumber,
+                    repositoryId,
+                    organizationAndTeamData,
+                );
+            if (byId) {
+                return byId;
+            }
+        }
+
+        if (repository?.name) {
+            const byName =
+                await this.pullRequestsRepository.findByNumberAndRepositoryName(
+                    pullRequestNumber,
+                    repository.name,
+                    organizationAndTeamData,
+                );
+
+            // No name hit: this pull request has not been stored yet, which is
+            // the normal case, so there is nothing to name. Returning here also
+            // keeps the warning below honest - it used to fire on every new
+            // pull request, with `storedRepositoryId: undefined`, because a
+            // missed name lookup fell through to it (#2076 review).
+            if (!byName) {
+                return undefined;
+            }
+
+            // A name hit is this pull request's document only when the stored
+            // row carries no id (a legacy document) or carries THIS repository's
+            // id. A non-empty, different id means the row belongs to another
+            // repository that merely shares the name; updating it would rewrite
+            // its `repository.id` from this payload and hand it this save's
+            // suggestions — the cross-repository contamination of #2059
+            // (#2076 review).
+            const storedId = byName.repository?.id;
+            const sameRepository =
+                !repositoryId || !storedId || String(storedId) === repositoryId;
+
+            if (sameRepository) {
+                return byName;
+            }
+
+            // A name hit owned by a DIFFERENT repository is worth naming: two
+            // repositories of one organization share a name, this save is about
+            // the other one, and the document is left alone on purpose
+            // (#2076 review).
+            this.logger.warn({
+                message:
+                    'Skipping the name match for a pull request: the stored document belongs to a different repository id',
+                context: PullRequestsService.name,
+                metadata: {
+                    pullRequestNumber,
+                    repositoryId,
+                    storedRepositoryId: storedId,
+                    organizationAndTeamData,
+                },
+            });
+
+            return undefined;
+        }
+
+        // No identity at all: nothing bounds the query, so nothing is looked
+        // up. With an id or a name, a miss is simply a pull request whose
+        // review has not been stored yet, which is the normal case rather than
+        // something to warn about (#2076 review).
+        if (!repositoryId && !repository?.name) {
+            this.logger.warn({
+                message:
+                    'Saving a pull request with no repository id and no repository name; skipping the identity lookup',
+                context: PullRequestsService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    number: pullRequestNumber,
+                },
+            });
+        }
+
+        return null;
+    }
+
     private async handleInitialPullRequest(
         pullRequest: any,
         repository: any,
@@ -1112,12 +1434,81 @@ export class PullRequestsService implements IPullRequestsService {
                 });
             }
 
+            // Seed the aggregate diff budget with the bytes the document
+            // already carries from prior syncs, so the whole `pullRequests`
+            // document — not just this batch — stays under MongoDB's 16 MB
+            // BSON ceiling. Measured in UTF-8 bytes (the unit BSON/Mongo use),
+            // never in JS string length: a CJK-heavy diff measured in UTF-16
+            // code units understates its real footprint ~3× (#1841).
+            const existingEmbeddedPatchBytes =
+                existingPR.files?.reduce(
+                    (sum, f) =>
+                        sum + utf8ByteLength((f as { patch?: string }).patch),
+                    0,
+                ) ?? 0;
+            let remainingTotalPatchBudget = Math.max(
+                0,
+                MAX_TOTAL_EMBEDDED_PATCH_BYTES - existingEmbeddedPatchBytes,
+            );
+
+            // Patch-bearing updateFile payloads, kept aside so the post-write
+            // verification pass below can re-budget *only* these. Re-emitting
+            // the non-idempotent addFile/addSuggestions ops on a retry would
+            // duplicate sub-documents.
+            const patchUpdates: Array<{
+                fileId: string;
+                rawPatch: string;
+                fields: Partial<
+                    Omit<
+                        IFile,
+                        'id' | 'suggestions' | 'patch' | 'patchTruncated'
+                    >
+                >;
+            }> = [];
+
+            const budgetPatchUpdates = (
+                budget: number,
+            ): { updateOps: FileBulkOp[]; consumed: number } => {
+                let remaining = budget;
+                const updateOps: FileBulkOp[] = [];
+                for (const pu of patchUpdates) {
+                    const budgeted = budgetPatchForPersist(
+                        pu.rawPatch,
+                        remaining,
+                    );
+                    remaining -= budgeted.consumed;
+                    updateOps.push({
+                        kind: 'updateFile',
+                        fileId: pu.fileId,
+                        data: {
+                            ...pu.fields,
+                            patch: budgeted.patch,
+                            // Always write the flag explicitly: a file that
+                            // was truncated on an earlier sync must not keep a
+                            // stale `true` once its patch fits again (#1841).
+                            patchTruncated: !!budgeted.truncated,
+                        },
+                    });
+                }
+                return { updateOps, consumed: budget - remaining };
+            };
+
             const ops: FileBulkOp[] = [];
             const seenInBatch = new Set<string>();
             let duplicateChangedFiles = 0;
             let skippedInvalidChangedFiles = 0;
             let newFilesCount = 0;
             let totalNewSuggestions = 0;
+            // Bytes of patch written by *this* batch (sum of `consumed`).
+            let ourPatchBytes = 0;
+            // Patch bytes contributed by each op slot in `ops`, so the
+            // post-write enforcement pass can reconcile `ourPatchBytes`
+            // against the ops that actually landed: a patch op that was
+            // rejected in the bulk write (its opIndex appears in
+            // `bulkResult.errors`) never persisted its bytes, so counting
+            // them as embedded would inflate the retry budget by exactly
+            // the failed bytes (#1841).
+            const patchBytesByOpIndex = new Map<number, number>();
 
             for (const file of changedFiles ?? []) {
                 const filename: string | undefined = file?.filename;
@@ -1137,17 +1528,38 @@ export class PullRequestsService implements IPullRequestsService {
                     unusedSuggestions,
                 ).map((s) => ({
                     ...s,
-                    id: s.id || this.pullRequestsRepository.newSubDocumentId(),
+                    id: s.id || this.pullRequestsRepository.newSuggestionId(),
                 }));
 
                 const existing = existingByPath.get(filename);
 
                 if (existing) {
-                    const fileFields = {
-                        patch: PullRequestsService.sanitizePatchForPersist(
+                    // Cap the union of embedded diffs so this PR document stays
+                    // well under MongoDB's 16 MB BSON ceiling. Shares a running
+                    // aggregate budget across all files in the batch, seeded by
+                    // the bytes already embedded on existing files. Oversized
+                    // diffs are truncated (with a visible marker) or dropped,
+                    // never failing the review (#1841).
+                    //
+                    // updateFile *replaces* `files.$.patch` ($set), so the
+                    // bytes the old patch contributed to the seed must be
+                    // re-credited before the replacement is billed — otherwise
+                    // the same file is charged twice and later files get
+                    // needlessly truncated/dropped (#1841).
+                    remainingTotalPatchBudget += utf8ByteLength(
+                        (existing as { patch?: string }).patch,
+                    );
+                    const rawPatch =
+                        PullRequestsService.sanitizePatchForPersist(
                             filename,
                             file.patch,
-                        ),
+                        );
+                    const fields: Partial<
+                        Omit<
+                            IFile,
+                            'id' | 'suggestions' | 'patch' | 'patchTruncated'
+                        >
+                    > = {
                         status: file.status ?? '',
                         added: file.additions ?? 0,
                         deleted: file.deletions ?? 0,
@@ -1156,11 +1568,33 @@ export class PullRequestsService implements IPullRequestsService {
                         codeReviewModelUsed: file.codeReviewModelUsed ?? '',
                         updatedAt: new Date().toISOString(),
                     };
+                    patchUpdates.push({
+                        fileId: existing.id,
+                        rawPatch,
+                        fields,
+                    });
+                    const budgeted = budgetPatchForPersist(
+                        rawPatch,
+                        remainingTotalPatchBudget,
+                    );
+                    remainingTotalPatchBudget -= budgeted.consumed;
+                    ourPatchBytes += budgeted.consumed;
+
+                    // Record the op slot that carries this patch payload so
+                    // the post-write enforcement pass can tell which patch
+                    // ops persisted vs. were rejected (#1841).
+                    patchBytesByOpIndex.set(ops.length, budgeted.consumed);
 
                     ops.push({
                         kind: 'updateFile',
                         fileId: existing.id,
-                        data: fileFields,
+                        data: {
+                            ...fields,
+                            patch: budgeted.patch,
+                            // Explicit, not conditional: a file whose patch is
+                            // no longer capped must clear any stale flag (#1841).
+                            patchTruncated: !!budgeted.truncated,
+                        },
                     });
 
                     if (newSuggestionsForFile.length > 0) {
@@ -1206,6 +1640,149 @@ export class PullRequestsService implements IPullRequestsService {
                         organizationId,
                         ops,
                     );
+            }
+
+            // Reconcile `ourPatchBytes` with what actually landed, so it counts
+            // only bytes that were truly persisted. A patch op that the bulk
+            // write rejected (its opIndex is in the error result) never mixed
+            // into the document, so it must be excluded from the retry-budget
+            // math below — otherwise we'd hand ourselves a budget inflated by
+            // exactly the failed bytes and re-write past the ceiling the
+            // enforcement pass exists to keep (#1841).
+            //
+            // This applies ONLY to the initial write: a rejected INITIAL op
+            // truly never contributed bytes. It deliberately does NOT apply
+            // to retries — a rejected retry op leaves the (larger) patch the
+            // initial write embedded still in the document and still ours, so
+            // subtracting its bytes would understate our ownership (see below).
+            const reconcileFailedPatchBytes = (
+                errors: Array<{ opIndex: number }>,
+                bytesByOpIndex: Map<number, number>,
+            ) => {
+                let failedPatchBytes = 0;
+                for (const e of errors) {
+                    failedPatchBytes += bytesByOpIndex.get(e.opIndex) ?? 0;
+                }
+                ourPatchBytes = Math.max(0, ourPatchBytes - failedPatchBytes);
+            };
+
+            reconcileFailedPatchBytes(bulkResult.errors, patchBytesByOpIndex);
+
+            // Enforce the aggregate embedded-diff ceiling against ground truth
+            // *after* the write. The in-memory seed above comes from a read of
+            // `existingPR.files` that can be stale — two syncs firing at once
+            // each see the same "remaining" budget and can both spend it,
+            // overshooting the cap even though each individual write looked
+            // safe (#1841). So we re-read the real byte total server-side and,
+            // if the document is over the cap, shrink and re-write only our
+            // patch updates (bounded retries). Files we did not touch, and
+            // patches added by a concurrent writer, are never rewritten.
+            if (patchUpdates.length > 0) {
+                const MAX_BUDGET_ENFORCEMENT_PASSES = 3;
+                for (
+                    let pass = 0;
+                    pass < MAX_BUDGET_ENFORCEMENT_PASSES;
+                    pass++
+                ) {
+                    let embeddedNow: number;
+                    try {
+                        embeddedNow =
+                            await this.pullRequestsRepository.computeEmbeddedPatchBytes(
+                                existingPR.uuid,
+                                organizationId,
+                            );
+                    } catch (error) {
+                        this.logger.warn({
+                            message: `Skipped embedded-diff ceiling verification for PR#${pullRequest?.number}`,
+                            context: PullRequestsService.name,
+                            error,
+                            metadata: {
+                                pullRequestNumber: pullRequest?.number,
+                                prUuid: existingPR.uuid,
+                                organizationId,
+                            },
+                        });
+                        break;
+                    }
+
+                    const overflow =
+                        embeddedNow - MAX_TOTAL_EMBEDDED_PATCH_BYTES;
+                    if (overflow <= 0) {
+                        break; // under the cap — settled
+                    }
+                    if (ourPatchBytes <= 0) {
+                        // The overflow is not ours to reclaim (a concurrent
+                        // writer or a pre-existing oversized document). Log and
+                        // leave it rather than thrash.
+                        this.logger.warn({
+                            message: `pullRequests doc for PR#${pullRequest?.number} is over the embedded-diff ceiling but this batch owns none of it`,
+                            context: PullRequestsService.name,
+                            metadata: {
+                                pullRequestNumber: pullRequest?.number,
+                                prUuid: existingPR.uuid,
+                                embeddedPatchBytes: embeddedNow,
+                                maxTotalPatchBytes:
+                                    MAX_TOTAL_EMBEDDED_PATCH_BYTES,
+                                organizationId,
+                            },
+                        });
+                        break;
+                    }
+
+                    // Keep every embedded byte that is not ours; hand our
+                    // patches the remainder. Always strictly shrinks because
+                    // `embeddedNow > MAX` implies `tightened < ourPatchBytes`.
+                    const tightened = Math.max(
+                        0,
+                        MAX_TOTAL_EMBEDDED_PATCH_BYTES -
+                            (embeddedNow - ourPatchBytes),
+                    );
+                    if (tightened >= ourPatchBytes) {
+                        break; // cannot make progress
+                    }
+
+                    const { updateOps, consumed } =
+                        budgetPatchUpdates(tightened);
+                    if (updateOps.length === 0) {
+                        break;
+                    }
+                    ourPatchBytes = consumed;
+
+                    this.logger.warn({
+                        message: `Embedded-diff ceiling exceeded after write for PR#${pullRequest?.number}; retrying with a tighter budget`,
+                        context: PullRequestsService.name,
+                        metadata: {
+                            pullRequestNumber: pullRequest?.number,
+                            prUuid: existingPR.uuid,
+                            embeddedPatchBytes: embeddedNow,
+                            tightenedBudgetBytes: tightened,
+                            organizationId,
+                        },
+                    });
+
+                    const retryResult =
+                        await this.pullRequestsRepository.bulkApplyFileChanges(
+                            existingPR.uuid,
+                            organizationId,
+                            updateOps,
+                        );
+                    // Deliberately do NOT subtract the retry's rejected bytes
+                    // from `ourPatchBytes`. A retry overwrites a patch that the
+                    // initial write of this same batch already embedded — the
+                    // larger original is still in the document and still ours.
+                    // Subtracting the rejected retry bytes understates our
+                    // ownership, shrinks `tightened` on the next pass, and if
+                    // it reaches 0 the loop bails out at the `ourPatchBytes`
+                    // guard with the doc still over the ceiling — a regression.
+                    // `ourPatchBytes = consumed` above therefore stays as is;
+                    // only the initial write reconciles failed ops (those truly
+                    // never contributed bytes).
+                    bulkResult = {
+                        attempted: bulkResult.attempted + retryResult.attempted,
+                        modified: bulkResult.modified + retryResult.modified,
+                        errors: [...bulkResult.errors, ...retryResult.errors],
+                    };
+                }
             }
 
             if (bulkResult.errors.length > 0) {
@@ -1358,7 +1935,7 @@ export class PullRequestsService implements IPullRequestsService {
                         platformType,
                     );
 
-                    return {
+                return {
                     id: String(completeUser.id),
                     username:
                         completeUser?.login ||
@@ -1510,473 +2087,6 @@ export class PullRequestsService implements IPullRequestsService {
                 metadata: { organizationAndTeamData, platformType },
             });
         }
-    }
-
-    async getOnboardingReviewModeSignals(params: {
-        organizationAndTeamData: OrganizationAndTeamData;
-        repositoryIds: string[];
-        limit?: number;
-    }): Promise<
-        Array<{
-            repositoryId: string;
-            sampleSize: number;
-            metrics: Record<string, number>;
-            recommendation: {
-                mode: 'Safety' | 'Speed' | 'Coach' | 'Default';
-                reasons: string[];
-            };
-        }>
-    > {
-        const { organizationAndTeamData, repositoryIds, limit = 10 } = params;
-        const perRepoPrLimit = Math.min(Math.max(limit, 1), 3);
-        const perRepoTimeoutMs = 5000;
-
-        const sensitivePathTokens = [
-            'auth',
-            'security',
-            'payment',
-            'billing',
-            'checkout',
-            'permissions',
-            'admin',
-            'migrations',
-            'infra',
-            'terraform',
-            'k8s',
-            'helm',
-            'prod',
-        ];
-
-        const pct = (count: number, total: number) =>
-            total > 0 ? (count / total) * 100 : 0;
-
-        const calcMedian = (values: number[]) => {
-            if (!values.length) return 0;
-            const sorted = [...values].sort((a, b) => a - b);
-            const mid = Math.floor(sorted.length / 2);
-            return sorted.length % 2
-                ? sorted[mid]
-                : (sorted[mid - 1] + sorted[mid]) / 2;
-        };
-
-        const calcP90 = (values: number[]) => {
-            if (!values.length) return 0;
-            const sorted = [...values].sort((a, b) => a - b);
-            const idx = Math.ceil(sorted.length * 0.9) - 1;
-            return sorted[Math.min(Math.max(idx, 0), sorted.length - 1)];
-        };
-
-        const classifyTitle = (title: string, tokens: string[]) => {
-            const lower = (title || '').toLowerCase();
-            return tokens.some((t) => lower.includes(t));
-        };
-
-        const getPrSize = (pr: PullRequestsEntity) => {
-            if (typeof pr.totalChanges === 'number') return pr.totalChanges;
-            if (
-                typeof pr.totalAdded === 'number' &&
-                typeof pr.totalDeleted === 'number'
-            ) {
-                return pr.totalAdded + pr.totalDeleted;
-            }
-            const filesTotal = (pr.files || []).reduce(
-                (acc, f) => acc + (f.changes ?? 0),
-                0,
-            );
-            return filesTotal || 0;
-        };
-
-        const hasSensitivePathTouch = (pr: PullRequestsEntity) => {
-            return (pr.files || []).some((f) =>
-                sensitivePathTokens.some((token) =>
-                    (f.path || f.filename || '').toLowerCase().includes(token),
-                ),
-            );
-        };
-
-        const getWeeksRange = (dates: Date[]) => {
-            if (!dates.length) return 1;
-            const min = dates.reduce((acc, d) => (d < acc ? d : acc), dates[0]);
-            const max = dates.reduce((acc, d) => (d > acc ? d : acc), dates[0]);
-            const diffDays = Math.max(
-                1,
-                (max.getTime() - min.getTime()) / (1000 * 60 * 60 * 24),
-            );
-            return Math.max(1, diffDays / 7);
-        };
-
-        const buildReasons = (
-            entries: Array<{ key: string; value: number }>,
-            topN: number = 2,
-        ) =>
-            entries
-                .sort((a, b) => b.value - a.value)
-                .slice(0, topN)
-                .map((e) => e.key);
-
-        const repositories =
-            (await this.codeManagement.getRepositories({
-                organizationAndTeamData,
-            })) || [];
-
-        const repoById = new Map(
-            repositories
-                .filter((r) => r && (r.id || (r as any).uuid))
-                .map((r) => [String(r.id ?? (r as any).uuid), r]),
-        );
-
-        const results = await Promise.all(
-            repositoryIds.map(async (repositoryId) => {
-                const repo = repoById.get(String(repositoryId));
-
-                let prs: PullRequestsEntity[] = [];
-
-                try {
-                    const integrationPRs =
-                        (await Promise.race([
-                            this.codeManagement.getPullRequestsWithFiles({
-                                organizationAndTeamData,
-                                filters: {
-                                    repositoryId: String(repositoryId),
-                                    limit: perRepoPrLimit,
-                                },
-                            }),
-                            new Promise<null>((resolve) =>
-                                setTimeout(
-                                    () => resolve(null),
-                                    perRepoTimeoutMs,
-                                ),
-                            ),
-                        ])) || [];
-
-                    if (integrationPRs === null) {
-                        this.logger.warn({
-                            message:
-                                'Timed out fetching PRs for onboarding signals',
-                            context: PullRequestsService.name,
-                            metadata: { repositoryId, organizationAndTeamData },
-                        });
-                    } else {
-                        const sortedPRs = (integrationPRs as any[]).sort(
-                            (a: any, b: any) => {
-                                const ad = new Date(
-                                    a.created_at || a.updated_at || '',
-                                ).getTime();
-                                const bd = new Date(
-                                    b.created_at || b.updated_at || '',
-                                ).getTime();
-                                return bd - ad;
-                            },
-                        );
-
-                        const recentPRs = sortedPRs.slice(0, perRepoPrLimit);
-
-                        prs = recentPRs.map((pr: any) => {
-                            const prNumber =
-                                pr.number ?? pr.pull_number ?? pr.id;
-                            const totalChanges = (pr as any).totalChanges;
-                            const addedDeleted =
-                                ((pr as any).totalAdded ?? 0) +
-                                ((pr as any).totalDeleted ?? 0);
-                            const safeTotalChanges =
-                                totalChanges !== undefined &&
-                                totalChanges !== null &&
-                                !Number.isNaN(totalChanges)
-                                    ? Number(totalChanges)
-                                    : addedDeleted;
-
-                            const mappedFiles: IFile[] = (
-                                pr.pullRequestFiles ||
-                                pr.files ||
-                                []
-                            ).map((f: any) => {
-                                const added = Number(f.additions ?? 0) || 0;
-                                const deleted = Number(f.deletions ?? 0) || 0;
-                                const changes =
-                                    Number(f.changes ?? added + deleted) || 0;
-
-                                const path =
-                                    f.path || f.filePath || f.filename || '';
-
-                                return {
-                                    id: uuidv4(),
-                                    path,
-                                    filename:
-                                        f.filename ||
-                                        f.path ||
-                                        f.filePath ||
-                                        '',
-                                    previousName: '',
-                                    status: f.status || '',
-                                    createdAt: '',
-                                    updatedAt: '',
-                                    added,
-                                    deleted,
-                                    changes,
-                                    suggestions: [],
-                                };
-                            });
-
-                            const totals =
-                                this.generateTotalFileMetrics(mappedFiles);
-                            const totalAdded =
-                                (pr as any).totalAdded ?? totals.totalAdded;
-                            const totalDeleted =
-                                (pr as any).totalDeleted ?? totals.totalDeleted;
-                            const totalChangesValue =
-                                safeTotalChanges || totals.totalChanges || 0;
-
-                            return {
-                                title: pr.title,
-                                status: pr.state,
-                                merged:
-                                    (pr as any).merged ??
-                                    (pr.state || '').toLowerCase() ===
-                                        PullRequestState.MERGED,
-                                number: prNumber,
-                                url: (pr as any).prURL || (pr as any).url || '',
-                                baseBranchRef:
-                                    (pr as any).base?.ref ||
-                                    pr.targetRefName ||
-                                    '',
-                                headBranchRef:
-                                    (pr as any).head?.ref ||
-                                    pr.sourceRefName ||
-                                    '',
-                                openedAt: pr.created_at,
-                                closedAt: pr.closed_at,
-                                updatedAt: pr.updated_at,
-                                repository: {
-                                    id: String(repositoryId),
-                                    name:
-                                        repo?.name ||
-                                        (repo as any)?.fullName ||
-                                        pr.repositoryData?.name ||
-                                        '',
-                                    fullName: (repo as any)?.fullName || '',
-                                    language: (repo as any)?.language || '',
-                                    url: '',
-                                    createdAt: '',
-                                    updatedAt: '',
-                                },
-                                files: mappedFiles,
-                                totalAdded,
-                                totalDeleted,
-                                totalChanges: totalChangesValue,
-                                user: null,
-                                commits: [],
-                                provider: '',
-                                assignees: [],
-                                reviewers: [],
-                                suggestionsByPR: [],
-                                prLevelSuggestions: [],
-                                organizationId:
-                                    organizationAndTeamData.organizationId,
-                                syncedEmbeddedSuggestions: false,
-                                syncedWithIssues: false,
-                                isDraft: Boolean(pr.isDraft),
-                            } as unknown as PullRequestsEntity;
-                        });
-                    }
-                } catch (error) {
-                    this.logger.warn({
-                        message: 'Failed to fetch PRs for onboarding signals',
-                        context: PullRequestsService.name,
-                        error,
-                        metadata: { repositoryId, organizationAndTeamData },
-                    });
-                    prs = [];
-                }
-
-                const N = prs?.length;
-                if (!N) {
-                    return {
-                        repositoryId,
-                        sampleSize: 0,
-                        metrics: {},
-                        recommendation: {
-                            mode: 'Speed',
-                            reasons: ['no_pr_history'],
-                        },
-                    };
-                }
-
-                const hotfixPct = pct(
-                    prs.filter((pr) =>
-                        classifyTitle(pr.title, [
-                            'hotfix',
-                            'revert',
-                            'rollback',
-                        ]),
-                    ).length,
-                    N,
-                );
-                const bugfixPct = pct(
-                    prs.filter((pr) =>
-                        classifyTitle(pr.title, ['fix', 'bug', 'regression']),
-                    ).length,
-                    N,
-                );
-                const securityPct = pct(
-                    prs.filter((pr) =>
-                        classifyTitle(pr.title, [
-                            'security',
-                            'vuln',
-                            'auth',
-                            'permission',
-                        ]),
-                    ).length,
-                    N,
-                );
-                const perfPct = pct(
-                    prs.filter((pr) =>
-                        classifyTitle(pr.title, [
-                            'perf',
-                            'optimize',
-                            'slow',
-                            'latency',
-                        ]),
-                    ).length,
-                    N,
-                );
-
-                const sensitiveTouchPct = pct(
-                    prs.filter((pr) => hasSensitivePathTouch(pr)).length,
-                    N,
-                );
-
-                const prSizes = prs.map((pr) => getPrSize(pr));
-                const medianLines = calcMedian(prSizes);
-                const p90Lines = calcP90(prSizes);
-
-                const mergedDates = prs
-                    .filter((pr) => pr.merged)
-                    .map(
-                        (pr) =>
-                            new Date(pr.closedAt || pr.updatedAt || Date.now()),
-                    );
-                const weeks = getWeeksRange(
-                    mergedDates.length
-                        ? mergedDates
-                        : prs.map(
-                              (pr) => new Date(pr.openedAt || pr.createdAt),
-                          ),
-                );
-                const mergesPerWeek = mergedDates.length
-                    ? mergedDates.length / weeks
-                    : prs.length / weeks;
-
-                // Comment-based metrics are not available in the current model; default to 0.
-                const commentsPerPR = 0;
-                const qualityPct = 0;
-                const nitPct = 0;
-
-                const HIGH_RISK =
-                    hotfixPct >= 10 ||
-                    securityPct >= 10 ||
-                    sensitiveTouchPct >= 30 ||
-                    (bugfixPct >= 40 && hotfixPct >= 10) ||
-                    (perfPct >= 25 && p90Lines >= 800);
-
-                const HIGH_VELOCITY = mergesPerWeek >= 8;
-
-                const LARGE_PRS = p90Lines >= 800 || medianLines >= 400;
-
-                const LOW_NOISE_TOLERANCE =
-                    commentsPerPR <= 1.0 ||
-                    (commentsPerPR <= 1.5 && HIGH_VELOCITY);
-
-                const COACHING_NEED =
-                    qualityPct >= 35 && nitPct <= 35 && commentsPerPR >= 1.5;
-
-                let mode: 'Safety' | 'Speed' | 'Coach' | 'Default' = 'Default';
-                let reasons: string[] = [];
-
-                if (
-                    HIGH_RISK &&
-                    !(
-                        HIGH_VELOCITY &&
-                        LOW_NOISE_TOLERANCE &&
-                        !(securityPct >= 10)
-                    )
-                ) {
-                    mode = 'Safety';
-                    reasons = buildReasons(
-                        [
-                            { key: 'hotfixPct', value: hotfixPct },
-                            { key: 'securityPct', value: securityPct },
-                            {
-                                key: 'sensitiveTouchPct',
-                                value: sensitiveTouchPct,
-                            },
-                            { key: 'perfPct', value: perfPct },
-                            { key: 'p90Lines', value: p90Lines },
-                        ],
-                        2,
-                    );
-                } else if (
-                    !HIGH_RISK &&
-                    (HIGH_VELOCITY || LARGE_PRS) &&
-                    LOW_NOISE_TOLERANCE
-                ) {
-                    mode = 'Speed';
-                    reasons = buildReasons(
-                        [
-                            { key: 'HIGH_VELOCITY', value: mergesPerWeek },
-                            {
-                                key: 'LOW_NOISE_TOLERANCE',
-                                value: commentsPerPR,
-                            },
-                            { key: 'p90Lines', value: p90Lines },
-                            { key: 'medianLines', value: medianLines },
-                        ],
-                        2,
-                    );
-                } else if (!HIGH_RISK && COACHING_NEED) {
-                    mode = 'Coach';
-                    reasons = buildReasons(
-                        [
-                            { key: 'qualityPct', value: qualityPct },
-                            { key: 'commentsPerPR', value: commentsPerPR },
-                        ],
-                        2,
-                    );
-                }
-
-                return {
-                    repositoryId,
-                    sampleSize: N,
-                    metrics: {
-                        hotfixPct,
-                        bugfixPct,
-                        securityPct,
-                        perfPct,
-                        sensitiveTouchPct,
-                        medianLines,
-                        p90Lines,
-                        mergesPerWeek,
-                        commentsPerPR,
-                        qualityPct,
-                        nitPct,
-                    },
-                    recommendation: { mode, reasons },
-                };
-            }),
-        );
-
-        return results.map((r) => ({
-            repositoryId: r.repositoryId,
-            sampleSize: r.sampleSize,
-            metrics: r.metrics || {},
-            recommendation: {
-                mode: r.recommendation.mode as
-                    | 'Safety'
-                    | 'Speed'
-                    | 'Coach'
-                    | 'Default',
-                reasons: r.recommendation.reasons || [],
-            },
-        }));
     }
 
     private isValidEmail(email?: string): boolean {

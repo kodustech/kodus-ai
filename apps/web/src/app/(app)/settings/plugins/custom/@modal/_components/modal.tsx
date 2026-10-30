@@ -248,7 +248,9 @@ const convertFormDataToApiPayload = (
         case CUSTOM_MCP_AUTH_METHODS.OAUTH2:
             payload.clientId = formData.clientId;
             payload.clientSecret = formData.clientSecret;
-            payload.oauthScopes = formData.oauthScopes;
+            payload.oauthScopes = (formData.oauthScopes ?? [])
+                .map((scope) => scope.trim())
+                .filter(Boolean);
             payload.dynamicRegistration = formData.dynamicRegistration;
             break;
         case CUSTOM_MCP_AUTH_METHODS.NONE:
@@ -331,8 +333,7 @@ const getFriendlyErrorMessage = (
     // OAuth-specific errors
     if (code === IntegrationErrorCode.OAUTH_ERROR) {
         const oauthErrorCode = details.oauthErrorCode as
-            | OAuthErrorCode
-            | undefined;
+            OAuthErrorCode | undefined;
         switch (oauthErrorCode) {
             case OAuthErrorCode.OAUTH_CONFIG_MISSING_REDIRECT_URI:
                 return {
@@ -1035,6 +1036,9 @@ export const AddCustomPluginModal = ({
                                                                 const value =
                                                                     e.target
                                                                         .value;
+                                                                // Kept as typed until saved: dropping the
+                                                                // empty item on every keystroke erased the
+                                                                // comma, so a second scope couldn't be typed.
                                                                 const scopes =
                                                                     value
                                                                         .split(
@@ -1044,10 +1048,7 @@ export const AddCustomPluginModal = ({
                                                                             (
                                                                                 s,
                                                                             ) =>
-                                                                                s.trim(),
-                                                                        )
-                                                                        .filter(
-                                                                            Boolean,
+                                                                                s.trimStart(),
                                                                         );
                                                                 field.onChange(
                                                                     scopes,

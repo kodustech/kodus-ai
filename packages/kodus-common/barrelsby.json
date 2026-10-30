@@ -1,4 +1,0 @@
-{
-    "directory": ["src/types", "src/llm", "src/utils", "src/interfaces"],
-    "singleQuotes": true
-}

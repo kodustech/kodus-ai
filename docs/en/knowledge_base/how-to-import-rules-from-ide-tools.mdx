@@ -1,0 +1,31 @@
+---
+title: "How to use your Cursor, Copilot, or Claude instructions in code review"
+description: "Let Kody check pull requests against the instructions your team already wrote for coding agents, and keep the conventions you want enforced as Kody Rules."
+---
+
+If your team already keeps instructions for Cursor, GitHub Copilot, Claude or other coding agents, Kody can read them during code review and point out changes that break them.
+
+## How it works
+
+Kody reads the instruction files that cover the files a pull request changes. Supported files include:
+
+- `.cursorrules` and `.cursor/rules/**/*.mdc` (Cursor)
+- `.github/copilot-instructions.md` and `.github/instructions/**/*.instructions.md` (GitHub Copilot)
+- `CLAUDE.md` (Claude)
+- `AGENTS.md` and `.agents/rules/**` (agents.md convention)
+
+A change that breaks one of them is reported with the **Repo Instruction** label, quoting the instruction and the file it comes from. The files are never turned into Kody Rules, so they can't silently change your review policy.
+
+## Setting it up
+
+1. Pick **Global** or a repository in the scope picker at the top of the **Code review** group in the sidebar and open **What to review**
+2. Turn on **Coding-agent instructions**
+3. The next pull request reviewed in that scope is checked against the instruction files that cover its changes
+
+New workspaces are asked this during onboarding, with the list of coding-agent files found in each repository.
+
+## Enforcing a convention on every review
+
+Coding-agent instructions are context: Kody reports a broken one only when it clearly applies to the changed lines. For a convention you want enforced like any other review rule, write it as a [Repository Rule](/en/how_to_use/code_review/configs/repository_rules) in `.kody/rules`. Rule files sync on merge, one file per rule, exactly as written.
+
+For details, see [Coding-Agent Instructions](/en/how_to_use/code_review/configs/rules_file_detection).

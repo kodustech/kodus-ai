@@ -24,12 +24,7 @@ const REPOS = (args.repos ? String(args.repos).split(',') : [
 const PER = +(args.per || 25);     // merged PRs to scan per repo
 const WANT = +(args.want || 14);   // stop after this many good cases
 
-const PATTERNS = {
-    'no-direct-process-env': { rx: /\bprocess\.env\./, title: 'No direct process.env access', rule: 'Application code must not read process.env directly. Resolve configuration through the typed config/env module so values are validated and mockable.', path: '**/*.{ts,tsx}' },
-    'no-console': { rx: /\bconsole\.(log|warn|error|debug)\s*\(/, title: 'No console.* in app code', rule: 'Never use console.log/console.error/console.warn/console.debug in application code; use the structured logger.', path: '**/*.{ts,tsx}' },
-    'no-generic-error': { rx: /\bthrow new Error\(/, title: 'No generic Error — throw a typed error', rule: 'Do not `throw new Error(...)` with the generic Error class. Throw a domain-specific error type so callers can discriminate.', path: '**/*.{ts,tsx}' },
-    'no-any-type': { rx: /(:\s*any\b|\bas any\b)/, title: 'No `any` type', rule: 'Do not use the TypeScript `any` type (annotation or `as any` cast). Use a concrete type or `unknown` with narrowing.', path: '**/*.{ts,tsx}' },
-};
+const { PATTERNS } = require('./patterns');
 
 function gh(endpoint) {
     return JSON.parse(execSync(`gh api "${endpoint}" 2>/dev/null`, { maxBuffer: 64 * 1024 * 1024 }).toString() || 'null');

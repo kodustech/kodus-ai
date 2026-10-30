@@ -21,8 +21,16 @@ import { environment } from '@libs/ee/configs/environment';
  * losing the cache on restart is fine — first request after boot just
  * pays the round-trip.
  */
+export const VERSION_CHECK_SERVICE_TOKEN = Symbol(
+    'VERSION_CHECK_SERVICE_TOKEN',
+);
+
+export interface IVersionCheckService {
+    getStatus(): Promise<VersionStatus>;
+}
+
 @Injectable()
-export class VersionCheckService {
+export class VersionCheckService implements IVersionCheckService {
     private readonly logger = new Logger(VersionCheckService.name);
 
     private static readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
@@ -76,9 +84,10 @@ export class VersionCheckService {
         };
     }
 
-    private async fetchLatest(): Promise<
-        { latest: string; releaseUrl: string } | null
-    > {
+    private async fetchLatest(): Promise<{
+        latest: string;
+        releaseUrl: string;
+    } | null> {
         const now = Date.now();
         if (
             this.cache &&
@@ -95,7 +104,7 @@ export class VersionCheckService {
             const timeout = setTimeout(() => controller.abort(), 5000);
             const res = await fetch(VersionCheckService.GH_API, {
                 headers: {
-                    Accept: 'application/vnd.github+json',
+                    'Accept': 'application/vnd.github+json',
                     'User-Agent': 'kodus-self-hosted-update-check',
                 },
                 signal: controller.signal,

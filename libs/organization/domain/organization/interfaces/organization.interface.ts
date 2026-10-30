@@ -5,6 +5,8 @@ export interface IOrganization<TUser = any, TTeam = any> {
     name: string;
     tenantName: string;
     status: boolean;
+    codeHostMemberCount?: number;
+    codeHostMemberCountUpdatedAt?: Date;
     releaseTrack?: ReleaseTrack;
     users?: Partial<TUser>[] | null;
     teams?: Partial<TTeam>[] | null;

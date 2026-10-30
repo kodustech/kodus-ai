@@ -1,0 +1,459 @@
+import { createLogger } from '@libs/core/log/logger';
+import { KODY_IDENTIFIERS } from '@libs/common/utils/kody-identifiers';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { LLM_TASK } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+
+import {
+    classifyReplyAddressedToKody,
+    isBotAuthor,
+    ThreadMessage,
+} from './implicit-reply';
+
+/**
+ * How ChatWithKodyFromGitUseCase reads a PR thread for a reply without @kody
+ * (#1946): which comments are Kody's, the reply's thread as the classifier sees
+ * it, and the classifier on the org's conversation model. The use case and the
+ * reply-addressing eval (evals/reply-addressing) both run these.
+ */
+
+const logger = createLogger('ReplyThread');
+
+/** Posted by Kody right after a mention, before it answers. */
+export const KODY_ACKNOWLEDGMENT_MESSAGE = 'Analyzing your request...';
+
+/**
+ * Posted instead of running the agent when the org may not use Kodus-funded
+ * LLM calls (cloud, past trial, no BYOK). A visible pointer beats silence:
+ * without it the dev reads the missing reply as Kody being broken.
+ */
+export const CONVERSATION_PLAN_GATE_MESSAGE =
+    "I can't reply right now: your organization's trial has ended and no " +
+    'LLM API key (BYOK) is configured. Connect your key in the Kodus ' +
+    'settings to keep chatting with Kody.';
+
+/** The fields of a platform comment this module reads. */
+export interface ThreadComment {
+    id: number;
+    body: string;
+    in_reply_to_id?: number;
+    parent?: { id: number };
+    thread?: any;
+    user?: { login?: string; type?: string };
+    author?: {
+        name?: string;
+        username?: string;
+        bot?: boolean;
+        type?: string;
+    };
+    discussionId?: string;
+    discussion_id?: string;
+    system?: boolean;
+    createdAt?: string;
+    created_at?: string;
+}
+
+/**
+ * Texts Kody posts with no marker on Bitbucket, where raw HTML would show.
+ * There Kody often posts through the customer's own account, so without
+ * this its "Analyzing your request..." acknowledgment reads as a new human
+ * reply in its thread and gets answered.
+ */
+export function isKodyFixedMessage(body: string): boolean {
+    const text = (body ?? '').replace(/[​\s]+$/u, '').trim();
+    return (
+        text === KODY_ACKNOWLEDGMENT_MESSAGE ||
+        text === CONVERSATION_PLAN_GATE_MESSAGE
+    );
+}
+
+export function isKodyComment(
+    comment: ThreadComment,
+    platformType: PlatformType,
+): boolean {
+    const login =
+        platformType === PlatformType.GITHUB
+            ? comment.user?.login
+            : comment.author?.name;
+    const body = comment.body.toLowerCase();
+    const bodyWithoutMarkdown =
+        platformType !== PlatformType.BITBUCKET
+            ? KODY_IDENTIFIERS.MARKDOWN_IDENTIFIERS.DEFAULT
+            : KODY_IDENTIFIERS.MARKDOWN_IDENTIFIERS.BITBUCKET;
+
+    return (
+        KODY_IDENTIFIERS.LOGIN_KEYWORDS.some((keyword) =>
+            login?.includes(keyword),
+        ) ||
+        body.includes(bodyWithoutMarkdown) ||
+        isKodyFixedMessage(comment.body)
+    );
+}
+
+/**
+ * The reply's thread, oldest first, ending at the reply itself. Undefined
+ * when the comment is not a reply or its thread cannot be rebuilt from what
+ * the platform returned (Bitbucket Data Center carries no parent link).
+ */
+export function buildReplyThread(
+    comment: ThreadComment,
+    allComments: ThreadComment[],
+    platformType: PlatformType,
+): ThreadMessage[] | undefined {
+    const comments = allComments ?? [];
+    let members: ThreadComment[];
+
+    switch (platformType) {
+        case PlatformType.GITHUB: {
+            // GitHub points every reply at the thread's first comment.
+            const rootId = comment.in_reply_to_id;
+            if (!rootId) return undefined;
+            members = comments.filter(
+                (c) => c.id === rootId || c.in_reply_to_id === rootId,
+            );
+            break;
+        }
+        case PlatformType.GITLAB: {
+            const discussionId = comment.discussionId;
+            if (!discussionId) return undefined;
+            members = comments.filter(
+                (c) =>
+                    (c.discussionId ?? c.discussion_id) === discussionId &&
+                    !c.system,
+            );
+            break;
+        }
+        case PlatformType.BITBUCKET: {
+            if (!comment.parent?.id) return undefined;
+            const byId = new Map(comments.map((c) => [c.id, c]));
+            const rootOf = (c: ThreadComment) => {
+                let current = c;
+                const seen = new Set<number>();
+                while (current?.parent?.id && !seen.has(current.id)) {
+                    seen.add(current.id);
+                    const parent = byId.get(current.parent.id);
+                    if (!parent) break;
+                    current = parent;
+                }
+                return current?.id;
+            };
+            const rootId = rootOf(comment);
+            members = comments.filter((c) => rootOf(c) === rootId);
+            break;
+        }
+        case PlatformType.AZURE_REPOS: {
+            const thread = comment.thread;
+            if (!thread) return undefined;
+            members = [thread, ...(thread.replies ?? [])];
+            break;
+        }
+        default:
+            return undefined;
+    }
+
+    const ordered = [...members].sort(
+        (a, b) =>
+            new Date(a.createdAt ?? a.created_at ?? 0).getTime() -
+            new Date(b.createdAt ?? b.created_at ?? 0).getTime(),
+    );
+    const replyIndex = ordered.findIndex((c) => c.id === comment.id);
+    if (replyIndex < 0) return undefined;
+
+    return ordered.slice(0, replyIndex + 1).map((c) => {
+        const login =
+            platformType === PlatformType.GITHUB
+                ? c.user?.login
+                : (c.author?.username ?? c.author?.name);
+
+        return {
+            id: c.id,
+            author:
+                platformType === PlatformType.GITHUB
+                    ? c.user?.login
+                    : (c.author?.name ?? c.author?.username),
+            isKody: isKodyComment({ ...c, body: c.body ?? '' }, platformType),
+            isBot: isBotAuthor({
+                login,
+                type: c.user?.type ?? c.author?.type,
+                bot: c.author?.bot,
+            }),
+            body: c.body ?? '',
+        };
+    });
+}
+
+/**
+ * Whether an unmentioned reply is meant for Kody: the classifier on the model
+ * the org routes the conversation task to. Throws on any failure; the caller
+ * treats that as silence.
+ */
+export async function classifyImplicitReply(params: {
+    thread: ThreadMessage[];
+    permissionValidationService: {
+        resolveTaskSlot(
+            organizationAndTeamData: OrganizationAndTeamData,
+            task: (typeof LLM_TASK)[keyof typeof LLM_TASK],
+        ): Promise<NormalizedModel | null | undefined>;
+    };
+    organizationAndTeamData: OrganizationAndTeamData;
+    prNumber: number;
+    platformType: PlatformType;
+}): Promise<boolean> {
+    const byokConfig =
+        (await params.permissionValidationService.resolveTaskSlot(
+            params.organizationAndTeamData,
+            LLM_TASK.conversation,
+        )) ?? undefined;
+
+    return classifyReplyAddressedToKody({
+        thread: params.thread,
+        byokConfig,
+        organizationAndTeamData: params.organizationAndTeamData,
+        prNumber: params.prNumber,
+        platformType: params.platformType,
+    });
+}
+
+/** The platform comments and the PR facts the conversation use case builds the agent's context from. */
+export interface ContextComment extends ThreadComment {
+    in_reply_to_id?: number;
+    parent?: { id: number; links?: any };
+    replies?: any[];
+    content?: { raw: string };
+    path?: string;
+    deleted?: boolean;
+    diff_hunk?: string;
+    originalCommit?: any;
+    subject_type?: string;
+    threadId?: number;
+    commentType?: string;
+}
+type Comment = ContextComment;
+type Repository = { id?: string; name?: string; fullName?: string; [k: string]: any };
+interface OriginatingSuggestion {
+    suggestionId?: string;
+    label?: string;
+    brokenKodyRulesIds?: string[];
+}
+
+export function getOriginalKodyComment(
+        comment: Comment,
+        allComments: Comment[],
+        platformType: PlatformType,
+    ): Comment | undefined {
+        switch (platformType) {
+            case PlatformType.GITHUB:
+                if (
+                    !comment?.id &&
+                    !comment?.in_reply_to_id &&
+                    !comment?.subject_type
+                ) {
+                    return undefined;
+                }
+
+                return allComments.find(
+                    (originalComment) =>
+                        originalComment.id ===
+                        (comment?.in_reply_to_id ?? comment?.id),
+                );
+            case PlatformType.GITLAB:
+                return comment?.originalCommit;
+            case PlatformType.BITBUCKET: {
+                if (!comment?.parent?.id) {
+                    return undefined;
+                }
+
+                const originalComment = allComments.find(
+                    (c) => c.id === comment.parent.id,
+                );
+
+                return originalComment;
+            }
+            case PlatformType.AZURE_REPOS:
+                if (comment.threadId && comment.id !== comment.threadId) {
+                    const originalComment = comment.thread;
+                    return originalComment;
+                }
+                return undefined;
+            default:
+                logger.warn({ message: `Unsupported platform type: ${platformType}`, context: 'ChatWithKodyFromGitUseCase', metadata: { platformType, commentId: comment?.id } });
+                return undefined;
+        }
+    }
+
+
+export function getOthersReplies(
+        comment: Comment,
+        allComments: Comment[],
+        platformType: PlatformType,
+    ): Comment[] {
+        switch (platformType) {
+            case PlatformType.GITHUB:
+                return allComments.filter(
+                    (reply) =>
+                        reply.in_reply_to_id === comment.in_reply_to_id &&
+                        !isKodyComment(reply, platformType),
+                );
+            case PlatformType.BITBUCKET:
+                if (comment.parent?.id) {
+                    const originalComment = allComments.find(
+                        (c) => c.id === comment.parent.id,
+                    );
+
+                    if (!originalComment) {
+                        return [];
+                    }
+
+                    if (
+                        originalComment.replies &&
+                        Array.isArray(originalComment.replies)
+                    ) {
+                        const validReplies = [];
+
+                        for (const reply of originalComment.replies) {
+                            if (
+                                reply.content?.raw === '' ||
+                                reply.deleted === true
+                            ) {
+                                continue;
+                            }
+
+                            if (reply.id === comment.id) {
+                                continue;
+                            }
+                            if (
+                                isKodyComment(
+                                    {
+                                        body: reply.content?.raw,
+                                        id: reply.id,
+                                        author: {
+                                            name: reply.user?.display_name,
+                                        },
+                                    },
+                                    platformType,
+                                )
+                            ) {
+                                continue;
+                            }
+
+                            if (reply.content?.raw) {
+                                validReplies.push({
+                                    ...reply,
+                                    body: reply.content.raw,
+                                });
+                            } else {
+                                validReplies.push(reply);
+                            }
+                        }
+
+                        return validReplies;
+                    }
+                }
+                return [];
+            case PlatformType.AZURE_REPOS:
+                if (comment.threadId) {
+                    const thread = allComments.find(
+                        (c) => c.threadId === comment.threadId,
+                    );
+
+                    if (
+                        thread &&
+                        thread.replies &&
+                        Array.isArray(thread.replies)
+                    ) {
+                        return thread.replies.filter(
+                            (reply) =>
+                                reply.id !== comment.id &&
+                                !isKodyComment(reply, platformType),
+                        );
+                    }
+                    return [];
+                }
+
+                return allComments.filter(
+                    (reply) =>
+                        reply.in_reply_to_id === comment.in_reply_to_id &&
+                        !isKodyComment(reply, platformType),
+                );
+            case PlatformType.GITLAB:
+                return allComments.filter(
+                    (reply) =>
+                        ((reply.in_reply_to_id !== undefined &&
+                            reply.in_reply_to_id === comment.in_reply_to_id) ||
+                            reply.discussionId === comment.discussionId) &&
+                        !isKodyComment(reply, platformType),
+                );
+            default:
+                logger.warn({ message: `Plataforma nu00e3o suportada: ${platformType}`, context: 'ChatWithKodyFromGitUseCase', metadata: { platformType, commentId: comment?.id } });
+                return [];
+        }
+    }
+
+
+export function prepareContext({
+        comment,
+        originalKodyComment,
+        originalSuggestion,
+        gitUser,
+        othersReplies,
+        pullRequestNumber,
+        repository,
+        pullRequestDescription,
+        platformType,
+        headRef,
+        baseRef,
+        defaultBranch,
+        customInstructions,
+    }: {
+        comment?: Comment;
+        originalKodyComment?: Comment;
+        originalSuggestion?: OriginatingSuggestion;
+        gitUser?: { id: number; username: string };
+        othersReplies?: Comment[];
+        repository?: Repository;
+        platformType?: PlatformType;
+        pullRequestNumber?: number;
+        pullRequestDescription?: string;
+        headRef?: string;
+        baseRef?: string;
+        defaultBranch?: string;
+        customInstructions?: string;
+    }): any {
+        const userQuestion =
+            comment.body.trim() === '@kody'
+                ? 'The user did not ask any questions. Ask them what they would like to know about the codebase or suggestions for code changes.'
+                : comment.body;
+
+        return {
+            gitUser,
+            userQuestion,
+            repository: {
+                ...repository,
+                defaultBranch: defaultBranch ?? baseRef,
+            },
+            pullRequestDescription,
+            platformType,
+            customInstructions,
+            pullRequest: {
+                pullRequestNumber,
+                headRef: headRef,
+                baseRef: baseRef,
+            },
+            codeManagementContext: {
+                originalComment: {
+                    suggestionCommentId: originalKodyComment?.id,
+                    suggestionFilePath: comment?.path,
+                    suggestionText: originalKodyComment?.body,
+                    diffHunk: originalKodyComment?.diff_hunk,
+                    suggestionId: originalSuggestion?.suggestionId,
+                    label: originalSuggestion?.label,
+                    brokenKodyRulesIds: originalSuggestion?.brokenKodyRulesIds,
+                },
+                othersReplies: othersReplies.map((reply) => ({
+                    historyConversationText: reply.body,
+                })),
+            },
+        };
+    }
+

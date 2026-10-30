@@ -16,6 +16,7 @@ import {
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 import { normalizeRepoPath } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
+import type { ReviewFindingLabel } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 
 // ── Bounded Levenshtein + UUID recovery ──────────────────────────────────────
 
@@ -80,7 +81,7 @@ export interface LabelPolicy {
     /** The agent's fixed category (bug/security/performance/kody_rules/generalist). */
     categoryLabel: string;
     /** Labels this run may emit (for mixed/generalist reviewers). */
-    allowedLabels: Array<'bug' | 'security' | 'performance'>;
+    allowedLabels: ReviewFindingLabel[];
     /** Whether the agent emits per-finding labels (generalist) vs a fixed one. */
     supportsMixed: boolean;
 }
@@ -95,17 +96,12 @@ export function resolveSuggestionLabel(
     if (!policy.supportsMixed) {
         return policy.categoryLabel;
     }
-    const allowed = new Set(policy.allowedLabels);
+    const allowed = new Set<string>(policy.allowedLabels);
     const rawLabel =
         typeof suggestion.label === 'string'
             ? suggestion.label.toLowerCase()
             : '';
-    if (
-        (rawLabel === 'bug' ||
-            rawLabel === 'security' ||
-            rawLabel === 'performance') &&
-        allowed.has(rawLabel as 'bug' | 'security' | 'performance')
-    ) {
+    if (allowed.has(rawLabel)) {
         return rawLabel;
     }
     return policy.allowedLabels[0] || 'bug';
@@ -117,6 +113,7 @@ export function resolveSuggestionLabel(
 export interface RawFinding {
     suggestionContent?: string;
     ruleUuid?: string;
+    revisesSuggestionId?: string;
     relevantFile?: string;
     oneSentenceSummary?: string;
     language?: string;
@@ -126,12 +123,19 @@ export interface RawFinding {
     relevantLinesEnd?: number;
     severity?: string;
     label?: string;
+    /** Custom agents: whether the finding applies a team rule, and which. */
+    kind?: CodeSuggestion['kind'];
+    source?: CodeSuggestion['source'];
+    /** On a discarded finding: why the check set it aside. */
+    discardReason?: string;
 }
 
 export interface MappableAgentResult {
     findings?: { suggestions?: RawFinding[] };
     discardedBySeverity?: RawFinding[];
     droppedByVerify?: RawFinding[];
+    unverifiedByVerify?: RawFinding[];
+    droppedByQuoteCheck?: RawFinding[];
 }
 
 export interface FindingMapperContext {
@@ -151,6 +155,10 @@ export interface MappedFindings {
     suggestions: Partial<CodeSuggestion>[];
     discardedBySeverity: Partial<CodeSuggestion>[];
     discardedByVerify: Partial<CodeSuggestion>[];
+    /** Findings whose verify run failed (#2171). */
+    discardedByVerifyError: Partial<CodeSuggestion>[];
+    /** Findings dropped because the file they named is not in the PR. */
+    droppedForPath: number;
 }
 
 /**
@@ -168,13 +176,17 @@ export function mapAgentFindings(
     // (missing leading slash, backslashes), but keep the provider's original
     // filename as the value (downstream comment posting needs the exact shape).
     const validFilesByNormalized = new Map<string, string>(
-        ctx.changedFiles.map((f) => [normalizeRepoPath(f.filename), f.filename]),
+        ctx.changedFiles.map((f) => [
+            normalizeRepoPath(f.filename),
+            f.filename,
+        ]),
     );
     const kodyRulesByUuid = new Map(
         (ctx.kodyRules || []).filter((r) => r.uuid).map((r) => [r.uuid!, r]),
     );
     const warn = (message: string, metadata: Record<string, unknown>) =>
         ctx.logger?.warn({ message, context: ctx.identityName, metadata });
+    let droppedForPath = 0;
 
     const rawSuggestions = (agentResult.findings?.suggestions || []).filter(
         (s) => {
@@ -187,13 +199,29 @@ export function mapAgentFindings(
                     typeof s.ruleUuid === 'string' ? s.ruleUuid.trim() : '';
 
                 if (!ruleUuid) {
-                    warn(
-                        `[AGENT] Dropping kody_rules suggestion without ruleUuid: "${(s.oneSentenceSummary || s.suggestionContent).slice(0, 140)}"`,
-                        { prNumber: ctx.prNumber },
-                    );
-                    return false;
+                    // Model omitted the uuid echo. With exactly ONE candidate
+                    // rule in play there is no ambiguity — attribute instead
+                    // of dropping (observed live: both violations of the only
+                    // selected rule were found and then discarded here, so
+                    // the customer saw "rule never fires" even after the
+                    // path-matching fix).
+                    if (kodyRulesByUuid.size === 1) {
+                        const only = [...kodyRulesByUuid.keys()][0];
+                        warn(
+                            `[AGENT] kody_rules suggestion missing ruleUuid — attributing to the single selected rule ${only}`,
+                            { prNumber: ctx.prNumber },
+                        );
+                        s.ruleUuid = only;
+                    } else {
+                        warn(
+                            `[AGENT] Dropping kody_rules suggestion without ruleUuid (${kodyRulesByUuid.size} candidate rules, ambiguous): "${(s.oneSentenceSummary || s.suggestionContent).slice(0, 140)}"`,
+                            { prNumber: ctx.prNumber },
+                        );
+                        return false;
+                    }
                 }
-                const resolvedRuleUuid = ruleUuid;
+                const resolvedRuleUuid =
+                    typeof s.ruleUuid === 'string' ? s.ruleUuid.trim() : '';
 
                 if (!kodyRulesByUuid.has(resolvedRuleUuid)) {
                     const recovered = recoverRuleUuid(
@@ -222,9 +250,12 @@ export function mapAgentFindings(
                 // PR-level kody_rules omit relevantFile by design.
                 const kodyRulePathMatch =
                     !s.relevantFile ||
-                    validFilesByNormalized.has(normalizeRepoPath(s.relevantFile));
+                    validFilesByNormalized.has(
+                        normalizeRepoPath(s.relevantFile),
+                    );
 
                 if (!kodyRulePathMatch) {
+                    droppedForPath++;
                     warn(
                         `@@PATH_MISMATCH@@ Dropping kody_rules suggestion — relevantFile not in changedFiles after normalization`,
                         {
@@ -250,6 +281,7 @@ export function mapAgentFindings(
                 validFilesByNormalized.has(normalizeRepoPath(s.relevantFile));
 
             if (!pathMatch && s.relevantFile) {
+                droppedForPath++;
                 warn(
                     `@@PATH_MISMATCH@@ Dropping suggestion — relevantFile not in changedFiles after normalization`,
                     {
@@ -299,6 +331,12 @@ export function mapAgentFindings(
                 : s.severity || 'medium',
             llmPrompt: s.suggestionContent,
             ...(s.ruleUuid && { brokenKodyRulesIds: [s.ruleUuid] }),
+            ...(s.revisesSuggestionId && {
+                revisesSuggestionId: s.revisesSuggestionId,
+            }),
+            // Lane credit in dedup and the rule citation read these.
+            ...(s.kind && { kind: s.kind }),
+            ...(s.source && { source: s.source }),
         } as Partial<CodeSuggestion>;
     });
 
@@ -309,11 +347,24 @@ export function mapAgentFindings(
             severity: (s.severity || 'medium') as CodeSuggestion['severity'],
             label: resolveSuggestionLabel(s, ctx.labelPolicy),
             oneSentenceSummary: s.oneSentenceSummary || '',
+            relevantLinesStart: s.relevantLinesStart,
+            relevantLinesEnd: s.relevantLinesEnd,
+            ...(s.kind && { kind: s.kind }),
+            ...(s.source && { source: s.source }),
+            ...(s.discardReason && { discardReason: s.discardReason }),
         }));
 
     return {
         suggestions,
         discardedBySeverity: mapDiscarded(agentResult.discardedBySeverity),
-        discardedByVerify: mapDiscarded(agentResult.droppedByVerify),
+        // A convention finding whose quoted rule is not in the guide was
+        // checked and refuted like a verify drop; counted apart it vanished
+        // from the agent's "dropped by verification" figure.
+        discardedByVerify: mapDiscarded([
+            ...(agentResult.droppedByVerify ?? []),
+            ...(agentResult.droppedByQuoteCheck ?? []),
+        ]),
+        discardedByVerifyError: mapDiscarded(agentResult.unverifiedByVerify),
+        droppedForPath,
     };
 }

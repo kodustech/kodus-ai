@@ -39,7 +39,7 @@ This app is part of the Kodus monorepo at `apps/web`.
 ### Prerequisites
 
 - Node.js 22.x
-- yarn
+- pnpm
 - Docker
 
 ### Installation
@@ -54,25 +54,25 @@ cd kodus-ai
 2. Install dependencies:
 
 ```bash
-yarn install
+pnpm install
 ```
 
 3. Configure environment and generated secrets:
 
 ```bash
-yarn setup
+pnpm setup
 ```
 
 4. Run web in development mode:
 
 ```bash
-yarn web:dev
+pnpm web:dev
 ```
 
 Optional: run full stack (backend + web + infra):
 
 ```bash
-yarn docker:start
+pnpm docker:start
 ```
 
 ## Tech Stack

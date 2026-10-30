@@ -28,16 +28,26 @@ function getUsageDateRange(
 ) {
     const now = new Date();
 
-    if (license?.valid && license.subscriptionStatus === "trial") {
+    // Guard: some trial licenses carry subscriptionStatus="trial" without a
+    // trialEnd (e.g. legacy rows / plan-reset via SQL). new Date(undefined)
+    // is Invalid Date and format() then throws RangeError. Fall back to the
+    // default lookback window instead of crashing the choose-plan page.
+    if (
+        license?.valid &&
+        license.subscriptionStatus === "trial" &&
+        license.trialEnd
+    ) {
         const trialEndDate = new Date(license.trialEnd);
-        const trialStartDate = subDays(trialEndDate, TRIAL_DURATION_DAYS);
-        const daysUsed = Math.max(1, differenceInDays(now, trialStartDate));
+        if (!isNaN(trialEndDate?.getTime())) {
+            const trialStartDate = subDays(trialEndDate, TRIAL_DURATION_DAYS);
+            const daysUsed = Math.max(1,differenceInDays(now, trialStartDate));
 
-        return {
-            startDate: format(trialStartDate, "yyyy-MM-dd"),
-            endDate: format(now, "yyyy-MM-dd"),
-            daysUsed,
-        };
+            return {
+                startDate: format(trialStartDate, "yyyy-MM-dd"),
+                endDate: format(now, "yyyy-MM-dd"),
+                daysUsed,
+            };
+        }
     }
 
     const startDate = subDays(now, USAGE_LOOKBACK_DAYS);

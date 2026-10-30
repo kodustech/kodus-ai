@@ -1,0 +1,67 @@
+---
+title: "Severity Threshold"
+description: "Control how much feedback Kody posts in your PRs — the minimum severity to post, formerly Review Filters / Suggestion Control."
+---
+
+The severity threshold (formerly **Review filters**, and before that **Suggestion Control**) decides
+**which** of Kody's findings actually get posted. In the sidebar, open
+**Code review → What to review**; the settings are in the **Minimum severity to post** card. They
+can be set at the global, repository, or directory level — see
+[Config Inheritance & Overrides](/en/how_to_use/code_review/configs/inheritance_overrides).
+
+## Minimum severity to post
+
+Kody assigns a severity to every suggestion and only posts the ones at or above the level you
+pick on the slider. The default is **Medium**. Kody still finds lower-severity issues; it just
+does not comment on them.
+
+| Level | What it covers |
+| --- | --- |
+| **Low/All** | Minor enhancements that would improve code quality — small optimizations, style improvements, subtle refinements. |
+| **Medium** (default) | Moderate improvements that are recommended but not immediately critical: best practices, preventing future technical debt. |
+| **High** | Significant issues that should be addressed in the near term — important quality improvements, potential risks, substantial technical concerns. |
+| **Critical** | Issues that require immediate attention and could severely impact stability, security, or functionality. |
+
+<Tip>
+  Too much noise on a big PR is usually a severity problem, not a volume problem. Move to
+  **High** before reaching for anything else — you keep every real bug and drop the nitpicks.
+  See [Reduce code review noise](/en/knowledge_base/how-to-reduce-code-review-noise).
+</Tip>
+
+## Apply the threshold to Kody Rules
+
+A toggle in the same card, **off by default**.
+
+- **Off** — [Kody Rules](/en/how_to_use/code_review/configs/kody_rules) findings **bypass** the
+  severity threshold. A rule your team wrote is always reported, whatever severity it lands on.
+- **On** — Kody Rules go through the same severity threshold as every other suggestion.
+
+Leave it off unless your rules are producing more noise than signal. The whole point of a Kody
+Rule is that your team already decided it matters.
+
+<Note>
+  In `kodus-config.yml` these two settings live under `suggestionControl`:
+
+  ```yaml
+  suggestionControl:
+      severityLevelFilter: 'medium' # low | medium | high | critical
+      applyFiltersToKodyRules: false
+  ```
+
+  Remember that the file is only read once you enable
+  `kodusConfigFileOverridesWebPreferences` — see
+  [General](/en/how_to_use/code_review/configs/general).
+</Note>
+
+## Other ways to cut noise
+
+The severity threshold is a blunt instrument. When you need something more targeted:
+
+- **Ignored files** — skip generated code, lockfiles, and vendored directories entirely.
+  See [General](/en/how_to_use/code_review/configs/general).
+- **Categories** — turn off a whole category (e.g. Performance) with its switch on
+  **What to review**, for repositories where it isn't useful.
+- **Directory-level config** — apply a stricter or looser threshold per folder in a monorepo.
+  See [Directory Level Config](/en/how_to_use/code_review/configs/directory_level).
+- **Kody Rules** — encode what your team actually cares about, so the signal comes from your
+  standards instead of generic advice.

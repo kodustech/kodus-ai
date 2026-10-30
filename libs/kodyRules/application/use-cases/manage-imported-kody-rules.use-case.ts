@@ -17,10 +17,10 @@ import { AuthorizationService } from '@libs/identity/infrastructure/adapters/ser
 import { KodyRulesSyncService } from '../../infrastructure/adapters/services/kodyRulesSync.service';
 
 /**
- * What the management endpoint can do to the IDE-synced rules of a given
- * repository, independent of the auto-sync toggle. Surfaced as a single
- * `POST /kody-rules/imported/manage` so the UI banner ("Auto-sync OFF, X
- * rules still active") can offer pause/resume/delete in one place.
+ * What the management endpoint can do to the rules a repository imported from
+ * coding-agent files (CLAUDE.md, .cursor/rules, ...) before those files stopped
+ * converting. The rules are frozen; `POST /kody-rules/imported/manage` lets the
+ * Kody Rules page pause, resume or delete them in one place.
  */
 export type ManageImportedRulesAction = 'pause' | 'resume' | 'delete';
 
@@ -48,7 +48,6 @@ export class ManageImportedKodyRulesUseCase {
             active: number;
             paused: number;
             deleted: number;
-            pinned: number;
         };
     }> {
         const { organizationAndTeamData, repositoryId, action } = params;
@@ -105,6 +104,11 @@ export class ManageImportedKodyRulesUseCase {
         return { action, counts };
     }
 
+    /**
+     * Rules imported from coding-agent files, per status. `repositoryId:
+     * "global"` covers the ones stored at the global scope (onboarding imports
+     * and global source repositories).
+     */
     async count(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;

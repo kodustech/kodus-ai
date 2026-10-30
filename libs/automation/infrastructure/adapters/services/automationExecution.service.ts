@@ -39,6 +39,9 @@ export class AutomationExecutionService implements IAutomationExecutionService {
                 execution?.dataExecution?.organizationAndTeamData
                     ?.organizationId;
             if (orgId) {
+                // Cross-process delivery to the API's SSE endpoint happens
+                // via CrossProcessEventsBridge, which forwards this local
+                // emit over Postgres NOTIFY.
                 this.eventEmitter.emit(PR_EXECUTION_UPDATED_EVENT, {
                     organizationId: orgId,
                     executionUuid: execution.uuid,
@@ -124,6 +127,10 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         return result;
     }
 
+    touchInProgress(uuid: string): Promise<void> {
+        return this.automationExecutionRepository.touchInProgress(uuid);
+    }
+
     delete(uuid: string): Promise<void> {
         return this.automationExecutionRepository.delete(uuid);
     }
@@ -131,10 +138,12 @@ export class AutomationExecutionService implements IAutomationExecutionService {
     findStaleInProgress(
         cutoffDate: Date,
         limit?: number,
+        options?: { excludeOrigins?: string[] },
     ): Promise<AutomationExecutionEntity[]> {
         return this.automationExecutionRepository.findStaleInProgress(
             cutoffDate,
             limit,
+            options,
         );
     }
 
@@ -155,12 +164,46 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         pullRequestNumber?: number;
         pullRequestTitle?: string;
         prFilters?: Array<{ number: number; repositoryId: string }>;
+        status?: string;
+        createdAtFrom?: string;
+        createdAtTo?: string;
         skip?: number;
+        cursor?: { createdAt: string | Date; uuid: string };
         take?: number;
         order?: 'ASC' | 'DESC';
         includeTotal?: boolean;
-    }): Promise<{ data: AutomationExecutionEntity[]; total: number }> {
+    }): Promise<{
+        data: AutomationExecutionEntity[];
+        total: number;
+        distinctPrTotal: number;
+    }> {
         return this.automationExecutionRepository.findPullRequestExecutionsByOrganizationAndTeam(
+            params,
+        );
+    }
+
+    getDistinctReviewedPullRequestKeys(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds?: string[];
+        createdAtFrom?: Date | string;
+    }): Promise<
+        Array<{
+            repositoryId: string;
+            pullRequestNumber: number;
+            hasError: boolean;
+        }>
+    > {
+        return this.automationExecutionRepository.getDistinctReviewedPullRequestKeys(
+            params,
+        );
+    }
+
+    getAwaitingReviewPullRequestKeys(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds?: string[];
+        createdAtFrom?: Date | string;
+    }): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>> {
+        return this.automationExecutionRepository.getAwaitingReviewPullRequestKeys(
             params,
         );
     }
@@ -198,7 +241,13 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         startDate: Date,
         endDate: Date,
         teamAutomationId: string,
-    ): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>> {
+    ): Promise<
+        Array<{
+            repositoryId: string;
+            pullRequestNumber: number;
+            mayAllowNoComments: boolean;
+        }>
+    > {
         return this.automationExecutionRepository.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId(
             startDate,
             endDate,

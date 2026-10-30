@@ -324,6 +324,10 @@ export function TokenProjectionEmptyState({
     const required = progress?.required ?? 3;
     const percentage = Math.min((current / required) * 100, 100);
     const hasStarted = current > 0;
+    // Enough PRs but still no estimate: the models those reviews used have no
+    // price we can read (or priced at zero). "49 of 5 PRs · keep using Kody"
+    // would ask for more of what is already there.
+    const reachedTarget = current >= required;
 
     return (
         <Card className="overflow-hidden">
@@ -337,7 +341,12 @@ export function TokenProjectionEmptyState({
                             Estimated AI token cost
                         </p>
                         <p className="text-text-primary text-sm font-medium">
-                            {hasStarted ? (
+                            {reachedTarget ? (
+                                <span className="text-text-tertiary">
+                                    Not enough pricing data for your models to
+                                    estimate the cost yet
+                                </span>
+                            ) : hasStarted ? (
                                 <>
                                     <span className="text-primary-light">
                                         {current} of {required} PRs
@@ -355,12 +364,14 @@ export function TokenProjectionEmptyState({
                             )}
                         </p>
                         {/* Progress bar */}
-                        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-card-lv1)]">
-                            <div
-                                className="bg-primary-light h-full rounded-full transition-all"
-                                style={{ width: `${percentage}%` }}
-                            />
-                        </div>
+                        {!reachedTarget && (
+                            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-card-lv1)]">
+                                <div
+                                    className="bg-primary-light h-full rounded-full transition-all"
+                                    style={{ width: `${percentage}%` }}
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
             </CardContent>

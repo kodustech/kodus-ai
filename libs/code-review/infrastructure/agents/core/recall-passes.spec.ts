@@ -118,3 +118,31 @@ describe('runRecallPasses', () => {
         expect(out.findings).toBe(base);
     });
 });
+
+describe('runRecallPasses — custom agent kept to its lane (#2172)', () => {
+    const rescuePrompt = async (laneScoped?: boolean) => {
+        const runner = fakeRunner([stateWith([])]);
+        await runRecallPasses(
+            base,
+            {
+                runner,
+                finderSpec: {} as any,
+                finderState,
+                userPrompt: 'review this',
+                laneScoped,
+            },
+            ctx,
+        );
+        return String(runner.run.mock.calls[0][1].prompt);
+    };
+
+    it('asks for missed findings within its focus, not missed bugs', async () => {
+        const prompt = await rescuePrompt(true);
+
+        expect(prompt).toContain(
+            'If there are concrete missed findings within your focus, submit them.',
+        );
+        expect(prompt).toContain('do not add general bugs outside your focus');
+        expect(prompt).not.toContain('If there are concrete missed bugs');
+    });
+});

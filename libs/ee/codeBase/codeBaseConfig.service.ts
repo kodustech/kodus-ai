@@ -4,18 +4,15 @@ import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 
 import { ICodeBaseConfigService } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
-import globalIgnorePathsJson from '@libs/common/utils/codeBase/ignorePaths/generated/paths.json';
 import { GlobalParametersKey } from '@libs/core/domain/enums/global-parameters-key.enum';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
-import { OrganizationParametersKey } from '@libs/core/domain/enums/organization-parameters-key.enum';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import {
     CodeReviewConfig,
     CodeReviewConfigWithoutLLMProvider,
     FileChange,
     KodusConfigFile,
-    KodyFineTuningConfig,
     ReviewModeConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
@@ -30,7 +27,11 @@ import * as yaml from 'js-yaml';
 import { decrypt } from '@libs/common/utils/crypto';
 import { ValidateCodeManagementIntegration } from '@libs/common/utils/decorators/validate-code-management-integration.decorator';
 import { deepMerge } from '@libs/common/utils/deep';
-import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
+import { withDirectoryAgentLists } from '@libs/code-review/domain/custom-agents/directory-cascade';
+import {
+    buildDefaultGlobalCodeReviewConfig,
+    getDefaultKodusConfigFile,
+} from '@libs/common/utils/validateCodeReviewConfigFile';
 import { CacheService } from '@libs/core/cache/cache.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import {
@@ -61,9 +62,6 @@ import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeM
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { KodyRulesValidationService } from '../kodyRules/service/kody-rules-validation.service';
 
-const GLOBAL_IGNORE_PATHS_CACHE_KEY = 'global:ignore_paths';
-const GLOBAL_IGNORE_PATHS_CACHE_TTL = 43200000; // 12 hours
-
 const IP_E2B_CACHE_KEY = 'global:ip_e2b';
 const IP_E2B_CACHE_TTL = 604800000; // 1 week
 
@@ -77,6 +75,8 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         private readonly integrationService: IIntegrationService,
         @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
         private readonly integrationConfigService: IIntegrationConfigService,
+        // Unused since fine-tuning left; kept so the evals that build this
+        // service by position keep the same arguments on both sides.
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private readonly organizationParametersService: IOrganizationParametersService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
@@ -106,7 +106,6 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 defaultBranch,
                 kodyRulesEntity,
                 reviewModeConfig,
-                kodyFineTuningConfig,
             ] = await Promise.all([
                 this.parametersService.findOne({
                     configKey: ParametersKey.CODE_REVIEW_CONFIG,
@@ -122,13 +121,26 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     organizationAndTeamData.organizationId,
                 ),
                 this.getReviewModeConfigParameter(organizationAndTeamData),
-                this.getKodyFineTuningConfigParameter(organizationAndTeamData),
             ]);
+
+            // Self-heal: a team can reach a review without its
+            // `code_review_config` row (created too late in onboarding, or a
+            // creation write that failed). Persist the default global config so
+            // this review — and every one after it — runs on a real row instead
+            // of only the in-memory DEFAULT_CONFIG. Best-effort: if the write
+            // fails, getMergedCodeReviewConfigs still falls back to DEFAULT_CONFIG.
+            let codeReviewConfigValue = parameters?.configValue;
+            if (!parameters) {
+                codeReviewConfigValue =
+                    await this.ensureDefaultCodeReviewConfig(
+                        organizationAndTeamData,
+                    );
+            }
 
             const mergedConfigs = await this.getMergedCodeReviewConfigs(
                 organizationAndTeamData,
                 repository,
-                parameters?.configValue,
+                codeReviewConfigValue,
                 defaultBranch,
                 preliminaryFiles || [],
             );
@@ -139,17 +151,25 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     CodeBaseConfigService.name,
                 );
 
+            // Fail-safe: reconcile the rules' lock state with the current plan
+            // before the review uses them, in case the plan-change webhook was
+            // missed. Reuses the entity + `limited` already resolved above so
+            // it's a no-op (no extra lookup, no write) when already in sync.
+            const syncedEntity =
+                await this.kodyRulesService.syncRulesWithPlanLimit(
+                    organizationAndTeamData,
+                    { entity: kodyRulesEntity, limited },
+                );
+            const effectiveRules =
+                (syncedEntity ?? kodyRulesEntity)?.toObject()?.rules || [];
+
             const { standardRules, memoryRules } =
                 this.kodyRulesValidationService.filterKodyRules(
-                    kodyRulesEntity?.toObject()?.rules || [],
+                    effectiveRules,
                     repository.id,
                     mergedConfigs.directoryId,
                     limited,
                 ) || { standardRules: [], memoryRules: [] };
-
-            const globalIgnorePaths = await this.getGlobalIgnorePaths(
-                organizationAndTeamData,
-            );
 
             const fullConfig = {
                 ...mergedConfigs,
@@ -160,9 +180,6 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 kodyRules: standardRules,
                 kodyMemoryRules: memoryRules,
                 reviewModeConfig,
-                kodyFineTuningConfig,
-                ignorePaths:
-                    mergedConfigs.ignorePaths.concat(globalIgnorePaths),
                 // v2-only prompt overrides (categories and severity guidance). Read from repo/global parameters.
                 v2PromptOverrides: this.sanitizeV2PromptOverrides(
                     mergedConfigs.v2PromptOverrides,
@@ -228,11 +245,19 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
 
             const directoryDelta = directoryConfig?.configs;
 
-            const merged = deepMerge(
-                this.DEFAULT_CONFIG,
-                globalDelta || {},
-                repoDelta || {},
-                directoryDelta || {},
+            const merged = withDirectoryAgentLists(
+                deepMerge(
+                    this.DEFAULT_CONFIG,
+                    globalDelta || {},
+                    repoDelta || {},
+                    directoryDelta || {},
+                ),
+                deepMerge(
+                    this.DEFAULT_CONFIG,
+                    globalDelta || {},
+                    repoDelta || {},
+                ),
+                directoryDelta,
             );
 
             let configLevel = ConfigLevel.GLOBAL;
@@ -325,6 +350,52 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         };
     }
 
+    /**
+     * Persist and return the default global `code_review_config` for a team
+     * that reached a review without one. Best-effort: a write failure logs and
+     * returns the in-memory default so the review still proceeds.
+     */
+    private async ensureDefaultCodeReviewConfig(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CodeReviewParameter> {
+        const defaultConfig = buildDefaultGlobalCodeReviewConfig();
+
+        try {
+            // Insert-if-absent (not deactivate-and-insert): if a concurrent
+            // writer already populated the config between our read and here,
+            // this is a no-op and returns THEIR config — so a review-time
+            // self-heal can never clobber a populated config with the empty
+            // default.
+            const ensured =
+                await this.parametersService.createActiveVersionIfAbsent(
+                    ParametersKey.CODE_REVIEW_CONFIG,
+                    organizationAndTeamData.teamId,
+                    defaultConfig,
+                );
+
+            if (ensured?.configValue) {
+                this.logger.log({
+                    message:
+                        'Ensured code_review_config exists at review time for a team without one',
+                    context: CodeBaseConfigService.name,
+                    metadata: { organizationAndTeamData },
+                });
+                return ensured.configValue as CodeReviewParameter;
+            }
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Failed to persist default code_review_config at review time; using in-memory default',
+                context: CodeBaseConfigService.name,
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
+                metadata: { organizationAndTeamData },
+            });
+        }
+
+        return defaultConfig;
+    }
+
     async getMergedCodeReviewConfigs(
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { name: string; id: string },
@@ -357,31 +428,55 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
 
         const directoryDelta = directoryConfig?.configs;
 
+        // Keys the file loader dropped, kept so the review can name the ones
+        // a team writes expecting them to work (customAgents, knowledge).
+        const droppedFileKeys = new Set<string>();
+        const onDroppedKeys = (keys: string[]) =>
+            keys.forEach((key) => droppedFileKeys.add(key));
+
         const repositoryFileDelta = await this.getKodusConfigFile({
             organizationAndTeamData,
             repository,
             defaultBranch,
             overrideConfig: this.getFileOverridePreference(repoConfig),
+            onDroppedKeys,
         });
 
-        const directoryFileDelta = await this.getKodusConfigFile({
-            organizationAndTeamData,
-            repository,
-            directoryId: directoryConfig?.id,
-            defaultBranch,
-            overrideConfig: this.getFileOverridePreference(
-                repoConfig,
-                directoryConfig,
+        // Without a directory config this read has no directory to resolve and
+        // would fetch the root file a second time (and label it DIRECTORY).
+        const directoryFileDelta = directoryConfig
+            ? await this.getKodusConfigFile({
+                  organizationAndTeamData,
+                  repository,
+                  directoryId: directoryConfig.id,
+                  defaultBranch,
+                  overrideConfig: this.getFileOverridePreference(
+                      repoConfig,
+                      directoryConfig,
+                  ),
+                  onDroppedKeys,
+              })
+            : undefined;
+
+        // kodus-config.yml never carries customAgents or knowledge (the file
+        // loader drops them), so the directory's stored delta is their only
+        // directory-level source.
+        const merged = withDirectoryAgentLists(
+            deepMerge(
+                this.DEFAULT_CONFIG,
+                globalDelta || {},
+                repoDelta || {},
+                repositoryFileDelta || {},
+                directoryDelta || {},
+                directoryFileDelta || {},
             ),
-        });
-
-        const merged = deepMerge(
-            this.DEFAULT_CONFIG,
-            globalDelta || {},
-            repoDelta || {},
-            repositoryFileDelta || {},
-            directoryDelta || {},
-            directoryFileDelta || {},
+            deepMerge(
+                this.DEFAULT_CONFIG,
+                globalDelta || {},
+                repoDelta || {},
+                repositoryFileDelta || {},
+            ),
+            directoryDelta,
         );
 
         let configLevel = ConfigLevel.GLOBAL;
@@ -401,6 +496,9 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             directoryId,
             directoryPath,
             directoryFolders: this.getDirectoryFolders(directoryConfig),
+            ...(droppedFileKeys.size && {
+                kodusConfigFileDroppedKeys: [...droppedFileKeys],
+            }),
         } as CodeReviewConfigWithoutLLMProvider;
     }
 
@@ -622,7 +720,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         );
     }
 
-    private async getDefaultBranch(
+    async getDefaultBranch(
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { name: string; id: string },
     ): Promise<string> {
@@ -641,6 +739,8 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         directoryId?: string;
         defaultBranch?: string;
         removeProperties?: boolean;
+        /** Told the top-level keys stripped from the file as unknown. */
+        onDroppedKeys?: (keys: string[]) => void;
     }): Promise<KodusConfigFile | undefined> {
         const {
             organizationAndTeamData,
@@ -685,11 +785,14 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 : ({} as KodusConfigFile);
 
         // strip properties not in default config
+        const droppedKeys: string[] = [];
         for (const key in kodusConfigYMLfile) {
             if (!(key in this.DEFAULT_CONFIG)) {
+                droppedKeys.push(key);
                 delete kodusConfigYMLfile[key as keyof KodusConfigFile];
             }
         }
+        if (droppedKeys.length) params.onDroppedKeys?.(droppedKeys);
 
         if (removeProperties) {
             delete kodusConfigYMLfile.version;
@@ -750,108 +853,6 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         _organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<ReviewModeConfig> {
         return ReviewModeConfig.HEAVY_MODE;
-    }
-
-    private async getKodyFineTuningConfigParameter(
-        organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<KodyFineTuningConfig> {
-        const kodyFineTuningConfig =
-            await this.organizationParametersService.findByKey(
-                OrganizationParametersKey.KODY_FINE_TUNING_CONFIG,
-                organizationAndTeamData,
-            );
-
-        const enableService =
-            kodyFineTuningConfig?.configValue?.enabled !== undefined
-                ? kodyFineTuningConfig.configValue.enabled
-                : true;
-
-        return {
-            enabled: enableService,
-        };
-    }
-
-    private async getGlobalIgnorePaths(
-        organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<string[]> {
-        try {
-            // Try to get from cache first
-            const cachedData = await this.cacheService.getFromCache<{
-                paths: string[];
-                updatedAt: string;
-            }>(GLOBAL_IGNORE_PATHS_CACHE_KEY);
-
-            if (cachedData) {
-                // Light query: fetch only updatedAt to check if cache is stale
-                const dbUpdatedAt =
-                    await this.globalParametersService.findUpdatedAtByKey(
-                        GlobalParametersKey.IGNORE_PATHS_GLOBAL,
-                    );
-
-                // If no record in DB or cache is still valid, use cached data
-                if (
-                    !dbUpdatedAt ||
-                    new Date(cachedData.updatedAt) >= new Date(dbUpdatedAt)
-                ) {
-                    this.logger.log({
-                        message: 'Global ignore paths loaded from cache',
-                        context: CodeBaseConfigService.name,
-                        metadata: { organizationAndTeamData },
-                    });
-                    return cachedData.paths;
-                }
-            }
-
-            // Fetch full record from database
-            const globalParameters =
-                await this.globalParametersService.findByKey(
-                    GlobalParametersKey.IGNORE_PATHS_GLOBAL,
-                );
-
-            if (globalParameters?.configValue?.paths) {
-                const paths = globalParameters.configValue.paths as string[];
-
-                // Save to cache with updatedAt
-                await this.cacheService.addToCache(
-                    GLOBAL_IGNORE_PATHS_CACHE_KEY,
-                    {
-                        paths,
-                        updatedAt:
-                            globalParameters.updatedAt?.toISOString() ??
-                            new Date().toISOString(),
-                    },
-                    GLOBAL_IGNORE_PATHS_CACHE_TTL,
-                );
-
-                this.logger.log({
-                    message:
-                        'Global ignore paths loaded from global parameters',
-                    context: CodeBaseConfigService.name,
-                    metadata: { organizationAndTeamData },
-                });
-
-                return paths;
-            }
-
-            // Fallback to JSON file
-            this.logger.log({
-                message: 'Global ignore paths loaded from file (fallback)',
-                context: CodeBaseConfigService.name,
-                metadata: { organizationAndTeamData },
-            });
-
-            return globalIgnorePathsJson?.paths ?? [];
-        } catch (error) {
-            this.logger.error({
-                message:
-                    'Error getting global ignore paths, using file fallback',
-                context: CodeBaseConfigService.name,
-                error,
-                metadata: { organizationAndTeamData },
-            });
-
-            return globalIgnorePathsJson?.paths ?? [];
-        }
     }
 
     async getE2BIpAddress(): Promise<string | null> {

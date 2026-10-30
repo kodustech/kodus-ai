@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
-import { CheckIcon, ChevronDown, ChevronUpIcon } from "lucide-react";
+import { CheckIcon, ChevronDown } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 import { Button } from "./button";
@@ -13,39 +13,6 @@ const Select = SelectPrimitive.Root;
 const SelectGroup = SelectPrimitive.Group;
 
 const SelectValue = SelectPrimitive.Value;
-
-const SelectScrollUpButton = React.forwardRef<
-    React.ComponentRef<typeof SelectPrimitive.ScrollUpButton>,
-    React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollUpButton>
->(({ className, ...props }, ref) => (
-    <SelectPrimitive.ScrollUpButton
-        ref={ref}
-        className={cn(
-            "flex cursor-default items-center justify-center py-1",
-            className,
-        )}
-        {...props}>
-        <ChevronUpIcon className="size-4" />
-    </SelectPrimitive.ScrollUpButton>
-));
-SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName;
-
-const SelectScrollDownButton = React.forwardRef<
-    React.ComponentRef<typeof SelectPrimitive.ScrollDownButton>,
-    React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollDownButton>
->(({ className, ...props }, ref) => (
-    <SelectPrimitive.ScrollDownButton
-        ref={ref}
-        className={cn(
-            "flex cursor-default items-center justify-center py-1",
-            className,
-        )}
-        {...props}>
-        <ChevronDown className="size-4" />
-    </SelectPrimitive.ScrollDownButton>
-));
-SelectScrollDownButton.displayName =
-    SelectPrimitive.ScrollDownButton.displayName;
 
 const SelectTrigger = React.forwardRef<
     React.ComponentRef<typeof SelectPrimitive.Trigger>,
@@ -110,18 +77,14 @@ const SelectContent = React.forwardRef<
                     ),
                 className,
             )}>
-            <SelectScrollUpButton />
-
             <SelectPrimitive.Viewport
                 className={cn(
-                    "space-y-1 p-1",
+                    "max-h-72 space-y-1 overflow-y-auto p-1",
                     position === "popper" &&
                         "h-(--radix-select-trigger-height) w-full min-w-(--radix-select-trigger-width)",
                 )}>
                 {children}
             </SelectPrimitive.Viewport>
-
-            <SelectScrollDownButton />
         </SelectPrimitive.Content>
     </SelectPrimitive.Portal>
 ));

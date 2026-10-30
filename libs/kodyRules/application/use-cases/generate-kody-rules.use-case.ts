@@ -1,5 +1,11 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable, forwardRef } from '@nestjs/common';
+import {
+    Inject,
+    Injectable,
+    ServiceUnavailableException,
+    UnprocessableEntityException,
+    forwardRef,
+} from '@nestjs/common';
 import pLimit from 'p-limit';
 
 import {
@@ -7,10 +13,19 @@ import {
     ICodeBaseConfigService,
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
-import { with429Retry } from '@libs/core/infrastructure/http/rate-limit-retry';
+import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
+import {
+    is429Error,
+    with429Retry,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
 import { GenerateKodyRulesDTO } from '@libs/core/domain/dtos/generate-kody-rules.dto';
 
-import { CommentAnalysisService } from '@libs/code-review/infrastructure/adapters/services/commentAnalysis.service';
+import {
+    CommentAnalysisService,
+    KodyRulesModelSelection,
+} from '@libs/code-review/infrastructure/adapters/services/commentAnalysis.service';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { resolveKodyRulesModelPolicy } from '@libs/kodyRules/application/services/kody-rules-model-policy';
 import { generateDateFilter } from '@libs/common/utils/transforms/date';
 import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -35,6 +50,7 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { ParametersEntity } from '@libs/organization/domain/parameters/entities/parameters.entity';
 import { KodyLearningStatus } from '@libs/organization/domain/parameters/types/configValue.type';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
@@ -67,6 +83,70 @@ import { RepositoryCodeReviewConfig } from '@libs/core/infrastructure/config/typ
 // is already detached via setImmediate for the background path.
 export const PR_FETCH_CONCURRENCY = 2;
 
+// Ceiling on the per-PR walk, which is the fallback for providers with no
+// repository-level comment listing (GitLab, Bitbucket, Azure DevOps, Forgejo).
+//
+// Without it the walk costs 3 API calls per pull request in the window, with
+// nothing bounding the window's size but the customer's own activity. On a
+// repo with 816 PRs that is ~2450 requests -- most of an hourly GitHub budget,
+// spent to build a list this use case then truncates to 100 comments. See
+// issue #1686.
+//
+// Two limits, because either one alone leaves a hole: TARGET stops early on a
+// repo where a few PRs carry long review threads, and MAX_SCANNED stops a repo
+// whose PRs are mostly empty from walking forever looking for a target it will
+// never reach.
+export const MAX_PULL_REQUESTS_SCANNED = 100;
+
+// Oversampled against the ~100 comments the pipeline keeps: bot authors,
+// Kody's own past comments and denylisted reviewers are dropped downstream.
+export const TARGET_SAMPLED_COMMENTS = 300;
+
+// Mirrors the filter in commentAnalysis.service (`body.length > 100`), so the
+// budget counts comments that can actually become a rule rather than "LGTM".
+const SUBSTANTIVE_COMMENT_LENGTH = 100;
+
+/**
+ * Newest pull requests first, tolerating providers that do not return a
+ * creation date (bitbucket and forgejo do not populate `created_at` on this
+ * shape). Undated entries keep their original relative order, which is
+ * already newest-first for every provider we call -- sorting them to the back
+ * would be worse than leaving them where the API put them.
+ */
+export function orderPullRequestsNewestFirst<
+    T extends { created_at?: string; createdAt?: string },
+>(pullRequests: T[]): T[] {
+    const time = (pr: T): number | undefined => {
+        const raw = pr?.created_at ?? pr?.createdAt;
+        if (!raw) return undefined;
+        const t = new Date(raw).getTime();
+        return Number.isNaN(t) ? undefined : t;
+    };
+    return [...(pullRequests ?? [])]
+        .map((pr, index) => ({ pr, index, t: time(pr) }))
+        .sort((a, b) => {
+            if (a.t === undefined || b.t === undefined) {
+                return a.index - b.index;
+            }
+            return b.t - a.t;
+        })
+        .map((entry) => entry.pr);
+}
+
+/** Comments long enough to carry a convention worth learning. */
+export function countSubstantiveComments(entry: {
+    generalComments?: any[];
+    reviewComments?: any[];
+}): number {
+    return [
+        ...(entry?.generalComments ?? []),
+        ...(entry?.reviewComments ?? []),
+    ].filter(
+        (comment) =>
+            (comment?.body ?? '').length > SUBSTANTIVE_COMMENT_LENGTH,
+    ).length;
+}
+
 @Injectable()
 export class GenerateKodyRulesUseCase {
     private readonly logger = createLogger(GenerateKodyRulesUseCase.name);
@@ -84,6 +164,8 @@ export class GenerateKodyRulesUseCase {
         private readonly sendRulesNotificationUseCase: SendRulesNotificationUseCase,
         @Inject(forwardRef(() => CODE_BASE_CONFIG_SERVICE_TOKEN))
         private readonly codeBaseConfigService: ICodeBaseConfigService,
+        private readonly permissionValidationService: PermissionValidationService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     /**
@@ -128,6 +210,29 @@ export class GenerateKodyRulesUseCase {
             organizationAndTeamData = {
                 organizationId,
                 teamId,
+            };
+
+            // Resolve the model policy up front. Outside the trial, an org
+            // without BYOK generates nothing — skip before any expensive PR
+            // fetching or status transition, and leave kodyLearningStatus as-is
+            // (ENABLED) so the UI shows the feature idle rather than stuck.
+            const modelPolicy = await resolveKodyRulesModelPolicy(
+                this.permissionValidationService,
+                organizationAndTeamData,
+            );
+
+            if (!modelPolicy.generate) {
+                this.logger.warn({
+                    message: `Skipping Kody Rules generation — ${modelPolicy.skipReason}`,
+                    context: GenerateKodyRulesUseCase.name,
+                    metadata: { body, organizationAndTeamData },
+                });
+                return [];
+            }
+
+            const modelConfig: KodyRulesModelSelection = {
+                byokConfig: modelPolicy.byokConfig,
+                modelOverride: modelPolicy.modelOverride,
             };
 
             const dateFilter = generateDateFilter({ months, weeks, days });
@@ -197,11 +302,49 @@ export class GenerateKodyRulesUseCase {
             );
 
             const allRules = [];
-            const createdRules = []; // To track created rules for notification
+            // Typed on purpose. As a bare `[]` this was `any[]`, so pushing
+            // objects here and passing the array to a `string[]` parameter
+            // type-checked cleanly — and only blew up at render time, inside
+            // the worker, as "Objects are not valid as a React child".
+            const createdRules: Array<{
+                title: string;
+                rule: string;
+                severity: string;
+            }> = [];
+            // Repos that received ≥1 persisted rule — promoted to isSelected:true
+            // after the loop so the generated rules are visible in the UI.
+            const reposWithRules = new Map<string, Repositories>();
+            // Repos whose PR fetch errored (auth/integration/rate-limit) rather
+            // than genuinely having no PRs. `getPullRequestsByRepository`
+            // returns null on failure and [] when the repo has no PRs in the
+            // window — collapsing them turned a broken GitHub integration into
+            // a misleading "200, 0 rules".
+            const failedRepositories: string[] = [];
+
+            // Per-repo denylist of git reviewers to exclude from learning
+            // (issue #1497), resolved once from the code-review config.
+            const excludedReviewers =
+                await this.resolveExcludedReviewersByRepo(
+                    organizationAndTeamData,
+                );
 
             for (const repository of filteredRepositories) {
-                const pullRequests =
-                    await this.codeManagementService.getPullRequestsByRepository(
+                // Preferred path: ask the provider for the repo's recent
+                // comments directly, newest first, and stop once we have
+                // enough. Bounded by the sample we want rather than by how
+                // many PRs the repo happens to have.
+                //
+                // The fallback below walks every PR in the window and spends
+                // 3 calls on each, which on an active repo can exceed the
+                // account's entire hourly GitHub budget before it finishes
+                // (issue #1686). It stays only for providers with no
+                // repository-level comment listing.
+                // Optional call: the capability is declared optional on the
+                // contract, so a platform (or a partially-wired facade) that
+                // lacks it degrades to the walk below instead of failing rule
+                // generation outright.
+                const sampled =
+                    await this.codeManagementService.getRecentRepositoryComments?.(
                         {
                             organizationAndTeamData,
                             repository,
@@ -211,25 +354,63 @@ export class GenerateKodyRulesUseCase {
                         },
                     );
 
-                if (!pullRequests || pullRequests.length === 0) {
-                    this.logger.log({
-                        message: 'No pull requests found',
-                        context: GenerateKodyRulesUseCase.name,
-                        metadata: {
-                            dateFilter,
-                            repositoryId: repository
-                                ? repository.id
-                                : 'repository not found',
-                        },
-                    });
-                    continue;
-                }
+                let comments = sampled;
 
-                const comments = await this.fetchPullRequestComments(
-                    repository,
-                    pullRequests,
-                    organizationAndTeamData,
-                );
+                // null means the provider has no repository-level listing (or
+                // the call failed) -- NOT "no comments". Only then do we pay
+                // for the per-PR walk.
+                if (comments == null) {
+                    const pullRequests =
+                        await this.codeManagementService.getPullRequestsByRepository(
+                            {
+                                organizationAndTeamData,
+                                repository,
+                                filters: {
+                                    ...dateFilter,
+                                },
+                            },
+                        );
+
+                    // null/undefined = fetch failed (e.g. GitHub App install
+                    // returning 404 on the access token); an empty array is a
+                    // legitimate "no PRs in this window".
+                    if (pullRequests == null) {
+                        this.logger.error({
+                            message:
+                                'Failed to fetch pull requests (code management integration/auth error)',
+                            context: GenerateKodyRulesUseCase.name,
+                            metadata: {
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                                dateFilter,
+                                repositoryId:
+                                    repository?.id ?? 'repository not found',
+                            },
+                        });
+                        failedRepositories.push(repository?.id ?? 'unknown');
+                        continue;
+                    }
+
+                    if (pullRequests.length === 0) {
+                        this.logger.log({
+                            message: 'No pull requests found',
+                            context: GenerateKodyRulesUseCase.name,
+                            metadata: {
+                                dateFilter,
+                                repositoryId: repository
+                                    ? repository.id
+                                    : 'repository not found',
+                            },
+                        });
+                        continue;
+                    }
+
+                    comments = await this.fetchPullRequestComments(
+                        repository,
+                        pullRequests,
+                        organizationAndTeamData,
+                    );
+                }
 
                 if (!comments || comments.length === 0) {
                     this.logger.log({
@@ -244,8 +425,27 @@ export class GenerateKodyRulesUseCase {
                     continue;
                 }
 
+                const excludedForRepo = excludedReviewers.forRepo(
+                    repository.id,
+                );
+
+                if (excludedForRepo && excludedForRepo.size > 0) {
+                    this.logger.log({
+                        message: `Excluding ${excludedForRepo.size} reviewer(s) from Kody Rules learning`,
+                        context: GenerateKodyRulesUseCase.name,
+                        metadata: {
+                            organizationAndTeamData,
+                            repositoryId: repository.id,
+                            excludedCount: excludedForRepo.size,
+                        },
+                    });
+                }
+
                 const processedComments =
-                    this.commentAnalysisService.processComments(comments);
+                    this.commentAnalysisService.processComments(
+                        comments,
+                        excludedForRepo,
+                    );
 
                 if (!processedComments || processedComments.length === 0) {
                     continue;
@@ -256,6 +456,7 @@ export class GenerateKodyRulesUseCase {
                         comments: processedComments,
                         existingRules,
                         organizationAndTeamData,
+                        modelConfig,
                     });
 
                 if (!rules || rules.length === 0) {
@@ -282,6 +483,7 @@ export class GenerateKodyRulesUseCase {
                     ? KodyRulesStatus.PENDING
                     : KodyRulesStatus.ACTIVE;
 
+                let persistedForRepo = 0;
                 for (const rule of rules) {
                     const dto: CreateKodyRuleDto = {
                         type: KodyRulesType.STANDARD,
@@ -300,39 +502,91 @@ export class GenerateKodyRulesUseCase {
                         userEmail: 'kody@kodus.io',
                     };
 
-                    const createOrUpdateUseCase = await this.moduleRef.resolve(
-                        CreateOrUpdateKodyRulesUseCase,
-                        undefined,
-                        { strict: false },
-                    );
+                    // A single rule failing to persist (e.g. a plan cap or a
+                    // transient write error) must not discard the rules already
+                    // saved for this repo or the remaining repos. Log and move on.
+                    try {
+                        const createOrUpdateUseCase =
+                            await this.moduleRef.resolve(
+                                CreateOrUpdateKodyRulesUseCase,
+                                undefined,
+                                { strict: false },
+                            );
 
-                    const createdRule = await createOrUpdateUseCase.execute(
-                        dto,
-                        organizationId,
-                        userInfo,
-                    );
-
-                    if (!createdRule) {
-                        throw new Error(
-                            'Failed to persist generated Kody rule',
+                        const createdRule = await createOrUpdateUseCase.execute(
+                            dto,
+                            organizationId,
+                            userInfo,
                         );
+
+                        if (!createdRule) {
+                            throw new Error(
+                                'Failed to persist generated Kody rule',
+                            );
+                        }
+
+                        persistedForRepo++;
+
+                        // Add rule to notification data
+                        createdRules.push({
+                            title: rule.title,
+                            rule: rule.rule,
+                            severity: rule.severity,
+                        });
+
+                        this.logger.log({
+                            message: 'Rule generated and saved successfully',
+                            context: GenerateKodyRulesUseCase.name,
+                            metadata: { rule },
+                        });
+                    } catch (persistError) {
+                        this.logger.error({
+                            message:
+                                'Failed to persist a generated Kody rule; keeping the others',
+                            context: GenerateKodyRulesUseCase.name,
+                            error:
+                                persistError instanceof Error
+                                    ? persistError
+                                    : new Error(String(persistError)),
+                            metadata: {
+                                repositoryId: repository.id,
+                                title: rule.title,
+                            },
+                        });
                     }
+                }
 
-                    // Add rule to notification data
-                    createdRules.push({
-                        title: rule.title,
-                        rule: rule.rule,
-                        severity: rule.severity,
-                    });
-
-                    this.logger.log({
-                        message: 'Rule generated and saved successfully',
-                        context: GenerateKodyRulesUseCase.name,
-                        metadata: { rule },
-                    });
+                if (persistedForRepo > 0) {
+                    reposWithRules.set(repository.id, {
+                        id: repository.id,
+                        name: repository.name,
+                    } as Repositories);
                 }
 
                 allRules.push(rules);
+            }
+
+            // If every worked repo failed to even fetch PRs and nothing was
+            // generated, this is an integration/auth failure — not "no rules to
+            // learn". Throw so the run surfaces a non-2xx (the outer catch
+            // resets kodyLearningStatus to ENABLED) instead of a misleading
+            // "200, 0 rules". Partial success (some repos produced rules) still
+            // completes; the failures are already logged above.
+            if (failedRepositories.length > 0 && allRules.length === 0) {
+                throw new ServiceUnavailableException(
+                    'Could not fetch pull requests from the code management integration; no rules were generated',
+                );
+            }
+
+            // Make the generated rules visible: every repo that received a rule
+            // must have its own code_review_config entry with isSelected:true
+            // (the front only lists rules for repos with an individual config).
+            // One-way — never demotes a repo the user already selected.
+            if (reposWithRules.size > 0) {
+                await this.promoteRepositoriesToSelected(
+                    organizationAndTeamData,
+                    [...reposWithRules.values()],
+                );
             }
 
             await this.createOrUpdateParametersUseCase.execute(
@@ -373,8 +627,15 @@ export class GenerateKodyRulesUseCase {
                 });
 
                 // Execute notification asynchronously to not block the main flow
+                // The notification takes the rule TITLES — short, human
+                // readable, and the same text the Kody Rules screen shows.
+                // The full rule body is a paragraph of prompt text and would
+                // make the email unreadable.
                 this.sendRulesNotificationUseCase
-                    .execute(organizationId, createdRules)
+                    .execute(
+                        organizationId,
+                        createdRules.map((r) => r.title),
+                    )
                     .catch((error) => {
                         this.logger.error({
                             message:
@@ -388,6 +649,14 @@ export class GenerateKodyRulesUseCase {
                         });
                     });
             }
+
+            void this.telemetry.kodyRulesImported({
+                organizationId,
+                teamId,
+                source: 'discovery',
+                ruleCount: createdRules.length,
+                repositoryCount: reposWithRules.size,
+            });
 
             return allRules.flat();
         } catch (error) {
@@ -431,19 +700,73 @@ export class GenerateKodyRulesUseCase {
     ): Promise<any[]> {
         const limit = pLimit(PR_FETCH_CONCURRENCY);
 
-        const settled = await Promise.allSettled(
-            pullRequests.map((pr) =>
-                limit(() =>
-                    this.fetchSinglePullRequestComments(
-                        repository,
-                        pr,
-                        organizationAndTeamData,
-                    ),
-                ),
-            ),
-        );
+        // Newest first, then walk in chunks and stop as soon as we have
+        // enough. Fetching everything and truncating later is what made this
+        // cost an hour of the customer's GitHub budget (issue #1686); the
+        // chunking is what lets us stop, since the previous single
+        // Promise.allSettled committed to every PR before seeing any result.
+        const ordered = orderPullRequestsNewestFirst(pullRequests ?? []);
+        const scannable = ordered.slice(0, MAX_PULL_REQUESTS_SCANNED);
 
         const collected: any[] = [];
+        const settled: PromiseSettledResult<any>[] = [];
+        let sampled = 0;
+        let scanned = 0;
+        let rateLimited = false;
+
+        for (let i = 0; i < scannable.length; i += PR_FETCH_CONCURRENCY) {
+            const chunk = scannable.slice(i, i + PR_FETCH_CONCURRENCY);
+            const chunkSettled = await Promise.allSettled(
+                chunk.map((pr) =>
+                    limit(() =>
+                        this.fetchSinglePullRequestComments(
+                            repository,
+                            pr,
+                            organizationAndTeamData,
+                        ),
+                    ),
+                ),
+            );
+            settled.push(...chunkSettled);
+            scanned += chunk.length;
+
+            for (const result of chunkSettled) {
+                if (result.status === 'fulfilled') {
+                    sampled += countSubstantiveComments(result.value);
+                    rateLimited ||= result.value.rateLimited;
+                }
+            }
+
+            // The provider already refused the request rate after
+            // with429Retry waited it out. Walking on would spend the quota
+            // the customer's reviews run on (on gitlab.com it kept the token
+            // in 429 for 12 minutes and the first review was skipped), so
+            // learn from what we have.
+            if (rateLimited || sampled >= TARGET_SAMPLED_COMMENTS) {
+                break;
+            }
+        }
+
+        // Never silent: a cap that trims coverage has to say what it left on
+        // the floor, or a thin rule set reads as "this repo has no
+        // conventions" instead of "we stopped early".
+        if (scanned < ordered.length) {
+            this.logger.log({
+                message:
+                    'Stopped sampling pull requests early (comment budget reached, scan ceiling hit or provider rate-limited)',
+                context: GenerateKodyRulesUseCase.name,
+                metadata: {
+                    rateLimited,
+                    organizationId: organizationAndTeamData?.organizationId,
+                    pullRequestsInWindow: ordered.length,
+                    pullRequestsScanned: scanned,
+                    substantiveCommentsSampled: sampled,
+                    targetComments: TARGET_SAMPLED_COMMENTS,
+                    maxScanned: MAX_PULL_REQUESTS_SCANNED,
+                },
+            });
+        }
+
         for (const result of settled) {
             if (result.status === 'fulfilled') {
                 collected.push(result.value);
@@ -488,6 +811,9 @@ export class GenerateKodyRulesUseCase {
                             organizationAndTeamData,
                             repository,
                             prNumber,
+                            // Without it GitLab answers a 429 with [], and the
+                            // walk never learns it should stop.
+                            failOnError: true,
                         }),
                     { label: `genRules:getAllComments PR#${prNumber}` },
                 ),
@@ -515,6 +841,10 @@ export class GenerateKodyRulesUseCase {
 
         return {
             pr,
+            rateLimited: [generalComments, reviewComments, files].some(
+                (result) =>
+                    result.status === 'rejected' && is429Error(result.reason),
+            ),
             generalComments: this.settledOrEmpty(
                 generalComments,
                 'comments',
@@ -559,6 +889,56 @@ export class GenerateKodyRulesUseCase {
         return [];
     }
 
+    /**
+     * Resolve, once per run, each repo's denylist of git reviewers to exclude
+     * from past-review learning (issue #1497). Reads the code-review config and
+     * merges global ⊕ repo levels (repo overrides global, matching every other
+     * config field). Returns a `forRepo(id)` lookup that yields a `Set` of
+     * excluded ids, or `undefined` when the repo excludes no one (so
+     * `processComments` skips the filter entirely).
+     */
+    private async resolveExcludedReviewersByRepo(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<{ forRepo: (repositoryId: string) => Set<string> | undefined }> {
+        const toSet = (ids?: string[]): Set<string> | undefined => {
+            if (!ids || ids.length === 0) {
+                return undefined;
+            }
+            return new Set(ids.map((id) => String(id)));
+        };
+
+        try {
+            const codeReviewConfig = await this.parametersService.findByKey(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                organizationAndTeamData,
+            );
+
+            const resolveSettings = createKodyLearningSettingsResolver(
+                codeReviewConfig?.configValue,
+            );
+
+            return {
+                forRepo: (repositoryId: string) =>
+                    toSet(
+                        resolveSettings(repositoryId)
+                            .kodyLearningExcludedReviewers,
+                    ),
+            };
+        } catch (error) {
+            // Never let reviewer resolution break generation — fall back to
+            // learning from everyone.
+            this.logger.warn({
+                message:
+                    'Failed to resolve excluded reviewers; learning from all reviewers',
+                context: GenerateKodyRulesUseCase.name,
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
+                metadata: { organizationAndTeamData },
+            });
+            return { forRepo: () => undefined };
+        }
+    }
+
     private async getRepositories(
         organizationAndTeamData: OrganizationAndTeamData,
     ) {
@@ -570,9 +950,103 @@ export class GenerateKodyRulesUseCase {
         if (!codeReviewConfig || !codeReviewConfig.configValue)
             return this.getRepositoriesIntegration(organizationAndTeamData);
 
-        return codeReviewConfig.configValue.repositories.filter(
-            (repo) => repo.isSelected === true,
-        );
+        const selected = (
+            codeReviewConfig.configValue.repositories ?? []
+        ).filter((repo) => repo.isSelected === true);
+
+        if (selected.length > 0) {
+            return selected;
+        }
+
+        // Config exists but nothing is selected — the normal state right after
+        // onboarding (per-repo configs are only created on demand). Fall back to
+        // the integration's repositories, same as when no config exists at all.
+        this.logger.log({
+            message:
+                'No repositories selected in code_review_config; falling back to integration repositories',
+            context: GenerateKodyRulesUseCase.name,
+            metadata: { organizationAndTeamData },
+        });
+        return this.getRepositoriesIntegration(organizationAndTeamData);
+    }
+
+    /**
+     * Promote each given repository to `isSelected: true` in code_review_config,
+     * creating the entry when it doesn't exist yet. One-way by design: a repo
+     * that is already selected (or absent from `repositories`) is never demoted
+     * or otherwise touched — rule generation must never unselect a repo.
+     */
+    private async promoteRepositoriesToSelected(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositories: Array<Pick<Repositories, 'id' | 'name'>>,
+    ): Promise<void> {
+        try {
+            const codeReviewConfig = await this.parametersService.findByKey(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                organizationAndTeamData,
+            );
+
+            if (!codeReviewConfig || !codeReviewConfig.configValue) {
+                // Provisioning the global config is owned by the sibling fix
+                // (code_review_config creation); there's nothing to promote onto.
+                this.logger.warn({
+                    message:
+                        'code_review_config missing; cannot promote repositories to isSelected',
+                    context: GenerateKodyRulesUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryIds: repositories.map((r) => r.id),
+                    },
+                });
+                return;
+            }
+
+            const configValue = codeReviewConfig.configValue;
+            const entries: RepositoryCodeReviewConfig[] = Array.isArray(
+                configValue.repositories,
+            )
+                ? [...configValue.repositories]
+                : [];
+            const byId = new Map(entries.map((r) => [r.id, r]));
+
+            let changed = false;
+            for (const repo of repositories) {
+                const current = byId.get(repo.id);
+                if (!current) {
+                    entries.push({
+                        id: repo.id,
+                        name: repo.name,
+                        isSelected: true,
+                        configs: {},
+                        directories: [],
+                    });
+                    changed = true;
+                } else if (current.isSelected !== true) {
+                    current.isSelected = true;
+                    changed = true;
+                }
+                // Already selected → left untouched (never demoted).
+            }
+
+            if (!changed) {
+                return;
+            }
+
+            await this.createOrUpdateParametersUseCase.execute(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                { ...configValue, repositories: entries },
+                organizationAndTeamData,
+            );
+        } catch (error) {
+            this.logger.error({
+                message:
+                    'Failed to promote repositories to isSelected after rule generation',
+                context: GenerateKodyRulesUseCase.name,
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
+                metadata: { organizationAndTeamData },
+            });
+        }
     }
 
     private async getRepositoriesIntegration(
@@ -584,7 +1058,12 @@ export class GenerateKodyRulesUseCase {
         });
 
         if (!integration) {
-            throw new Error('Integration not found');
+            // Semantic 422 instead of the generic 500 that surfaced downstream
+            // as "Repository service for type 'null' not found" when the team
+            // has no code-management integration wired up.
+            throw new UnprocessableEntityException(
+                'Code management integration not configured for this team',
+            );
         }
 
         const integrationConfig = await this.integrationConfigService.findOne({
@@ -594,7 +1073,9 @@ export class GenerateKodyRulesUseCase {
         });
 
         if (!integrationConfig) {
-            throw new Error('Integration config not found');
+            throw new UnprocessableEntityException(
+                'Code management integration has no repositories configured for this team',
+            );
         }
 
         return integrationConfig.configValue as Repositories[];

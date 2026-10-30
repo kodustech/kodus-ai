@@ -1,0 +1,4169 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "65d8210f3d4ff1d5a5fa4e69740a3ec8f2c429d859a98bb946084efd8385a404"
+  },
+  "startedAt": "2026-10-15T00:56:00.265Z",
+  "updatedAt": "2026-10-15T02:13:00.897Z",
+  "complete": true,
+  "selectedCases": [
+    "R3p-consequence-status-pending",
+    "R10-kodus2044-reversal",
+    "K5-rule-repost-stored-implemented",
+    "K12-rule-repost-attempted-fix",
+    "P08-rule-bottom-cast-moved-to-helper",
+    "P16-rule-no-overwrite-listed-site",
+    "P24-create-mode-section-hidden",
+    "P32-install-failure-only-logged",
+    "P40-rule-pii-on-structured-log-lines"
+  ],
+  "casesSourceDigest": "b2df88608e358fbe3a624081f47d032fe4b819493181632650cb98b78198605f",
+  "summary": {
+    "measured": 45,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 30,
+        "violations": 5,
+        "rate": 0.167
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 4,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 30,
+        "violations": 2,
+        "rate": 0.067
+      },
+      "index-reference (#2039)": {
+        "n": 44,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R3p-consequence-status-pending · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 3,
+        "n": 5,
+        "delivered": 3
+      },
+      "R10-kodus2044-reversal · unresolved-team-bypass [if_delivered_linked, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 1
+      },
+      "K5-rule-repost-stored-implemented · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K5-rule-repost-stored-implemented · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "K12-rule-repost-attempted-fix · rangeLabel-attempt-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K12-rule-repost-attempted-fix · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P08-rule-bottom-cast-moved-to-helper · bottom-cast-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P08-rule-bottom-cast-moved-to-helper · bottom-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P16-rule-no-overwrite-listed-site · snapshot-overwrite-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P16-rule-no-overwrite-listed-site · merge-overwrite-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P24-create-mode-section-hidden · billing-hidden-on-create-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P32-install-failure-only-logged · install-failure-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P40-rule-pii-on-structured-log-lines · pii-log-field-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 112395,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged (status.ts:8-9) makes pollCharge's `gw.submit(...)` branch reachable, and `submit` is documented as non-idempotent ('every call creates a new charge', gateway.ts:3), while NotReadyError is documented as 'The gateway has the charge but has not settled it yet' (errors.ts:1). WHY: A charge that is merely unsettled (transient) now triggers a brand-new charge submission on every poll tick, producing duplicate charges / double billing instead of simply retrying the status check. HOW: The caller must retry polling rather than resubmit for NotReadyError — e.g. in pollCharge, do not call the non-idempotent submit on NotReadyError (re-poll / back off instead), or have gw.status surface a distinct error meaning 'not received' if resubmission is actually intended.",
+          "keep": true,
+          "rationale": "Verified across status.ts, poller.ts, errors.ts, and gateway.ts: status.ts:8-9 propagates NotReadyError unchanged; poller.ts:13-16 catches NotReadyError and calls gw.submit, which gateway.ts:3 documents as non-idempotent ('every call creates a new charge'). errors.ts:1 defines NotReadyError as 'the gateway has the charge but has not settled it yet (transient)' — i.e. the charge already exists. Before propagation the branch was unreachable (error was wrapped as FailedError and rethrown); now it is reachable, so each poll tick on a merely-unsettled charge triggers a brand-new charge submission, producing duplicate charges. The contradiction between poller.ts's 'never received it' comment and errors.ts's contract confirms the resubmit is wrong for this error type.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "label": "bug",
+          "earlierId": "round-a-propagate",
+          "earlierOutcome": "pending",
+          "revisesSuggestionId": "round-a-propagate",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 169428,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError unchanged from fetchStatus (status.ts:8-10) makes pollCharge's resubmit branch (poller.ts:13-16) reachable for the first time, and that branch calls gw.submit(), which the Gateway contract (gateway.ts:3) documents as NOT idempotent (\"every call creates a new charge\") while NotReadyError itself is documented as \"the gateway HAS the charge but has not settled it yet\" (errors.ts:1). WHY: Every time a charge is merely unsettled — a normal transient state — pollCharge now issues an extra submit and creates a duplicate charge; because pollCharge returns only {state:'resubmitted'} and never records the new charge id, the next tick re-polls the same old id, gets NotReadyError again, and resubmits again, producing an unbounded stream of duplicate charges (money movement). HOW: Do not resubmit on a transient NotReadyError — return a 'pending' state and re-poll the same charge id; only resubmit when the gateway explicitly reports it never received the charge (a distinct error type), and persist the new charge id if a resubmit is genuinely required. This narrows the earlier 'propagate NotReadyError' suggestion: propagation is correct, but it is only safe once pollCharge stops treating NotReadyError as 'resubmit'.",
+          "keep": true,
+          "rationale": "Confirmed against source. fetchStatus re-throws NotReadyError unchanged (status.ts:8-10), making pollCharge's NotReadyError branch (poller.ts:13-16) reachable, which calls gw.submit(). errors.ts:1 defines NotReadyError as the transient \"has the charge but not settled yet\" state, while gateway.ts:3 defines submit as NOT idempotent (\"every call creates a new charge\"). Thus an unsettled charge triggers an extra, duplicate charge; pollCharge returns only {state:'resubmitted'} without persisting the new charge id, so the next tick re-polls the same old id, gets NotReadyError again, and resubmits again — an unbounded duplicate-charge (money-movement) loop. The root cause and failure path are factually accurate; no guard prevents it. This narrows the earlier propagate-NotReadyError suggestion, which is exactly the claimed revision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError from fetchStatus makes pollCharge's resubmit branch (poller.ts:13-16) newly reachable, and that branch calls the non-idempotent gw.submit, creating a second charge. WHY: NotReadyError is documented as 'the gateway has the charge but has not settled it yet (transient)' (errors.ts:1) — the charge already exists, so resubmitting produces a duplicate charge and double billing. This path was unreachable before the change because fetchStatus wrapped every error in FailedError. HOW: propagate NotReadyError but stop treating it as 'not received' downstream — e.g. have pollCharge retry status instead of resubmitting on NotReadyError (only resubmit when the gateway explicitly reports the charge is unknown), or make submit idempotent via an idempotency key.",
+          "keep": true,
+          "rationale": "Confirmed. status.ts:8-10 now propagates NotReadyError instead of wrapping it in FailedError, making poller.ts:13-16 newly reachable. That branch interprets NotReadyError as \"never received\" and calls gw.submit, which gateway.ts:3 explicitly documents as non-idempotent (\"every call creates a new charge\"). errors.ts:1 defines NotReadyError as \"the gateway has the charge but has not settled it yet\", directly contradicting the poller's assumption, so resubmission produces a duplicate charge / double billing. fetchStatus has only one consumer (pollCharge), so no upstream guard prevents this path. The bug is real and cross-file; the claim holds.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|fetchStatus|submit\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRe-throwing `NotReadyError` from `fetchStatus` makes `pollCharge`'s resubmit branch (`poller.ts:13-16`) newly reachable, so its non-idempotent `gw.submit` call creates a second charge and double billing because `NotReadyError` means the gateway already has the charge but has not settled it (`errors.ts:1`), and this path was unreachable before `fetchStatus` wrapped every error in `FailedError`. Propagate `NotReadyError` but stop treating it as `not received` downstream, for example by having `pollCharge` retry status instead of resubmitting on `NotReadyError` and only resubmitting when the gateway explicitly reports the charge is unknown, or by making `submit` idempotent via an idempotency key."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRe-throwing `NotReadyError` unchanged from `fetchStatus` (`status.ts:8-10`) makes `pollCharge`'s resubmit branch (`poller.ts:13-16`) reachable for the first time, and because `gw.submit()` is documented as not idempotent (`gateway.ts:3`) while `NotReadyError` means the gateway has the charge but has not settled it (`errors.ts:1`), every transient unsettled state triggers an extra submit; `pollCharge` returns only `{state:'resubmitted'}` without recording the new charge id, so the next tick re-polls the old id, gets `NotReadyError` again, and resubmits, producing an unbounded stream of duplicate charges and money movement. Do not resubmit on a transient `NotReadyError`; return a `pending` state and re-poll the same charge id, only resubmit when the gateway explicitly reports it never received the charge as a distinct error type, and persist the new charge id if a resubmit is genuinely required; this narrows the earlier propagation suggestion, which is correct but safe only once `pollCharge` stops treating `NotReadyError` as a resubmit trigger."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 157637,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError out of fetchStatus makes pollCharge's resubmit branch reachable, and that branch calls gw.submit — which gateway.ts documents as NOT idempotent (every call creates a new charge). WHY: errors.ts defines NotReadyError as \"The gateway HAS the charge but has not settled it yet (transient)\", so a charge that is merely unsettled now causes pollCharge to submit the payload again, creating a duplicate charge (the previous code wrapped it in FailedError, leaving the resubmit branch unreachable). HOW: either keep NotReadyError distinguished but have the caller retry gw.status instead of resubmitting (do not call gw.submit on a not-settled status), or make submit idempotent/keyed by charge before allowing the resubmit path. If the intended semantic really is \"gateway never received it\", fix the NotReadyError contract/comment in errors.ts so the two meanings cannot be confused.",
+          "keep": true,
+          "rationale": "Confirmed by tracing the code: status.ts:8-9 rethrows NotReadyError, poller.ts:13-15 catches it and calls gw.submit, and gateway.ts:3 documents submit as NOT idempotent (creates a new charge each call). errors.ts:1 defines NotReadyError as \"gateway HAS the charge but has not settled it yet\", which conflicts with poller.ts:7's \"gateway never received it\". Thus propagating NotReadyError makes the resubmit branch reachable and, per the errors.ts contract, a merely-unsettled charge produces a duplicate charge. No guard prevents this. The earlier pending decision (round-a-propagate) only addressed misclassifying a transient error as terminal; it did not judge this downstream duplicate-submit consequence, so it does not resolve this finding. The claim's root cause and failure path are accurate; it is a real behavioral bug, not style.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|submit|NotReadyError|FailedError",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "label": "bug",
+          "earlierId": "round-a-propagate",
+          "earlierOutcome": "pending",
+          "revisesSuggestionId": "round-a-propagate",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 187289,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError unchanged makes pollCharge's `err instanceof NotReadyError` branch reachable, so a transient \"charge exists but is not settled yet\" error now triggers `gw.submit(charge.payload)`. WHY: errors.ts documents NotReadyError as \"the gateway HAS the charge but has not settled it yet\", while gateway.ts documents submit as NOT idempotent (\"every call creates a new charge\") — so the poller resubmits a charge the gateway already holds, producing a duplicate charge (double billing); because pollCharge runs \"on every tick\", a charge that stays unsettled creates one new charge per tick. HOW: propagate NotReadyError (as done here) but stop treating it as \"never received\" in the caller — in pollCharge do not call gw.submit for NotReadyError; return a pending/retry state and let the next status poll settle it (or resubmit through an idempotent endpoint / idempotency key). Also reconcile the contradictory docs at poller.ts:7 and errors.ts:2 so the branch semantics match the error.",
+          "keep": true,
+          "rationale": "The code path is confirmed: status.ts:8-9 now propagates NotReadyError unchanged, making poller.ts:13-14 reachable. That branch calls gw.submit (gateway.ts:3: 'NOT idempotent: every call creates a new charge') for an error that errors.ts:1 defines as 'gateway HAS the charge but has not settled it yet (transient)' — the opposite of poller.ts:7's 'never received it: resubmit'. So an unsettled charge triggers a duplicate non-idempotent submit, once per tick. No upstream guard prevents this; the root cause and failure path are factually accurate, and the finding refines rather than reverses the pending propagation suggestion.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|submit\\(|pollCharge|instanceof"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError unchanged now makes pollCharge's `err instanceof NotReadyError` branch reachable, and that branch calls the non-idempotent gw.submit to create a brand-new charge. WHY: errors.ts defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)' and gateway.ts documents submit as 'NOT idempotent: every call creates a new charge', so a charge that is merely unsettled is resubmitted and duplicated — a double-billing regression that did not exist while fetchStatus converted every throw to FailedError (the poller branch was dead). HOW: keep propagating NotReadyError, but make the caller retry (re-poll) instead of resubmitting — e.g. in pollCharge drop the gw.submit call for NotReadyError and re-run fetchStatus on the next tick; only resubmit when the error truly means the gateway never received the charge.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts defines NotReadyError as \"gateway HAS the charge but has not settled it (transient)\", and gateway.ts documents submit as non-idempotent (each call creates a new charge). By re-throwing NotReadyError unchanged, status.ts:8-9 lets it escape fetchStatus into poller.ts:13-15, which calls gw.submit — creating a duplicate charge for a charge that already exists, i.e. double-billing. The branch was unreachable before (all errors were wrapped into FailedError), so the diff activates the bug. The poller.ts \"never received it\" comment conflicts with the NotReadyError class contract, which is exactly the mismatch driving the defect. No upstream guard prevents this path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|submit",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\n`errors.ts` defines `NotReadyError` as the gateway having the charge but not settled, while `gateway.ts` documents `submit` as non-idempotent, so re-throwing it makes `pollCharge`'s `err instanceof NotReadyError` branch reachable and duplicates the charge for a double-billing regression that was hidden while `fetchStatus` converted every throw to `FailedError` and left that branch dead. Keep propagating `NotReadyError`, but have `pollCharge` re-poll `fetchStatus` on the next tick instead of calling `gw.submit`, and only resubmit when the error truly means the gateway never received the charge."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\n`errors.ts` documents `NotReadyError` as the gateway already holding the charge but not settling it, and `gateway.ts` documents `submit` as non-idempotent, so re-throwing it makes `pollCharge`'s `err instanceof NotReadyError` branch reachable and creates one duplicate charge per tick for a double-billing regression. Keep propagating `NotReadyError`, but in `pollCharge` do not call `gw.submit`; return a pending/retry state and let the next status poll settle it (or resubmit through an idempotent endpoint/idempotency key), and reconcile the contradictory docs at `poller.ts:7` and `errors.ts:2`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 183138,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Rethrowing NotReadyError from fetchStatus makes pollCharge's resubmit branch reachable, and pollCharge responds to a NotReadyError by calling gw.submit(charge.payload). WHY: NotReadyError is defined as 'the gateway has the charge but has not settled it yet' (transient) and Gateway.submit is explicitly documented as 'NOT idempotent: every call creates a new charge', so every not-yet-settled charge now causes a duplicate charge to be created (double billing). Before this change fetchStatus converted the error to FailedError, so the resubmit branch in pollCharge was never triggered. HOW: distinguish 'gateway never received it' from 'not settled yet' — only resubmit for the former; for NotReadyError retry the status call instead of calling gw.submit, e.g. in pollCharge: `if (err instanceof NotReadyError) { return { state: 'pending' as const }; }` (retry on the next tick) rather than resubmitting.",
+          "keep": true,
+          "rationale": "The claim is confirmed by the actual code. errors.ts defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', and gateway.ts documents submit as 'NOT idempotent: every call creates a new charge.' In status.ts:8-9, the change rethrows NotReadyError unchanged instead of wrapping it in FailedError. This makes poller.ts:13-15 reachable: pollCharge catches NotReadyError and calls gw.submit(charge.payload), which per the gateway contract creates a brand-new charge for a charge the gateway already holds and is merely waiting to settle — i.e. double billing. Before this change fetchStatus converted NotReadyError to FailedError, so the resubmit branch was unreachable. The root cause is factually correct, the path is reachable, and this is a behavior bug, not style. It also directly revises the earlier suggestion round-a-propagate (which asked to propagate NotReadyError), since propagating it exposes the poller's resubmit branch.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|resubmit|gw.submit"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRethrowing `NotReadyError` from `fetchStatus` makes `pollCharge`'s resubmit branch reachable, and because `NotReadyError` means the gateway has the charge but has not settled it yet while `Gateway.submit` is documented as NOT idempotent (every call creates a new charge), every not-yet-settled charge now triggers `gw.submit(charge.payload)` and can create a duplicate charge, causing double billing; before this change `fetchStatus` converted the error to `FailedError`, so the resubmit branch was never triggered. Distinguish 'gateway never received it' from 'not settled yet' so only the former resubmits; for `NotReadyError`, retry the status call instead of calling `gw.submit`, e.g. in `pollCharge` return `{ state: 'pending' as const }` on the next tick rather than resubmitting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 205264,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: the new createMemoryRule refusal branch returns a `data` object missing the outputSchema-required fields `uuid`, `rule` and `status`. WHY: createMemoryRule's outputSchema (lines 1070-1087) declares those three as non-optional `z.string()`/`z.enum`, so if the tool result's structuredContent is validated against outputSchema (by wrapToolHandler or the MCP client), the intended graceful `success: false, 'Team not found.'` refusal is surfaced as a schema-validation error instead of the structured refusal the caller expects; note createKodyRule's data fields are all optional, so its refusal (data: { title }) is valid while this one is not. HOW: populate the required fields in the refusal, e.g. add `uuid: ''`, `rule: args.kodyRule.rule`, `status: KodyRulesStatus.ACTIVE` (or relax the schema fields to optional to match createKodyRule).",
+          "keep": true,
+          "rationale": "The claim is factually confirmed by the code: createMemoryRule's outputSchema (lines 1070-1087) declares data.uuid (z.string()), data.rule (z.string()), and data.status (z.enum(KodyRulesStatus)) as required (non-optional) inside z.looseObject, while the new refusal branch (lines 1116-1127) returns a data object containing only title, action, requiresApproval, message, and link. The branch is reachable whenever teamBelongsToAnotherOrganization() is true. The MCP TypeScript SDK validates a tool's structuredContent against its declared outputSchema (server-side output validation), so this intended graceful `success:false, 'Team not found.'` refusal would surface as an output-validation error rather than the structured refusal the caller expects. The comparison to createKodyRule (whose data fields are optional) is consistent with the described asymmetry. I could not locate wrapToolHandler's implementation to find any code that bypasses/relaxes output validation, and nothing in the code shows the missing fields are populated elsewhere, so the finding cannot be refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1050,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outputSchema|structuredContent|wrapToolHandler",
+                "path": "libs/mcp-server"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/utils/mcp-protocol.utils.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "mcp-protocol.utils*"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "label": "bug",
+          "earlierId": "kodus-2044-round-a",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 44,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 177668,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new refusal path in createMemoryRule returns `structuredContent.data` without `uuid`, `rule`, or `status`, but this tool's declared outputSchema requires all three (`uuid: z.string()`, `rule: z.string()`, `status: z.enum(KodyRulesStatus)` at lines 1073-1077). WHY: MCP clients validate structuredContent against the tool's outputSchema, so a call with a team of another organization produces a payload that fails that validation instead of the intended `success: false` result — note createKodyRule's schema declares these same fields `.optional()`, so only the memory tool is exposed. HOW: Mark `uuid`, `rule`, and `status` optional in the createMemoryRule outputSchema (matching the CreateMemoryRuleResponse interface, where they are already optional), or return the fields the schema requires.",
+          "keep": true,
+          "rationale": "Confirmed: createMemoryRule's outputSchema (lines 1073-1084) declares `uuid: z.string()`, `rule: z.string()`, and `status: z.enum(KodyRulesStatus)` as REQUIRED inside `data`, whereas the sibling createKodyRule tool marks these same fields `.optional()` (lines 516-519). The new refusal path (lines 1116-1128) returns `data` containing only title, action, requiresApproval, message, and link — omitting uuid, rule, and status. This is a concrete schema/return mismatch: structuredContent from this branch does not satisfy the tool's declared outputSchema, so any MCP client validating structuredContent against it will reject the intended `success: false` refusal. The CreateMemoryRuleResponse interface (lines 114-123) already marks these fields optional, confirming the outputSchema is stricter than the actual contract. The claim's root cause, fields, and line references all check out; no upstream guard or validation prevents the mismatch. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1050,
+                "endLine": 1160
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outputSchema",
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CreateMemoryRuleResponse|CreateKodyRuleResponse",
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 508,
+                "endLine": 560
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 125,
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 100
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1111,
+          "label": "bug",
+          "earlierId": "kodus-2044-round-a",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 39,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 451126,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new \"team of another organization\" refusal in createMemoryRule returns a `data` object that omits the required `uuid`, `rule`, and `status` fields declared by this tool's `outputSchema` (`z.looseObject({ uuid: z.string(), title: z.string(), rule: z.string(), status: z.enum(KodyRulesStatus), ... })`). WHY: Any MCP client that validates `structuredContent` against `outputSchema` will reject the error response, so the caller never receives the intended \"Team not found.\" refusal (and the tool contract is violated), whereas the sibling createKodyRule branch is safe because its schema fields are all optional. HOW: Include the required fields, e.g. `uuid: '', rule: args.kodyRule.rule, status: KodyRulesStatus.ACTIVE`, or make the schema fields optional.",
+          "keep": true,
+          "rationale": "Confirmed. The KODUS_CREATE_MEMORY outputSchema (lines 1070-1084) declares `data` as a z.looseObject with `uuid: z.string()`, `title: z.string()`, `rule: z.string()`, and `status: z.enum(KodyRulesStatus)` all as REQUIRED (non-optional) fields, plus `action` and `requiresApproval`. The refusal branch at lines 1119-1125 returns `data` containing only title, action, requiresApproval, message, link — omitting the required uuid, rule, and status. So the structured content does not conform to the declared outputSchema, and any MCP client (or server-side) that validates structuredContent against outputSchema would reject the response, preventing the intended 'Team not found.' refusal from being delivered. The contrast drawn with the sibling createKodyRule schema (lines 516-519, all fields optional) is also accurate. This is a concrete contract/schema mismatch in the changed code, not a style issue, and the earlier review decision (teamBelongsToOrganization gate behavior) is a distinct issue not covering this. No refutation available.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outputSchema",
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1080,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1060,
+                "endLine": 1088
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 505,
+                "endLine": 560
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler|outputSchema|structuredContent",
+                "glob": "*.ts",
+                "path": "libs/mcp-server",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 44,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the \"team of another organization\" refusal in `createMemoryRule` returns a `data` object without the `uuid`, `rule`, and `status` fields required by the tool's `outputSchema`, MCP clients that validate `structuredContent` will reject the error response and the caller will never receive the intended `Team not found.` refusal. Include those required fields, such as `uuid: ''`, `rule: args.kodyRule.rule`, and `status: KodyRulesStatus.ACTIVE`, or make the schema fields optional, unlike the sibling `createKodyRule` branch whose fields are all optional and therefore safe."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 228435,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new refusal branch in createMemoryRule returns a `data` object that omits the required `uuid`, `rule`, and `status` fields declared in the tool's own `outputSchema` (lines 1070-1087: `uuid: z.string()`, `rule: z.string()`, `status: z.enum(KodyRulesStatus)` are all required). WHY: `z.looseObject` keeps declared keys required, so this response does not conform to the advertised output contract — an MCP client/SDK validating `structuredContent` against `outputSchema` will reject the result (or error), turning a clean 'Team not found.' refusal into a protocol/validation failure. Note the analogous `createKodyRule` refusal is safe only because all of its `data` fields are `.optional()`. HOW: include the required fields in the refusal payload (or mark them optional in the memory `outputSchema`, matching `CreateMemoryRuleResponse`).",
+          "keep": true,
+          "rationale": "Confirmed by direct reading: the memory tool's outputSchema (lines 1070-1087) declares `data` via z.looseObject with `uuid: z.string()`, `rule: z.string()`, and `status: z.enum(KodyRulesStatus)` as required keys, while the refusal branch at lines 1119-1125 returns a `data` object containing only title, action, requiresApproval, message, and link — omitting uuid, rule, and status. The declared TS return type CreateMemoryRuleResponse (lines 111-124) marks those fields optional, but the runtime outputSchema does not, so the emitted structuredContent does not conform to the advertised output contract. z.looseObject permits extra keys but does not relax required declared keys, so the claim's mechanism is accurate. The branch is reachable (teamBelongsToAnotherOrganization true), so this is a genuine contract/validation mismatch, not a style issue. No evidence refutes it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1060,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CreateMemoryRuleResponse|CreateKodyRuleResponse|structuredContent",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "Team not found\\.",
+                "glob": "libs/mcp-server/tools/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 95,
+                "endLine": 130
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 535,
+                "endLine": 560
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 42,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the refusal payload omits the required `uuid`, `rule`, and `status` fields declared in the memory tool's `outputSchema` (lines 1070-1087), `z.looseObject` keeps those declared keys required and any MCP client validating `structuredContent` against `outputSchema` will reject the response, turning the clean `Team not found.` refusal into a protocol/validation failure. Include those fields in the refusal payload or mark them optional in the memory `outputSchema`, matching `CreateMemoryRuleResponse`; the analogous `createKodyRule` refusal is safe only because all of its `data` fields are `.optional()`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R10-kodus2044-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 297415,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The new 'Team not found.' early return in createMemoryRule builds `data` with only title/action/requiresApproval/message/link, but the tool's declared outputSchema (lines 1073-1084) requires `uuid`, `rule`, and `status` as non-optional fields. WHY: An MCP call whose teamId resolves to another organization produces structuredContent that fails output-schema validation, so the SDK rejects the tool result instead of returning the intended 'Team not found.' response — a broken contract on the newly added path (the sibling createKodyRule avoids this by making those fields optional). HOW: Either make `uuid`, `rule`, and `status` optional in the createMemoryRule outputSchema (mirroring createKodyRule at lines 516-520), or populate them in the early return as shown.",
+          "keep": true,
+          "rationale": "Confirmed the mismatch: createMemoryRule's outputSchema (lines 1070-1087) declares `uuid: z.string()`, `rule: z.string()`, and `status: z.enum(KodyRulesStatus)` as non-optional, while the new 'Team not found.' early return (lines 1116-1127) supplies only title/action/requiresApproval/message/link. The sibling createKodyRule deliberately marks uuid/title/rule/status optional (lines 516-519) precisely so its equivalent early return validates. The reachable path is real: teamBelongsToAnotherOrganization returns true only when teamId resolves to a different organization (line 349), so an MCP call with such a teamId hits this branch. With outputSchema set, the MCP SDK validates structuredContent against it and would reject the result, breaking the intended response. The finding is accurate and not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1040,
+                "endLine": 1140
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 500,
+                "endLine": 560
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "wrapToolHandler",
+                "path": "libs/mcp-server",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "teamBelongsToAnotherOrganization",
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "export function wrapToolHandler|export const wrapToolHandler|function wrapToolHandler",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 320,
+                "endLine": 370
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "claim": "WHAT: The reworked gate now returns false (allow) whenever `findOneOrganizationIdByTeamId(teamId)` resolves to nothing (lines 339-347), so the tenant check is skipped and `createOrUpdate`/`createOrUpdateMemory` proceed with the caller-supplied `args.organizationId`. WHY: An MCP caller can pass a bogus/non-existent `teamId` together with any victim `organizationId` and the rule or memory is created scoped to that organization — before this change a non-resolving team was refused, so this is a cross-tenant write path newly opened by the implementation of the earlier suggestion (which asked to refuse only a team confirmed to belong to another org). It also contradicts the function's own contract: `KodyRulesTenantGuard` returns 404 for `!teamOrganizationId` (apps/api/src/guards/kody-rules-tenant.guard.ts:53), i.e. the opposite of `return false` here. HOW: Only skip the gate for an unresolvable team once `organizationId` has been confirmed against the caller's identity; otherwise refuse (or fail closed) when the team does not resolve. This narrows the earlier suggestion, which is why it is flagged as a revision.",
+          "keep": true,
+          "rationale": "Confirmed: teamBelongsToAnotherOrganization returns false (allow) when findOneOrganizationIdByTeamId resolves nothing (line 346), and the call sites (537-548, 1111-1128) then proceed to createOrUpdate/createOrUpdateMemory using the caller-supplied organizationId (633, 1131). The HTTP KodyRulesTenantGuard fails closed for the same condition (guard line 53), confirming the divergence. No upstream binding of organizationId to the caller was found, so the cross-tenant write path cannot be refuted; this is a different problem that narrows the earlier implemented suggestion.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 300,
+                "endLine": 420
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "teamBelongsToOrganization|findOneOrganizationIdByTeamId|isKodyRulesApprovalEnabled|return false|return true",
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "pattern": "teamBelongsToAnotherOrganization|createOrUpdate|createOrUpdateMemory|resolveCreatedRuleStatus"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "apps/api/src/guards/kody-rules-tenant.guard.ts",
+                "startLine": 30,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 520,
+                "endLine": 660
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/mcp-server/tools/kodyRules.tools.ts",
+                "startLine": 1095,
+                "endLine": 1150
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 56,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 1116,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new `Team not found.` early return in `createMemoryRule` builds `data` without `uuid`, `rule`, or `status`, which the tool's outputSchema (lines 1073-1084) declares as required, so an MCP call whose `teamId` resolves to another organization produces `structuredContent` that fails output-schema validation and the SDK rejects the tool result instead of returning the intended response. Either make `uuid`, `rule`, and `status` optional in the `createMemoryRule` outputSchema (mirroring `createKodyRule` at lines 516-520) or populate them in the early return as shown."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "libs/mcp-server/tools/kodyRules.tools.ts",
+          "line": 339,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "kodus-2044-round-a",
+          "label": "security",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `libs/mcp-server/tools/kodyRules.tools.ts:535` (2026-09-30 23:47 UTC).\n\nReturning false (allow) whenever `findOneOrganizationIdByTeamId(teamId)` resolves to nothing (lines 339-347) skips the tenant check, so an MCP caller can pass a bogus `teamId` together with any victim `organizationId` and have the rule or memory created scoped to that organization — a cross-tenant write path that also contradicts `KodyRulesTenantGuard`, which returns 404 for `!teamOrganizationId` (apps/api/src/guards/kody-rules-tenant.guard.ts:53). Only skip the gate for an unresolvable team once `organizationId` has been confirmed against the caller's identity; otherwise refuse (or fail closed) when the team does not resolve."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unresolved-team-bypass",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K5-rule-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17241,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Because `at.toISOString().slice(0, 10)` uses UTC, `dayKey` is the previous calendar day for users west of UTC. Replace it with `formatLocalDate(at)`, which is already imported in this file, so keys stay in local calendar time."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K5-rule-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17126,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` uses `toISOString().slice(0, 10)`, so users west of UTC get the previous calendar day. Use `formatLocalDate(at)` from `src/reports/dates.ts`, which is already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K5-rule-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19796,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Because `dayKey` derives the calendar day with `toISOString().slice(0, 10)`, users west of UTC get the previous day, violating the local-calendar-day rule. Use `formatLocalDate(at)`, which is already imported in this file, instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K5-rule-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20048,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` derives the calendar day with `at.toISOString().slice(0, 10)`, which returns the previous day for users west of UTC. Use `formatLocalDate(at)`, already imported from `./dates`, to format the date in local calendar time."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K5-rule-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20828,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` derives a calendar day with `toISOString().slice(0, 10)`, which returns the previous day for users west of UTC and breaks the date-only rule. Use `formatLocalDate(at)`, already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K12-rule-repost-attempted-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16621,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        },
+        {
+          "file": "src/reports/range.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Because `dayKey` derives the day with `at.toISOString().slice(0, 10)`, users west of UTC get the previous calendar day, violating the local-calendar-time rule for date-only values. Use `formatLocalDate` from `src/reports/dates.ts` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-attempt-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K12-rule-repost-attempted-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15987,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` derives a date-only value with `toISOString().slice(0, 10)`, which shifts to the previous day for users west of UTC. Use `formatLocalDate` from `src/reports/dates.ts` instead and add the import."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-attempt-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K12-rule-repost-attempted-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22997,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` builds a calendar day with `toISOString().slice(0, 10)`, which returns the previous day for users west of UTC. Use `formatLocalDate` from `src/reports/dates.ts` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-attempt-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K12-rule-repost-attempted-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 52153,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC, `dayKey` returns the previous calendar day because `toISOString().slice(0, 10)` is UTC-based. Replace it with `formatLocalDate` imported from `src/reports/dates.ts` so the local date is used."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-attempt-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K12-rule-repost-attempted-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33707,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        },
+        {
+          "file": "src/reports/range.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC, `dayKey` can return the previous calendar day because `toISOString().slice(0, 10)` converts to UTC before taking the date. Use `formatLocalDate(at)` from `src/reports/dates.ts` to derive the local date instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-attempt-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30712,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/invoice-publisher.ts:8` (2026-10-06 12:00 UTC).\n\nPublishing `payload as never` bypasses the compiler, violating \"No casts through never or unknown\" and reintroducing a cast that was already removed from the paid path. Type the payload as `InvoiceEventMap['invoice.refunded']` (or build it via the typed helper) and drop the cast."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24277,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `payload as never` cast silences the compiler and bypasses `publish`'s type check against `InvoiceEventMap['invoice.refunded']`, violating the \"No casts through never or unknown\" rule. Build the payload through the typed `payloadFor` helper instead so the compiler validates it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 60177,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/invoice-publisher.ts:8` (2026-10-06 12:00 UTC).\n\n`payload as never` violates the no-casts-through-`never`-or-`unknown` rule, and because the same pattern was already fixed for `paid`, this reintroduction lets a misnamed or missing field in the refund payload reach subscribers with no compile error. Annotate the payload as `InvoiceEventMap['invoice.refunded']` and pass it without a cast."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25131,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `as never` cast on `payload` before `this.bus.publish('invoice.refunded', ...)` disables type checking, so a missing or misnamed field can reach subscribers without a compile error. Type the payload as `InvoiceEventMap['invoice.refunded']` (or route it through the typed helper) and drop the cast so `publish` validates it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 48452,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `as never` cast on the `refunded` payload is the banned cast-through-bottom-type and erases its type, so a missing or misnamed field compiles silently and reaches subscribers unchecked. Type the payload as `InvoiceEventMap['invoice.refunded']` and pass it to `publish` without the cast so the bus validates it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 48393,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P16-rule-no-overwrite-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Re-running `snapshot` for the same dataset/version silently replaces the previous snapshot file and never honors `--force`. Check whether `target` exists before writing and exit with an error naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "An existing report is silently replaced and `--force` is ignored. Check `report` before writing and exit with an error naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "A previous merge result is silently replaced and `--force` is ignored. Check the target output path before writing and exit with an error naming the file unless `--force` was passed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59220,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P16-rule-no-overwrite-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Re-running `datasets snapshot orders ./out` for the same version silently replaces the previously written snapshot instead of erroring and naming the file, breaking the rule \"Commands never overwrite existing outputs\". Guard the write so that `target.exists()` without `--force` raises a `SystemExit` naming the target file."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Running `datasets report orders report.txt` twice silently replaces the first report and never consults the `--force` flag, breaking the rule \"Commands never overwrite existing outputs\". Check whether `report` exists first and raise a `SystemExit` naming the file unless `args.force` was passed."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Re-running `datasets merge merged.json orders users` silently replaces the previous merged file and the `--force` flag is never read, breaking the rule \"Commands never overwrite existing outputs\". Bind `Path(args.output)` to `out`, and raise a `SystemExit` naming the file when `out.exists()` and `--force` is absent."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 38761,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P16-rule-no-overwrite-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "A second snapshot of the same dataset version silently replaces the first because the versioned snapshot file is written unconditionally and `--force` is never read. Verify the target path does not already exist and raise `SystemExit` naming the file unless `--force` was given."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "A previously generated report is lost on a re-run because `write_report` overwrites the output file with no existence check and ignores `--force`. Check the path first and raise `SystemExit` naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "An existing merge result is silently replaced even though `--force` was declared for exactly this purpose. Refuse the write when the target exists and `--force` was not passed, raising `SystemExit` that names the file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 31602,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P16-rule-no-overwrite-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Re-running `snapshot` for an already-written version silently replaces the snapshot, even though `main()` provides `--force` for overwriting. Check `target.exists()` and `args.force` before `target.write_text(...)`, raising `SystemExit` with the `{target} already exists; pass --force to overwrite it` message when overwrite is not allowed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Running `datasets report orders out.txt` silently replaces a previous report and ignores `--force`, since `write_report` never checks whether the output exists. Guard `report.exists()` against `args.force` before `report.write_text(...)`, raising `SystemExit` with the `{report} already exists; pass --force to overwrite it` message when overwrite is not allowed."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`merge` overwrites any existing output file without checking existence or honoring `--force` parsed in `main()`. Before calling `out.write_text(...)`, check `out.exists()` and `args.force` and raise `SystemExit` with the `{out} already exists; pass --force to overwrite it` message when overwriting is not allowed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 42033,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P16-rule-no-overwrite-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Re-running the same dataset version silently overwrites the previous snapshot and ignores `--force`. Before `target.write_text`, raise `SystemExit` when `target.exists()` and `not args.force`, using `f\"{target} already exists; pass --force to overwrite it\"`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "A prior report is lost on re-run because `write_report` overwrites it without checking existence or respecting `--force`. Before `report.write_text`, raise `SystemExit` when `report.exists()` and `not args.force`, using `f\"{report} already exists; pass --force to overwrite it\"`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "A previous merge is silently clobbered and `--force` is ignored because `merge` writes directly to `args.output`. Before `output.write_text`, compute `output = Path(args.output)` and raise `SystemExit` when `output.exists()` and `not args.force`, using `f\"{output} already exists; pass --force to overwrite it\"`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 170738,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling = mode === 'edit' || Boolean(draft.id)` evaluates to false in create mode (mode is 'create' and a new draft has no id), so `BillingSection` never renders for a new customer. WHY: `validateCustomer` rejects an empty billing email (validate.ts:8) and the billing email input lives only inside `BillingSection`, so in create mode the user cannot supply the required email and 'Create customer' always fails with 'A valid billing email is required' — the applied fix for the earlier review comment does not actually render billing in create mode. HOW: include create mode in the predicate, e.g. `const showBilling = mode === 'create' || mode === 'edit' || Boolean(draft.id);` (or render `BillingSection` unconditionally, since the email is required in both modes).",
+          "keep": true,
+          "rationale": "Confirmed: line 27 `mode === 'edit' || Boolean(draft.id)` is false in create mode (mode='create', new draft has no id), so BillingSection—the only source of the billing email input—is not rendered. validateCustomer (validate.ts:8) requires a valid billing email, so 'Create customer' always fails. The code's own comment says billing should show in create mode, but the predicate omits it, showing the earlier applied fix is incomplete/wrong. Not refutable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "billingEmail|billing email|BillingSection",
+                "path": "src/customers"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/BillingSection.tsx"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling = mode === 'edit' || Boolean(draft.id)` evaluates to false in create mode because `mode` is 'create' and a new draft has no `id`, so BillingSection (and its billingEmail input) is never rendered. WHY: validateCustomer requires a valid billingEmail, so the 'Create customer' button always fails with 'A valid billing email is required' and the user has no field to fix it — the exact failure the comment on lines 25-26 says this code avoids. HOW: show billing in create mode too, e.g. `const showBilling = mode === 'create' || Boolean(draft.id);` (or render BillingSection unconditionally, since the comment states it should show in both modes).",
+          "keep": true,
+          "rationale": "Verified: in create mode draft = EMPTY (no id), so `mode === 'edit' || Boolean(draft.id)` is false and BillingSection/billingEmail input is never rendered. validateCustomer (src/customers/validate.ts:8) rejects empty billingEmail, so 'Create customer' always fails with no way to fix it. The prior decision's 'implemented' outcome is contradicted by the current diff — the gate was changed to `mode === 'edit'` rather than `'create'`, leaving the bug intact.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 27,
+          "label": "bug",
+          "earlierId": "round-a-P24-create-mode-section-hidden",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P24-create-mode-section-hidden",
+          "by": "model"
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 27,
+          "label": "bug",
+          "earlierId": "round-a-P24-create-mode-section-hidden",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 483033,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling` evaluates to false in create mode (`mode === 'edit'` is false and a new draft's `draft.id` is undefined), so BillingSection never renders, contradicting the comment directly above it. WHY: validateCustomer requires a valid billingEmail whose only input is inside BillingSection, so in create mode the user can never enter it and 'Create customer' always fails with 'A valid billing email is required' (onSave is never reached). HOW: render billing in create mode too, e.g. `const showBilling = mode === 'edit' || mode === 'create' || Boolean(draft.id);` (or simply `true` if billing is always required).",
+          "keep": true,
+          "rationale": "Verified in src/customers/CustomerForm.tsx:27. In create mode `mode === 'edit'` is false and the new draft (EMPTY, line 13) has no `id`, so `showBilling` is false and BillingSection (line 40) never renders — contradicting the comment on lines 25-26. validateCustomer (validate.ts:8) requires a valid billingEmail whose only input is inside BillingSection (BillingSection.tsx:13-14), so submit() always records 'A valid billing email is required' and onSave is never reached. The prior \"implemented\" decision does not match the current code (still gated on draft.id/edit mode), which is concrete evidence the applied fix is absent/wrong.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "validateCustomer|billingEmail|mode ===",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 27,
+          "label": "bug",
+          "earlierId": "round-a-P24-create-mode-section-hidden",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P24-create-mode-section-hidden",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 279399,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling` is `mode === 'edit' || Boolean(draft.id)`, which evaluates to false in create mode (mode is 'create' and a new draft has no id), so BillingSection — the only control for `billingEmail` — is never rendered, yet validateCustomer requires a valid billing email. WHY: the create form can never be submitted; 'Create customer' always fails with 'A valid billing email is required' because the field needed to satisfy the validation is hidden. This is the same defect the earlier round flagged, but the current code shows the applied fix is ineffective: the comment claims billing shows in create mode while the condition still gates on `draft.id`. HOW: render the billing section in create mode as well, e.g. drop the gate (`const showBilling = true;`) or use `const showBilling = mode === 'create' || mode === 'edit' || Boolean(draft.id);`.",
+          "keep": true,
+          "rationale": "Confirmed. In create mode `mode === 'edit'` is false and the new draft (EMPTY = { name:'', billingEmail:'', taxId:'' }, id optional per types.ts) has no id, so `Boolean(draft.id)` is false and `showBilling` is false. BillingSection — the only control for billingEmail — is therefore never rendered, leaving billingEmail empty. validateCustomer (validate.ts:8) requires a valid billing email, so submit() always pushes 'A valid billing email is required' and the create form can never succeed. The inline comment claims the billing section shows in create mode, but the condition still gates on draft.id, so the previously 'implemented' fix is ineffective in the current code — concrete evidence the applied change is wrong, not superseded.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "validateCustomer"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling` is `mode === 'edit' || Boolean(draft.id)`, which is false for a new customer (mode is 'create' and a new draft has no `id`), so `BillingSection` never renders in create mode — contradicting the comment on lines 25-26. WHY: `validateCustomer` requires a valid billing email (validate.ts:8) and submit only calls `onSave` when there are no problems (line 22), so 'Create customer' always fails with 'A valid billing email is required' and the user has no field to fix it; the earlier suggestion to show billing in create mode was not actually implemented by this condition. HOW: include create mode in the gate (or drop the gate entirely), e.g. `const showBilling = mode === 'create' || mode === 'edit' || Boolean(draft.id);`.",
+          "keep": true,
+          "rationale": "Verified: mode is 'create'|'edit' and EMPTY has no id, so in create mode showBilling = ('create'==='edit') || Boolean(undefined) = false. BillingSection is the only input for billingEmail (BillingSection.tsx), validateCustomer unconditionally requires a valid billing email (validate.ts:8), and submit only calls onSave when problems is empty (CustomerForm.tsx:22). Thus 'Create customer' always fails with no field to fix it, contradicting the comment on lines 25-26. The previous-round implementation added mode === 'edit', which does not cover create mode, so the current code provides concrete evidence the applied change is incomplete.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/BillingSection.tsx",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "id",
+                "path": "src/customers/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 25,
+          "label": "bug",
+          "earlierId": "round-a-P24-create-mode-section-hidden",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P24-create-mode-section-hidden",
+          "by": "model"
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 27,
+          "label": "bug",
+          "earlierId": "round-a-P24-create-mode-section-hidden",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P24-create-mode-section-hidden",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 210646,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling` is computed as `mode === 'edit' || Boolean(draft.id)`, which is false in create mode because a new customer has no id, so BillingSection never renders when `mode === 'create'`. WHY: validateCustomer always requires a valid billingEmail, so the 'Create customer' submit always returns 'A valid billing email is required' and onSave is never called — create is permanently broken. The comment on lines 25-26 says billing should show in create mode, so the applied fix used the wrong mode literal. HOW: gate on create mode (or on both modes), e.g. `const showBilling = mode === 'create' || mode === 'edit' || Boolean(draft.id);` or simply `const showBilling = true;`.",
+          "keep": true,
+          "rationale": "Confirmed. In create mode `mode === 'edit'` is false and `draft.id` is undefined (EMPTY has no id), so `showBilling` is false and BillingSection never renders. BillingSection.tsx is the only place billingEmail is edited (lines 11-15), and validateCustomer (validate.ts:8) rejects any draft whose billingEmail fails the EMAIL regex — EMPTY.billingEmail is ''. Therefore submit() always pushes 'A valid billing email is required' and onSave is never reached, permanently breaking create. The comment on lines 25-26 states billing should show in create mode, but the literal used is 'edit', so the previously-applied fix is itself wrong; this revises the earlier suggestion (gate on the wrong mode) rather than re-raising it. The claim's root cause and failure path are factually correct.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/BillingSection.tsx"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 27,
+          "label": "bug",
+          "earlierId": "round-a-P24-create-mode-section-hidden",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P24-create-mode-section-hidden",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 251200,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling = mode === 'edit' || Boolean(draft.id)` evaluates to false in create mode because a new draft has no id, so the billing section (and its billing-email input) is never rendered. WHY: `validateCustomer` unconditionally requires a valid billing email, so in create mode the user can never enter one and 'Create customer' always fails with 'A valid billing email is required' — the exact failure the earlier suggestion intended to fix. HOW: gate on the mode, not the id: `const showBilling = mode === 'edit' || mode === 'create';` (or simply render `<BillingSection>` unconditionally).",
+          "keep": true,
+          "rationale": "Confirmed: in create mode `initial` is undefined so `draft = EMPTY` (line 13/16), which has no `id`. Thus `showBilling = mode === 'edit' || Boolean(draft.id)` is false, and `<BillingSection>` (line 40) is not rendered, leaving `billingEmail` as ''. `validateCustomer` (validate.ts:8) unconditionally pushes 'A valid billing email is required' whenever `billingEmail` is empty/invalid, so `submit()` (lines 20-22) can never reach `onSave` in create mode — 'Create customer' always fails. The code contradicts its own comment (lines 25-26). The earlier decision (round-a-P24-create-mode-section-hidden) was marked implemented but the current diff shows the applied change gates on `draft.id`, which is undefined for a new draft, so the fix does not actually work. The finding is technically correct.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "showBilling",
+                "path": "src/customers/CustomerForm.tsx"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/types.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling = mode === 'edit' || Boolean(draft.id)` evaluates to false in create mode because `mode` is 'create' and a new draft has no `id`, so `BillingSection` never renders when creating a customer. WHY: `validateCustomer` unconditionally requires a valid billing email, so the billing email input is unreachable in create mode and the 'Create customer' button can never succeed (always reports 'A valid billing email is required'). HOW: render the billing section regardless of mode (the earlier suggestion asked for exactly this; the applied change added an edit-mode clause instead, which only narrows it) — e.g. `const showBilling = true;` or drop the gate and render `<BillingSection ... />` unconditionally.",
+          "keep": true,
+          "rationale": "Confirmed: in create mode `mode === 'edit'` is false and the EMPTY draft has no id (draft.id is never set in create mode), so `showBilling` is false and BillingSection never renders. validateCustomer (validate.ts:8) unconditionally requires a valid billingEmail, so with billingEmail stuck at '' submit() always reports 'A valid billing email is required' and 'Create customer' can never succeed. The earlier 'implemented' change added only a mode==='edit' clause, which does not address create mode — the failure path remains fully reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `EMPTY` is a module-scope object used directly as the `useState` default, so every CustomerForm instance shares the same draft object reference. WHY: the comment on line 12 states onSave assigns the id when the customer is stored; if onSave assigns it by mutating the passed draft in place (rather than returning a new object), it mutates the shared `EMPTY`, leaking that id into every subsequently mounted create form. HOW: use a fresh object per instance, e.g. `useState<CustomerDraft>(() => initial ?? { name: '', billingEmail: '', taxId: '' })`.",
+          "keep": false,
+          "rationale": "REFUTED: The failure path requires onSave to be invoked with the shared EMPTY object. But onSave is only called when validateCustomer passes (line 22), and EMPTY ({name:'', billingEmail:'', taxId:''}) fails validation (empty name, invalid billing email). The only state in which draft === EMPTY is a completely unedited draft, which never passes validation. Every edit path (name input line 38; BillingSection lines 14/19) uses object spread and produces a fresh object, so a validation-passing draft is never the EMPTY reference. Thus onSave can never mutate EMPTY, and no id can leak into subsequently mounted create forms. The shared-reference code smell is real but the described concrete failure is impossible.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "onSave",
+                "glob": "src/customers/**"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm|onSave|\\.id =|draft\\.id",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerDraft",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/customers"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm|saveCustomer|createCustomer|assignId|\\.id\\s*=",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/types.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/BillingSection.tsx"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 25,
+          "label": "bug",
+          "earlierId": "round-a-P24-create-mode-section-hidden",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P24-create-mode-section-hidden",
+          "by": "model"
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 27,
+          "label": "bug",
+          "earlierId": "round-a-P24-create-mode-section-hidden",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P24-create-mode-section-hidden",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 51951,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: run! logs \"aborting the release\" when install_gems fails but does not actually abort — it falls through to migrate, precompile_assets and activate. WHY: when `bundle install` fails (a native gem does not compile, the gem server is unreachable), the release is still migrated and the symlink is switched to it, so the app crashes at boot after activation while the log misleadingly claims the release was aborted. HOW: return (or raise) inside the failure branch, e.g. `return @logger.error(...)` or run install through sh! so a failure raises, so the release stops before migrate/activate.",
+          "keep": true,
+          "rationale": "Confirmed: install_gems returns system()'s boolean; the `unless install_gems` branch only logs and does not return/raise, so run! proceeds to migrate, precompile_assets, and activate. The log text 'aborting the release' is false and the symlink is switched to a broken release. The prior partially_implemented decision explicitly asked to abort, and the current diff shows the abort is still missing, so this is not superseded.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "lib/deploy/release.rb",
+          "line": 14,
+          "label": "bug",
+          "earlierId": "round-a-P32-install-failure-only-logged",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": "round-a-P32-install-failure-only-logged",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 87672,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: run! logs \"aborting the release\" when install_gems returns false/nil but does not abort — execution continues into migrate, precompile_assets and activate. WHY: when bundle install fails (native gem fails to compile, gem server unreachable), the release still runs migrations and symlinks CURRENT to a release whose gems are missing, crashing the app at boot after the switch; the log message is also misleading. HOW: raise (or return early) in the failure branch, e.g. `raise \"bundle install failed in #{@release_dir}, aborting the release\" unless install_gems`, or route install_gems through sh! so a non-zero exit raises.",
+          "keep": true,
+          "rationale": "Confirmed by direct reading of lib/deploy/release.rb. `install_gems` (line 25) returns the boolean result of `system(\"bundle\",\"install\",...)`, which is false/nil on failure. In `run!` (lines 13-20) the `unless install_gems` branch only calls `@logger.error(...)` and then unconditionally executes `migrate`, `precompile_assets`, and `activate`. So a failed bundle install still migrates and symlinks CURRENT to an incomplete release, and the \"aborting the release\" message is misleading. The described root cause and failure path are accurate and reachable; the earlier related decision was only partially implemented and does not resolve this remaining gap, so nothing here refutes the claim.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "lib/deploy/release.rb",
+          "line": 14,
+          "label": "bug",
+          "earlierId": "round-a-P32-install-failure-only-logged",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 63071,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: The `unless install_gems` branch logs \"aborting the release\" but never aborts — there is no return/raise, so execution continues to migrate, precompile_assets, and activate. WHY: When `bundle install` fails (native gem fails to compile, gem server unreachable) the release is still migrated and CURRENT is symlinked to a directory whose gems are missing, so the app crashes at boot after the switch — exactly the failure the message claims to prevent. HOW: Abort the release after logging, e.g. add `return` inside the block (or raise/exit if the caller expects a failure signal).",
+          "keep": true,
+          "rationale": "Confirmed in lib/deploy/release.rb:13-20: the `unless install_gems` branch only logs an error and contains no return/raise/exit, so migrate, precompile_assets, and activate still execute even when `system(\"bundle\", ...)` fails (returns false). The failure path is real and matches the claim. PreviousDecision round-a-P32 was only partially_implemented (status checked, abort not added), so it corroborates rather than refutes this finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "def install_gems|def migrate|def precompile_assets|def activate",
+                "path": "lib/deploy/release.rb"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "lib/deploy/release.rb",
+          "line": 14,
+          "label": "bug",
+          "earlierId": "round-a-P32-install-failure-only-logged",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": "round-a-P32-install-failure-only-logged",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 61824,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: The new `unless install_gems` guard only logs an error and then falls through, so run! continues to migrate/precompile_assets/activate even though the message says 'aborting the release'. WHY: A failed bundle install (native gem fails to compile, gem server unreachable) still migrates the DB and symlinks CURRENT to a release with missing gems, crashing the app at boot after the switch — the exact failure the guard was added to prevent. HOW: abort for real after logging, e.g. `raise \"bundle install failed in #{@release_dir}\" unless install_gems`, or route install_gems through sh! so a non-zero exit raises.",
+          "keep": true,
+          "rationale": "Verified in lib/deploy/release.rb: run! (lines 13-20) guards only with `unless install_gems { @logger.error(...) }` and then unconditionally calls migrate, precompile_assets, activate. install_gems (line 25) uses system(...), and the guard neither raises nor returns early, so a failed bundle install still migrates and symlinks CURRENT to a gem-incomplete release. The described failure path is real and reachable, matching the message 'aborting the release' that is not honored. This restates the partially-implemented prior decision about install_gems being log-only (the abort portion is still missing) rather than reversing an applied change, and the diff shows no rework — downstream dedup handles overlap, so the technical claim stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "def (install_gems|migrate|precompile_assets|activate|sh!|run!)",
+                "path": "lib/deploy/release.rb"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "lib/deploy/release.rb",
+          "line": 14,
+          "label": "bug",
+          "earlierId": "round-a-P32-install-failure-only-logged",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": "round-a-P32-install-failure-only-logged",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 48921,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: The `unless install_gems` branch only logs \"aborting the release\" but does not actually abort — there is no `return` or `raise`, so `migrate`, `precompile_assets`, and `activate` still run after a failed `bundle install`. WHY: When bundle install fails (`system` returns false, or nil if the bundle executable cannot be spawned), the release is still migrated and the `current` symlink is switched to a release whose gems are missing, so the app crashes at boot after the switch — and the log line falsely reports the release was aborted, masking the failure. HOW: Return (or raise) immediately after logging, e.g. `unless install_gems\n  @logger.error(...)\n  return\nend`.",
+          "keep": true,
+          "rationale": "Verified in lib/deploy/release.rb: the `unless install_gems` block (lines 14-16) only logs an error; there is no `return` or `raise`, so execution falls through to `migrate`, `precompile_assets`, and `activate` (lines 17-19) unconditionally. `install_gems` (line 25) calls `system(\"bundle\", ...)`, which returns false on failure or nil if the executable cannot be spawned, so the log line falsely reports an abort while the release is still migrated and the `current` symlink is switched to a release with missing gems. The root cause and failure path are exactly as described.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "lib/deploy/release.rb",
+          "line": 14,
+          "label": "bug",
+          "earlierId": "round-a-P32-install-failure-only-logged",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": "round-a-P32-install-failure-only-logged",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 11786,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Logging `customer.email` as a structured field writes personal data to logs, which the \"No personal data in logs\" rule forbids. Drop the `customerEmail` field and keep only `orderId`, which is enough to correlate the receipt."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29001,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P40-rule-pii-on-structured-log-lines",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/receipts.ts:11` (2026-10-06 12:00 UTC).\n\nLogging `customer.email` violates the \"No personal data in logs\" rule. Drop the `customerEmail` field and keep only `orderId`, which is sufficient to correlate the receipt."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19015,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P40-rule-pii-on-structured-log-lines",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/receipts.ts:11` (2026-10-06 12:00 UTC).\n\nLogging `customerEmail: customer.email` violates the \"No personal data in logs\" rule, and the previous fix for rule 21 moved the email into the structured payload instead of removing it. Drop `customerEmail` from the log context so only `orderId` is logged, or replace it with a non-identifying customer id if correlation requires one."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19738,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Emails are personal data, so passing `customerEmail` to `logger.info` persists it in the log pipeline and violates the \"No personal data in logs\" rule. Log only `orderId`, which still allows the customer to be looked up, and drop `customerEmail` from the call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14242,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Because the log call passes the customer's email address as a structured field, it violates the \"No personal data in logs\" rule and exposes PII to everyone with log access and to any downstream sink. Drop the `customerEmail` field (the order id is enough to correlate) or log a non-PII identifier such as a hashed customer id."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

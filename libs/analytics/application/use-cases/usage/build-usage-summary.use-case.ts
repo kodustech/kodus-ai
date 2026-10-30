@@ -93,7 +93,12 @@ export class BuildUsageSummaryUseCase {
             await this.cacheService.getFromCache<UsageOverviewReportContract>(
                 cacheKey,
             );
-        if (cached) return cached;
+        // Shape guard instead of a hand-bumped key version: an entry cached
+        // before a facet was added/renamed lacks the current field, so treat it
+        // as a miss and recompute. Self-invalidating — no `:v3` to remember on
+        // the next payload change. (Check the newest required facet; an empty
+        // array is still a valid, present shape.)
+        if (cached && Array.isArray(cached.byTaskModelSpan)) return cached;
 
         const report = await this.buildOverview(query, overrides);
 
@@ -110,7 +115,10 @@ export class BuildUsageSummaryUseCase {
         overrides?: ManualPricingOverrides,
     ): string {
         return [
-            'usage:overview:v1',
+            // Stable key — payload-shape changes are handled by the shape guard
+            // in executeOverview (a cached entry missing the current facet is
+            // recomputed), so this no longer needs a hand-bumped version.
+            'usage:overview',
             query.organizationId,
             query.byok ? 'byok' : 'sys',
             query.start.getTime(),
@@ -118,6 +126,7 @@ export class BuildUsageSummaryUseCase {
             query.timezone || 'UTC',
             query.models || '',
             query.prNumber ?? '',
+            query.repositoryId ?? '',
             JSON.stringify(overrides ?? {}),
         ].join('|');
     }
@@ -146,6 +155,9 @@ export class BuildUsageSummaryUseCase {
             },
             daily: overview.daily,
             byPr: overview.byPr,
+            byArea: overview.byArea,
+            byTaskArea: overview.byTaskArea,
+            byTaskModelSpan: overview.byTaskModelSpan,
         };
     }
 
@@ -157,25 +169,19 @@ export class BuildUsageSummaryUseCase {
         const pricingSource = TO_API_SOURCE[resolved.source];
 
         if (row.byTier) {
-            const leCost = ModelCostCalculator.bucketCost(
-                row.byTier.le,
-                resolved.rates,
-                'default',
-            );
-            const gtCost = ModelCostCalculator.bucketCost(
-                row.byTier.gt,
-                resolved.rates,
-                'tier',
+            // Price each bracket at its own rate (bracket i → i-th tier).
+            const costByTier = row.byTier.map((bucket, i) =>
+                ModelCostCalculator.bucketCost(bucket, resolved.rates, i),
             );
             return {
                 ...row,
-                cost: addCost(leCost, gtCost),
-                costByTier: { le: leCost, gt: gtCost },
+                cost: costByTier.reduce(addCost, zeroCost()),
+                costByTier,
                 pricingSource,
             };
         }
 
-        // Flat row — treat as a single `le` bucket.
+        // Flat row — a single bracket-0 bucket at the default rate.
         const flatBucket: TierUsage = {
             input: row.input,
             output: row.output,
@@ -186,11 +192,7 @@ export class BuildUsageSummaryUseCase {
         };
         return {
             ...row,
-            cost: ModelCostCalculator.bucketCost(
-                flatBucket,
-                resolved.rates,
-                'default',
-            ),
+            cost: ModelCostCalculator.bucketCost(flatBucket, resolved.rates, 0),
             pricingSource,
         };
     }

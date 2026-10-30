@@ -13,6 +13,13 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
     autoIndex: true,
 })
 export class PullRequestsModel extends CoreDocument {
+    @Prop({ type: Object, required: false, default: null })
+    public approvalReasonDeliveryFailure?: {
+        decision: 'hold' | 'approve';
+        reason: string;
+        occurredAt: string;
+    } | null;
+
     @Prop({ type: String, required: true })
     public title: string;
 
@@ -67,6 +74,7 @@ export class PullRequestsModel extends CoreDocument {
         added?: number;
         deleted?: number;
         changes?: number;
+        patchTruncated?: boolean;
         reviewMode: ReviewModeResponse;
         codeReviewModelUsed: {
             generateSuggestions: string;
@@ -80,11 +88,21 @@ export class PullRequestsModel extends CoreDocument {
             existingCode: string;
             improvedCode: string;
             oneSentenceSummary: string;
+            fullExplanation?: string;
             relevantLinesStart: number;
             relevantLinesEnd: number;
             label: string;
             severity: string;
             rankScore: number;
+            // Provenance for deterministic findings. The @Prop above is an
+            // untyped Array, so this persists as written — it is declared here
+            // to keep the stored shape documented rather than incidental.
+            evidence?: {
+                source: string;
+                ruleId?: string;
+                ruleUrl?: string;
+                analyzerSeverity?: string;
+            };
             priorityStatus: PriorityStatus;
             deliveryStatus: DeliveryStatus;
             brokenKodyRulesIds?: string[];
@@ -118,7 +136,10 @@ export class PullRequestsModel extends CoreDocument {
     @Prop({ type: String, required: false })
     public provider: string;
 
-    @Prop({ type: { id: String, username: String, name: String, email: String }, required: false })
+    @Prop({
+        type: { id: String, username: String, name: String, email: String },
+        required: false,
+    })
     public user: {
         id: string;
         username: string;
@@ -154,6 +175,7 @@ export class PullRequestsModel extends CoreDocument {
     public prLevelSuggestions: Array<{
         id: string;
         suggestionContent: string;
+        fullExplanation?: string;
         oneSentenceSummary: string;
         label: LabelType;
         severity?: SeverityLevel;
@@ -193,6 +215,17 @@ PullRequestsSchema.index(
     { name: 'idx_number_repo_name_org' },
 );
 
+// PR Decision Memory (issue #1313): findSuggestionsByPRAndFilenames and
+// findPrLevelSuggestionsByPR run on EVERY review round of EVERY PR, matching
+// on repository.fullName (not .name/.id) because that's the only stable repo
+// identifier the review pipeline context carries at that stage. Without this
+// index those two aggregations fall back to a collection scan. Create with
+// `{ background: true }` on large prod collections.
+PullRequestsSchema.index(
+    { 'number': 1, 'repository.fullName': 1, 'organizationId': 1 },
+    { name: 'idx_number_repo_fullname_org' },
+);
+
 // Watermark da ingestão analítica varre por `(updatedAt, _id)` ASC como
 // tupla — ver `PullRequestIngestionService.readWatermark` pra racional.
 // Compound `{ updatedAt: 1, _id: 1 }` serve tanto o filtro range quanto
@@ -210,4 +243,46 @@ PullRequestsSchema.index(
 PullRequestsSchema.index(
     { createdAt: 1 },
     { name: 'idx_createdAt_for_analytics_backfill' },
+);
+
+// PR-dashboard segment facets count DISTINCT PRs that delivered a suggestion
+// (see PullRequestsRepository.countDeliveredPullRequests). The document-level
+// countDocuments needs this multikey index to resolve the org + delivery match
+// from the index instead of a full collection scan + files×suggestions unwind
+// (multi-second at scale). Multikey on the nested files→suggestions path.
+// Em prod criar com `{ background: true }` antes de virar a flag (autoIndex
+// pode travar startup em coleções grandes).
+PullRequestsSchema.index(
+    { 'organizationId': 1, 'files.suggestions.deliveryStatus': 1 },
+    { name: 'idx_org_files_suggestions_delivery' },
+);
+
+// "Find suggestions by rule" (kody-rules screen) filters PRs by a broken-rule
+// id. Without this index the query scanned the whole org and unwound
+// files×suggestions to find the few PRs referencing the rule. Multikey on the
+// nested files→suggestions→brokenKodyRulesIds path. Em prod criar com
+// `{ background: true }` (autoIndex pode travar startup em coleções grandes).
+PullRequestsSchema.index(
+    { 'organizationId': 1, 'files.suggestions.brokenKodyRulesIds': 1 },
+    { name: 'idx_org_broken_kody_rules' },
+);
+
+// Token Usage repository filter: findNumbersByRepositoryId resolves a repo to
+// its PR numbers (org + repository.id, bounded by createdAt, newest first,
+// projecting only `number`). This compound covers the filter, the sort, and
+// the projection so the scope resolution stays index-only. Create with
+// `{ background: true }` on large prod collections before enabling the filter.
+PullRequestsSchema.index(
+    { organizationId: 1, 'repository.id': 1, createdAt: -1, number: 1 },
+    { name: 'idx_org_repo_createdAt_number_for_token_usage' },
+);
+
+// "Awaiting review" facet + daily digest: findOpenPullRequestKeysOpenedSince
+// scans open PRs for the org (status ≠ closed, not merged, openedAt ≥ cutoff).
+// Without this the match was a collection scan that grew with the org. Leading
+// on organizationId (equality) then the open-state fields keeps it index-bound.
+// Create with `{ background: true }` on large prod collections.
+PullRequestsSchema.index(
+    { organizationId: 1, status: 1, merged: 1, openedAt: 1 },
+    { name: 'idx_org_status_merged_openedAt_for_awaiting' },
 );

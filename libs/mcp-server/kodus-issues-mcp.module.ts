@@ -1,10 +1,13 @@
 import { DynamicModule, Module, Provider, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
 
+import { TeamModule } from '@libs/organization/modules/team.module';
 import { PlatformCoreModule } from '@libs/platform/modules/platform-core.module';
 
 import { KodusIssuesMcpController } from './controllers/kodus-issues-mcp.controller';
 import { McpEnabledGuard } from './guards/mcp-enabled.guard';
+import { McpAuthModule } from './auth/mcp-auth.module';
 import { McpCoreModule } from './mcp-core.module';
 import { KodusIssuesMcpServerFactory } from './services/kodus-issues-mcp-server.factory';
 import { KodusIssuesMcpServerService } from './services/kodus-issues-mcp-server.service';
@@ -18,7 +21,14 @@ export class KodusIssuesMcpModule {
         const controllers = [];
         const exports: Provider[] = [McpCoreModule];
 
-        imports.push(forwardRef(() => PlatformCoreModule));
+        // @UseGuards(McpAuthGuard) is instantiated in this module, so its
+        // dependencies must be visible here, not only in McpAuthModule.
+        imports.push(
+            McpAuthModule,
+            JwtModule,
+            forwardRef(() => TeamModule),
+            forwardRef(() => PlatformCoreModule),
+        );
 
         controllers.push(KodusIssuesMcpController);
 

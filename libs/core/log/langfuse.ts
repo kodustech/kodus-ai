@@ -1,10 +1,18 @@
 import { LangfuseSpanProcessor } from '@langfuse/otel';
+import {
+    getActiveTraceId,
+    propagateAttributes,
+    startActiveObservation,
+} from '@langfuse/tracing';
+import { LangfuseVercelAiSdkIntegration } from '@langfuse/vercel-ai-sdk';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import type { AttributeValue } from '@opentelemetry/api';
+import { registerTelemetry, type TelemetryOptions } from 'ai';
 
 let spanProcessor: LangfuseSpanProcessor | null = null;
 let ownTracerProvider: NodeTracerProvider | null = null;
 let beforeExitInstalled = false;
+let aiSdkTelemetryRegistered = false;
 
 export function shouldTrace(): boolean {
     return (
@@ -86,6 +94,24 @@ export function registerLangfuseStandalone(): void {
     ownTracerProvider.register();
 }
 
+/**
+ * Register Langfuse's AI SDK 7 telemetry integration once at process start.
+ * AI SDK 7 uses a callback-based telemetry registry (`registerTelemetry`);
+ * without this, `telemetry` / `experimental_telemetry` on generateText never
+ * emit OTEL spans — only manual `@langfuse/tracing` observations show up.
+ *
+ * Call after `registerLangfuseStandalone()` (or Sentry OTel wiring) so the
+ * global TracerProvider already has the Langfuse span processor.
+ * Idempotent; no-op when tracing is disabled.
+ */
+export function registerLangfuseAiSdkTelemetry(): void {
+    if (aiSdkTelemetryRegistered) return;
+    if (!shouldTrace()) return;
+
+    registerTelemetry(new LangfuseVercelAiSdkIntegration());
+    aiSdkTelemetryRegistered = true;
+}
+
 export async function flushLangfuse(): Promise<void> {
     if (!spanProcessor) return;
     try {
@@ -107,6 +133,108 @@ export async function shutdownLangfuse(): Promise<void> {
     spanProcessor = null;
 }
 
+/** Trace-level attributes — the Langfuse dimensions you filter and group BY
+ *  (user, session, tags), as opposed to the per-observation metadata that
+ *  `buildLangfuseTelemetry` carries. Different plane, different API: the SDK
+ *  telemetry option cannot set these. */
+export interface LangfuseTraceAttributes {
+    /** Names the trace in the UI. */
+    traceName: string;
+    /** Groups traces the UI shows as one unit of work (a conversation thread,
+     *  a pull request). */
+    sessionId?: string;
+    /** Whom the trace belongs to — we scope by organization, not end user. */
+    userId?: string;
+    /** Langfuse keeps string values only (≤200 chars) and warns on anything
+     *  else, so absent identifiers are dropped rather than sent as "undefined"
+     *  — see `withLangfuseTrace`. */
+    metadata?: Record<string, string | undefined>;
+    tags?: string[];
+}
+
+/**
+ * The Langfuse session key for a pull-request-scoped run.
+ *
+ * Every agent working on the same PR MUST derive the key here: Langfuse groups
+ * traces into a session by exact string match, so a second spelling silently
+ * splits one PR into two sessions instead of failing loudly. Returns undefined
+ * when there is no PR to scope to — a session is not invented for a run that
+ * has nothing to group with.
+ */
+export function pullRequestSessionId(meta: {
+    organizationId?: string;
+    repositoryId?: string;
+    pullRequestId?: number | string;
+}): string | undefined {
+    if (!meta.pullRequestId) {
+        return undefined;
+    }
+    return `${meta.organizationId || 'unknown_org'}:${meta.repositoryId ?? 'repo'}:${meta.pullRequestId}`;
+}
+
+/**
+ * Run `fn` with Langfuse trace-level attributes propagated to every span it
+ * opens — including the AI SDK spans the agent runner produces downstream.
+ *
+ * Pass-through no-op when tracing is disabled, so callers wrap unconditionally
+ * and pay nothing when Langfuse is off.
+ */
+export function withLangfuseTrace<T>(
+    attrs: LangfuseTraceAttributes,
+    fn: () => Promise<T>,
+): Promise<T> {
+    if (!shouldTrace()) {
+        return fn();
+    }
+    const { metadata, ...rest } = attrs;
+    return propagateAttributes(
+        {
+            ...rest,
+            ...(metadata
+                ? {
+                      metadata: Object.fromEntries(
+                          Object.entries(metadata).filter(
+                              (entry): entry is [string, string] =>
+                                  entry[1] !== undefined,
+                          ),
+                      ),
+                  }
+                : {}),
+        },
+        fn,
+    );
+}
+
+/**
+ * Run `fn` inside one Langfuse observation named `name`, handing it that trace's
+ * id. The AI SDK opens its own spans inside `fn`, so they land in this trace
+ * instead of each starting a root of its own — and the caller can store the id
+ * next to whatever it records about the call (the usage row keeps it as
+ * `externalTraceId`). With tracing off, `fn` runs as is and gets no id.
+ */
+export function withLangfuseObservation<T>(
+    name: string,
+    fn: (traceId: string | undefined) => Promise<T>,
+    /** Searchable in Langfuse (e.g. the correlationId a log line carries).
+     *  Absent values are dropped; Langfuse keeps string values. */
+    metadata?: Record<string, string | number | undefined>,
+): Promise<T> {
+    if (!shouldTrace()) {
+        return fn(undefined);
+    }
+    const tags = Object.fromEntries(
+        Object.entries(metadata ?? {})
+            .filter(([, v]) => v !== undefined && v !== '')
+            .map(([k, v]) => [k, String(v)]),
+    );
+    return startActiveObservation(name, (observation) => {
+        if (Object.keys(tags).length > 0) {
+            observation.update({ metadata: tags });
+        }
+        return fn(getActiveTraceId());
+    });
+}
+
 export interface LangfuseTelemetryMetadata {
     organizationId?: string;
     teamId?: string;
@@ -115,20 +243,27 @@ export interface LangfuseTelemetryMetadata {
     provider?: string;
 }
 
+/** Declared as a type alias (not an interface) on purpose: aliases get an
+ *  implicit index signature, so this stays assignable to the harness's opaque
+ *  `Readonly<Record<string, unknown>>` telemetry slot. */
+export type LangfuseTelemetryConfig = {
+    isEnabled: boolean;
+    functionId: string;
+    /** Carried for AI SDK 7 via `runtimeContext` (see `toAiSdkTelemetryArgs`). */
+    metadata?: Record<string, AttributeValue>;
+};
+
 /**
- * Build the `experimental_telemetry` config for a Vercel AI SDK call.
- * `functionId` sets the observation name in Langfuse; `metadata` shows up
- * in the Metadata tab. Safe to call when tracing is disabled — the AI SDK
- * reads `isEnabled` and skips span emission.
+ * Build Langfuse telemetry knobs for a Vercel AI SDK call.
+ * `functionId` sets the observation name; optional `metadata` is applied as
+ * AI SDK 7 `runtimeContext` via `toAiSdkTelemetryArgs` (not the removed
+ * `telemetry.metadata` field). Safe when tracing is disabled — `isEnabled`
+ * opts the call out.
  */
 export function buildLangfuseTelemetry(
     functionId: string,
     metadata?: LangfuseTelemetryMetadata,
-): {
-    isEnabled: boolean;
-    functionId: string;
-    metadata?: Record<string, AttributeValue>;
-} {
+): LangfuseTelemetryConfig {
     const attrs: Record<string, AttributeValue> = {};
     if (metadata?.organizationId) attrs.organizationId = metadata.organizationId;
     if (metadata?.teamId) attrs.teamId = metadata.teamId;
@@ -140,5 +275,35 @@ export function buildLangfuseTelemetry(
         isEnabled: shouldTrace(),
         functionId,
         ...(Object.keys(attrs).length > 0 && { metadata: attrs }),
+    };
+}
+
+/**
+ * Expand `buildLangfuseTelemetry()` into AI SDK 7 call fields — the ONE place
+ * that knows how Langfuse metadata maps onto the SDK. Spreads as
+ * `{ telemetry, runtimeContext? }` into `generateText`/`generateObject`, or
+ * into an `AgentRunInput` for a harness run; both forward it verbatim.
+ *
+ * The return type is the SDK's own `TelemetryOptions`, so a telemetry redesign
+ * in a future `ai` major fails here at compile time instead of silently
+ * dropping attributes at runtime.
+ */
+export function toAiSdkTelemetryArgs(config: LangfuseTelemetryConfig): {
+    telemetry: TelemetryOptions;
+    runtimeContext?: Record<string, AttributeValue>;
+} {
+    const { isEnabled, functionId, metadata } = config;
+    if (!metadata || Object.keys(metadata).length === 0) {
+        return { telemetry: { isEnabled, functionId } };
+    }
+    return {
+        telemetry: {
+            isEnabled,
+            functionId,
+            includeRuntimeContext: Object.fromEntries(
+                Object.keys(metadata).map((k) => [k, true as const]),
+            ),
+        },
+        runtimeContext: metadata,
     };
 }

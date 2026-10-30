@@ -225,6 +225,8 @@ export interface MCPServerConfig {
     /** Canonical capability category from the mcp-manager registry (e.g.
      *  'task-management'). Lets consumers match by capability, not display name. */
     category?: string | null;
+    /** Catalog id of the integration this server comes from (`linear-default`), or the custom integration's id. */
+    integrationId?: string;
 }
 
 export interface MCPAdapterConfig {
@@ -259,9 +261,12 @@ export interface MCPToolRaw {
     inputSchema?: unknown;
     outputSchema?: unknown;
     annotations?: Record<string, unknown>;
+    _meta?: Record<string, unknown>;
 }
 
 export interface MCPTool extends MCPToolRaw {
+    /** The configured server (`MCPServerConfig.name`) that listed the tool. */
+    serverName?: string;
     execute: (args: unknown, ctx: unknown) => Promise<unknown>;
 }
 
@@ -329,6 +334,8 @@ export interface EngineTool {
     outputSchema?: unknown;
     outputZodSchema?: z.ZodSchema;
     annotations?: Record<string, unknown>;
+    _meta?: Record<string, unknown>;
+    serverName?: string;
     title?: string;
     execute: (args: unknown, ctx: unknown) => Promise<unknown>;
 }

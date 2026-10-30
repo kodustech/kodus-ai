@@ -141,7 +141,7 @@ describe('GraphIndexerService', () => {
         it('should find preinstalled kodus-graph through the Bun global bin path', async () => {
             mockSandbox.run
                 .mockResolvedValueOnce({
-                    stdout: '/home/node/.bun/bin/kodus-graph\n0.2.19',
+                    stdout: '/home/node/.bun/bin/kodus-graph\n0.3.0',
                     stderr: '',
                     exitCode: 0,
                 })
@@ -166,19 +166,6 @@ describe('GraphIndexerService', () => {
                     cmd.includes('kodus-graph parse --all'),
                 ),
             ).toBeGreaterThan(0);
-        });
-
-        it('should call sandbox.readFile() to read graph JSON', async () => {
-            await service.fullBuild({
-                repositoryId: REPO_ID,
-                sandbox: mockSandbox,
-                headSha: HEAD_SHA,
-            });
-
-            expect(mockSandbox.readFile).toHaveBeenCalledWith(
-                expect.stringContaining('graph.json'),
-                expect.any(Object),
-            );
         });
 
         it('should use sandbox.repoDir in commands, not hardcoded path', async () => {

@@ -1,0 +1,28 @@
+diff --git a/src/patients/patient.entity.ts b/src/patients/patient.entity.ts
+--- a/src/patients/patient.entity.ts
++++ b/src/patients/patient.entity.ts
+@@ -1,4 +1,5 @@
+ export class Patient {
+   id: string;
+   name: string;
++  cpf?: string | null;
+ }
+diff --git a/src/patients/patient.serializer.ts b/src/patients/patient.serializer.ts
+--- a/src/patients/patient.serializer.ts
++++ b/src/patients/patient.serializer.ts
+@@ -1,3 +1,3 @@
+ export function serializePatient(p: Patient) {
+-  return { id: p.id, name: p.name };
++  return { id: p.id, name: p.name, cpf: p.cpf ?? null };
+ }
+diff --git a/src/patients/updatePatient.ts b/src/patients/updatePatient.ts
+new file mode 100644
+--- /dev/null
++++ b/src/patients/updatePatient.ts
+@@ -0,0 +1,6 @@
++export function normalizeCpf(cpf?: string | null) {
++  return cpf ? cpf.replace(/\D/g, '') : null;
++}
++export async function updatePatient(id: string, input: { name?: string; cpf?: string | null }) {
++  return db.patients.update(id, { ...input, cpf: normalizeCpf(input.cpf) });
++}

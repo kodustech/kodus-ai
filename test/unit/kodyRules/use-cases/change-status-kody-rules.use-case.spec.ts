@@ -12,6 +12,7 @@ import {
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -66,6 +67,13 @@ describe('ChangeStatusKodyRulesUseCase', () => {
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                {
+                    provide: TelemetryService,
+                    useValue: {
+                        kodyRuleChanged: jest.fn(),
+                        kodyRulesImported: jest.fn(),
+                    },
+                },
                 ChangeStatusKodyRulesUseCase,
                 {
                     provide: KODY_RULES_SERVICE_TOKEN,

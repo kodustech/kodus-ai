@@ -1,3 +1,4 @@
+import { reviewsOnlyIgnoredFiles } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { Injectable, Inject } from '@nestjs/common';
 import {
     COMMENT_MANAGER_SERVICE_TOKEN,
@@ -13,10 +14,35 @@ import {
     BehaviourForNewCommits,
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    classifyLLMError,
+    getClassification,
+    llmErrorLogLevel,
+} from '@libs/llm/error-classifier';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
-import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import {
+    CodeReviewPipelineContext,
+    resolvedModel,
+    resolvedProvider,
+} from '../context/code-review-pipeline.context';
+import { buildReviewErrorMessage } from '@libs/llm/review-error-diagnostics';
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
+import { formatLinkedReposSummaryLine } from '@libs/ee/linked-repositories';
+import { PostTracePrCommentUseCase } from '@libs/cli-review/application/use-cases/post-trace-pr-comment.use-case';
+import { resolveBusinessLogicSettings } from '@libs/agents/business-validation/settings';
+
+/**
+ * `metadata.reason` tag on the `PipelineError` pushed below when
+ * `generateSummaryPR` fails. Shared with `RequestChangesOrApproveStage`
+ * (finish-process-review.stage.ts), which excludes it from the auto-approve
+ * gate: by the time this stage runs, the real review output (PR-level + line
+ * comments) has already posted (pipeline order: createPrLevelComments ->
+ * createFileComments -> aggregateResults -> HERE -> requestChangesOrApprove),
+ * so a summary-only failure has nothing to do with whether the review itself
+ * is trustworthy. #1844.
+ */
+export const SUMMARY_GENERATION_FAILED_REASON = 'summary_generation_failed';
 
 @Injectable()
 export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -33,8 +59,88 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         private readonly commentManagerService: ICommentManagerService,
         @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
         private readonly pullRequestManagerService: IPullRequestManagerService,
+        private readonly postTracePrCommentUseCase: PostTracePrCommentUseCase,
     ) {
         super();
+    }
+
+    private async postHoldReasonIfNeeded(
+        context: CodeReviewPipelineContext,
+        reviewFailed: boolean,
+        reviewHasPartialErrors: boolean,
+    ): Promise<CodeReviewPipelineContext> {
+        if (
+            context.approvalDecision?.kind !== 'hold' ||
+            reviewFailed ||
+            reviewHasPartialErrors
+        ) {
+            return context;
+        }
+        try {
+            await this.commentManagerService.postApprovalReason(
+                context.organizationAndTeamData,
+                context.pullRequest.number,
+                context.repository,
+                context.approvalDecision.reason,
+                'hold',
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not publish automatic approval hold reason',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData.organizationId,
+                    teamId: context.organizationAndTeamData.teamId,
+                    repositoryId: context.repository.id,
+                    prNumber: context.pullRequest.number,
+                },
+            });
+            return this.updateContext(context, (draft) => {
+                draft.errors ??= [];
+                draft.errors.push({
+                    stage: this.stageName,
+                    substage: 'approval-hold-reason-publication',
+                    severity: 'partial',
+                    error,
+                });
+            });
+        }
+        return context;
+    }
+
+    /**
+     * The sticky comment carrying the reasoning behind the change.
+     *
+     * Posted once and edited in place on every later run, and skipped entirely
+     * when the PR has no recorded decisions.
+     */
+    private async postTraceComment(
+        context: CodeReviewPipelineContext,
+    ): Promise<void> {
+        if (!context.traceDecisions?.length) {
+            return;
+        }
+
+        const outcome = await this.postTracePrCommentUseCase.execute({
+            organizationAndTeamData: context.organizationAndTeamData,
+            prNumber: context.pullRequest.number,
+            repository: context.repository,
+            decisions: context.traceDecisions,
+            platformType: context.platformType,
+            dryRun: context.dryRun,
+        });
+
+        this.logger.log({
+            message: `Kodus Trace comment ${outcome.action} on PR#${context.pullRequest.number}`,
+            context: this.stageName,
+            metadata: {
+                organizationAndTeamData: context.organizationAndTeamData,
+                prNumber: context.pullRequest.number,
+                outcome,
+            },
+        });
     }
 
     protected async executeStage(
@@ -60,24 +166,61 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         // skipped — otherwise the user sees "review completed" + no
         // approval and assumes auto-approve is broken. Default severity
         // for a pushed error is 'critical' per PipelineErrorSeverity docs.
-        const errors = context.errors ?? [];
-        const reviewFailed = errors.some(
-            (e) => (e?.severity ?? 'critical') === 'critical',
-        );
-        const reviewHasPartialErrors =
-            !reviewFailed && errors.some((e) => e?.severity === 'partial');
-        const reviewErrorMessage = context.lastReviewError?.friendlyMessage;
+        // Computed as a closure, not a snapshot: the summary block below can
+        // add an error of its own, and the end-review comment must reflect it.
+        // Reading these once at stage entry meant a failed summary still
+        // rendered "review completed" (#1568).
+        //
+        // A SUMMARY_GENERATION_FAILED_REASON error is excluded here too
+        // (#1844): RequestChangesOrApproveStage no longer blocks auto-approve
+        // on it alone, so the "...so auto-approval was skipped" notice would
+        // be false for that case — an approved PR would ship a comment
+        // claiming approval was skipped. Still counts toward `reviewFailed`/
+        // `reviewHasPartialErrors` if it co-occurs with any OTHER error
+        // (unfiltered elsewhere in `errors`), since that other failure is
+        // real and does block approval.
+        const classifyErrors = (ctx: CodeReviewPipelineContext) => {
+            const errors = (ctx.errors ?? []).filter(
+                (e) => e?.metadata?.reason !== SUMMARY_GENERATION_FAILED_REASON,
+            );
+            const reviewFailed = errors.some(
+                (e) => (e?.severity ?? 'critical') === 'critical',
+            );
+            return {
+                reviewFailed,
+                reviewHasPartialErrors:
+                    !reviewFailed &&
+                    errors.some((e) => e?.severity === 'partial'),
+            };
+        };
+
+        // Optional team-authored guidance appended below Kody's default error
+        // comment (issue #1452). Honored whenever the review failed and the
+        // message has content — the presence of content is the switch (there is
+        // no separate on/off toggle for the error message). Empty/unset content
+        // leaves the default error comment unchanged. Inherits global →
+        // repository → directory like the other custom messages (resolved into
+        // pullRequestMessagesConfig upstream).
+        const errorReviewMessageConfig =
+            context.pullRequestMessagesConfig?.errorReviewMessage;
+        const customMessageFor = (reviewFailed: boolean) =>
+            reviewFailed && errorReviewMessageConfig?.content?.trim()
+                ? errorReviewMessageConfig.content.trim()
+                : undefined;
 
         const isCommitRun = Boolean(lastExecution);
         const commitBehaviour =
             codeReviewConfig?.summary?.behaviourForNewCommits ??
             BehaviourForNewCommits.NONE;
 
+        // A review only custom agents ran on ignored files (#2172) has no
+        // changes of its own to summarize.
         const shouldGenerateOrUpdateSummary =
-            (!isCommitRun && codeReviewConfig?.summary?.generatePRSummary) ||
-            (isCommitRun &&
-                codeReviewConfig?.summary?.generatePRSummary &&
-                commitBehaviour !== BehaviourForNewCommits.NONE);
+            !reviewsOnlyIgnoredFiles(context) &&
+            ((!isCommitRun && codeReviewConfig?.summary?.generatePRSummary) ||
+                (isCommitRun &&
+                    codeReviewConfig?.summary?.generatePRSummary &&
+                    commitBehaviour !== BehaviourForNewCommits.NONE));
 
         if (
             !initialCommentData &&
@@ -138,11 +281,17 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         organizationAndTeamData,
                         codeReviewConfig.languageResultPrompt,
                         codeReviewConfig.summary,
-                        codeReviewConfig?.byokConfig ?? null,
+                        // No byokConfig arg: generateSummaryPR owns its model
+                        // resolution and routes by the `prSummary` task itself.
                         isCommitRun,
                         false,
                         context.externalPromptContext,
                         platformType,
+                        lineComments,
+                        context.prLevelCommentResults,
+                        resolveBusinessLogicSettings(
+                            codeReviewConfig.businessLogic,
+                        ).taskIdPattern,
                     );
 
                 await this.commentManagerService.updateSummarizationInPR(
@@ -150,33 +299,93 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     pullRequest.number,
                     repository,
                     summaryPR,
-                    context.dryRun,
                 );
             } catch (error) {
-                this.logger.error({
+                // Terminal BYOK (suspended key / no credit) → warn: user's
+                // provider config, not a Kodus fault. Real fault stays error.
+                this.logger[llmErrorLogLevel(error)]({
                     message: `Failed to generate summary for PR#${pullRequest.number}`,
                     context: this.stageName,
                     error,
                 });
 
+                const summaryError =
+                    error instanceof Error ? error : new Error(String(error));
+
+                // 'partial', not the 'critical' default: the review itself
+                // still ran and its comments are on the PR — only the summary
+                // is missing. Tagged with SUMMARY_GENERATION_FAILED_REASON so
+                // RequestChangesOrApproveStage can tell this apart from a
+                // partial failure that actually bears on the review's
+                // trustworthiness (#1844) — it does NOT block auto-approve or
+                // land the check on NEUTRAL by itself; it still counts as
+                // 'partial' for anything else that reads severity (e.g. a
+                // future partial failure alongside it keeps blocking).
                 const pipelineError: PipelineError = {
                     stage: this.stageName,
-                    error:
-                        error instanceof Error
-                            ? error
-                            : new Error(String(error)),
+                    error: summaryError,
+                    severity: 'partial',
                     metadata: {
                         message: 'Failed to generate summary',
-                        reason: 'summary_generation_failed',
+                        reason: SUMMARY_GENERATION_FAILED_REASON,
                     },
                 };
 
-                if (!context.errors) {
-                    context.errors = [];
-                }
-                context.errors.push(pipelineError);
+                // Name the real cause in the PR comment ("provider returned
+                // 404") instead of the generic "unexpected error" fallback.
+                // Only fills the slot when no agent failure already claimed it
+                // — a core-agent failure is the more important thing to report.
+                const classification =
+                    getClassification(summaryError) ??
+                    classifyLLMError(
+                        summaryError,
+                        resolvedProvider(context, summaryError),
+                    );
+
+                // The pipeline context is Immer-frozen once an earlier stage
+                // (e.g. agent-review) ran updateContext, so a direct
+                // `context.errors = []` / `.push()` throws "Cannot assign to
+                // read only property" — and here, INSIDE the summary-failure
+                // catch, that throw would replace the real summary error with a
+                // confusing frozen-mutation error and abort the stage. Record
+                // the pipeline error through updateContext (same fix class as
+                // create-file-comments #c886e369a / agent-review #1522).
+                context = this.updateContext(context, (draft) => {
+                    if (!draft.errors) {
+                        draft.errors = [];
+                    }
+                    draft.errors.push(pipelineError);
+
+                    if (!draft.lastReviewError) {
+                        draft.lastReviewError = {
+                            category: classification.category,
+                            provider:
+                                classification.provider ??
+                                resolvedProvider(context, summaryError),
+                            friendlyMessage: classification.friendlyMessage,
+                            httpStatus: classification.httpStatus,
+                            providerMessage: classification.providerMessage,
+                            model: resolvedModel(context, summaryError),
+                            occurredAt: new Date(),
+                        };
+                    }
+                });
             }
         }
+
+        await this.postTraceComment(context);
+
+        const { reviewFailed, reviewHasPartialErrors } =
+            classifyErrors(context);
+        // Everything the classifier learned, not just its sentence. This line
+        // used to read `?.friendlyMessage` and drop the rest, which is how a
+        // failed review reported "Unexpected error while running the code
+        // review (open_router)" while the status, the model and the provider's
+        // own explanation sat on the same object (#1871).
+        const reviewErrorMessage = context.lastReviewError
+            ? buildReviewErrorMessage(context.lastReviewError)
+            : undefined;
+        const reviewErrorCustomMessage = customMessageFor(reviewFailed);
 
         const startReviewMessage =
             context.pullRequestMessagesConfig?.startReviewMessage;
@@ -184,6 +393,14 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             context.pullRequestMessagesConfig?.endReviewMessage;
 
         if (!endReviewMessage) {
+            // The default completion comment is updated in place. Keep the
+            // separate approval status current when a later review holds a PR
+            // that Kody previously approved.
+            context = await this.postHoldReasonIfNeeded(
+                context,
+                reviewFailed,
+                reviewHasPartialErrors,
+            );
             await this.commentManagerService.updateOverallComment(
                 organizationAndTeamData,
                 pullRequest.number,
@@ -195,10 +412,14 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 codeReviewConfig,
                 initialCommentData.threadId,
                 undefined,
-                context.dryRun,
                 reviewFailed,
                 reviewErrorMessage,
                 reviewHasPartialErrors,
+                reviewErrorCustomMessage,
+                context.linkedRepositoriesMetadata,
+                context.reviewWarnings,
+                !!context.onlyCustomAgent,
+                context.approvalDecision,
             );
             return context;
         }
@@ -207,6 +428,11 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             endReviewMessage.status === PullRequestMessageStatus.OFF ||
             endReviewMessage.status === PullRequestMessageStatus.INACTIVE
         ) {
+            context = await this.postHoldReasonIfNeeded(
+                context,
+                reviewFailed,
+                reviewHasPartialErrors,
+            );
             return context;
         }
 
@@ -215,6 +441,11 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 PullRequestMessageStatus.ONLY_WHEN_OPENED &&
             context.lastExecution
         ) {
+            context = await this.postHoldReasonIfNeeded(
+                context,
+                reviewFailed,
+                reviewHasPartialErrors,
+            );
             return context;
         }
 
@@ -245,6 +476,14 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     lineComments,
                 );
 
+            // Append cross-repo transparency line to custom end-review templates too.
+            const linkedLine = formatLinkedReposSummaryLine(
+                context.linkedRepositoriesMetadata,
+            );
+            const bodyWithLinked = linkedLine
+                ? `${finalCommentBody}${linkedLine}`
+                : finalCommentBody;
+
             await this.commentManagerService.updateOverallComment(
                 organizationAndTeamData,
                 pullRequest.number,
@@ -255,11 +494,15 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 lineComments,
                 codeReviewConfig,
                 initialCommentData.threadId,
-                finalCommentBody,
-                context.dryRun,
+                bodyWithLinked,
                 reviewFailed,
                 reviewErrorMessage,
                 reviewHasPartialErrors,
+                reviewErrorCustomMessage,
+                context.linkedRepositoriesMetadata,
+                context.reviewWarnings,
+                !!context.onlyCustomAgent,
+                context.approvalDecision,
             );
             return context;
         }
@@ -281,6 +524,15 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         ) {
             const finalCommentBody = endReviewMessage.content;
 
+            // End-review messages can be created on every push. Keep the
+            // approval reason in its marked comment so an older message does
+            // not keep showing a stale hold after a later review.
+            context = await this.postHoldReasonIfNeeded(
+                context,
+                reviewFailed,
+                reviewHasPartialErrors,
+            );
+
             await this.commentManagerService.createComment(
                 organizationAndTeamData,
                 pullRequest.number,
@@ -292,11 +544,13 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 codeReviewConfig,
                 finalCommentBody,
                 context.pullRequestMessagesConfig,
-                context.dryRun,
                 context.prLevelCommentResults ?? [],
                 reviewFailed,
                 reviewErrorMessage,
                 reviewHasPartialErrors,
+                reviewErrorCustomMessage,
+                context.reviewWarnings,
+                undefined,
             );
         }
 

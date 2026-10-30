@@ -38,9 +38,10 @@ export function handleAuthenticated(
             role: session.user.role,
         })
     ) {
-        return NextResponse.redirect(new URL("/forbidden", req.url), {
-            status: 302,
-        });
+        // Carry the blocked path so /forbidden can say what was denied.
+        const forbiddenUrl = new URL("/forbidden", req.url);
+        forbiddenUrl.searchParams.set("from", pathname);
+        return NextResponse.redirect(forbiddenUrl, { status: 302 });
     }
 
     // Allows access to the route

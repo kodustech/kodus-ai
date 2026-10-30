@@ -7,19 +7,14 @@ vi.mock('../../services/git.service.js', () => ({
     gitService: {
         isGitRepository: vi.fn().mockResolvedValue(true),
         getGitRoot: vi.fn(),
+        getHooksDir: vi.fn(),
     },
 }));
 
-vi.mock('../memory/session-hooks-install.js', () => ({
-    removeSessionHooks: vi.fn().mockResolvedValue({ removed: false }),
-}));
-
 import { gitService } from '../../services/git.service.js';
-import { disableAction } from '../memory/disable.js';
-import {
-    CODEX_NOTIFY_LINE,
-    CODEX_NOTIFY_LINE_LEGACY,
-} from '../memory/hooks.js';
+import { disableAction } from '../trace/disable.js';
+import { CODEX_NOTIFY_LINE_LEGACY_VARIANTS } from '../trace/hooks.js';
+import { gitHooksService } from '../../services/git-hooks.service.js';
 
 let tmpDir: string;
 
@@ -27,6 +22,9 @@ beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kodus-disable-test-'));
     await fs.mkdir(path.join(tmpDir, '.git', 'hooks'), { recursive: true });
     vi.mocked(gitService.getGitRoot).mockResolvedValue(tmpDir);
+    vi.mocked(gitService.getHooksDir).mockResolvedValue(
+        path.join(tmpDir, '.git', 'hooks'),
+    );
 
     // Override HOME so resolveCodexConfigPath points to tmpDir
     vi.spyOn(os, 'homedir').mockReturnValue(tmpDir);
@@ -41,7 +39,7 @@ afterEach(async () => {
 });
 
 describe('disableAction', () => {
-    it('removes Claude hooks from settings.json', async () => {
+    it('removes hooks from settings.json, including the previous release', async () => {
         const settingsPath = path.join(tmpDir, '.claude', 'settings.json');
         await fs.mkdir(path.dirname(settingsPath), { recursive: true });
         await fs.writeFile(
@@ -68,7 +66,7 @@ describe('disableAction', () => {
                                     {
                                         type: 'command',
                                         command:
-                                            'kodus decisions capture --agent claude-compatible --event stop',
+                                            'kodus trace hooks claude-code stop',
                                     },
                                 ],
                             },
@@ -86,34 +84,33 @@ describe('disableAction', () => {
         expect(settings.hooks).toBeUndefined();
     });
 
-    it('removes Codex notify line', async () => {
+    it('removes the legacy Codex notify line', async () => {
         const codexPath = path.join(tmpDir, '.codex', 'config.toml');
         await fs.mkdir(path.dirname(codexPath), { recursive: true });
         await fs.writeFile(
             codexPath,
-            `model = "gpt-4"\n${CODEX_NOTIFY_LINE}\n`,
+            `model = "gpt-4"\n${CODEX_NOTIFY_LINE_LEGACY_VARIANTS[2]}\n`,
         );
 
         await disableAction();
 
         const content = await fs.readFile(codexPath, 'utf-8');
-        expect(content).not.toContain(CODEX_NOTIFY_LINE);
+        expect(content).not.toContain('notify =');
         expect(content).toContain('model = "gpt-4"');
     });
 
-    it('removes legacy Codex notify line', async () => {
-        const codexPath = path.join(tmpDir, '.codex', 'config.toml');
-        await fs.mkdir(path.dirname(codexPath), { recursive: true });
-        await fs.writeFile(
-            codexPath,
-            `model = "gpt-4"\n${CODEX_NOTIFY_LINE_LEGACY}\n`,
-        );
+    it('removes the git hooks it installed', async () => {
+        const hooksDir = path.join(tmpDir, '.git', 'hooks');
+        await gitHooksService.install(hooksDir);
 
         await disableAction();
 
-        const content = await fs.readFile(codexPath, 'utf-8');
-        expect(content).not.toContain(CODEX_NOTIFY_LINE_LEGACY);
-        expect(content).toContain('model = "gpt-4"');
+        await expect(
+            fs.access(path.join(hooksDir, 'prepare-commit-msg')),
+        ).rejects.toThrow();
+        await expect(
+            fs.access(path.join(hooksDir, 'pre-push')),
+        ).rejects.toThrow();
     });
 
     it('is idempotent (disable when nothing installed reports not found)', async () => {

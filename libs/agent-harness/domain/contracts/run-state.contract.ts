@@ -13,7 +13,12 @@ export type AgentRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export interface AgentMessage {
     readonly role: AgentRole;
-    readonly content: string;
+    /** Text for simple turns, OR the AI SDK's structured content parts for
+     *  `tool`/`assistant` turns (an array of tool-result / tool-call / text
+     *  parts). MUST stay structured end-to-end: stringifying a `tool` turn's
+     *  content makes the AI SDK crash on `content.filter` during prompt
+     *  conversion, and flattens tool-call/tool-result pairing on `assistant`. */
+    readonly content: string | readonly unknown[];
     /** Tool call(s) the assistant requested in this message, if any. */
     readonly toolCalls?: readonly ToolCallRecord[];
 }

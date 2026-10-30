@@ -1,0 +1,2774 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "ef8ace6e81c2ad04800d9543336439a8767fa987",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-15T22:56:31.051Z",
+  "updatedAt": "2026-10-15T23:14:21.308Z",
+  "complete": true,
+  "selectedCases": [
+    "R1-repeat-open",
+    "R9-repeat-after-dev-rejected",
+    "K6-rule-repost-not-implemented",
+    "P03-rule-nested-config-unguarded-after-reformat",
+    "P13-rule-log-operation-still-missing",
+    "P23-param-shape-read-before-helper",
+    "P33-rule-invalidation-new-callback"
+  ],
+  "casesSourceDigest": "66df9a0fa58a68ac0e16502af5eb11ae47126c2bd5e6d27ccd0256eefa3f7d80",
+  "summary": {
+    "measured": 35,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 30,
+        "violations": 1,
+        "rate": 0.033
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 25,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 27,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R1-repeat-open · resubmit-repeat [not_deliver, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R9-repeat-after-dev-rejected · resubmit-repeat-after-rejection [not_deliver, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K6-rule-repost-not-implemented · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K6-rule-repost-not-implemented · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P03-rule-nested-config-unguarded-after-reformat · nested-config-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P03-rule-nested-config-unguarded-after-reformat · nested-config-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P13-rule-log-operation-still-missing · log-operation-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P13-rule-log-operation-still-missing · success-log-operation-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P23-param-shape-read-before-helper · export-filter-shape-repeat [not_deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 1
+      },
+      "P23-param-shape-read-before-helper · low-stock-wrong-query-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P33-rule-invalidation-new-callback · onError-invalidation-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.9818181818181818,
+    "floor": 0.8,
+    "baseline": 0.903
+  },
+  "runs": 5,
+  "tokens": {
+    "in": 1709184,
+    "out": 84918,
+    "cacheRead": 1434106,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 35
+  },
+  "cases": [
+    {
+      "id": "R1-repeat-open",
+      "checks": "resubmit-repeat: not posted",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "resubmit-repeat",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R9-repeat-after-dev-rejected",
+      "checks": "resubmit-repeat-after-rejection: not posted",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "resubmit-repeat-after-rejection",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-after-rejection",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-after-rejection",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-after-rejection",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-after-rejection",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "K6-rule-repost-not-implemented",
+      "checks": "rangeLabel-start-repeat: not posted; dayKey-new-site: posted",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P03-rule-nested-config-unguarded-after-reformat",
+      "checks": "Kody Rule on unguarded access to a nested optional config value; the developer reformatted the block and the access is still unguarded on a changed line; stored implemented; 8 earlier comments",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "nested-config-repeat",
+          "ok": true
+        },
+        {
+          "what": "nested-config-new-site",
+          "ok": true
+        },
+        {
+          "what": "nested-config-repeat",
+          "ok": true
+        },
+        {
+          "what": "nested-config-new-site",
+          "ok": true
+        },
+        {
+          "what": "nested-config-repeat",
+          "ok": true
+        },
+        {
+          "what": "nested-config-new-site",
+          "ok": true
+        },
+        {
+          "what": "nested-config-repeat",
+          "ok": true
+        },
+        {
+          "what": "nested-config-new-site",
+          "ok": true
+        },
+        {
+          "what": "nested-config-repeat",
+          "ok": true
+        },
+        {
+          "what": "nested-config-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P13-rule-log-operation-still-missing",
+      "checks": "Kody Rule requiring an operation field on structured logs (Go slog); the developer added another field to the flagged call but no operation; stored not_implemented; 5 earlier comments",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "log-operation-repeat",
+          "ok": true
+        },
+        {
+          "what": "success-log-operation-new-site",
+          "ok": true
+        },
+        {
+          "what": "log-operation-repeat",
+          "ok": true
+        },
+        {
+          "what": "success-log-operation-new-site",
+          "ok": true
+        },
+        {
+          "what": "log-operation-repeat",
+          "ok": true
+        },
+        {
+          "what": "success-log-operation-new-site",
+          "ok": true
+        },
+        {
+          "what": "log-operation-repeat",
+          "ok": true
+        },
+        {
+          "what": "success-log-operation-new-site",
+          "ok": true
+        },
+        {
+          "what": "log-operation-repeat",
+          "ok": true
+        },
+        {
+          "what": "success-log-operation-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P23-param-shape-read-before-helper",
+      "checks": "Bug finder; a query param can be a string or array where an object is expected (500); the developer added a type check in a helper, but one action still reads the param before calling it; stored partially_implemented; 2 earlier comments",
+      "hits": 9,
+      "total": 10,
+      "detail": [
+        {
+          "what": "export-filter-shape-repeat",
+          "ok": true
+        },
+        {
+          "what": "low-stock-wrong-query-unrelated",
+          "ok": true
+        },
+        {
+          "what": "export-filter-shape-repeat",
+          "ok": true
+        },
+        {
+          "what": "low-stock-wrong-query-unrelated",
+          "ok": true
+        },
+        {
+          "what": "export-filter-shape-repeat",
+          "ok": true
+        },
+        {
+          "what": "low-stock-wrong-query-unrelated",
+          "ok": true
+        },
+        {
+          "what": "export-filter-shape-repeat",
+          "ok": false
+        },
+        {
+          "what": "low-stock-wrong-query-unrelated",
+          "ok": true
+        },
+        {
+          "what": "export-filter-shape-repeat",
+          "ok": true
+        },
+        {
+          "what": "low-stock-wrong-query-unrelated",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P33-rule-invalidation-new-callback",
+      "checks": "Kody Rule broken again in a different callback of the same file; the earlier comment covered onSuccess (pending), this round adds onError with the same violation; 9 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "onError-invalidation-new-site",
+          "ok": true
+        },
+        {
+          "what": "onError-invalidation-new-site",
+          "ok": true
+        },
+        {
+          "what": "onError-invalidation-new-site",
+          "ok": true
+        },
+        {
+          "what": "onError-invalidation-new-site",
+          "ok": true
+        },
+        {
+          "what": "onError-invalidation-new-site",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 42601,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 32618,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24778,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36457,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26261,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23745,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28791,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33471,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 31432,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29559,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K6-rule-repost-not-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21837,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "For users west of UTC, `dayKey` returns the previous calendar day because it derives the date with `toISOString().slice(0, 10)`. Replace it with `formatLocalDate(at)`, which matches the import added at the top of this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K6-rule-repost-not-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17110,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "Because `toISOString().slice(0, 10)` converts to UTC first, users west of UTC get the previous calendar day from `dayKey`. Use `formatLocalDate(at)`, already imported in this file, so the value reflects the local calendar day."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K6-rule-repost-not-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17728,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "`dayKey` produces a date-only value with `toISOString().slice(0, 10)` that is off by one day for users west of UTC. Replace it with `formatLocalDate(at)` from `./dates`, which is already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K6-rule-repost-not-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16159,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "`dayKey` uses `at.toISOString().slice(0, 10)`, which returns the previous calendar day for users west of UTC. Use the already imported `formatLocalDate(at)` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K6-rule-repost-not-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14347,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "`dayKey` derives a date-only key with `at.toISOString().slice(0, 10)`, which returns the previous calendar day for users west of UTC and breaks day bucketing. Use `formatLocalDate(at)`, already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21445,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "text": "When `:integrations` or `:pagerduty` is absent, `escalate` raises `NoMethodError` on `@workspace.config[:integrations][:pagerduty][:routing_key]` while escalating a critical digest. Use `@workspace.config.dig(:integrations, :pagerduty, :routing_key)` as elsewhere so missing optional settings return `nil` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34411,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "text": "Because `:integrations` and `:pagerduty` are optional, a workspace without PagerDuty configured has `nil` at one level, so `escalate` raises `NoMethodError` on a critical digest. Read the routing key with `@workspace.config.dig(:integrations, :pagerduty, :routing_key)`, as `send_hour` already does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22404,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "text": "`escalate` will raise `NoMethodError` on `nil` for any workspace whose `config[:integrations]` lacks PagerDuty when a critical digest is escalated, because the routing key is read with `@workspace.config[:integrations][:pagerduty][:routing_key]`. Use `@workspace.config.dig(:integrations, :pagerduty, :routing_key)` instead and skip the trigger when it is `nil`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 67046,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "text": "When integrations or PagerDuty are not configured, `escalate` raises `NoMethodError` because `@workspace.config[:integrations][:pagerduty][:routing_key]` hits nil on `[:integrations]` or `[:pagerduty]`, violating the Read optional integration settings safely rule. Use `@workspace.config.dig(:integrations, :pagerduty, :routing_key)` and handle a nil routing key before triggering the pager."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20340,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P03-rule-nested-config-unguarded-after-reformat",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "text": "A workspace missing `:integrations` or PagerDuty configuration has nil at those levels, so escalating a critical digest raises `NoMethodError` instead of triggering the pager. Use `dig` to read `@workspace.config` and return when the resulting `routing_key` is nil."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18736,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/payouts/settle.go",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P13-rule-log-operation-still-missing",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "text": "Without an `operation` field, the `payout settled` log call in `notifySettled` cannot be grouped with the rest of the settle flow in the log dashboards, breaking the rule that log calls name the operation. Add an operation field naming the operation, e.g. `slog.String(\"operation\", \"payout.notify_settled\")`, alongside the existing `payout_id` and `bank_ref` attributes."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19204,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/payouts/settle.go",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P13-rule-log-operation-still-missing",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "text": "Without an operation field, this notification cannot be grouped with the rest of the settle flow in the log dashboards. Add `slog.String(\"operation\", \"payout.notifySettled\")` to this `InfoContext` call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16504,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/payouts/settle.go",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P13-rule-log-operation-still-missing",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "text": "Without the `operation` field, this settlement event cannot be grouped with the rest of the settle flow in the log dashboards. Add `slog.String(\"operation\", \"payout.settle\")` to the `InfoContext` call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 12877,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/payouts/settle.go",
+          "line": 28,
+          "label": "kody_rules",
+          "earlierId": "round-a-P13-rule-log-operation-still-missing",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "text": "Without an operation field this call cannot be grouped with the rest of the settle flow in the log dashboards. Add `slog.String(\"operation\", \"payout.settle\")` to this InfoContext call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P13-rule-log-operation-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13190,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/payouts/settle.go",
+          "line": 28,
+          "label": "kody_rules",
+          "earlierId": "round-a-P13-rule-log-operation-still-missing",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-log-operation-field"
+          ],
+          "marked": false,
+          "file": "internal/payouts/notify.go",
+          "line": 9,
+          "text": "Without an `operation` field, this event cannot be grouped with the rest of the settle flow in the log dashboards. Add `slog.String(\"operation\", \"payout.settle\")` to this `InfoContext` call so it follows the rule that log calls name the operation."
+        }
+      ],
+      "claims": [
+        {
+          "id": "log-operation-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "success-log-operation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 66784,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter), dropping the `qty < reorder_at` predicate. WHY: stockService.low adds `and qty < reorder_at` (stock.service.ts:9) whereas stockService.list (stock.service.ts:7) does not, so the low-stock endpoint returns every matching row instead of only items below the reorder threshold — a wrong-result regression for all low-stock callers. HOW: call stockService.low(filter) here as before.",
+          "keep": true,
+          "rationale": "Confirmed in code: stock.service.ts:7 `list` selects `where warehouse=$1 and sku like $2`, while :9 `low` adds `and qty < reorder_at`. stock.controller.ts:13 calls stockService.list in lowStock, so the low-stock endpoint returns all matching rows rather than only below-reorder items. This is a concrete wrong-result regression, distinct from the earlier PreviousDecision about filter param shape (a TypeError/500, different failure and operation).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1,
+                "endLine": 25
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter), dropping the `qty < reorder_at` filter that the endpoint is named for. WHY: the lowStock endpoint returns every stock row for the warehouse/sku prefix instead of only the rows below the reorder threshold, producing wrong results for all callers of that endpoint. HOW: restore the low() call: `const rows = await stockService.low(filter);`.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/inventory/stock.service.ts: list() queries `qty < reorder_at` NOT applied, whereas low() includes `and qty < reorder_at`. The lowStock endpoint (stock.controller.ts:13) calls list(), so it returns all rows for warehouse/sku prefix rather than only rows below the reorder threshold — exactly the wrong-result failure described. Not covered by any previous decision (those concern param shape and CSV escaping). Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "low|list",
+                "path": "src/inventory",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock reads raw.warehouse.trim() on line 19 before readStockFilter(raw) validates raw on line 20. WHY: when Express parses ?filter=x as a string, a repeated ?filter as an array, or the param is absent, raw.warehouse is undefined and `.trim()` throws a TypeError that errorHandler (src/http/errors.ts:15) turns into a 500 instead of the intended 400 from the helper. HOW: derive the filter first, then build the filename from the validated value, e.g. `const filter = readStockFilter(req.query.filter); const fileName = `stock_${filter.warehouse}.csv`;`.",
+          "keep": false,
+          "rationale": "The claim is technically accurate: line 19 reads raw.warehouse.trim() before readStockFilter (line 20) validates, so a string/array/absent filter yields undefined.warehouse → TypeError → 500 via errorHandler, rather than the 400 the helper would throw. However, this is precisely the problem already posted in PreviousReviewDecision index 1 (round-a-P23-param-shape-read-before-helper), at the same lines (16-19), same operation (exportStock), same failure mode (warehouse undefined → .trim() TypeError → 500 instead of 400). Its outcome is \"partially_implemented\" (listStock/lowStock fixed, exportStock not), and the rules explicitly require dropping a re-raised problem regardless of outcome or the fact that it labels the fix incomplete. Same crash, same operation — a repeat, not a new defect.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "function readStockFilter|const readStockFilter"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/filter.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/errors.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 12,
+          "text": "The `lowStock` endpoint now returns every stock row for the warehouse/sku prefix instead of only rows below the reorder threshold, so all callers get wrong results. Restore the `stockService.low(filter)` call to keep the `qty < reorder_at` filter."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 13,
+          "text": "Because `stockService.low` adds `and qty < reorder_at` (stock.service.ts:9) while `stockService.list` (stock.service.ts:7) does not, `lowStock` returns every matching row instead of only items below the reorder threshold, a wrong-result regression for all low-stock callers. Call `stockService.low(filter)` here as before."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 52128,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock calls stockService.list(filter) instead of stockService.low(filter). WHY: stockService.list has no `qty < reorder_at` predicate (stock.service.ts:8-9 defines `low` with it), so the low-stock endpoint now returns every matching row rather than only items below reorder level — a wrong-result regression for callers relying on the low-stock semantics. HOW: call `stockService.low(filter)` in lowStock.",
+          "keep": true,
+          "rationale": "Confirmed at src/inventory/stock.controller.ts:13: lowStock calls stockService.list(filter), while stock.service.ts:8-9 defines low() with the `qty < reorder_at` predicate that list() lacks. So the low-stock endpoint returns all matching rows instead of only below-reorder items — a genuine wrong-result regression. This is a different problem from PreviousDecision 1 (param-shape/TypeError in exportStock), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock reads `raw.warehouse.trim()` on line 19 before readStockFilter(raw) runs on line 20, so the new validation guard is bypassed for the file-name read. WHY: with a non-object filter such as ?filter=north (Express parses it as a string) raw.warehouse is undefined, so `.trim()` throws a TypeError that errorHandler maps to a 500 instead of the intended 400 — the exact crash the extracted helper was introduced to prevent, still reachable because the helper is called after the unguarded access. HOW: call readStockFilter first and build the file name from the validated filter, e.g. `const filter = readStockFilter(req.query.filter); const fileName = `stock_${filter.warehouse}.csv`;`.",
+          "keep": false,
+          "rationale": "The technical claim is accurate — line 19 reads raw.warehouse.trim() before readStockFilter(raw) on line 20, so ?filter=north (a string) yields undefined.warehouse.trim() → TypeError → 500 instead of 400. But this is the exact same failure (same crash: TypeError→500 instead of the intended 400) in the same operation (exportStock) already raised in PreviousDecision index 1 (round-a-P23-param-shape-read-before-helper), whose Outcome is partially_implemented. The current diff shows the developer added readStockFilter but placed it after the unguarded access — i.e. the same problem remains, just with a new cause named. Per the repeat rule this must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/filter.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 11,
+          "text": "The low-stock endpoint now returns every matching row rather than only items below reorder level, since `stockService.list` lacks the `qty < reorder_at` predicate that `stock.service.ts:8-9` defines for `low`. Call `stockService.low(filter)` in `lowStock` to restore the correct low-stock semantics for callers."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53289,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter), silently dropping the below-reorder-threshold predicate. WHY: stock.service.ts:8-9 shows low() adds `and qty < reorder_at` while list() does not, so the low-stock endpoint returns every stock row for the warehouse, not just items that need reordering. HOW: restore the correct delegate: `const rows = await stockService.low(filter);`.",
+          "keep": true,
+          "rationale": "Confirmed: stock.service.ts:8-9 defines low() with the `and qty < reorder_at` predicate, while list() (lines 6-7) lacks it. lowStock at stock.controller.ts:13 calls stockService.list(filter), so the low-stock endpoint returns all rows for the warehouse instead of only below-reorder items. The root cause and failure path are factually accurate and this is a distinct issue from the PreviousDecision (which concerned filter param shape/type validation, not the wrong service delegate).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "stock.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "stock.service*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "low\\(|list\\(|reorder_at",
+                "path": "src/inventory"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock reads raw.warehouse.trim() at line 19 on an unvalidated cast value before readStockFilter(raw) runs at line 20. WHY: when filter is absent, a string (?filter=north) or an array (repeated ?filter), warehouse is undefined and .trim() throws a TypeError that errorHandler converts into a 500 instead of the 400 readStockFilter would raise — the exact failure the helper was added to prevent. HOW: build the filename from the validated filter, e.g. `const filter = readStockFilter(raw); const fileName = `stock_${filter.warehouse}.csv`;` (dropping the raw cast entirely).",
+          "keep": false,
+          "rationale": "The technical claim is accurate (line 19 does `raw.warehouse.trim()` on the unvalidated cast before `readStockFilter` runs, so a string/array `filter` yields a TypeError→500 instead of the helper's 400). But this is precisely the problem PreviousDecision index 1 already raised on this PR: it named exportStock at these same lines, the same `warehouse.trim()` TypeError→500 failure, and the same \"validate the filter shape before reading it\" fix. Same failure in the same operation = a repeat, so the finding must be dropped regardless of that entry's \"partially_implemented\" outcome.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/inventory/filter.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 12,
+          "text": "Because `lowStock` now calls `stockService.list(filter)` instead of `stockService.low(filter)`, and `stock.service.ts:8-9` shows `low()` adds `and qty < reorder_at` while `list()` does not, the low-stock endpoint returns every stock row for the warehouse instead of only items that need reordering. Restore the correct delegate with `const rows = await stockService.low(filter);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 75513,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: fileName is built from raw.warehouse (unvalidated query input) before readStockFilter runs and is passed to res.attachment(). WHY: Express sets Content-Disposition from this value, so a warehouse containing CRLF/quote characters injects into the response header (and readStockFilter's 400 validation is bypassed for the filename). HOW: derive the filename from the validated filter (const filter = readStockFilter(raw); then use filter.warehouse) and sanitize/strip control characters before passing it to res.attachment().",
+          "keep": true,
+          "rationale": "The claim is technically sound. Line 19 reads raw.warehouse and calls .trim() to build fileName BEFORE readStockFilter validates the input at line 20. Since readStockFilter explicitly documents that Express parses ?filter as a string or array in some shapes, raw.warehouse can be undefined and .trim() would throw; but more relevantly for this finding, when raw IS an object with a warehouse string containing CRLF/quote characters, that raw unvalidated value is interpolated into the filename and passed to res.attachment() before readStockFilter's 400 validation (and its trim-only sanitization, which does not strip control characters) can run. Express sets Content-Disposition from res.attachment(), so CRLF/quote injection into the response header is a real, reachable path, not merely a style concern. Note this is a DIFFERENT failure than the earlier PreviousDecision (which concerned the TypeError/500 from destructuring non-object filter shapes); this finding is about header injection via the unvalidated filename value, so it is not a repeat. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "filter.ts",
+                "path": "src/inventory"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/filter.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock calls stockService.list(filter) instead of stockService.low(filter). WHY: the low-stock endpoint now returns every stock row in the warehouse (stock.service.ts list drops the `qty < reorder_at` filter that low applies), so callers relying on this endpoint get wrong results. HOW: call stockService.low(filter).",
+          "keep": true,
+          "rationale": "Confirmed. stock.service.ts defines list (line 6-7, no qty < reorder_at filter) and low (line 8-9, includes `and qty < reorder_at`). stock.controller.ts lowStock (line 13) calls stockService.list(filter), so the low-stock endpoint returns all rows instead of only rows below reorder threshold. This is a real wrong-result bug. It is distinct from PreviousDecision index 1, which concerns req.query.filter shape/400 handling, not the wrong service method.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "(list|low)\\s*\\(|reorder_at|qty",
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 11,
+          "text": "The low-stock endpoint now returns every stock row in the warehouse instead of only the ones below reorder point, because `stockService.list` drops the `qty < reorder_at` filter that `stockService.low` applies, so callers relying on this endpoint get wrong results. Call `stockService.low(filter)` instead of `stockService.list(filter)`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 18,
+          "text": "Because `fileName` is built from the unvalidated `raw.warehouse` before `readStockFilter` runs and then passed to `res.attachment()`, Express writes it into `Content-Disposition`, so a warehouse containing CRLF or quote characters injects into the response header and `readStockFilter`'s 400 validation is bypassed for the filename. Derive the filename from the validated `filter` (`filter.warehouse`) and sanitize or strip control characters before passing it to `res.attachment()`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 49533,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter), dropping the low-stock predicate. WHY: stockService.list queries only `warehouse = $1 and sku like $2` (src/inventory/stock.service.ts:6-7) while stockService.low adds `and qty < reorder_at` (lines 8-9), so the /low-stock endpoint silently returns all stock rows instead of only items below reorder level — wrong result set for every caller. HOW: restore `const rows = await stockService.low(filter);` in lowStock.",
+          "keep": true,
+          "rationale": "Confirmed. src/inventory/stock.controller.ts:13 calls stockService.list(filter), and stock.service.ts:6-7 shows list's SQL only filters `warehouse = $1 and sku like $2`. The distinct low-stock predicate `and qty < reorder_at` exists only in stockService.low (lines 8-9), which is now unused by lowStock. The /low-stock endpoint therefore returns all matching stock rows instead of only items below reorder level — a real wrong-result bug for every caller. This is distinct from PreviousDecision index 1, which concerns param-shape destructuring/TypeError, not the dropped predicate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock dereferences raw.warehouse.trim() (line 19) before readStockFilter(raw) validates the shape (line 20), so a missing/string/array filter throws a TypeError. WHY: when ?filter is absent, ?filter=x, or repeated, raw.warehouse is undefined and .trim() throws, and errorHandler (src/http/errors.ts:15) turns the non-HttpError into a 500 instead of the intended 400. HOW: validate first and derive the file name from the validated filter, e.g. `const filter = readStockFilter(req.query.filter); const fileName = \\`stock_${filter.warehouse}.csv\\`;`.",
+          "keep": false,
+          "rationale": "The finding describes the exact failure already raised by PreviousDecision index 1: exportStock reads req.query.filter as an object and raw.warehouse.trim() throws a TypeError that errorHandler (src/http/errors.ts:15) turns into a 500 instead of the intended 400. Same operation (exportStock filter handling), same crash/500 consequence. Per the rules, this is a repeat of an already-posted comment regardless of its \"partially_implemented\" outcome or the reworded cause (ordering vs. shape). It is not a distinct new problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/errors.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 11,
+          "text": "`lowStock` now calls `stockService.list(filter)` instead of `stockService.low(filter)`, so the `/low-stock` endpoint silently returns all stock rows rather than only items below reorder level, because `stockService.list` queries only `warehouse = $1 and sku like $2` (`src/inventory/stock.service.ts:6-7`) while `stockService.low` adds `and qty < reorder_at` (lines 8-9). Restore `const rows = await stockService.low(filter);` in `lowStock`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30711,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 21,
+          "text": "Because the new `onError` callback calls `queryClient.invalidateQueries` without returning or awaiting it, violating the rule that mutation callbacks return the invalidation promise, a failed seat update can settle before the seats query refetches and the UI can briefly show the optimistic value instead of the rolled-back one. Return the promise from `onError`: `return queryClient.invalidateQueries({ queryKey: queryKeys.seats(change.workspaceId) });`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29661,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "text": "The new `onError` callback does not return or await `queryClient.invalidateQueries`, so the mutation settles before the seats query refetch finishes and the settings page can briefly show stale data after a failed update. Return the `queryClient.invalidateQueries` promise for `queryKeys.seats(change.workspaceId)` so the mutation waits for the refetch."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18684,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 21,
+          "text": "The `onError` callback doesn't return or await `queryClient.invalidateQueries`, violating the rule that mutation callbacks return the invalidation promise, so the mutation settles before the seats query refetch completes and the UI can still show stale seat data after a failed save. Return the promise with `return queryClient.invalidateQueries({ queryKey: queryKeys.seats(change.workspaceId) });`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20009,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "text": "Because `onError` calls `queryClient.invalidateQueries` without returning or awaiting the promise, the mutation settles before the seats query refetch finishes and the UI can still show stale state after a failed update. Return the promise from the new `onError` callback so React Query keeps the mutation pending until the refetch settles; the same pattern in the pre-existing `onSuccess` was already raised, but this `onError` is a newly introduced instance."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17101,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 21,
+          "text": "The new `onError` callback does not return or await `queryClient.invalidateQueries`, violating the rule \"Mutation callbacks return the invalidation promise\"; as a result, the mutation settles before the seats query refetches and the UI can still show the stale seat count after a failed save. Return the promise so the mutation stays pending until the refetch settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

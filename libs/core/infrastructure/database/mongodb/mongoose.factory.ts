@@ -24,7 +24,7 @@ export class MongooseFactory implements MongooseOptionsFactory {
         const isProduction = !['development', 'test'].includes(env ?? '');
 
         if (!isProduction) {
-            mongoose.set('debug', true);
+            mongoose.set('debug', false);
         }
 
         let uri: string;

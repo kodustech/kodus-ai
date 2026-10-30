@@ -1,0 +1,18 @@
+diff --git a/libs/code-review/infrastructure/agents/providers/custom-agent.provider.ts b/libs/code-review/infrastructure/agents/providers/custom-agent.provider.ts
+index 098a0f7ea..1f5818aaa 100644
+--- a/libs/code-review/infrastructure/agents/providers/custom-agent.provider.ts
++++ b/libs/code-review/infrastructure/agents/providers/custom-agent.provider.ts
+@@ -223,11 +223,8 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
+         return this.agent.instructions || undefined;
+     }
+ 
+-    protected getLaneFocus(input: ReviewAgentInput): string | undefined {
+-        return buildCustomAgentLaneFocus(
+-            this.agent,
+-            this.getConventionGuides(input),
+-        );
++    protected getLaneFocus(_input: ReviewAgentInput): string | undefined {
++        return undefined;
+     }
+ 
+     protected getRunToolCache(): RunToolCache {

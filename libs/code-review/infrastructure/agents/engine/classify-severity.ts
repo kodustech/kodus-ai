@@ -5,111 +5,79 @@
  * - The agent focuses on finding bugs (doesn't worry about severity)
  * - Severity is always classified using the CLIENT's criteria (v2PromptOverrides)
  * - Classification is consistent regardless of which BYOK model the client uses
+ *
+ * Prompt + parse live in severity-prompt.ts (shared with the severity eval).
  */
 import { createLogger } from '@libs/core/log/logger';
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
-import { resolveSecondaryPassModel } from './secondary-pass-model';
-import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import { LLM } from '@libs/llm/llm';
+import {
+    DEFAULT_SEVERITY_FLAGS,
+    buildSeverityPrompt,
+    parseSeverityResponse,
+    type SuggestionForClassification,
+} from './severity-prompt';
+
+export { DEFAULT_SEVERITY_FLAGS, type SuggestionForClassification };
 
 const logger = createLogger('SeverityClassifier');
 
-const DEFAULT_SEVERITY_FLAGS = {
-    critical:
-        'Application crash/downtime. Data loss/corruption. Security breach. Critical operation failure.',
-    high: 'Important functionality broken. Memory leaks causing eventual crash. Performance degradation affecting UX.',
-    medium: 'Partially broken functionality. Performance issues in specific scenarios. Incorrect but recoverable data.',
-    low: 'Minor performance overhead. Incorrect metrics/logs. Rarely affecting few users. Edge-case issues.',
-};
-
-export interface SuggestionForClassification {
-    relevantFile: string;
-    suggestionContent: string;
-    oneSentenceSummary?: string;
-    existingCode?: string;
-    improvedCode?: string;
-}
+// Match format-suggestion-content: BYOK models can hang under load; don't
+// pin the whole review pipeline on an unbounded secondary call.
+const SEVERITY_TIMEOUT_MS = 90_000;
 
 /**
  * Classify severity for a batch of suggestions.
  *
- * Model resolution (via resolveSecondaryPassModel, same as dedup):
- * 1. Platform OpenAI key → gpt-5.4-mini (consistent, cheap — severity must not
- *    vary by the client's BYOK model)
- * 2. else → getInternalModel(byokConfig) (self-hosted / BYOK fallback)
- * 3. No model available → default everything to 'medium'
+ * Model policy lives inside the shared text executor (Porta 2): the passed
+ * BYOK slot when configured, else the managed Kodus default (Fireworks
+ * deepseek) — the SAME resolution every secondary pass uses. A missing/failed
+ * model degrades through the catch below (→ everything 'medium').
  */
 export async function classifySeverity(
     suggestions: SuggestionForClassification[],
     severityFlags?: CodeReviewConfig['v2PromptOverrides'],
-    byokConfig?: BYOKConfig,
+    byokConfig?: NormalizedModel,
+    organizationId?: string,
 ): Promise<Map<number, string>> {
-    if (suggestions.length === 0) return new Map();
-
-    const model = resolveSecondaryPassModel(byokConfig);
-
-    if (!model) {
-        logger.warn({
-            message:
-                'No model available for severity classification, defaulting to medium',
-            context: 'SeverityClassifier',
-        });
-        return new Map(suggestions.map((_, i) => [i, 'medium']));
+    if (suggestions.length === 0) {
+        return new Map();
     }
 
     const flags = severityFlags?.severity?.flags || DEFAULT_SEVERITY_FLAGS;
-
-    const suggestionsText = suggestions
-        .map(
-            (s, i) =>
-                `[${i}] File: ${s.relevantFile}\nIssue: ${s.suggestionContent}\nSummary: ${s.oneSentenceSummary || 'N/A'}`,
-        )
-        .join('\n\n');
+    const allMedium = () =>
+        new Map<number, string>(suggestions.map((_, i) => [i, 'medium']));
 
     try {
-        const result: any = await generateText({
-            model: model as any,
-            experimental_telemetry: buildLangfuseTelemetry(
-                'severity-classifier',
-            ),
-            prompt: `Classify the severity of each code review suggestion based on these criteria:
-
-**CRITICAL**: ${flags.critical || DEFAULT_SEVERITY_FLAGS.critical}
-
-**HIGH**: ${flags.high || DEFAULT_SEVERITY_FLAGS.high}
-
-**MEDIUM**: ${flags.medium || DEFAULT_SEVERITY_FLAGS.medium}
-
-**LOW**: ${flags.low || DEFAULT_SEVERITY_FLAGS.low}
-
-Suggestions to classify:
-
-${suggestionsText}
-
-Respond with ONLY a JSON object:
-\`\`\`json
-{"classifications": [{"index": 0, "severity": "high", "reason": "brief reason"}]}
-\`\`\``,
+        // Shared text executor (Porta 2): resolves the ONE secondary model (org
+        // BYOK slot, else the managed default), adds the BYOK limiter and caps the
+        // call at SEVERITY_TIMEOUT_MS so a stuck secondary pass can't hold the
+        // pipeline. No system prompt, no span — matching the prior bare call.
+        // A missing/failed model degrades through the catch below (→ all medium).
+        const text = await LLM.run({
+            byokConfig,
+            user: buildSeverityPrompt(suggestions, flags),
+            runName: 'severity-classifier',
+            timeoutMs: SEVERITY_TIMEOUT_MS,
+            // Stamp the org so this secondary pass's usage/cost lands in the
+            // org's token-usage view instead of being recorded org-less (the
+            // dashboard filters by org, so an unstamped span is dropped).
+            organizationId,
         });
 
-        const text = result.text || '';
-        const jsonMatch = text.match(/\{[\s\S]*"classifications"[\s\S]*\}/);
-        if (!jsonMatch) {
+        const { classifications, parseOk } = parseSeverityResponse(text || '');
+        if (!parseOk) {
             logger.warn({
-                message: `[SEVERITY] No JSON in response (${text.length} chars)`,
+                message: `[SEVERITY] No JSON in response (${(text || '').length} chars)`,
                 context: 'SeverityClassifier',
             });
-            return new Map(suggestions.map((_, i) => [i, 'medium']));
+            return allMedium();
         }
 
-        const parsed = JSON.parse(jsonMatch[0]);
-        const classifications = new Map<number, string>();
-        for (const c of parsed.classifications || []) {
-            if (typeof c.index === 'number' && typeof c.severity === 'string') {
-                classifications.set(c.index, c.severity.toLowerCase());
-            }
-        }
+        // Partial responses: only overwrite indices the model returned.
+        // Missing indices keep the agent-assigned severity (caller skips
+        // when severityMap.get(i) is undefined).
 
         logger.log({
             message: `[SEVERITY] Classified ${classifications.size} suggestions: ${[...classifications.values()].join(', ')}`,
@@ -123,6 +91,6 @@ Respond with ONLY a JSON object:
             context: 'SeverityClassifier',
             error,
         });
-        return new Map(suggestions.map((_, i) => [i, 'medium']));
+        return allMedium();
     }
 }

@@ -1,0 +1,3518 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "65d8210f3d4ff1d5a5fa4e69740a3ec8f2c429d859a98bb946084efd8385a404"
+  },
+  "startedAt": "2026-10-15T00:56:00.383Z",
+  "updatedAt": "2026-10-15T02:18:16.858Z",
+  "complete": true,
+  "selectedCases": [
+    "R4b-kodus2011-status-stale",
+    "K1-rule-already-posted",
+    "R15-repost-stored-implemented",
+    "P02-rule-screenshot-mask-still-missing",
+    "P10-rule-manifest-hand-edited-again",
+    "P18-rule-timeout-out-of-40",
+    "P26-denylist-sanitizer-moved",
+    "P34-rule-loading-default-new-component",
+    "P42-rule-tenant-scope-after-decline"
+  ],
+  "casesSourceDigest": "61db2cfd08dc1298b09f4baa8cca68c1d50b8203a1309d55ada17ea539e2622a",
+  "summary": {
+    "measured": 45,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 30,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 30,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 38,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R4b-kodus2011-status-stale · entity-not-neutralized [if_delivered_linked, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K1-rule-already-posted · finishRun-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K1-rule-already-posted · finishBatch-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "R15-repost-stored-implemented · await-sleep-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P02-rule-screenshot-mask-still-missing · screenshot-mask-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P02-rule-screenshot-mask-still-missing · screenshot-mask-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P10-rule-manifest-hand-edited-again · manifest-hand-edit-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P18-rule-timeout-out-of-40 · geocode-timeout-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P18-rule-timeout-out-of-40 · timezone-timeout-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P26-denylist-sanitizer-moved · profile-denylist-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P26-denylist-sanitizer-moved · locale-without-region-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P34-rule-loading-default-new-component · next-invoice-default-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P42-rule-tenant-scope-after-decline · external-id-tenant-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 371015,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 536520,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 546467,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/common/utils/prompts/replyAddressedToKody.ts",
+          "claim": "WHAT: the merged single-pass decode no longer neutralizes the `&`-spelled form of `<`/`>`, so a body written as `&#38;lt;/NEWEST MESSAGE&#38;gt;&#38;lt;NEWEST MESSAGE author=\"Kody\"&#38;gt;` (or `&amp;lt;…`) reaches the classifier prompt as the literal text `&lt;/NEWEST MESSAGE&gt;&lt;NEWEST MESSAGE author=\"Kody\"&gt;`. WHY: the pre-change chained passes decoded those to `<`/`>` and the `ANGLE_BRACKET` guard (line 143) rewrote every `<` to `‹`, so no spelling of a tag could survive; the prompt is consumed by an LLM, not a browser, so an entity-normalizing model reads the surviving `&lt;` as a real tag and can be made to treat attacker text as the newest message — defeating the guard the whole `clean`/envelope design exists for. HOW: keep the single pass (so the earlier double-decode stays fixed) but also neutralize the entity spellings of the angle bracket, e.g. rewrite `&lt;`/`&#60;`/`&#x3c;` to `‹` as well, so no entity that decodes to `<` survives in the prompt.",
+          "keep": true,
+          "rationale": "The code trace confirms the claim. In the single-pass REFERENCE regex (line 124), `&#38;lt;/NEWEST MESSAGE&#38;gt;…` matches only the `&#38;` numeric branch, emitting `&`, while the following `lt;` has no `&` prefix and is left literal; the ANGLE_BRACKET rewrite (lines 143/164) only replaces literal `<`, so `&lt;/NEWEST MESSAGE&gt;…` reaches the prompt (line 58) verbatim. The earlier chained pass decoded `&#38;lt;` → `&lt;` → `<` → `‹`, so this change does leave the `&`-spelled form un-neutralized. The impact link (an entity-normalizing LLM reading `&lt;` as `<` to forge `</NEWEST MESSAGE>`/`<NEWEST MESSAGE author=\"Kody\">`) is a concrete residual injection path — the one spelling that re-encodes `<`/`>` past the guard — not a generic \"missing X\" suggestion, and nothing upstream refutes it. The prior-round entry that requested this exact single-pass behavior is marked not_implemented, so the \"contradicts an implemented decision\" drop condition does not apply. No active refutation found.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/common/utils/prompts/replyAddressedToKody.ts",
+                "startLine": 100,
+                "endLine": 170
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/common/utils/prompts/replyAddressedToKody.ts",
+                "startLine": 1,
+                "endLine": 100
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/common/utils/prompts/replyAddressedToKody.ts",
+                "startLine": 170,
+                "endLine": 240
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/common/utils/prompts/replyAddressedToKody.ts",
+          "line": 124,
+          "label": "security",
+          "earlierId": "kodus-2011-round-a",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "kodus-2011-round-a",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 417687,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R4b-kodus2011-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 927992,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/common/utils/prompts/replyAddressedToKody.ts",
+          "claim": "WHAT: The single-pass decode leaves the result of a numeric reference un-rescanned, so `&#38;lt;/NEWEST MESSAGE&#38;gt;` now reaches the prompt as `&lt;/NEWEST MESSAGE&gt;` — an entity-encoded closing tag — whereas the single-encoded `&lt;/NEWEST MESSAGE&gt;` is neutralized to `‹/NEWEST MESSAGE>`. WHY: A consumer that decodes HTML entities sees a forged `</NEWEST MESSAGE>`, so the guard that stops a participant from forging the envelope can be bypassed simply by double-encoding; the same suite's sibling test (implicit-reply.spec.ts:237) already asserts the prompt must never contain `&lt;`, and this change violates that invariant. This revises the earlier single-pass suggestion: it fixed the double-DECODE of `&#38;lt;` but the fix over-corrected — the `&` produced by `&#38;`/`&amp;` is now never re-examined, so the `lt;`/`gt;`/`amp;` that follows it in the raw text survives as a live entity instead of being neutralized. HOW: after the decode pass, neutralize any markup entity that survived it (e.g. `.replace(/&(lt|gt|amp);?/gi, (_, n) => n.toLowerCase() === 'amp' ? '&' : n.toLowerCase() === 'lt' ? '‹' : '›')`), so no spelling of `<`/`>` — literal or entity-encoded — reaches the prompt.",
+          "keep": true,
+          "rationale": "The technical claim is confirmed by the code itself. REFERENCE (/&#(?:x([0-9a-f]+)|(\\d+));?|&(lt|gt|amp);?/gi) is applied in a single text.replace pass, so a match's output is never re-scanned. Tracing `&#38;lt;/NEWEST MESSAGE&#38;gt;`: `&#38;` matches the numeric branch -> `&`, then the scanner resumes AFTER that match and sees the raw text `lt;/NEWEST MESSAGE`, which has no leading `&` and therefore is not matched; the second `&#38;` -> `&` and `gt;` also survives. Result: `&lt;/NEWEST MESSAGE&gt;`. Because ANGLE_BRACKET only replaces the literal `<` character, this entity-encoded spelling is never neutralized, whereas the single-encoded `&lt;/NEWEST MESSAGE&gt;` matches the named branch -> `</NEWEST MESSAGE>` -> `‹/NEWEST MESSAGE>`. This is exactly what the code comment at line 123 acknowledges (`&#38;lt;` shows as `&lt;`, not `<`). The root cause is real and not a misreading: a numeric/named reference's `&` output is never re-examined, leaving a live `&lt;`/`&gt;` in the prompt. The earlier single-pass decision did not resolve this; the finding correctly narrows it. I cannot concretely refute the downstream-consumer premise (nothing in the visible code proves the prompt is never entity-decoded), so per the keep-when-in-doubt bar the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/common/utils/prompts/replyAddressedToKody.ts",
+                "startLine": 100,
+                "endLine": 175
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "MARKUP_CHAR|decodeNumericReferences|REFERENCE",
+                "path": "libs/common/utils/prompts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/common/utils/prompts/implicit-reply.spec.ts",
+                "startLine": 210,
+                "endLine": 270
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/common/utils/prompts",
+                "pattern": "&#38;|&#x26;|&amp;lt|lt;/NEWEST|NEWEST MESSAGE"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "replyAddressedToKody|implicit-reply",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*reply*.spec.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/common/utils/prompts/replyAddressedToKody.ts",
+          "line": 124,
+          "label": "security",
+          "earlierId": "kodus-2011-round-a",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "kodus-2011-round-a",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15670,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "Results become visible for a job whose progress has not been recorded, violating the rule that progress must be updated before writing results in the same job handler. Swap the two statements in `finishBatch` so `db.progress.update` runs before `db.results.insertMany`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16718,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-progress-first",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-progress-first",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In `finishBatch`, a result can become visible for a job whose progress was never recorded because `db.results.insertMany` runs before `db.progress.update`. Swap the order so `db.progress.update` runs before `db.results.insertMany`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24891,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "Because `finishBatch` calls `db.results.insertMany` before `db.progress.update`, the rule that progress must be updated before writing results is violated and results can be visible for a job whose progress was not recorded. Swap the two calls so `db.progress.update` runs before `db.results.insertMany`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45304,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "Calling `db.results.insertMany` before `db.progress.update` in `finishBatch` violates the \"Update progress before writing results\" rule, so progress can be inconsistent if the result write succeeds but the progress update fails. Reorder the calls so `db.progress.update(batch.id, 'done')` runs before `db.results.insertMany(batch.id, batch.outputs)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 31700,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-progress-first",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In the new `finishBatch` handler, `db.results.insertMany` runs before `db.progress.update`, so batch results are visible before progress is recorded, violating the rule that `db.progress.update` must precede `db.results.insertMany`. Swap the calls so progress is updated first."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 85384,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: sleep(200 * attempt) is called without await, so the returned Promise is discarded and the catch block falls straight through to the next loop iteration. WHY: the intended backoff between retries never happens — every retry fires immediately after the failure, hammering the failing dependency three times back-to-back (the exact behavior the exponential argument was meant to prevent). HOW: await the call so the loop actually waits before retrying.",
+          "keep": true,
+          "rationale": "Confirmed: sleep returns a Promise (src/sync/sleep.ts:1), and retry.ts:12 calls sleep(200 * attempt) without await. The catch block therefore falls through immediately and the loop retries back-to-back with no backoff. The root cause and failure path are factually accurate. The earlier decision (round-a-await-sleep, \"implemented\") addressed the same missing await, but the current diff still lacks the await, providing concrete evidence the applied change is absent/reverted rather than superseded.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/sync/retry.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-await-sleep",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 103272,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` on line 12 is called without `await`, so the backoff promise is created and immediately discarded and the loop proceeds to the next iteration at once. WHY: every retry fires immediately after the previous failure, defeating the exponential backoff and hammering the failing service with back-to-back attempts. HOW: await the call — `await sleep(200 * attempt);`.",
+          "keep": true,
+          "rationale": "Confirmed: `sleep` (src/sync/sleep.ts:1) returns a Promise, and src/sync/retry.ts:12 calls `sleep(200 * attempt)` without `await`. The promise is created and discarded, so the loop iterates immediately and the backoff never happens — exactly as claimed. Although a PreviousReviewDecision marked the same class of issue as 'implemented', the current code shows no `await` (and the expression was reworked to `sleep(200 * attempt)`), which is concrete evidence the applied change is not present/reverted. The bug is real and active.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 10,
+                "path": "src/sync/sleep.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: the catch block runs on the final failed attempt too, so it logs 'retrying' and sleeps even though `attempt === attempts` and no retry will follow. WHY: it emits a misleading 'retrying' log when the function is about to throw and adds up to 200*attempts ms of pointless delay (600ms with the default of 3) before `throw lastError`. HOW: guard the log/sleep with `if (attempt < attempts) { ... }`.",
+          "keep": true,
+          "rationale": "The claim's root cause is correct: the loop condition allows the catch block to execute on the final iteration (attempt === attempts), so log.warn('retrying') fires just before `throw lastError`, producing a misleading log when no retry follows. The suggested guard `if (attempt < attempts)` addresses a real (low-severity) behavior issue, not mere style. The only soft spot is that `sleep(200 * attempt)` is not awaited in the shown code, so the \"up to 200*attempts ms delay\" only materializes in the awaited form implied by the earlier implemented review suggestion; regardless, the misleading-log defect is real and unrefuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "withRetry\\("
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/sync/retry.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-await-sleep",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-await-sleep",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "On the final failed attempt the catch block still logs a misleading `retrying` message and waits up to `200 * attempt` ms (600ms with the default of 3) before `throw lastError`, even though `attempt === attempts` and no retry will follow. Guard the `log.warn('retrying', { attempt })` and `await sleep(200 * attempt)` calls with `if (attempt < attempts) { ... }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 93806,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` is called without `await`, so the returned promise is discarded and the loop immediately proceeds to the next retry. WHY: the intended backoff never happens — a failing `fn` is invoked up to `attempts` times back-to-back, defeating the purpose of the delay and hammering the downstream operation. HOW: await the call: `await sleep(200 * attempt);`.",
+          "keep": true,
+          "rationale": "src/sync/sleep.ts defines `sleep` as returning `new Promise<void>(...)`, and src/sync/retry.ts:12 calls `sleep(200 * attempt);` with no `await`, so the promise is discarded and the loop proceeds immediately to the next retry. The claim's root cause (missing await defeats backoff) is factually correct. Although a prior review round marked this as implemented, the current code still lacks the `await` keyword, which is concrete evidence the applied change is absent/wrong, so the finding must not be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "sleep",
+                "path": "src/sync/sleep.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/sync/retry.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-await-sleep",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 72034,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` is invoked without `await`, so the returned Promise (src/sync/sleep.ts:1) is not waited on and the catch block returns immediately. WHY: the retry loop's backoff never happens — every retry fires back-to-back, so a failing downstream service is hit `attempts` times with no delay, defeating the purpose of the retry/backoff logic. HOW: `await sleep(200 * attempt);`.",
+          "keep": true,
+          "rationale": "Confirmed: src/sync/retry.ts:12 calls `sleep(200 * attempt)` without `await` inside an async function. `sleep` returns a Promise (src/sync/sleep.ts:1), so the promise is floating and the catch block falls through immediately, so the backoff never occurs and retries fire back-to-back. The root cause and failure path are exactly as described. Although a prior review decision (round-a-await-sleep) marked this as 'implemented', the current diff shows no `await` present, giving concrete evidence the change was not applied / reverted — so the issue is live and not merely a re-raise of a resolved item.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/sync/retry.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-await-sleep",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": true
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 60353,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: sleep(200 * attempt) is called without await inside the catch block, so the retry backoff never happens. WHY: the catch returns synchronously and the for-loop immediately re-invokes fn, so all attempts fire back-to-back and the exponential backoff is a no-op — a failing dependency is hammered with no delay. HOW: await the sleep (and ideally skip it on the last attempt): `if (attempt < attempts) { log.warn('retrying', { attempt }); await sleep(200 * attempt); }`.",
+          "keep": true,
+          "rationale": "Confirmed: src/sync/sleep.ts shows `sleep = (ms) => new Promise(...)`, i.e. async. src/sync/retry.ts:12 calls `sleep(200 * attempt)` without `await`, so the returned promise is discarded and the for-loop re-invokes fn immediately — the exponential backoff never delays retries. The claim's root cause and failure path are both correct. The earlier round-a-await-sleep decision marked 'implemented' does not refute this because the current code still lacks the await, which is concrete evidence the applied change is not present here.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-await-sleep",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-await-sleep",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16212,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "The unmasked drawer screenshot captures the author avatar and relative timestamps, so it will differ between runs and flake, violating the rule to mask dynamic content in screenshot assertions. Pass `mask: dynamicMasks(page)` to `toHaveScreenshot` for the `opens the entry drawer with the author card` test, as the collapsed-feed test already does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15324,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "The dialog screenshot assertion in `opens the entry drawer with the author card` omits `mask`, so the author card's relative timestamp and avatar make the snapshot unstable and violate rule [1]'s requirement that every `toHaveScreenshot` call pass `mask: dynamicMasks(page)`. Pass `{ mask: dynamicMasks(page) }` as the second argument to `toHaveScreenshot`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17334,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "The drawer's author card renders an avatar and relative timestamps that vary between runs, so calling `toHaveScreenshot` with no options in `e2e/visual/activity-feed.spec.ts` flakes. Pass `mask: dynamicMasks(page)` as the second argument to the `getByRole('dialog')` assertion."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16891,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "The drawer screenshot in `e2e/visual/activity-feed.spec.ts` for `opens the entry drawer with the author card` is unmasked, so the author card's avatar and relative timestamps will differ between runs and flake the test, violating `Mask dynamic content in screenshot assertions`. Pass `{ mask: dynamicMasks(page) }` to `toHaveScreenshot('feed-drawer.png')`, as the collapsed-feed and empty-state tests already do."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14322,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P02-rule-screenshot-mask-still-missing",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "Because the `toHaveScreenshot` call in \"opens the entry drawer with the author card\" omits `mask: dynamicMasks(page)`, the author card's avatar and relative timestamps vary between runs and make the snapshot flaky. Pass `mask: dynamicMasks(page)` to that call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3753,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P10-rule-manifest-hand-edited-again",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4698,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P10-rule-manifest-hand-edited-again",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 5067,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P10-rule-manifest-hand-edited-again",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-P10-rule-manifest-hand-edited-again",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4232,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P10-rule-manifest-hand-edited-again",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P10-rule-manifest-hand-edited-again",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4278,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "public/asset-manifest.json",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P10-rule-manifest-hand-edited-again",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "manifest-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18073,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P18-rule-timeout-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "If the provider hangs, the outbound timezone lookup runs until the platform kills the function, so the caller gets an opaque timeout instead of the 502 handling below and the requirement that outbound calls time out before the function does is violated. Pass a signal whose timeout is shorter than `FUNCTION_LIMIT_SECONDS`, e.g. `AbortSignal.timeout((FUNCTION_LIMIT_SECONDS - 2) * 1000)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25003,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P18-rule-timeout-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "Because the outbound `fetch` to the timezone API has no timeout, a hung provider makes the handler run until the platform kills it at `maxDuration` (10s), so the caller gets a platform timeout instead of the intended 502. Pass an explicit `AbortSignal.timeout` shorter than `FUNCTION_LIMIT_SECONDS` (e.g. 9s), per the rule that outbound calls time out before the function does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30980,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P18-rule-timeout-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "Because the `fetch` to the timezone API has no timeout, a hanging provider can cause the handler to be killed at the 10-second `FUNCTION_LIMIT_SECONDS` before it can respond, violating the outbound-call timeout rule. Pass an `AbortSignal.timeout` shorter than the function limit, e.g. `signal: AbortSignal.timeout((FUNCTION_LIMIT_SECONDS - 1) * 1000)`, to the `fetch` call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43911,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P18-rule-timeout-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "Because the `fetch` call to the timezone provider has no explicit timeout, a hung provider can keep the outbound request alive past the function's 10s limit instead of respecting the rule that outbound calls time out before the function does. Add `signal: AbortSignal.timeout(...)` using a named constant shorter than `FUNCTION_LIMIT_SECONDS`, such as 5000ms."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 32189,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P18-rule-timeout-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 16,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Although line 22 only logs the failure status, the interpolated street and city flow into an outbound URL whose errors are logged elsewhere, so this personal data can still reach logs in violation of \"No personal data in logs\". Keep the query construction, but ensure no caller logs the full URL or query."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "Without a timeout the fetch to the timezone provider can hang until the platform kills the function at maxDuration (10s), leaving no chance to return a clean error. Pass an `AbortSignal.timeout` shorter than `FUNCTION_LIMIT_SECONDS`, e.g. `AbortSignal.timeout(5000)`, so the request fails fast and the existing error handling can respond."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 245686,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: sanitizeProfileUpdate uses a denylist (PROTECTED_FIELDS = id, role, passwordHash) and forwards every other key of req.body to usersRepo.update, which writes all keys to the users row. WHY: a caller can include fields such as organizationId (move into another tenant), emailVerified: true (skip verification), or plan: 'pro' (self-upgrade) and they are persisted, since checkProfileFields only length/format-checks displayName, bio, avatarUrl and locale. HOW: build the patch from an allowlist of editable fields instead: const EDITABLE_FIELDS = ['displayName','bio','avatarUrl','locale'] as const; then copy only those keys from body.",
+          "keep": true,
+          "rationale": "Verified the full path. sanitizeProfileUpdate spreads req.body and deletes only id/role/passwordHash (lines 55-61). checkProfileFields (lines 29-44) only validates displayName/bio/avatarUrl/locale, so any other key (organizationId, emailVerified, plan, etc.) survives. usersRepo.update (src/users/users.repo.ts:20) forwards the patch verbatim to db.users.update({ data: patch }), writing all keys to the row. The mass-assignment vulnerability described is real and reachable from updateProfile (line 64-66). The earlier review entry for this exact issue has outcome not_implemented, which is not evidence of rejection, so it does not refute. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "usersRepo.update|sanitizeProfileUpdate|checkProfileFields"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update",
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: checkProfileFields validates displayName, bio, avatarUrl and locale only when the value is a string, so any non-string value for these fields silently skips the length check, the CDN-host allowlist check and the SUPPORTED_LOCALES check and is forwarded to usersRepo.update. WHY: the validation contract is not enforced for non-string input — a request such as {\"locale\": 5} or {\"avatarUrl\": false} passes checkProfileFields untouched and reaches the users row, producing a validation error/500 from the persistence layer (or an unvalidated write) instead of a clean 400. HOW: reject non-string values explicitly instead of skipping, e.g. add `if (patch.displayName !== undefined && typeof patch.displayName !== 'string') throw new HttpError(400, 'displayName must be a string');` (same for bio/avatarUrl/locale) before the existing checks.",
+          "keep": true,
+          "rationale": "Confirmed: checkProfileFields guards each field with `typeof x === 'string'`, so non-string values (e.g. {\"locale\": 5}, {\"avatarUrl\": false}) bypass the MAX_DISPLAY_NAME/MAX_BIO length checks, the CDN-host allowlist, and the SUPPORTED_LOCALES check, then flow unvalidated through usersRepo.update to db.users.update({ data: patch }). No upstream body-schema validation exists (no other references to updateProfile / no zod parse). The failure path is real, not speculative, so the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "checkProfileFields|sanitizeProfileUpdate",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "updateProfile|profile.controller",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\(|async update",
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale dereferences parts[1] unconditionally, so any locale without a region subtag (e.g. \"en\", \"pt\", or \"\") makes parts[1] undefined and parts[1].toUpperCase() throws a TypeError. WHY: updateProfile passes user-controlled req.body.locale into this function, so a request like {\"locale\":\"en\"} throws an uncaught TypeError (500) and the intended SUPPORTED_LOCALES check on line 41 is never reached, turning a validation path into a server error. HOW: destructure and validate the region before using it, e.g. `const [language, region] = input.replace('_','-').split('-'); if (!region) throw new HttpError(400, `unsupported locale ${input}`);` then build the normalized string.",
+          "keep": true,
+          "rationale": "Confirmed: normalizeLocale (lines 11-14) unconditionally dereferences parts[1].toUpperCase() after split('-'); a region-less locale like \"en\", \"pt\", or \"\" yields parts[1] === undefined and throws TypeError. updateProfile (line 63-65) passes user-controlled req.body.locale through checkProfileFields (line 39-41) into normalizeLocale before the SUPPORTED_LOCALES check, so {\"locale\":\"en\"} produces an uncaught 500 instead of a 400. Root cause and path are accurate; no previous decision covers this issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 90,
+                "path": "src/users/profile.controller.ts",
+                "startLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "line": 52,
+          "label": "security",
+          "earlierId": "round-a-P26-denylist-sanitizer-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 28,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Any locale without a region subtag, such as `en`, `pt`, or an empty string, leaves `parts[1]` undefined and makes `parts[1].toUpperCase()` throw a `TypeError`; since `updateProfile` passes user-controlled `req.body.locale`, a request like `{\"locale\":\"en\"}` becomes an uncaught 500 and never reaches the `SUPPORTED_LOCALES` check on line 41. Destructure and validate the region before using it, throwing an `HttpError(400)` for a missing region instead."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 30,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Non-string values for `displayName`, `bio`, `avatarUrl`, and `locale` silently skip the length, CDN-host allowlist, and `SUPPORTED_LOCALES` checks and are forwarded to `usersRepo.update`, so a request such as `{\"locale\": 5}` or `{\"avatarUrl\": false}` reaches the users row and surfaces as a persistence-layer error or unvalidated write instead of a clean 400. Reject non-string values explicitly before the existing checks, for example with a `requireString` helper that throws `HttpError(400)` for each field."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 228183,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale indexes parts[1] without checking it exists, so a locale string with no region segment ('en', 'de', or '') makes `parts[1].toUpperCase()` throw a TypeError. WHY: checkProfileFields (line 40) calls normalizeLocale for any string locale and updateProfile (line 65) runs it on the request body, so `PATCH {\"locale\":\"en\"}` returns an unhandled 500 instead of the intended 400 'unsupported locale'. HOW: destructure and reject a missing region before calling toUpperCase.",
+          "keep": true,
+          "rationale": "Confirmed. normalizeLocale splits on '-' and unconditionally calls parts[1].toUpperCase(). For a region-less input like 'en' (or ''), parts = ['en'], so parts[1] is undefined and undefined.toUpperCase() throws a TypeError. checkProfileFields (line 40) calls normalizeLocale on any string locale, and updateProfile (line 65) runs checkProfileFields on the sanitized request body, so PATCH {\"locale\":\"en\"} throws an unhandled TypeError (500) instead of the intended HttpError 400 'unsupported locale'. The root cause, trigger, and failure path are all accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: checkProfileFields guards every check with `typeof x === 'string'`, so a non-string value for displayName, bio, avatarUrl or locale skips validation and is passed unchanged to usersRepo.update, which writes every key of the patch to the users row. WHY: a client can persist invalid types (e.g. displayName as a number/object, or an avatarUrl that is not a string so checkAvatarUrl's CDN allowlist is never enforced and locale is never checked against SUPPORTED_LOCALES), corrupting the row or causing a 500 instead of a 400. HOW: reject non-string (and, for avatarUrl, non-null) values explicitly before the length/format checks, e.g. `if (patch.displayName !== undefined) { if (typeof patch.displayName !== 'string') throw new HttpError(400, 'displayName must be a string'); ... }` and likewise for bio/avatarUrl/locale.",
+          "keep": true,
+          "rationale": "Verified against the actual code. checkProfileFields (lines 29-44) gates every check on `typeof x === 'string'`, so non-string displayName/bio/avatarUrl/locale values skip all length/format/allowlist validation. The patch then flows unchanged through updateProfile (line 64) into usersRepo.update (line 66), and src/users/users.repo.ts:20 writes every key of the patch directly to the users row with no type coercion. Thus a non-string avatarUrl bypasses checkAvatarUrl's CDN allowlist, a non-string locale bypasses SUPPORTED_LOCALES, and non-string displayName/bio bypass length limits — the described root cause and failure path are accurate. This is distinct from the earlier denylist-sanitizer decision (which concerns which keys are permitted, not type validation of permitted keys), so it is not superseded.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "sanitizeProfileUpdate|update\\(",
+                "glob": "*.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: sanitizeProfileUpdate removes only id, role and passwordHash and passes every other key of the request body to usersRepo.update, which writes them all to the users row. WHY: a member can send organizationId to move into another tenant, emailVerified:true to skip verification, or plan:'pro' to self-upgrade. HOW: build the patch from an allowlist of the editable fields (displayName, bio, avatarUrl, locale) instead of a denylist.",
+          "keep": true,
+          "rationale": "Confirmed: sanitizeProfileUpdate (src/users/profile.controller.ts:55-61) only deletes PROTECTED_FIELDS = ['id','role','passwordHash'] from a copy of the request body and returns every remaining key. updateProfile (line 64-66) passes that patch straight to usersRepo.update, and users.repo.ts:20 forwards it verbatim to db.users.update({ where:{id}, data: patch }). checkProfileFields only validates types/lengths of displayName/bio/avatarUrl/locale and does not reject unknown keys, and grep shows no upstream allowlist or field whitelist. So a member can set organizationId, emailVerified, plan, etc. The denylist root cause is factually correct and reachable. The only prior decision on this exact issue (round-a-P26-denylist-sanitizer-moved) is outcome 'not_implemented', which per the rules is not evidence the developer rejected it, so it does not refute the finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "sanitizeProfileUpdate"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update",
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "updateProfile|PROTECTED_FIELDS",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "line": 55,
+          "label": "security",
+          "earlierId": "round-a-P26-denylist-sanitizer-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `normalizeLocale`, a locale without a region segment such as `en`, `de`, or `''` makes `parts[1].toUpperCase()` throw a `TypeError`, so `checkProfileFields` (line 40) and `updateProfile` (line 65) turn `PATCH {\"locale\":\"en\"}` into an unhandled 500 instead of the intended 400 `unsupported locale`. Destructure the locale and reject a missing region before calling `toUpperCase`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `checkProfileFields` guards every check with `typeof x === 'string'`, non-string values for `displayName`, `bio`, `avatarUrl`, or `locale` skip validation and reach `usersRepo.update`, which writes every patch key to the users row; this can corrupt the row or return a 500 instead of a 400, and it also lets a non-string `avatarUrl` bypass `checkAvatarUrl`'s CDN allowlist and `locale` bypass `SUPPORTED_LOCALES`. Reject non-string values explicitly before the length/format checks, allowing `null` for `avatarUrl`, and throw `HttpError(400, ...)` for `displayName`, `bio`, `avatarUrl`, and `locale`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 225465,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: sanitizeProfileUpdate is a denylist — it strips only id, role and passwordHash and forwards every other key of req.body to usersRepo.update, which writes all of them to the users row. WHY: a member can send organizationId to move into another tenant, emailVerified:true to skip verification, or plan:'pro' to upgrade, all of which bypass the intended field restrictions. HOW: build the patch from an allowlist of editable fields (displayName, bio, avatarUrl, locale) instead of deleting known-bad keys.",
+          "keep": true,
+          "rationale": "Verified: sanitizeProfileUpdate clones req.body and deletes only id/role/passwordHash, then updateProfile passes the result straight to usersRepo.update, which writes every key of the patch to the users row (confirmed in users.repo.ts line 19-20). The User type includes organizationId, emailVerified, and plan, so a member can set tenant, verification, and plan via the request body. The root cause and exploit path are both real. The earlier decision on this exact issue has outcome 'not_implemented', so it is not a refutation.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "sanitizeProfileUpdate|usersRepo.update|usersRepo\\.",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale calls parts[1].toUpperCase() without checking that the input actually contains a region segment, so a locale like \"en\", \"EN\" or \"\" makes parts[1] undefined and throws a TypeError. WHY: checkProfileFields (line 40) feeds req.body.locale straight in, so a request with locale:\"en\" crashes the handler with an unhandled 500 (not the intended HttpError(400)) instead of returning a validation error. HOW: guard the missing region and throw HttpError(400).",
+          "keep": true,
+          "rationale": "Confirmed. updateProfile (line 63) passes req.body through sanitizeProfileUpdate and then checkProfileFields, which at line 39-40 calls normalizeLocale(patch.locale) for any string locale. normalizeLocale (line 12-13) splits on '-' and unconditionally does parts[1].toUpperCase(). For input \"en\" (also \"EN\", \"pt\", or \"\") parts has a single element, so parts[1] is undefined and .toUpperCase() throws a TypeError. That exception is not an HttpError(400), so the request fails with an unhandled 500 rather than the intended validation error. The described failure path is real and reachable from the request body.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "checkProfileFields|normalizeLocale|sanitizeProfileUpdate",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 60,
+                "endLine": 85
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "line": 53,
+          "label": "security",
+          "earlierId": "round-a-P26-denylist-sanitizer-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A locale such as `\"en\"`, `\"EN\"`, or `\"\"` makes `parts[1]` undefined, so `normalizeLocale` throws a `TypeError`; because `checkProfileFields` at line 40 passes `req.body.locale` through, a request with `locale:\"en\"` crashes the handler with an unhandled 500 instead of the intended `HttpError(400)`. Guard against the missing region segment and throw `HttpError(400)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 222475,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: `normalizeLocale` calls `parts[1].toUpperCase()` on the second element of `split('-')` without checking it exists, so any locale string without a `-` separator (e.g. `\"en\"`, `\"EN\"`, or `\"\"`) makes `parts[1]` `undefined` and throws `TypeError: Cannot read properties of undefined (reading 'toUpperCase')`. WHY: A member submitting `locale: \"en\"` hits this crash inside `checkProfileFields` (line 40) before the `SUPPORTED_LOCALES` check on line 41 can return the intended 400, turning a validation error into an unhandled 500. HOW: Guard the split result and throw the same HttpError used for unsupported locales.",
+          "keep": true,
+          "rationale": "Confirmed: normalizeLocale (line 13) accesses parts[1].toUpperCase() unconditionally after split('-'). Inputs without a '-' separator (e.g. 'en', 'EN', '') produce a one-element array, so parts[1] is undefined and throws TypeError. This executes inside checkProfileFields at line 40, before the SUPPORTED_LOCALES check at line 41, so a member submitting locale:'en' gets an unhandled 500 instead of the intended 400. No upstream validation guards the locale format (sanitizeProfileUpdate only removes protected fields).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: `sanitizeProfileUpdate` uses a denylist (`PROTECTED_FIELDS = ['id','role','passwordHash']`) and forwards every other key of `req.body` to `usersRepo.update`, which (per its own comment) writes all keys to the users row. WHY: A member can POST `organizationId` to move into another tenant, `emailVerified: true` to skip verification, or `plan: 'pro'` to escalate — the denylist only blocks three fields and cannot anticipate the rest of the schema. HOW: Build the patch from an allowlist of editable fields (displayName, bio, avatarUrl, locale) instead of deleting a fixed set.",
+          "keep": true,
+          "rationale": "Confirmed by code: sanitizeProfileUpdate spreads req.body and deletes only ['id','role','passwordHash'], and usersRepo.update (src/users/users.repo.ts:20) writes `data: patch` directly to the users row. No upstream allowlist or field validation exists, so arbitrary schema fields (organizationId, emailVerified, plan, etc.) reach the DB. This is a concrete privilege-escalation/cross-tenant path, not a style nit. The matching previous decision (round-a-P26-denylist-sanitizer-moved) has outcome not_implemented, which is explicitly not evidence of rejection, so it does not resolve the issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\(",
+                "path": "src/users"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: both handlers dereference req.auth.userId (line 47 and line 66) but req.auth is never declared or populated anywhere in the codebase. WHY: a repo-wide grep for \"auth\" returns only this file, there is no .d.ts / `declare global` / `namespace Express` augmentation, and no middleware assigns req.auth — so this either fails to type-check (TS2339) or throws \"Cannot read properties of undefined (reading 'userId')\" at runtime on every request to getProfile/updateProfile. HOW: if the augmentation/middleware lives outside this PR, thread it in; otherwise guard the access (e.g. `if (!req.auth) throw new HttpError(401, 'unauthenticated');`) and add the Request augmentation so the property is typed.",
+          "keep": true,
+          "rationale": "Confirmed: a repo-wide grep for \"auth\" matches only src/users/profile.controller.ts, and greps for \".auth|authenticate|req.user|userId\" also return only this file. There are no .d.ts files anywhere, and src/ contains only http/ and users/ — no middleware directory and no `declare global`/`namespace Express` augmentation. Express's Request type has no `auth` property by default, so `req.auth.userId` at lines 47 and 66 is either a TS2339 compile error or a runtime \"Cannot read properties of undefined\" on every getProfile/updateProfile request. The root cause and failure path are accurate; the finding cannot be refuted. (The one prior decision touching this file, round-a-P26-denylist-sanitizer-moved, concerns sanitizeProfileUpdate and is unrelated to req.auth.)",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "req\\.auth|declare global|namespace Express|Request"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "auth",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "\\.auth|authenticate|req\\.user|userId",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*.d.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src",
+                "maxDepth": 2
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "line": 53,
+          "earlierId": "round-a-P26-denylist-sanitizer-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 35,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 13,
+          "severity": "high",
+          "linkedById": false,
+          "marked": false,
+          "text": "Because `normalizeLocale` calls `parts[1].toUpperCase()` without checking that the `split('-')` result has a second element, `parts[1]` is `undefined` for locales like \"en\", \"EN\", or \"\" and throws `TypeError: Cannot read properties of undefined (reading 'toUpperCase')`, so a member submitting `locale: \"en\"` crashes inside `checkProfileFields` (line 40) before the `SUPPORTED_LOCALES` check on line 41 can return the intended 400 and the validation error becomes an unhandled 500. Guard the split result and throw the same `HttpError` used for unsupported locales."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 47,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `req.auth` is never declared or populated anywhere in the codebase, both handlers dereference `req.auth.userId` (line 47 and line 66) either fail to type-check with TS2339 or throw `Cannot read properties of undefined (reading 'userId')` at runtime on every request to `getProfile`/`updateProfile`. If the augmentation or middleware lives outside this PR, thread it in; otherwise guard the access with `if (!req.auth) throw new HttpError(401, 'unauthenticated');` and add the `Request` augmentation so the property is typed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 227984,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale reads parts[1].toUpperCase() unconditionally, but when the locale has no '-' or '_' separator (e.g. \"en\", \"fr\") split('-') returns a one-element array and parts[1] is undefined, so the call throws an unhandled TypeError. WHY: A member posting {\"locale\":\"en\"} to updateProfile triggers this via checkProfileFields, producing a 500 crash instead of the intended 400 validation error. HOW: Guard the region segment and throw an HttpError when it is missing.",
+          "keep": true,
+          "rationale": "Confirmed: for input without a '-'/'_' separator (e.g. 'en'), replace/split yields a one-element array, parts[1] is undefined, and parts[1].toUpperCase() throws an unhandled TypeError. checkProfileFields (line 39-40) calls normalizeLocale without try/catch and updateProfile (line 65) reaches it directly with no upstream locale-format validation, so a member posting {\"locale\":\"en\"} produces a crash/500 instead of the intended 400. The root cause and failure path are exactly as described.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 60,
+                "endLine": 100
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: sanitizeProfileUpdate is a denylist that only deletes id, role and passwordHash, then passes every other key of the request body to usersRepo.update, which writes all keys to the users row (users.repo.ts:19-20). WHY: A member can set organizationId to move into another tenant, emailVerified:true to skip verification, or plan:'pro'; additionally checkProfileFields only validates fields that are strings, so a non-string displayName/avatarUrl bypasses the length/host checks. HOW: Build the patch from an allowlist of editable fields (displayName, bio, avatarUrl, locale) instead of deleting a denylist.",
+          "keep": true,
+          "rationale": "Confirmed the denylist/mass-assignment bug. sanitizeProfileUpdate spreads the whole request body and only deletes id/role/passwordHash (profile.controller.ts:55-61), then usersRepo.update writes every remaining key to the users row (users.repo.ts:19-20). The User type has organizationId, emailVerified and plan, so a member can set those (e.g. move tenants, self-verify, upgrade plan). checkProfileFields only enforces its limits when the value is a string, so non-string displayName/avatarUrl bypass validation. The claim's root cause and failure path are accurate; the earlier review decision on this same issue is 'not_implemented' and therefore does not resolve it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: checkProfileFields only enforces each rule when the value is a string (lines 30, 33, 36, 39), so a non-string displayName/bio/avatarUrl/locale skips every check while sanitizeProfileUpdate still keeps the key and usersRepo.update writes every key to the row. WHY: a member can bypass the MAX_DISPLAY_NAME/MAX_BIO limits and the avatar-CDN/SUPPORTED_LOCALES checks by sending a non-string (e.g. `{\"displayName\": [\"<very long string>\"]}` or `{\"locale\": 123}`), storing unvalidated/wrong-typed data. HOW: reject non-string values for these fields instead of silently skipping, e.g. `if (patch.displayName !== undefined) { if (typeof patch.displayName !== 'string') throw new HttpError(400, 'displayName must be a string'); if (patch.displayName.length > MAX_DISPLAY_NAME) throw new HttpError(400, `displayName is limited to ${MAX_DISPLAY_NAME} characters`); }` and apply the same pattern to bio, avatarUrl and locale.",
+          "keep": true,
+          "rationale": "Verified: checkProfileFields (lines 30/33/36/39) guards every rule with typeof === 'string', so non-string values skip all validation. sanitizeProfileUpdate (lines 55-61) only strips id/role/passwordHash and keeps the key, and usersRepo.update (users.repo.ts:20) writes the patch verbatim to db.users.update({ data: patch }). No upstream schema validation exists in updateProfile, so the bypass path is real and reachable. This is a different issue from the earlier denylist/allowlist decision (index 10), which concerns key allowlisting, not type enforcement; that decision was also not implemented. Root cause is correct and failure path is concrete — cannot refute.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update|set\\(|insert",
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: updateProfile dereferences the result of usersRepo.update (user.displayName) with no null guard, whereas the sibling getProfile guards findById's result with `if (!user) throw new HttpError(404, ...)`. WHY: If the row for req.auth.userId is missing (e.g. the account was deleted between token issuance and this call), the returned value is null and the property access throws a TypeError (500) instead of a clean error response. HOW: Guard the result, e.g. `if (!user) throw new HttpError(404, 'user not found');` before reading its fields.",
+          "keep": true,
+          "rationale": "The finding is not refutable with the available evidence. updateProfile at line 66-67 dereferences usersRepo.update's result (user.displayName) with no null check, whereas the sibling getProfile guards findById's result with `if (!user) throw new HttpError(404, ...)` at line 48. usersRepo.findById is typed `as Promise<User | null>` (users.repo.ts:18), confirming the underlying db can return null for a missing row; usersRepo.update is typed `as Promise<User>` (users.repo.ts:20), but that is only a TypeScript assertion (`as`), not a runtime guarantee, so it does not prove update is non-nullable. The db module is not present in the repo (src/db is empty/unresolvable), so I cannot confirm that update throws rather than returns null on a missing row. With no concrete evidence that the null case is impossible, the claimed TypeError(500) path stands and the finding is kept.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\(",
+                "glob": "**/users*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/users/users.repo.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\b|function update|update\\(",
+                "path": "src/db"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "users:|update|findOne",
+                "glob": "**/db*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "db*"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/db"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "index.ts",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "const db|export.*db|users\\s*[:=]",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "db\\.users|update\\(",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "line": 55,
+          "earlierId": "round-a-P26-denylist-sanitizer-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 36,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 4,
+        "after": 4
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "marked": false,
+          "text": "A locale without a `-` or `_` separator such as `\"en\"` leaves `parts[1]` undefined, so `normalizeLocale` throws an unhandled `TypeError` and a member posting `{\"locale\":\"en\"}` to `updateProfile` gets a 500 instead of the intended 400 validation error. Guard the region segment and throw an `HttpError` when it is missing."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "marked": false,
+          "text": "If the row for `req.auth.userId` is missing, `usersRepo.update` returns null and reading `user.displayName` throws a `TypeError` (500) instead of a clean error response, unlike the sibling `getProfile`, which guards `findById`. Guard the result with `if (!user) throw new HttpError(404, 'user not found');` before reading its fields."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/users/profile.controller.ts",
+          "line": 29,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A non-string value such as `{\"displayName\": [\"<very long string>\"]}` or `{\"locale\": 123}` skips every check in `checkProfileFields` while `sanitizeProfileUpdate` keeps the key and `usersRepo.update` writes it, bypassing the `MAX_DISPLAY_NAME`/`MAX_BIO` limits and the avatar-CDN/`SUPPORTED_LOCALES` checks. Reject non-string values for these fields instead of silently skipping, e.g. `if (typeof patch.displayName !== 'string') throw new HttpError(400, 'displayName must be a string');` and the same pattern for `bio`, `avatarUrl` and `locale`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 27436,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the query is loading or has failed, `NextInvoiceCard` shows `invoice?.totalCents ?? 0` and `invoice?.dueDate ?? ''` as a $0.00 invoice with an empty due date, reading as real data (rule 21); this is the same unfixed issue raised for `SeatUsageCard`, and unlike that component it doesn't even read `isLoading` or an error state. Render a `Skeleton` while loading, an error state when the query fails, and only render the amounts once `invoice` exists."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18217,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the query is loading or fails, `NextInvoiceCard` falls back to `invoice?.totalCents ?? 0` and `invoice?.dueDate ?? ''`, so the card displays a $0.00 amount and an empty due date that read as real data. Return a `Skeleton` while loading and an error state when the query fails, and only render the real values once `invoice` is present so the `??` defaults can be dropped."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28390,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the query is still loading or has failed, `NextInvoiceCard` renders `invoice?.totalCents ?? 0` and `invoice?.dueDate ?? ''`, so the card shows a $0.00 invoice with no due date that reads as real data. Return a `Skeleton` or an error state until the invoice is available, then render the actual values without fallbacks."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22001,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the query is loading or has failed, the card renders `formatMoney(invoice?.totalCents ?? 0)` and shows a $0.00 invoice that reads as real data. Destructure `isLoading`/`isError` from the `useQuery` and render a Skeleton (or error state) until `invoice` exists, then format `invoice.totalCents` directly."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 33,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the query has no data, the card renders the due date as an empty string, so a blank due date reads as real data. Guard on `invoice` and render the Skeleton/error state until it is available, then use `invoice.dueDate`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17251,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "`NextInvoiceCard` shows `$0.00` and an empty due date while the query is loading or after it fails, which violates the rule that loading states never show defaults as data. Return a `Skeleton` while loading and an error state when the query fails, as `SeatUsageCard` does, then use the non-optional `invoice.totalCents` and `invoice.dueDate` values."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15574,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "A caller passing an externalId from the request can load a project belonging to another tenant because findByExternalId queries by externalId alone with no tenant filter, violating \"Scope repository queries by tenant\". Take tenantId as a parameter and add it to the where clause as findById does: `where: { tenantId, externalId }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 12878,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Any caller that passes an `externalId` from the request can load a project belonging to another tenant, violating the “Scope repository queries by tenant” rule. Change `findByExternalId` to take `tenantId` and use `where: { tenantId, externalId }`, as `findById` does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15232,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "`findByExternalId` queries projects by `externalId` alone, violating the rule “Scope repository queries by tenant,” so any caller passing an external id from the request can load another tenant’s project. Take `tenantId` as a parameter and add it to the `where` clause, as `findById` does, using `where: { tenantId, externalId }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13308,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Because `findByExternalId` filters only on `externalId`, a caller passing an ID from the request can load a project belonging to another tenant. Add `tenantId` as a parameter and include it in the `where` clause as `findById` does, using `where: { tenantId, externalId }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 12121,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Because `findByExternalId` filters on `externalId` alone, any caller passing an `externalId` from the request can read another tenant's project. Take `tenantId` as a parameter and include it in the `where` clause alongside `externalId`, as `findById` does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

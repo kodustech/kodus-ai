@@ -17,7 +17,7 @@ import { createCodeManagementIntegration } from "@services/codeManagement/fetch"
 import { useGetGithubIntegrationByInstallId } from "@services/setup/hooks";
 import { InstallationStatus } from "@services/setup/types";
 import { AxiosError } from "axios";
-import { getCookie, deleteCookie } from "cookies-next";
+import { getCookie, deleteCookie } from "cookies-next/client";
 import { CopyIcon } from "lucide-react";
 import { PlatformType } from "src/core/types";
 import { axiosAuthorized } from "src/core/utils/axios";

@@ -83,7 +83,13 @@ export class MCPRegistry {
 
                 // ─── 3. Criar & conectar cliente ───────────────────────────────────
                 const client = new SpecCompliantMCPClient(clientConfig);
-                await client.connect();
+                try {
+                    await client.connect();
+                } catch (error) {
+                    // Not kept in the registry, so nothing else will release it.
+                    await client.disconnect().catch(() => undefined);
+                    throw error;
+                }
                 this.clients.set(config.name, client);
 
                 this.markToolsDirty(config.name);
@@ -293,6 +299,7 @@ export class MCPRegistry {
                             hasDescription: !!tool.description,
                             hasOutputSchema: !!tool.outputSchema,
                             hasAnnotations: !!tool.annotations,
+                            hasMeta: !!tool._meta,
                         },
                     });
 
@@ -387,6 +394,10 @@ export class MCPRegistry {
             candidateServers = this.toolIndex.get(toolName);
         }
 
+        // The last server that has the tool but failed to run it: reported
+        // instead of "not found", which reads as a wrong tool name.
+        let failure: { server: string; message: string } | undefined;
+
         if (candidateServers && candidateServers.size > 0) {
             for (const candidate of candidateServers) {
                 const client = this.clients.get(candidate);
@@ -398,6 +409,7 @@ export class MCPRegistry {
                 } catch (error) {
                     const execErrMsg =
                         error instanceof Error ? error.message : String(error);
+                    failure = { server: candidate, message: execErrMsg };
                     this.logger.warn({
                         message: `Failed to execute tool on server: ${execErrMsg}`,
                         context: this.constructor.name,
@@ -430,6 +442,11 @@ export class MCPRegistry {
             } catch {
                 /* ignora */
             }
+        }
+        if (failure) {
+            throw new Error(
+                `MCP server ${failure.server} is unavailable (${failure.message})`,
+            );
         }
         throw new Error(
             `Tool ${toolName} not found in any registered MCP server`,

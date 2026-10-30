@@ -153,12 +153,8 @@ describe('KodyRulesTools.createKodyRule', () => {
         const result = await runCreate({ repositoryId: 'repo-1' });
         const structured = (result as any).structuredContent;
 
-        expect(structured.prUrl).toBe(
-            'https://github.com/org/repo/pull/42',
-        );
-        expect(structured.link).toBe(
-            'https://github.com/org/repo/pull/42',
-        );
+        expect(structured.prUrl).toBe('https://github.com/org/repo/pull/42');
+        expect(structured.link).toBe('https://github.com/org/repo/pull/42');
         expect(mockKodyRulesService.createOrUpdate).not.toHaveBeenCalled();
     });
 });
@@ -236,7 +232,9 @@ describe('KodyRulesTools.updateKodyRule', () => {
             status: KodyRulesStatus.ACTIVE,
             repositoryId: 'repo-1',
         } as any);
-        (mockKodyRulesService.updateRuleWithLogging as jest.Mock).mockResolvedValue({
+        (
+            mockKodyRulesService.updateRuleWithLogging as jest.Mock
+        ).mockResolvedValue({
             uuid: 'rule-789',
             title: 'Updated title',
             rule: 'Some rule body',
@@ -289,4 +287,171 @@ describe('KodyRulesTools.updateKodyRule', () => {
         expect(structured.success).toBe(false);
         expect(structured.message).toMatch(/not found/i);
     });
+
+    it('looks the rule up inside the requested organization only', async () => {
+        (mockKodyRulesService.findById as jest.Mock).mockResolvedValue(null);
+
+        await runUpdate();
+
+        expect(mockKodyRulesService.findById).toHaveBeenCalledWith(
+            'rule-789',
+            'org-1',
+        );
+        expect(
+            mockKodyRulesService.updateRuleWithLogging,
+        ).not.toHaveBeenCalled();
+    });
+});
+
+describe('KodyRulesTools rule listings', () => {
+    let tools: KodyRulesTools;
+    const findByOrganizationId = jest.fn();
+
+    beforeEach(async () => {
+        findByOrganizationId.mockReset();
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                KodyRulesTools,
+                {
+                    provide: KODY_RULES_SERVICE_TOKEN,
+                    useValue: { findByOrganizationId },
+                },
+                { provide: CentralizedConfigPrService, useValue: {} },
+                {
+                    provide: DeleteRuleInOrganizationByIdKodyRulesUseCase,
+                    useValue: {},
+                },
+            ],
+        }).compile();
+        tools = module.get(KodyRulesTools);
+    });
+
+    it.each([
+        ['KODUS_GET_KODY_RULES', () => tools.getKodyRules(), {}],
+        [
+            'KODUS_GET_KODY_RULES_REPOSITORY',
+            () => tools.getKodyRulesRepository(),
+            { repositoryId: 'repo-1' },
+        ],
+    ])(
+        '%s answers an organization that never saved a rule with an empty list',
+        async (_name, tool, args) => {
+            findByOrganizationId.mockResolvedValue(null);
+
+            const result: any = await tool().execute(
+                { organizationId: 'org-1', ...args } as any,
+                undefined,
+            );
+
+            expect(result.isError).toBeFalsy();
+            expect(result.structuredContent).toEqual({
+                success: true,
+                count: 0,
+                data: [],
+            });
+        },
+    );
+
+    it.each([
+        ['KODUS_GET_KODY_RULES', () => tools.getKodyRules(), {}],
+        [
+            'KODUS_GET_KODY_RULES_REPOSITORY',
+            () => tools.getKodyRulesRepository(),
+            { repositoryId: 'repo-1' },
+        ],
+    ])(
+        '%s returns stored Date timestamps as ISO strings the output schema accepts',
+        async (_name, tool, args) => {
+            const createdAt = new Date('2026-10-01T10:00:00.000Z');
+            const updatedAt = new Date('2026-10-02T11:30:00.000Z');
+            findByOrganizationId.mockResolvedValue({
+                rules: [
+                    {
+                        uuid: 'rule-1',
+                        title: 'Avoid console.log',
+                        status: KodyRulesStatus.ACTIVE,
+                        repositoryId: 'repo-1',
+                        createdAt,
+                        updatedAt,
+                    },
+                ],
+            });
+            const definition = tool();
+
+            const result: any = await definition.execute(
+                { organizationId: 'org-1', ...args } as any,
+                undefined,
+            );
+
+            expect(result.structuredContent.data[0]).toMatchObject({
+                createdAt: '2026-10-01T10:00:00.000Z',
+                updatedAt: '2026-10-02T11:30:00.000Z',
+            });
+            expect(() =>
+                definition.outputSchema.parse(result.structuredContent),
+            ).not.toThrow();
+        },
+    );
+
+    it.each([
+        ['KODUS_GET_KODY_RULES', () => tools.getKodyRules(), {}],
+        [
+            'KODUS_GET_KODY_RULES_REPOSITORY',
+            () => tools.getKodyRulesRepository(),
+            { repositoryId: 'repo-1' },
+        ],
+    ])(
+        '%s omits legacy null optional fields while preserving nullable fields',
+        async (_name, tool, args) => {
+            findByOrganizationId.mockResolvedValue({
+                rules: [
+                    {
+                        uuid: 'rule-1',
+                        title: 'Avoid console.log',
+                        status: KodyRulesStatus.ACTIVE,
+                        repositoryId: 'repo-1',
+                        type: null,
+                        path: null,
+                        label: null,
+                        examples: null,
+                        scope: null,
+                        createdAt: null,
+                        updatedAt: null,
+                        reason: null,
+                        directoryId: null,
+                    },
+                ],
+            });
+            const definition = tool();
+            const result: any = await definition.execute(
+                { organizationId: 'org-1', ...args } as any,
+                undefined,
+            );
+
+            expect(result.isError).toBeFalsy();
+            expect(result.structuredContent.data[0]).toEqual(
+                expect.objectContaining({
+                    uuid: 'rule-1',
+                    reason: null,
+                    directoryId: null,
+                }),
+            );
+            for (const key of [
+                'type',
+                'path',
+                'label',
+                'examples',
+                'scope',
+                'createdAt',
+                'updatedAt',
+            ]) {
+                expect(result.structuredContent.data[0]).not.toHaveProperty(
+                    key,
+                );
+            }
+            expect(() =>
+                definition.outputSchema.parse(result.structuredContent),
+            ).not.toThrow();
+        },
+    );
 });

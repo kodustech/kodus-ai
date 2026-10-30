@@ -1,5 +1,7 @@
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { execa, type ExecaError, type Options as ExecaOptions } from 'execa';
 
 const require = createRequire(import.meta.url);
@@ -33,6 +35,37 @@ export function resolveHunkBin(): string {
 
     cachedHunkBin = path.resolve(path.dirname(pkgPath), binRelative);
     return cachedHunkBin;
+}
+
+let cachedExtensionDir: string | null | undefined;
+
+/**
+ * Absolute path to the Kodus hunk extension bundled with this package, or null
+ * when it isn't on disk.
+ *
+ * It ships as raw `.tsx` outside `src/` (hunk compiles it itself; our `tsc`
+ * must not), so it sits at `<package root>/hunk-extension/kodus` both in the
+ * repo and in the published tarball. This module lands at `dist/utils/hunk.js`
+ * once compiled and `src/utils/hunk.ts` under vitest — same depth either way.
+ */
+export function resolveKodusExtensionDir(): string | null {
+    if (cachedExtensionDir !== undefined) {
+        return cachedExtensionDir;
+    }
+
+    const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+    const candidate = path.resolve(
+        moduleDir,
+        '..',
+        '..',
+        'hunk-extension',
+        'kodus',
+    );
+
+    cachedExtensionDir = existsSync(path.join(candidate, 'index.tsx'))
+        ? candidate
+        : null;
+    return cachedExtensionDir;
 }
 
 export interface RunHunkResult {

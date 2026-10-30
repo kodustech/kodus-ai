@@ -48,6 +48,7 @@ name: "Benchmark: tier-0 model code review"
 
 permissions:
     contents: read
+    id-token: write # quality signal (report-signal action, WIF)
 
 on:
     workflow_dispatch:
@@ -257,6 +258,32 @@ jobs:
                   if-no-files-found: warn
                   retention-days: 30
 
+            - name: Scorecard numbers (for the quality signal)
+              id: sc
+              if: always()
+              run: |
+                  node -e "
+                    const fs = require(\"fs\"); const p = \"tests/e2e/benchmark/scorecard.json\";
+                    const out = (k, v) => fs.appendFileSync(process.env.GITHUB_OUTPUT, k + \"=\" + v + \"\\n\");
+                    if (!fs.existsSync(p)) { out(\"value\", \"\"); out(\"meta\", JSON.stringify({ note: \"no scorecard.json (scorecard is non-gating)\" })); process.exit(0); }
+                    const r = JSON.parse(fs.readFileSync(p, \"utf8\")); const scores = (r.scores || []).map((s) => ({ model: s.model, precision: s.precision, recall: s.recall, f1: s.f1 }));
+                    const f1 = scores.map((s) => s.f1).filter((x) => typeof x === \"number\");
+                    out(\"value\", f1.length ? String(Math.min(...f1)) : \"\"); out(\"meta\", JSON.stringify({ scored_at: r.scoredAt || null, models: scores }));
+                  "
+
+            - name: Report quality signal
+              if: always()
+              uses: ./.github/actions/report-signal
+              with:
+                  name: evals.benchmark
+                  status: ${{ job.status }}
+                  value: ${{ steps.sc.outputs.value }}
+                  unit: ratio
+                  meta: ${{ steps.sc.outputs.meta }}
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}
+
             - name: Notify Discord on failure
               if: failure()
               uses: ./.github/actions/discord-notify
@@ -264,7 +291,7 @@ jobs:
                   # Bench has its own audience (model quality watchers, not
                   # infra). Falls back to general so missing channel doesn't
                   # silence regressions.
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: failure
                   title: "❌ Model code-review benchmark failed"
                   description: |
@@ -277,7 +304,7 @@ jobs:
               if: success()
               uses: ./.github/actions/discord-notify
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: success
                   title: "✅ Model code-review benchmark — scorecard"
                   description: |

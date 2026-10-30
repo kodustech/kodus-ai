@@ -28,8 +28,7 @@
  * next LLM call.
  */
 
-/** Rough token estimate: 1 token ≈ 4 characters. */
-const CHARS_PER_TOKEN = 4;
+import { estimateValueTokens } from './token-estimator';
 
 /** Trigger compression when context usage crosses this fraction of the window. */
 export const COMPRESSION_THRESHOLD_RATIO = 0.7;
@@ -50,6 +49,14 @@ const OLDER_MAX_CHARS_PER_RESULT = 400;
 /** Max characters per entry in the investigation summary. */
 const SUMMARY_MAX_CHARS_PER_ENTRY = 200;
 
+/**
+ * Aggressive per-tool-result cap used by the hard clamp (phase 1). Applied to
+ * EVERY tool result (recent included), unlike the soft pass which spares the
+ * recent tail. Small enough to reclaim the bulk of an overflowing window while
+ * still leaving the agent a usable preview of each call.
+ */
+const HARD_CLAMP_MAX_CHARS_PER_RESULT = 500;
+
 export interface ModelMessage {
     role: 'system' | 'user' | 'assistant' | 'tool';
     content: unknown;
@@ -64,19 +71,19 @@ interface ToolCallRecord {
 }
 
 /**
- * Estimates the token count of a message array by JSON-stringifying each
- * message and dividing char length by 4.
+ * Estimates the token count of a message array with a real tokenizer
+ * (`token-estimator`), serializing each message so the structured `tool` /
+ * `tool-call` parts are counted the way the provider sees them on the wire.
+ * Replaces the old flat 4-chars/token estimate that under-counted dense code by
+ * ~1.6× and let the compressor believe it was under budget while the request
+ * already overflowed (issue #1574).
  */
 export function estimateMessagesTokens(messages: ModelMessage[]): number {
-    let chars = 0;
+    let total = 0;
     for (const msg of messages) {
-        try {
-            chars += JSON.stringify(msg).length;
-        } catch {
-            chars += 0;
-        }
+        total += estimateValueTokens(msg);
     }
-    return Math.ceil(chars / CHARS_PER_TOKEN);
+    return total;
 }
 
 /**
@@ -161,6 +168,96 @@ function truncateText(text: string, maxChars: number): string {
 }
 
 /**
+ * Truncates a structured tool-result payload while keeping it serializable.
+ *
+ * A tool-result's `output` is a discriminated object the provider switches on:
+ * `{ type:'text'|'error-text', value:string }`, `{ type:'content', value:[…] }`,
+ * or `{ type:'json'|'error-json', value }`. The Responses serializer has no
+ * `default` case, so an output it can't recognize — or one flattened to a bare
+ * string (the old bug) — serializes with `output: undefined`, which
+ * JSON.stringify strips → OpenAI 400 `Missing required parameter:
+ * 'input[N].output'`. Each branch below therefore returns a shape the
+ * serializer still handles:
+ *   - text / content: shrink the inner string(s) in place; wrapper unchanged.
+ *   - json / error-json: the value is a whole document — once truncated it is
+ *     no longer valid JSON, so we re-type it to text / error-text, an honest
+ *     lossy preview. This also lets the hard clamp actually reach budget; a
+ *     large json left intact would defeat the fit guarantee (re-opening #1574).
+ *   - anything else (e.g. execution-denied) is small/bounded — left intact.
+ */
+function truncateStructuredValue(
+    v: any,
+    maxChars: number,
+): { value: any; truncated: boolean } {
+    // { type:'json'|'error-json', value } — checked BEFORE the string/array
+    // branches so an array- OR string-valued json payload is shrunk here rather
+    // than being mistaken for content parts / plain text.
+    if (v?.type === 'json' || v?.type === 'error-json') {
+        try {
+            const serialized = JSON.stringify(v.value);
+            if (serialized.length > maxChars) {
+                return {
+                    value: {
+                        type: v.type === 'error-json' ? 'error-text' : 'text',
+                        value: truncateText(serialized, maxChars),
+                    },
+                    truncated: true,
+                };
+            }
+        } catch {
+            // non-serializable (cycles, BigInt, …) — leave intact
+        }
+        return { value: v, truncated: false };
+    }
+    // { type:'text'|'error-text', value:string }
+    if (typeof v?.value === 'string') {
+        if (v.value.length > maxChars) {
+            return {
+                value: { ...v, value: truncateText(v.value, maxChars) },
+                truncated: true,
+            };
+        }
+        return { value: v, truncated: false };
+    }
+    // { type:'content', value:[{type:'text',text},…] } or a bare content-part array
+    const parts = Array.isArray(v) ? v : Array.isArray(v?.value) ? v.value : null;
+    if (parts) {
+        let truncated = false;
+        const nextParts = parts.map((item: any) => {
+            if (typeof item?.text === 'string' && item.text.length > maxChars) {
+                truncated = true;
+                return { ...item, text: truncateText(item.text, maxChars) };
+            }
+            return item;
+        });
+        if (!truncated) return { value: v, truncated: false };
+        return {
+            value: Array.isArray(v) ? nextParts : { ...v, value: nextParts },
+            truncated: true,
+        };
+    }
+    // Unrecognized object output (a bounded type like execution-denied, or a
+    // future AI SDK output type). Last-resort net: shrink a serialized preview
+    // so the hard clamp can ALWAYS reach budget (#1574 is an unconditional
+    // guarantee), re-typed to text to stay provider-serializable. Bounded
+    // outputs serialize under maxChars and pass through untouched.
+    if (v && typeof v === 'object') {
+        try {
+            const serialized = JSON.stringify(v);
+            if (serialized.length > maxChars) {
+                return {
+                    value: { type: 'text', value: truncateText(serialized, maxChars) },
+                    truncated: true,
+                };
+            }
+        } catch {
+            // non-serializable (cycles, BigInt, …) — unmeasurable, leave intact
+        }
+    }
+    return { value: v, truncated: false };
+}
+
+/**
  * Truncates the content of a `tool` message. The content can be:
  *   - a string
  *   - an array of tool-result parts (Vercel AI SDK v5 structure)
@@ -197,15 +294,13 @@ function truncateToolMessage(
                     next[field] = truncateText(v, maxChars);
                     truncated = true;
                 } else if (v && typeof v === 'object') {
-                    // Nested structured output (e.g. { type: 'text', value: '...' })
-                    try {
-                        const serialized = JSON.stringify(v);
-                        if (serialized.length > maxChars) {
-                            next[field] = truncateText(serialized, maxChars);
-                            truncated = true;
-                        }
-                    } catch {
-                        // Ignore non-serializable nested content
+                    // Structured output ({ type, value }) — shrink the inner text
+                    // but keep the discriminated shape so the provider can still
+                    // serialize a valid tool-result `output` (see helper docs).
+                    const res = truncateStructuredValue(v, maxChars);
+                    if (res.truncated) {
+                        next[field] = res.value;
+                        truncated = true;
                     }
                 }
             }
@@ -293,4 +388,155 @@ export function compressMessages(
     }
 
     return [...head, ...compressedTail];
+}
+
+/**
+ * Splits the head (leading `system` messages + the first `user` message, which
+ * carries the non-negotiable <Diffs> block) from the rest of the window.
+ */
+function splitHead(messages: ModelMessage[]): {
+    head: ModelMessage[];
+    rest: ModelMessage[];
+} {
+    const head: ModelMessage[] = [];
+    let idx = 0;
+    while (idx < messages.length && messages[idx].role === 'system') {
+        head.push(messages[idx]);
+        idx++;
+    }
+    if (idx < messages.length && messages[idx].role === 'user') {
+        head.push(messages[idx]);
+        idx++;
+    }
+    return { head, rest: messages.slice(idx) };
+}
+
+/**
+ * Groups a message sequence into "rounds": each non-`tool` message (an
+ * assistant turn, or a steering user note) plus the `tool` messages that
+ * immediately follow it (its results). Evicting whole rounds keeps the window
+ * structurally valid for the AI SDK — a `tool` result never survives without
+ * the assistant tool-call it answers, so no provider sees an orphaned result.
+ */
+function groupRounds(messages: ModelMessage[]): ModelMessage[][] {
+    const rounds: ModelMessage[][] = [];
+    let current: ModelMessage[] | null = null;
+    for (const m of messages) {
+        if (m.role === 'tool' && current) {
+            current.push(m);
+        } else {
+            if (current) {
+                rounds.push(current);
+            }
+            current = [m];
+        }
+    }
+    if (current) {
+        rounds.push(current);
+    }
+    return rounds;
+}
+
+/**
+ * Evicts the OLDEST rounds from the middle of the window, keeping the head and
+ * as many of the most-recent rounds as fit under `budgetTokens`. Always keeps
+ * at least the single newest round (phase 3 truncates it if even that
+ * overflows). Structure-preserving via {@link groupRounds}.
+ */
+function evictOldestRounds(
+    messages: ModelMessage[],
+    budgetTokens: number,
+): ModelMessage[] {
+    const { head, rest } = splitHead(messages);
+    const rounds = groupRounds(rest);
+    if (rounds.length === 0) {
+        return messages;
+    }
+
+    let running = estimateMessagesTokens(head);
+    const keptReversed: ModelMessage[][] = [];
+    for (let i = rounds.length - 1; i >= 0; i--) {
+        const rtok = estimateMessagesTokens(rounds[i]);
+        if (keptReversed.length === 0 || running + rtok <= budgetTokens) {
+            keptReversed.push(rounds[i]);
+            running += rtok;
+        } else {
+            // Rounds only get older (and never smaller in aggregate) as we walk
+            // backwards, so once one doesn't fit, neither will the rest.
+            break;
+        }
+    }
+    return [...head, ...keptReversed.reverse().flat()];
+}
+
+/**
+ * Last-resort clamp: shrink every message's text content with a geometrically
+ * decreasing cap until the window estimates under `budgetTokens`. Truncates
+ * only text/output/result/content fields (never tool-call `input`/`args`), so
+ * assistant tool-call parts stay structurally intact. Bounded iteration count —
+ * returns the best effort if a pathological window can't be reduced further.
+ */
+function hardTruncateToFit(
+    messages: ModelMessage[],
+    budgetTokens: number,
+): ModelMessage[] {
+    let cap = HARD_CLAMP_MAX_CHARS_PER_RESULT;
+    let work = messages;
+    for (let i = 0; i < 12; i++) {
+        work = messages.map(
+            (m) => truncateToolMessage(m, cap).msg,
+        );
+        if (estimateMessagesTokens(work) <= budgetTokens) {
+            return work;
+        }
+        if (cap <= 80) {
+            break;
+        }
+        cap = Math.max(80, Math.floor(cap / 2));
+    }
+    return work;
+}
+
+/**
+ * Hard per-request clamp. Guarantees the returned window estimates at or below
+ * `budgetTokens` (the model window minus fixed system + tool-schema overhead
+ * and a safety margin) whenever possible, so the agent NEVER emits a request
+ * larger than the context window even when the soft pass can't reduce enough.
+ *
+ * Order of operations (least → most destructive), each structure-preserving so
+ * the AI SDK never sees an orphaned tool result:
+ *   1. Aggressively truncate EVERY tool-result text to a tiny cap.
+ *   2. Evict whole oldest rounds (an assistant turn + its tool results),
+ *      keeping the head (diff) and the most-recent rounds.
+ *   3. Last resort: hard-truncate the remaining message contents until it fits.
+ */
+export function clampMessagesToBudget(
+    messages: ModelMessage[],
+    budgetTokens: number,
+): ModelMessage[] {
+    if (!messages || messages.length === 0 || budgetTokens <= 0) {
+        return messages;
+    }
+    if (estimateMessagesTokens(messages) <= budgetTokens) {
+        return messages;
+    }
+
+    // Phase 1: aggressive tool-result truncation across the whole window.
+    let work = messages.map((m) =>
+        m.role === 'tool'
+            ? truncateToolMessage(m, HARD_CLAMP_MAX_CHARS_PER_RESULT).msg
+            : m,
+    );
+    if (estimateMessagesTokens(work) <= budgetTokens) {
+        return work;
+    }
+
+    // Phase 2: evict oldest rounds, preserving head + most-recent rounds.
+    work = evictOldestRounds(work, budgetTokens);
+    if (estimateMessagesTokens(work) <= budgetTokens) {
+        return work;
+    }
+
+    // Phase 3: shrink every remaining message's content until the window fits.
+    return hardTruncateToFit(work, budgetTokens);
 }

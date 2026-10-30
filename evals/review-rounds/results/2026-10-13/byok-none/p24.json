@@ -1,0 +1,992 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:30:48.766Z",
+  "updatedAt": "2026-10-13T22:01:46.325Z",
+  "complete": true,
+  "selectedCases": [
+    "P24-create-mode-section-hidden",
+    "P24-create-mode-section-hidden-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P24-create-mode-section-hidden · billing-hidden-on-create-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P24-create-mode-section-hidden-control · billing-hidden-on-create-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 227627,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: submit() awaits onSave(draft) with no error handling and is invoked as `void submit()`, so a rejected onSave produces an unhandled promise rejection and the errors state is never updated. WHY: when the save/create request fails, the user sees no error message and the button appears to do nothing (silent failure), and the rejected promise is unhandled. HOW: wrap the call in try/catch and surface the failure via setErrors, e.g. `if (problems.length === 0) { try { await onSave(draft); } catch { setErrors(['Could not save the customer']); } }`.",
+          "keep": true,
+          "rationale": "Confirmed: submit() (lines 19-23) awaits onSave(draft) with no error handling and is called as `void submit()` (line 33). onSave is typed Promise<void> and can reject (e.g. failed save/create request), yielding an unhandled promise rejection while errors state is never updated — silent failure to the user. The failure path is real and reachable. This is a distinct issue from the previous decision (BillingSection visibility in create mode), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `submit()` is invoked as `void submit()` and `onSave(draft)` is awaited without error handling, a rejected save becomes an unhandled promise rejection while the `errors` state is never updated, so the user sees no message and the button appears to do nothing. Wrap the `await onSave(draft)` call in `try`/`catch` and surface the failure via `setErrors(['Could not save the customer'])`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 261506,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `submit()` awaits `onSave(draft)` without a try/catch and its only caller invokes it via `void submit()` (line 33), so a rejected `onSave` becomes an unhandled promise rejection. WHY: when saving fails (network/server error) the failure is silently dropped — the form shows no error and the rejection is unobserved, leaving the user with no feedback and the customer unsaved. HOW: wrap the save in try/catch and surface the failure via setErrors.",
+          "keep": true,
+          "rationale": "The code matches the claim exactly: line 22 `if (problems.length === 0) await onSave(draft);` has no try/catch, and the sole caller invokes it as `void submit()` (line 33). onSave is typed to return Promise<void> (line 9), so a rejection from onSave propagates out of submit() and, because the returned promise is discarded with `void`, becomes an unhandled rejection with no error surfaced to the user (setErrors is only ever set from validateCustomer). This is a concrete, reachable failure path on save errors, not a generic 'missing validation' suggestion. It is also a different problem from the previous decision, which concerned the billing section being hidden in create mode, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "onSave",
+                "glob": "*.tsx",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 22,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A rejected `onSave(draft)` from `submit()` is invoked via `void submit()` at line 33, so save failures such as network/server errors become unhandled promise rejections and the form silently leaves the customer unsaved with no feedback. Wrap the `await onSave(draft)` call in `try/catch` and surface the failure via `setErrors`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 206542,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling = mode === 'edit' || Boolean(draft.id)` is false in create mode (mode is 'create' and a new draft has no id), so BillingSection is never rendered when creating a customer. WHY: validateCustomer requires a valid billingEmail (validate.ts:8), but the only input for it is inside BillingSection, so 'Create customer' always fails with 'A valid billing email is required' — the exact failure the earlier review targeted. HOW: render the billing section in create mode too, e.g. `const showBilling = mode === 'create' || mode === 'edit' || Boolean(draft.id);` (equivalently, always show it, since billing email is mandatory in both modes).",
+          "keep": false,
+          "rationale": "The finding is a verbatim repeat of PreviousDecision index 1 (round-a-P24-create-mode-section-hidden): same failure (create mode hides the billing email input so 'Create customer' always fails with 'A valid billing email is required'), same root cause (BillingSection gated on mode==='edit' || draft.id at line 27), and the same suggested fix (render the section in create mode). The code at line 27 still does not include create mode, but the drop rule explicitly requires dropping a finding that re-raises the problem an earlier entry already posted on this PR, even when the earlier fix is incomplete and whatever its Outcome. Hence drop.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 231217,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling` is false in create mode because `mode === 'edit'` is false and a new draft has no `id`, so the billing fields (including the required billing email) are never rendered when creating a customer. WHY: `validateCustomer` (validate.ts:8) requires a valid billing email, so `submit()` always produces 'A valid billing email is required' and `onSave` is never called — no customer can ever be created; the earlier suggestion's applied change gated on `mode === 'edit'` instead of `'create'`, so it does not fix the create flow it targeted (this finding revises that suggestion). HOW: render the billing section unconditionally, or gate on create mode instead of edit, e.g. `const showBilling = mode === 'create' || mode === 'edit' || Boolean(draft.id);`.",
+          "keep": false,
+          "rationale": "This is a repeat of PreviousReviewDecisions entry index 1 (round-a-P24-create-mode-section-hidden). That entry described the identical failure: the billing section is not rendered in create mode (new draft has no id), while validateCustomer requires a billing email, so 'Create customer' always fails with 'A valid billing email is required'. The current finding describes the same wrong result in the same operation; it only re-attributes the cause to the applied fix gating on `mode === 'edit'` instead of `'create'`. The drop rule explicitly covers this: judge by the failure, not the cause named, and drop even when the finding says the developer's fix is incomplete. The failure is not a new consequence of applying the earlier suggestion (the original `Boolean(draft.id)` already failed in create mode), so it is the same problem, not a different one. Dropping per the repeat rule.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "showBilling|BillingSection|mode ===|mode==",
+                "path": "src/customers/CustomerForm.tsx"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 388744,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: submit() awaits onSave(draft) with no try/catch and is invoked as `void submit()`, so if onSave rejects the promise is discarded. WHY: a failed save produces an unhandled promise rejection and no error state is set, leaving the user with no feedback that the save failed (the button appears to do nothing). HOW: wrap the save and surface the failure, e.g. `try { await onSave(draft); } catch { setErrors(['Could not save the customer']); }`.",
+          "keep": true,
+          "rationale": "Confirmed: line 22 awaits onSave(draft) (prop type Promise<void>) without try/catch, and the submit handler uses void submit() (line 33), so any rejection becomes an unhandled promise rejection with no error state set — the user gets no feedback. No upstream guard prevents rejection (validation only covers field content). This is a concrete behavior bug, not style, and it is a distinct issue from the prior billing-section decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "onSave|CustomerForm",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: showBilling is `mode === 'edit' || Boolean(draft.id)`, which is false for a brand-new customer (mode is 'create' and draft.id is undefined), so BillingSection — and therefore the billing email input — is still not rendered in create mode, even though the comment above claims it shows in create mode too. WHY: validateCustomer requires a valid billing email, so the 'Create customer' button always fails with 'A valid billing email is required' and a customer can never be created — the exact failure the earlier suggestion aimed to fix, which this change did not actually resolve (the condition should have included create mode). HOW: include create mode in the condition (or just always render the section): `const showBilling = mode === 'create' || Boolean(draft.id);`.",
+          "keep": false,
+          "rationale": "This is a repeat of PreviousDecision index 1 (round-a-P24-create-mode-section-hidden), which already raised the exact same failure: the billing section/billing email input is not rendered in create mode, so validateCustomer's required billing email makes 'Create customer' always fail with 'A valid billing email is required'. The candidate finding describes the identical failure in the same operation and even states it is \"the exact failure the earlier suggestion aimed to fix, which this change did not actually resolve.\" It is not a different problem, nor a consequence of applying the earlier suggestion. The rules mandate dropping a finding that re-raises an already-posted problem, including when it argues the developer's fix is incomplete.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "validateCustomer",
+                "path": "src/customers"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 22,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `submit()` is invoked as `void submit()` and does not catch rejections from `await onSave(draft)`, a failed save becomes an unhandled promise rejection with no error state, so the user gets no feedback. Wrap the save in `try`/`catch` and surface the failure, for example by calling `setErrors(['Could not save the customer'])` in the `catch`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P24-create-mode-section-hidden-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 166000,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: showBilling is false for a create-mode draft (mode !== 'edit' and draft.id is undefined), so BillingSection is hidden even though validateCustomer unconditionally requires a valid billingEmail. WHY: In create mode the user can never enter a billing email, so validateCustomer always returns 'A valid billing email is required' and the form can never be submitted — directly contradicting the comment on lines 25-26 that the section must show in create mode too. HOW: Make the predicate match the stated intent (billing is always required), e.g. `const showBilling = true;` or `mode === 'edit' || mode === 'create' || Boolean(draft.id)`; or if create mode should not require billing, relax validateCustomer instead.",
+          "keep": true,
+          "rationale": "Confirmed: validateCustomer (validate.ts:8) unconditionally requires a valid billingEmail. In create mode, draft defaults to EMPTY (CustomerForm.tsx:13) which has no id, so showBilling = (mode === 'edit') || Boolean(draft.id) evaluates to false and BillingSection is never rendered (line 40). The user therefore cannot enter a billing email, validateCustomer always pushes 'A valid billing email is required', and submit() never calls onSave. This directly contradicts the comment on lines 25-26 stating the billing section must show in create mode. The bug is real and reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "validateCustomer"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm|mode=\"create\"|mode='create'",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: submit() awaits onSave(draft) without a try/catch, and the onSubmit handler calls it via `void submit()`. WHY: If onSave rejects, the rejection is unhandled (unhandled promise rejection) and no error is shown to the user because errors state is only ever set from validateCustomer — a save failure is silently swallowed. HOW: Wrap the await in try/catch and push a failure message into errors (or otherwise surface it).",
+          "keep": true,
+          "rationale": "Confirmed: line 22 awaits onSave(draft) with no try/catch, and the form's onSubmit calls `void submit()` (line 33), so a rejected onSave becomes an unhandled promise rejection. errors state is only set from validateCustomer (line 21), so a save failure is silently swallowed with no user feedback. onSave is typed Promise<void> (line 9), so rejection is possible, and no caller guards it. The claim is factually accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "onSave|CustomerForm",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 27,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In create mode `showBilling` is false because `mode !== 'edit'` and `draft.id` is undefined, so `BillingSection` is hidden while `validateCustomer` unconditionally requires a valid `billingEmail`, making it always return 'A valid billing email is required' and the form impossible to submit. Make the predicate match the intent stated on lines 25-26 (billing is always required), e.g. `const showBilling = true;` or `mode === 'edit' || mode === 'create' || Boolean(draft.id)`, or relax `validateCustomer` if create mode should not require billing."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 22,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "If `onSave` rejects, the rejection is unhandled because `onSubmit` calls `void submit()` and `errors` is only ever set from `validateCustomer`, so a save failure is silently swallowed with no message shown to the user. Wrap the `await onSave(draft)` in a `try`/`catch` and push a failure message into `errors` so the user sees it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P24-create-mode-section-hidden-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 97928,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: submit() awaits onSave(draft) but is invoked as `void submit()` with no try/catch, so a rejected onSave promise is discarded and setErrors is never reached. WHY: a failed save silently produces no user feedback (and an unhandled promise rejection) while the form appears to do nothing. HOW: wrap the save in try/catch and surface the failure into errors state, e.g. `try { await onSave(draft); } catch (e) { setErrors([(e as Error).message ?? 'Save failed']); }`.",
+          "keep": true,
+          "rationale": "Verified against src/customers/CustomerForm.tsx lines 19-23 and 31-34. submit() awaits onSave(draft) with no try/catch, and onSubmit invokes it via `void submit()`. A rejected onSave promise becomes an unhandled rejection and setErrors is never called, so a failed save produces no user-visible error. The root cause and failure path are exactly as described and reachable (onSave is a Promise-returning prop); no upstream guard or error boundary mitigates it. Claim is factually correct.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit\\(\\)",
+                "path": "src/customers"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: showBilling is computed as `mode === 'edit' || Boolean(draft.id)`, which is false in create mode because a new customer has no id, so BillingSection is never rendered in create mode. WHY: validateCustomer unconditionally requires a valid billing email, and the billing email can only be entered through the hidden BillingSection, so a create-mode user can never satisfy validation and the form is permanently blocked — directly contradicting the adjacent comment stating billing should show in create mode. HOW: show the billing section whenever a billing email is required, e.g. `const showBilling = mode === 'edit' || mode === 'create';` (effectively always) or simply render BillingSection unconditionally.",
+          "keep": true,
+          "rationale": "Confirmed via code: EMPTY draft has no id, and in create mode draft.id is undefined, so `mode === 'edit' || Boolean(draft.id)` evaluates false and BillingSection is not rendered. BillingSection is the only component that sets billingEmail, so draft.billingEmail remains '' in create mode. validateCustomer (validate.ts:8) unconditionally pushes 'A valid billing email is required' when billingEmail is empty/invalid, so submit can never pass validation in create mode — the form is permanently blocked. This directly contradicts the comment on lines 25-26. Root cause and failure path are factually correct.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 140
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "validateCustomer",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/BillingSection.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 25,
+          "severity": "high",
+          "linkedById": false,
+          "marked": false,
+          "text": "In create mode `showBilling` evaluates to false because a new customer has no `id`, so `BillingSection` never renders, yet `validateCustomer` unconditionally requires a billing email that can only be entered there — leaving create-mode users permanently blocked and contradicting the adjacent comment. Show the billing section whenever a billing email is required, e.g. `const showBilling = mode === 'edit' || mode === 'create';`, or render `BillingSection` unconditionally."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "severity": "medium",
+          "linkedById": false,
+          "marked": false,
+          "text": "Because `submit()` is invoked as `void submit()` with no try/catch, a rejected `onSave` promise is discarded and `setErrors` is never reached, so a failed save gives no user feedback and raises an unhandled rejection while the form appears to do nothing. Wrap the `await onSave(draft)` in a try/catch and surface the failure into the `errors` state."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P24-create-mode-section-hidden-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 94067,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling = mode === 'edit' || Boolean(draft.id)` evaluates to false in create mode (the EMPTY draft has no id), so BillingSection is never rendered, even though the comment above and `validateCustomer` both require a billing email in create mode. WHY: The user can never enter a billing email in create mode, so `validateCustomer` always returns 'A valid billing email is required' and `onSave` is never called — creating a customer is impossible. HOW: Render billing in create mode as the comment intends, e.g. `const showBilling = mode === 'create' || mode === 'edit';` (equivalently always render it), or gate validation on the section being visible.",
+          "keep": true,
+          "rationale": "Confirmed. In create mode the draft defaults to EMPTY ({name:'', billingEmail:'', taxId:''}) which has no id, so `showBilling = mode === 'edit' || Boolean(draft.id)` is false and BillingSection is not rendered. BillingSection is the only input for billingEmail, and validateCustomer unconditionally requires a valid billing email (validate.ts:8). Therefore submit() always produces the 'A valid billing email is required' error and never calls onSave, making customer creation impossible in create mode. The root cause and failure path are accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "validateCustomer|BillingSection|showBilling",
+                "path": "src/customers"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 27,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `src/customers/CustomerForm.tsx`, create mode makes `showBilling` evaluate to false because the empty `draft` has no `id`, so `BillingSection` never renders, `validateCustomer` always returns 'A valid billing email is required', and `onSave` is never called, making customer creation impossible. Render billing in create mode as the comment intends, for example by changing `showBilling` to `mode === 'create' || mode === 'edit'`, or gate validation on the section being visible."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P24-create-mode-section-hidden-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 98761,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: In create mode the condition `mode === 'edit' || Boolean(draft.id)` is false (a new draft has no id), so BillingSection is not rendered, yet validateCustomer unconditionally requires a billing email. WHY: A create-mode form can never pass validation — the user always sees 'A valid billing email is required' with no field to enter it, so onSave is never called and no customer can be created. This also contradicts the inline comment stating the section should show in create mode. HOW: Show billing in create mode too, e.g. `const showBilling = mode === 'create' || mode === 'edit';` (or simply always render it).",
+          "keep": true,
+          "rationale": "validate.ts:8 unconditionally pushes 'A valid billing email is required' when draft.billingEmail fails the EMAIL regex. In create mode with the default EMPTY draft (no id), showBilling = 'edit' || Boolean(draft.id) evaluates false, so BillingSection is never rendered and billingEmail stays empty. Thus a create-mode form can never pass validation and onSave is never reached, contradicting the code's own comment. Root cause and failure path are both confirmed.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "validateCustomer"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 25,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In create mode, `mode === 'edit' || Boolean(draft.id)` is false because a new draft has no id, so `BillingSection` is not rendered even though `validateCustomer` unconditionally requires a billing email, making it impossible to create a customer: the user always sees 'A valid billing email is required' with no field to enter it, `onSave` is never called, and the inline comment saying the section should show in create mode is contradicted. Show billing in create mode too, e.g. `const showBilling = mode === 'create' || mode === 'edit';` (or simply always render it)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P24-create-mode-section-hidden-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 84075,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: showBilling is `mode === 'edit' || Boolean(draft.id)`, which is false in create mode because a new draft (EMPTY, line 13) has no id and nothing ever sets draft.id, contradicting the comment on lines 25-26 that says billing must show in create mode. WHY: BillingSection (the only place billingEmail can be entered) is never rendered when mode === 'create', so validateCustomer always fails with 'A valid billing email is required' and onSave is never called — creating a customer is impossible. HOW: gate on create mode instead, e.g. `const showBilling = mode === 'create' || Boolean(draft.id);`.",
+          "keep": true,
+          "rationale": "Confirmed. CustomerDraft.id is optional (types.ts:2). In create mode, `initial` is not supplied, so `draft` falls back to `EMPTY` (line 16), which has no id, and nothing in the component ever sets draft.id. Thus `showBilling = mode === 'edit' || Boolean(draft.id)` evaluates to false in create mode, contradicting the explicit comment on lines 25-26. BillingSection is the only place billingEmail can be entered, so draft.billingEmail stays '' and validateCustomer (validate.ts:8) always pushes 'A valid billing email is required', meaning onSave is never called and creating a customer is impossible. No caller overrides this (only self-reference found).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/types.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm|mode=\\\"create\\\"|mode={'create'}",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 27,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `showBilling` is false in create mode, `BillingSection` never renders, so `validateCustomer` always fails with 'A valid billing email is required' and `onSave` is never called, making it impossible to create a customer. Gate on `mode === 'create'` instead of `mode === 'edit'` so the billing fields render for new drafts."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

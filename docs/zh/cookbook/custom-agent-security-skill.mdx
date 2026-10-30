@@ -1,0 +1,112 @@
+---
+title: "基于代码库 skill 的安全审查者"
+description: "把团队的安全 skill 变成一个在每个拉取请求上遵循它的自定义智能体。"
+icon: "shield-halved"
+---
+
+## 为什么用 skill
+
+您的团队可能已经把安全规则写成了供编码助手使用的智能体 skill。自定义智能体可以在代码审查中遵循同一个 skill：在变更需要时打开它，读取其参考文件，并引用每条发现所应用的规则。当主分支上的 skill 发生变化时，智能体无需修改设置就会遵循新版本。
+
+示例是一个多租户的排程 API，其中每个查询都必须限定在调用者的工作区内。
+
+## 步骤 1 — 代码库中的 skill
+
+```markdown .claude/skills/tenant-isolation/SKILL.md
+---
+name: tenant-isolation
+description: Rules that keep one workspace's data out of another's. Use when changing endpoints, queries or background jobs.
+---
+
+# Tenant isolation
+
+- Every query on a tenant table filters by `workspaceId` taken from the authenticated session, never from the request body or query string.
+- Every new endpoint declares `@RequireWorkspaceRole(...)`; an endpoint without it is public.
+- Background jobs receive `workspaceId` in their payload and pass it to every repository call.
+- Logs never include tokens, passwords or full email addresses.
+
+For the list of tenant tables, see references/tenant-tables.md.
+```
+
+```markdown .claude/skills/tenant-isolation/references/tenant-tables.md
+# Tenant tables
+
+bookings, calendars, invoices, members, resources
+```
+
+文件夹名必须与 `name` 一致，并且 `description` 是必填的。
+
+## 步骤 2 — 作为智能体导入
+
+<Steps>
+  <Step title="打开代码库的设置">
+    在范围选择器中选择该代码库，然后进入 **What to review → Custom agents → New agent**。
+  </Step>
+  <Step title="Import from repository">
+    该标签页列出在默认分支上找到的 skills。点击 **tenant-isolation**。
+  </Step>
+  <Step title="检查结果">
+    智能体以关闭状态创建，名为 **Tenant isolation reviewer**，已关联该 skill，指令如下：
+
+    ```text
+    Review the change against the team's "tenant-isolation" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.
+    ```
+  </Step>
+</Steps>
+
+## 步骤 3 — 细化指令
+
+保留对 skill 的引用，并补充一条发现需要什么证据：
+
+```text Instructions
+Review the change against the team's "tenant-isolation" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.
+
+Trace where workspaceId comes from in every query or repository call the change adds or edits. A finding must show the line where the value enters (session, body, query string, job payload) and the line where it is used.
+
+Ignore tests and seed scripts. Do not report general security issues the skill does not cover; Kody's own review handles those.
+```
+
+| 字段 | 值 |
+| --- | --- |
+| **Files** | `src/api/**`、`src/jobs/**`、`src/repositories/**` |
+| **Except** | `**/*.test.ts`、`src/db/seeds/**` |
+
+## 步骤 4 — 可选：插件
+
+如果您的任务跟踪工具已作为插件安装，可在 **Tools → Plugins** 中开启它。只会提供读取类工具。当拉取请求描述中链接了工单时，智能体可以读取工单，并检查变更是否符合其要求。
+
+## 步骤 5 — 评论
+
+| 字段 | 值 | 原因 |
+| --- | --- | --- |
+| **Format** | Inline comments | |
+| **Minimum severity** | High | 只关注租户泄露和缺失的鉴权，不包括加固建议。 |
+| **Suggested fix** | When confident | |
+
+点击 **Save**。
+
+## 步骤 6 — Try it
+
+在一个新增了端点的拉取请求上运行 **Try it**。检查：
+
+- **Skills opened** 列出了 `.claude/skills/tenant-isolation`，并在智能体需要时列出 `references/tenant-tables.md`。
+- 保留的发现引用了 skill 中的规则：
+
+```markdown
+**Rule** (`.claude/skills/tenant-isolation/SKILL.md`):
+> Every new endpoint declares `@RequireWorkspaceRole(...)`; an endpoint without it is public.
+```
+
+- 被丢弃的发现会显示原因。skill 未覆盖的一般性安全意见会因超出智能体的关注范围而被丢弃，这正是此处想要的效果。
+
+开启该智能体。之后如果想对某个打开的拉取请求再听一次意见，可以评论 `@kody -v tenant-isolation-reviewer`。
+
+## 检查清单
+
+- [ ] `SKILL.md` 包含与文件夹名一致的 `name` 以及 `description`
+- [ ] 参考文件最多位于 skill 下一层文件夹中
+- [ ] 指令说明了一条发现需要什么证据
+- [ ] 最低严重程度符合智能体应有的"音量"
+- [ ] 已在一个已知存在问题的拉取请求上试运行
+
+检测和预算的说明，请参阅 [Skills & docs](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools#skills--docs)。

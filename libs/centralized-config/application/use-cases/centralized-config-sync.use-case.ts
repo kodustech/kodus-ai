@@ -6,10 +6,11 @@ import {
     IKodyRuleFileMeta,
 } from '@libs/centralized-config/domain/contracts/CentralizedConfigService.contract';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { Inject, Injectable } from '@nestjs/common';
 
 @Injectable()
-export class CentralizedConfigSyncUseCase {
+export class CentralizedConfigSyncUseCase implements IUseCase {
     private readonly logger = createLogger(CentralizedConfigSyncUseCase.name);
 
     constructor(
@@ -109,12 +110,24 @@ export class CentralizedConfigSyncUseCase {
                 });
 
             if (!syncRulesResult.success) {
-                this.logger.error({
+                // Files the repository got wrong (schema, unreadable) are the
+                // org's to fix: a warning carrying each file's reason. A sync
+                // that threw is reported under the `general` entry — still an
+                // error, like a failure that names no file at all.
+                const rejectedFiles =
+                    syncRulesResult.failureDetails?.length &&
+                    !syncRulesResult.failureDetails.some(
+                        (detail) => detail.file === 'general',
+                    );
+                this.logger[rejectedFiles ? 'warn' : 'error']({
                     message: 'Failed to synchronize Kody rules',
                     context: CentralizedConfigSyncUseCase.name,
                     metadata: {
                         organizationAndTeamData,
                         message: syncRulesResult.message,
+                        ...(rejectedFiles && {
+                            failureDetails: syncRulesResult.failureDetails,
+                        }),
                     },
                 });
 
@@ -129,6 +142,10 @@ export class CentralizedConfigSyncUseCase {
                 await this.centralizedConfigService.removeStaleKodyRules({
                     organizationAndTeamData,
                     ruleFiles: ruleFilesMeta,
+                    // Same tree read as the rules: proof the repository was
+                    // reachable, so an empty rule set means the user deleted
+                    // them rather than the read having failed.
+                    configFiles: configFilesMeta,
                     actor,
                 });
 

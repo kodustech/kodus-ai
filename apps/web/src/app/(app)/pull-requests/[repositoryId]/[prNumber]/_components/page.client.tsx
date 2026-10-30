@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import NextLink from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Spinner } from "@components/ui/spinner";
+import { Skeleton } from "@components/ui/skeleton";
 import {
     useInfinitePullRequestExecutions,
     usePullRequestFiles,
@@ -13,37 +13,143 @@ import {
     type PullRequestFile,
 } from "@services/pull-requests";
 import { ArrowLeftIcon } from "lucide-react";
-import { useSelectedTeamId } from "src/core/providers/selected-team-context";
-
 // Review screen — ported from the `try` app: a max-w page that scrolls as a
 // whole, with sticky left (file tree) and right (issues/metadata) rails and a
 // center column carrying the PR header + diff.
 import { ErrorBoundary, type FallbackProps } from "react-error-boundary";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 
 import { DiffViewer } from "./diff-viewer";
+import {
+    effectiveReviewStatus,
+    emptyFindingsLabel,
+    shouldLoadMoreRuns,
+    type ReviewRunStatus,
+} from "./review-run-status";
 import { ReviewStateProvider, useReviewStore } from "./review-store";
 import { adaptForTryDiffViewer, buildHeaderPrInfo } from "./try-port/adapt";
 import { CommitsList } from "./try-port/CommitsList";
-import { FileTree } from "./try-port/FileTree";
+import { FileTree, type FileTreeMode } from "./try-port/FileTree";
 import { PrHeader, type PrTab } from "./try-port/PrHeader";
 import { RightSidebar } from "./try-port/RightSidebar";
+import type { ReviewIssue } from "./try-port/types";
 
 // Web only carries data for these two tabs (Kody doesn't store the PR body
 // or comment threads), so we render a narrower tab bar than try's four.
 const WEB_TABS: PrTab[] = ["review", "commits"];
+const FILE_TREE_MODE_KEY = "kodus:pr-file-tree-mode";
 
 function PanelError({ error }: FallbackProps) {
     const message =
         error instanceof Error ? error.message : String(error ?? "");
     return (
         <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-2)]/70 p-6 text-center text-sm">
-            <p className="font-semibold text-[var(--red)]">This panel crashed</p>
+            <p className="font-semibold text-[var(--red)]">
+                This panel crashed
+            </p>
             <p className="max-w-md font-mono text-xs break-words text-[var(--text-dim)]">
                 {message}
             </p>
         </div>
     );
 }
+
+/**
+ * Slim bar above the diff: signal hierarchy on the left (what needs attention
+ * vs. what's minor) and review progress on the right (files viewed / total).
+ * Gives the reviewer an overview and a sense of "where am I" before the diff —
+ * the two things GitHub's raw file list never answers.
+ */
+function ReviewProgressBar({
+    viewed,
+    total,
+    bugs,
+    flags,
+    reviewStatus,
+}: {
+    viewed: number;
+    total: number;
+    bugs: number;
+    flags: number;
+    reviewStatus?: ReviewRunStatus;
+}) {
+    const pct = total > 0 ? Math.round((100 * viewed) / total) : 0;
+    // Mirror the rail buckets exactly so the two summaries always agree:
+    // "N potential bugs · M flags · X/Y viewed".
+    const clean = bugs + flags === 0;
+    const empty = emptyFindingsLabel(reviewStatus);
+    const emptyColor = {
+        clean: "var(--green)",
+        danger: "var(--color-danger)",
+        warning: "var(--color-warning)",
+        muted: "var(--text-dim)",
+    }[empty.tone];
+    return (
+        <div className="mt-2 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-2)]/70 px-4 py-2.5">
+            <div className="flex items-center gap-2.5 text-sm">
+                {clean ? (
+                    <span
+                        className="inline-flex items-center gap-1.5 font-medium"
+                        style={{ color: emptyColor }}>
+                        <span
+                            className="size-1.5 rounded-full"
+                            style={{ backgroundColor: emptyColor }}
+                        />
+                        {empty.text}
+                    </span>
+                ) : (
+                    <>
+                        {bugs > 0 && (
+                            <span
+                                className="inline-flex items-center gap-1.5 font-medium"
+                                style={{ color: "var(--color-danger)" }}>
+                                <span
+                                    className="size-1.5 rounded-full"
+                                    style={{
+                                        backgroundColor: "var(--color-danger)",
+                                    }}
+                                />
+                                {bugs} potential bug{bugs === 1 ? "" : "s"}
+                            </span>
+                        )}
+                        {flags > 0 && (
+                            <span className="text-[var(--text-dim)]">
+                                {bugs > 0 ? "· " : ""}
+                                {flags} flag{flags === 1 ? "" : "s"}
+                            </span>
+                        )}
+                    </>
+                )}
+            </div>
+            <div className="flex items-center gap-2.5">
+                <span className="font-mono text-xs text-[var(--text-muted)] tabular-nums">
+                    {viewed} / {total} viewed
+                </span>
+                <span
+                    className="h-1.5 w-24 overflow-hidden rounded-full bg-[var(--bg-4)]"
+                    role="progressbar"
+                    aria-valuenow={pct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}>
+                    <span
+                        className="block h-full rounded-full bg-[var(--accent)] transition-[width] duration-300"
+                        style={{ width: `${pct}%` }}
+                    />
+                </span>
+            </div>
+        </div>
+    );
+}
+
+// Newest first, the same order the PR list uses for a PR's runs.
+const runTime = (run: PullRequestExecution) =>
+    Date.parse(
+        run.automationExecution?.createdAt ||
+            run.automationExecution?.updatedAt ||
+            run.updatedAt ||
+            run.createdAt ||
+            "",
+    ) || 0;
 
 interface ReviewPageClientProps {
     repositoryId: string;
@@ -63,19 +169,63 @@ export function ReviewPageClient({
     } = usePullRequestSuggestions(repositoryId, prNumber);
 
     // Get PR metadata from executions
-    const { items: executions } = useInfinitePullRequestExecutions(
+    const {
+        items: executions,
+        data: runPages,
+        hasNextPage,
+        fetchNextPage,
+        isFetching,
+        isError: lastFetchFailed,
+    } = useInfinitePullRequestExecutions(
         {
             teamId,
             repositoryId,
             pullRequestNumber: prNumber.toString(),
         },
-        { pageSize: 1 },
+        // Every run of the PR, not just the latest: the empty state needs to
+        // know whether any of them finished clean (see effectiveReviewStatus).
+        { pageSize: 20 },
     );
 
-    const prExecution = useMemo(
-        () => executions.find((e) => e.prNumber === prNumber),
+    const prRuns = useMemo(
+        () =>
+            executions
+                .filter((e) => e.prNumber === prNumber)
+                .sort((a, b) => runTime(b) - runTime(a)),
         [executions, prNumber],
     );
+    const prExecution = prRuns[0];
+    const reviewStatus = effectiveReviewStatus(
+        prRuns.map((run) => run.automationExecution?.status),
+        hasNextPage,
+    );
+
+    // A clean run can sit past the first page on a PR with many pushes; page
+    // on just until one shows up (see shouldLoadMoreRuns).
+    const hasCleanRun = prRuns.some(
+        (run) => run.automationExecution?.status === "success",
+    );
+    const pagesLoaded = runPages?.pages.length ?? 0;
+    useEffect(() => {
+        if (
+            shouldLoadMoreRuns({
+                hasNextPage,
+                hasCleanRun,
+                isFetching,
+                lastFetchFailed,
+                pagesLoaded,
+            })
+        ) {
+            fetchNextPage();
+        }
+    }, [
+        hasNextPage,
+        hasCleanRun,
+        isFetching,
+        lastFetchFailed,
+        pagesLoaded,
+        fetchNextPage,
+    ]);
 
     // Extract repo name from suggestions or execution data
     const repoFullName =
@@ -92,27 +242,35 @@ export function ReviewPageClient({
         error: filesError,
     } = usePullRequestFiles(repositoryId, prNumber, teamId, repoName);
 
-    const fileSuggestions = suggestionsData?.data?.suggestions?.files ?? [];
-    const prLevelSuggestions =
-        suggestionsData?.data?.suggestions?.prLevel ?? [];
-    const patchFiles: PullRequestFile[] = filesData?.data?.files ?? [];
-    const commits: PullRequestCommit[] = filesData?.data?.commits ?? [];
+    // Derive these through useMemo so their reference is stable across renders
+    // while the underlying query data is unchanged. Without it, `?? []` (and
+    // the optional-chain miss during loading) hands a fresh array to every
+    // downstream memo — adaptForTryDiffViewer, buildTree, buildCohorts — on
+    // each render, defeating their memoization on a screen whose diffs are the
+    // expensive part to recompute.
+    const fileSuggestions = useMemo(
+        () => suggestionsData?.data?.suggestions?.files ?? [],
+        [suggestionsData],
+    );
+    const prLevelSuggestions = useMemo(
+        () => suggestionsData?.data?.suggestions?.prLevel ?? [],
+        [suggestionsData],
+    );
+    const patchFiles: PullRequestFile[] = useMemo(
+        () => filesData?.data?.files ?? [],
+        [filesData],
+    );
+    const commits: PullRequestCommit[] = useMemo(
+        () => filesData?.data?.commits ?? [],
+        [filesData],
+    );
     const patchFilenames = useMemo(
         () => patchFiles.map((f) => f.filename),
         [patchFiles],
     );
 
     if (suggestionsLoading) {
-        return (
-            <div className="flex h-full items-center justify-center">
-                <div className="flex flex-col items-center gap-3">
-                    <Spinner className="size-6" />
-                    <p className="text-text-tertiary text-sm">
-                        Loading suggestions...
-                    </p>
-                </div>
-            </div>
-        );
+        return <ReviewPageSkeleton />;
     }
 
     if (suggestionsError) {
@@ -136,6 +294,7 @@ export function ReviewPageClient({
             patchFilenames={patchFilenames}>
             <ReviewLayout
                 execution={prExecution}
+                reviewStatus={reviewStatus}
                 fileSuggestions={fileSuggestions}
                 prLevelSuggestions={prLevelSuggestions}
                 patchFiles={patchFiles}
@@ -153,8 +312,39 @@ export function ReviewPageClient({
     );
 }
 
+// Mirrors ReviewLayout's shell (max-w-[1600px] + file-tree / diff / sidebar
+// grid) so the page paints its structure immediately instead of a centered
+// spinner while suggestions load.
+export function ReviewPageSkeleton() {
+    return (
+        <div className="kodus-scroll h-full overflow-y-auto bg-[var(--bg)]">
+            <section className="px-6 py-6">
+                <div className="mx-auto max-w-[1600px]">
+                    <Skeleton className="mb-4 h-4 w-28" />
+                    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[280px_minmax(0,1fr)_300px]">
+                        <div className="hidden flex-col gap-2 lg:flex">
+                            {Array.from({ length: 9 }).map((_, i) => (
+                                <Skeleton key={i} className="h-6 w-full" />
+                            ))}
+                        </div>
+                        <div className="flex min-w-0 flex-col gap-4">
+                            <Skeleton className="h-16 w-full rounded-xl" />
+                            <Skeleton className="h-[60vh] w-full rounded-xl" />
+                        </div>
+                        <div className="hidden flex-col gap-3 lg:flex">
+                            <Skeleton className="h-32 w-full rounded-xl" />
+                            <Skeleton className="h-48 w-full rounded-xl" />
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    );
+}
+
 function ReviewLayout({
     execution,
+    reviewStatus,
     fileSuggestions,
     prLevelSuggestions,
     patchFiles,
@@ -166,6 +356,7 @@ function ReviewLayout({
     repositoryName,
 }: {
     execution?: PullRequestExecution;
+    reviewStatus?: ReviewRunStatus;
     fileSuggestions: any[];
     prLevelSuggestions: any[];
     patchFiles: PullRequestFile[];
@@ -178,6 +369,24 @@ function ReviewLayout({
 }) {
     const { state, dispatch, navigateFile } = useReviewStore();
     const [activeTab, setActiveTab] = useState<PrTab>("review");
+    // Folder tree vs. role-grouped cohorts. Persisted so the choice sticks
+    // across PRs. Applied AFTER mount (not in the initializer) so the server
+    // and the first client render agree on the "tree" default — reading
+    // localStorage in the initializer would diverge and trip a hydration
+    // mismatch. This one-time sync of a client-only preference is the case the
+    // set-state-in-effect heuristic doesn't cover, hence the scoped disable.
+    const [treeMode, setTreeMode] = useState<FileTreeMode>("tree");
+    useEffect(() => {
+        const saved = window.localStorage.getItem(FILE_TREE_MODE_KEY);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (saved === "grouped" || saved === "tree") setTreeMode(saved);
+    }, []);
+    const toggleTreeMode = () =>
+        setTreeMode((m) => {
+            const next = m === "tree" ? "grouped" : "tree";
+            window.localStorage.setItem(FILE_TREE_MODE_KEY, next);
+            return next;
+        });
 
     // Deep link: /pull-requests/<repo>/<num>?file=<path>&suggestion=<id>
     // Lands the user on the exact finding — scrolls to it and lights it up.
@@ -209,10 +418,73 @@ function ReviewLayout({
         [patchFiles, fileSuggestions],
     );
 
-    const suggestionCount = fileSuggestions.length + prLevelSuggestions.length;
+    // The right rail only ever holds findings on the web app (checks /
+    // reviewers / assignees / labels aren't populated here). With zero
+    // findings it collapses to a lone "Nothing to flag." box in an empty
+    // column, so drop the rail entirely and let the diff column reclaim the
+    // width — the all-clear reads off the full-width summary bar instead.
+    const hasFindings = treeIssues.length > 0;
+
+    // Orientation + signal hierarchy for the review header: how far the
+    // reviewer has gotten, and how many findings actually need attention vs.
+    // are minor. Bucketed case-insensitively so it survives severity casing.
+    const viewedCount = useMemo(
+        () => treeFiles.filter((f) => state.viewedFiles[f.path]).length,
+        [treeFiles, state.viewedFiles],
+    );
+    // ONE canonical taxonomy for every finding surface (Review-tab badge,
+    // summary bar, file tree, rail). All four derive from treeIssues — the
+    // findings actually rendered — so their totals can never disagree.
+    // bugs = critical/high, flags = everything else (medium/low), matching the
+    // rail's tier groups. PR-level suggestions aren't shown on this screen, so
+    // they no longer silently inflate the badge.
+    const bugCount = useMemo(
+        () =>
+            treeIssues.filter((i) =>
+                ["critical", "high"].includes((i.severity ?? "").toLowerCase()),
+            ).length,
+        [treeIssues],
+    );
+    const flagCount = treeIssues.length - bugCount;
+    const findingsTotal = treeIssues.length;
 
     const jumpToFile = (path: string) =>
         dispatch({ type: "SELECT_FILE", path });
+
+    // Click on a sidebar finding → land ON that suggestion (not the file top)
+    // and pulse it. Targets the `suggestion-<id>` anchor, which is keyed on the
+    // finding's own id, so it works even when the finding's file path doesn't
+    // match the diff's — the reason clicking used to do nothing. Retries a few
+    // frames while the diff finishes mounting.
+    const [activeIssueId, setActiveIssueId] = useState<string | null>(null);
+    const jumpToIssue = (issue: ReviewIssue) => {
+        if (issue.file) dispatch({ type: "SELECT_FILE", path: issue.file });
+        const targetId = issue.id
+            ? `suggestion-${issue.id}`
+            : issue.file
+              ? `file-${issue.file}`
+              : null;
+        if (issue.id) setActiveIssueId(issue.id);
+        if (!targetId) return;
+        let tries = 0;
+        const tryScroll = () => {
+            const el = document.getElementById(targetId);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                return;
+            }
+            if (tries++ < 60) requestAnimationFrame(tryScroll);
+        };
+        requestAnimationFrame(tryScroll);
+    };
+
+    // Keep the highlight in sync with the URL: navigating to (or away from) a
+    // deep-linked finding overrides a stale activeIssueId left by a prior
+    // sidebar click, so back/forward doesn't light up the wrong card.
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setActiveIssueId(deepLinkIssue ?? null);
+    }, [deepLinkIssue]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -307,8 +579,12 @@ function ReviewLayout({
                     <div
                         className={`grid grid-cols-1 gap-5 transition-[grid-template-columns] duration-200 ease-out ${
                             state.sidebarOpen
-                                ? "lg:grid-cols-[280px_minmax(0,1fr)_300px]"
-                                : "lg:grid-cols-[40px_minmax(0,1fr)_300px]"
+                                ? hasFindings
+                                    ? "lg:grid-cols-[280px_minmax(0,1fr)_300px]"
+                                    : "lg:grid-cols-[280px_minmax(0,1fr)]"
+                                : hasFindings
+                                  ? "lg:grid-cols-[40px_minmax(0,1fr)_300px]"
+                                  : "lg:grid-cols-[40px_minmax(0,1fr)]"
                         }`}>
                         {/* LEFT — file tree / collapsed rail */}
                         <aside className={stickyAside}>
@@ -320,6 +596,8 @@ function ReviewLayout({
                                     viewed={state.viewedFiles}
                                     onPick={jumpToFile}
                                     prRef={`PR #${prNumber}`}
+                                    mode={treeMode}
+                                    onToggleMode={toggleTreeMode}
                                     onHide={() =>
                                         dispatch({ type: "TOGGLE_SIDEBAR" })
                                     }
@@ -338,11 +616,21 @@ function ReviewLayout({
                         <div className="min-w-0">
                             <PrHeader
                                 pr={pr}
-                                suggestionCount={suggestionCount}
+                                suggestionCount={findingsTotal}
                                 activeTab={activeTab}
                                 onTabChange={setActiveTab}
                                 tabs={WEB_TABS}
                             />
+
+                            {activeTab === "review" && (
+                                <ReviewProgressBar
+                                    viewed={viewedCount}
+                                    total={treeFiles.length}
+                                    bugs={bugCount}
+                                    flags={flagCount}
+                                    reviewStatus={reviewStatus}
+                                />
+                            )}
 
                             {activeTab === "review" && (
                                 <ErrorBoundary FallbackComponent={PanelError}>
@@ -354,7 +642,9 @@ function ReviewLayout({
                                         prUrl={prUrl}
                                         repositoryName={repositoryName}
                                         highlightIssueId={
-                                            deepLinkIssue ?? undefined
+                                            activeIssueId ??
+                                            deepLinkIssue ??
+                                            undefined
                                         }
                                     />
                                 </ErrorBoundary>
@@ -365,17 +655,22 @@ function ReviewLayout({
                             )}
                         </div>
 
-                        {/* RIGHT — issues + PR metadata */}
-                        <aside className={stickyAside}>
-                            <ErrorBoundary FallbackComponent={PanelError}>
-                                <RightSidebar
-                                    pr={pr}
-                                    issues={treeIssues}
-                                    isCompleted
-                                    onJumpToIssue={jumpToFile}
-                                />
-                            </ErrorBoundary>
-                        </aside>
+                        {/* RIGHT — issues + PR metadata. Reserved only when
+                            there are findings to show; otherwise the column is
+                            dropped so the diff expands to fill the width. */}
+                        {hasFindings && (
+                            <aside className={stickyAside}>
+                                <ErrorBoundary FallbackComponent={PanelError}>
+                                    <RightSidebar
+                                        pr={pr}
+                                        issues={treeIssues}
+                                        isCompleted
+                                        onJumpToIssue={jumpToIssue}
+                                        activeIssueId={activeIssueId}
+                                    />
+                                </ErrorBoundary>
+                            </aside>
+                        )}
                     </div>
                 </div>
             </section>
@@ -414,7 +709,7 @@ function FileTreeRail({
                 </svg>
             </span>
             <span
-                className="font-mono text-[10px] tracking-[0.16em] text-[var(--text-dim)] uppercase transition-colors group-hover:text-[var(--text-muted)]"
+                className="text-3xs font-mono tracking-[0.16em] text-[var(--text-dim)] uppercase transition-colors group-hover:text-[var(--text-muted)]"
                 style={{
                     writingMode: "vertical-rl",
                     transform: "rotate(180deg)",

@@ -6,12 +6,12 @@ import {
 
 describe('buildFileDiffReadPlan', () => {
     it('builds a branch diff plan', () => {
-        expect(
-            buildFileDiffReadPlan('src/app.ts', { branch: 'main' }),
-        ).toEqual({
-            mode: 'single-diff',
-            args: ['main...HEAD', '--', 'src/app.ts'],
-        });
+        expect(buildFileDiffReadPlan('src/app.ts', { branch: 'main' })).toEqual(
+            {
+                mode: 'single-diff',
+                args: ['main...HEAD', '--', 'src/app.ts'],
+            },
+        );
     });
 
     it('builds a commit diff plan', () => {
@@ -24,9 +24,7 @@ describe('buildFileDiffReadPlan', () => {
     });
 
     it('builds a staged diff plan', () => {
-        expect(
-            buildFileDiffReadPlan('src/app.ts', { staged: true }),
-        ).toEqual({
+        expect(buildFileDiffReadPlan('src/app.ts', { staged: true })).toEqual({
             mode: 'single-diff',
             args: ['--cached', '--', 'src/app.ts'],
         });

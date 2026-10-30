@@ -29,7 +29,31 @@ scenarios:
     # platform, and that the review still fires. Full-tier only — it's a
     # second real review per cell, too heavy for the PR-check fast tier.
     - command-review-focus
+    # `@kody review` posted while a review ALREADY holds the PR. The
+    # inverse of command-review, which waits for the in-flight automation
+    # to settle first — that wait is right for a test and hid the fact
+    # that a colliding command was refused and never retried (#1700).
+    # Leaves auto-review ON so the collision window is minutes wide and
+    # deterministic on every provider, rather than the ~3s race that only
+    # ever fired on bitbucket (#1699). Full-tier only: a second real
+    # review per cell plus deferral backoff before it gets its turn.
+    - command-review-while-busy
     - kody-rules-create-and-apply
+    # Repo-file rule sync (customer case): .kody/rules template imported
+    # verbatim + multi-glob path enforced on a file matching the 2nd glob.
+    # github-only (needs mergePR).
+    - kody-rules-file-sync
+    - kody-rules-lifecycle
+    # Detection semantics (no review step, cheap): root AGENTS.md,
+    # nested CLAUDE.md scoped to its subdir, lowercase claude.md.
+    - rule-file-detection
+    # Cross-process event delivery: execution updates emitted in the worker
+    # must reach the API's SSE stream (CrossProcessEventsBridge).
+    - pr-execution-sse
+    # Multi-site coverage guard for the sharded kody-rules rewrite (#1449):
+    # a rule violated at several sites in one PR must be flagged at every
+    # site, not just one (the failure mode of the old agentic agent).
+    - kody-rules-coverage
     # Centralized config (config-as-code) init→sync→disable on a throwaway org.
     # github × {paid, license-paid}; skipped unless CENTRALIZED_CONFIG_TEST_REPO is set.
     - centralized-config-sync
@@ -40,6 +64,20 @@ scenarios:
     # cell on Kodus-managed keys). See fast.yml for the full rationale.
     - trial-entitlement-gate
     - trial-credits-consume
+    - kodus-credits-gate
+    #   * kodus-credits-review: the WHOLE credit loop, live — a real
+    #     Kodus-routed review on a throwaway repo, the metering sweep
+    #     journaling its spans, the ledger debited per charge, then the
+    #     balance drained so `@kody review` is blocked. It is the only cell
+    #     that can catch a metering or pricing regression (the gate cell
+    #     stops at the contract). Nightly only: ~10-25 min, one real review.
+    #     Reports SKIPPED with the exact reason unless the environment has
+    #     (a) the provider enabled for the org — API_KODUS_PROVIDER_ALPHA_ORGS
+    #     or the `kodus-provider` PostHog flag + an alpha release track,
+    #     (b) API_KODUS_PROVIDER_FIREWORKS_API_KEY (the routed models run on
+    #     it), and (c) BILLING_ADMIN_BASE_URL + BILLING_ADMIN_TOKEN, which is
+    #     how a balance is seeded without going through Stripe.
+    - kodus-credits-review
     - trial-managed-review
     # Per-seat gate: appliesTo restricts to self-hosted × github × license-paid
     # (one cell). Skipped automatically when SH_LICENSE_KEY_PATH (default
@@ -83,20 +121,45 @@ scenarios:
     # Public PR-review demo API (also in fast.yml). Anonymous, cloud-only;
     # appliesTo pins it to one cell (cloud × github × paid).
     - public-pr-demo
+    # Prior-round decision memory (#1313, also in fast.yml). github-only —
+    # needs pushFollowupCommit + listReviewCommentBodies.
+    - review-decision-memory
+    # Negative-control counterpart (also in fast.yml): memory must not
+    # over-suppress a genuinely reverted fix.
+    - review-decision-memory-revert
+    # Kody Rules path counterpart (also in fast.yml): exercises the separate
+    # rules-judge code path, not the bug/security/performance finder.
+    - review-decision-memory-kody-rules
     # Claude-on-Vertex BYOK on BOTH engines (self-hosted × github only).
     # Full-tier, not fast: needs a GCP service account + a Model-Garden-enabled
     # Claude model (real LLM cost). Each SKIPS (not fails) when its secret is
     # absent, so runners without Vertex wired stay green.
-    #   * code-review-vertex-byok: the v5 (Vercel SDK) review path. Needs
-    #     VERTEX_SA_JSON (+ optional VERTEX_REGION/VERTEX_MODEL).
-    #   * conversation-vertex-byok: the v2 (langchain) path via the legacy
-    #     conversation agent — @kody mention. Also needs CONVERSATION_USER_TOKEN
-    #     (a non-"kody/kodus" GitHub account with PR R/W on the fixture repo).
+    #   * code-review-vertex-byok: the review path (AI SDK).
+    #     Needs VERTEX_SA_JSON (+ optional VERTEX_REGION/VERTEX_MODEL).
+    #   * conversation-vertex-byok: the conversation agent (same AI SDK stack,
+    #     different routing task) — @kody mention. Also needs
+    #     CONVERSATION_USER_TOKEN (a non-"kody/kodus" GitHub account with PR
+    #     R/W on the fixture repo).
     - code-review-vertex-byok
     - conversation-vertex-byok
 
 cells:
-    # ---------- self-hosted (mirrors fast.yml) ----------
+    # ---------- self-hosted ----------
+    # NOTE: self-hosted github stays on a PAT, and that is a constraint, not a
+    # preference.
+    #
+    # A GitHub App's webhook URL is configured ONCE at App-registration level
+    # and GitHub delivers to it for every installation. Self-hosted cells boot
+    # an ephemeral droplet behind a fresh cloudflared tunnel each run, so an
+    # App would deliver events to whatever URL the App happens to point at —
+    # not to this run's stack. Making it work needs either PATCH /app/hook/config
+    # per run (which serialises every self-hosted cell onto one App) or a
+    # repo-level hook created by the installation. Until one of those exists,
+    # the PAT is the only auth mode that can receive events here.
+    #
+    # The quota pain is already halved regardless: the HARNESS drives on an App
+    # installation token (see runner.ts), so only the product's integration
+    # credential and PR authorship still spend PAT budget.
     - target: self-hosted
       provider: github
       license: license-paid
@@ -109,13 +172,18 @@ cells:
     - target: self-hosted
       provider: azure-devops
       license: license-paid
-    - target: self-hosted
-      provider: github
-      license: license-free
-
-    # ---------- cloud (mirrors fast.yml) ----------
+    # ---------- cloud ----------
+    # App on the PAID cell ONLY, and the limit is structural: GitHubAppProvider
+    # pins its whole surface to GH_APP_TEST_REPO and ignores the per-tenant
+    # repoFullName, so every github-app cell would drive the SAME repo. Four
+    # cloud tenants sharing one repo is precisely the 2026-06-03..05 incident
+    # documented in .github/workflows/e2e-cloud.yml — webhook fan-out
+    # collisions and phantom "review never started" flakes.
+    #
+    # Widening this needs one App-installed repo PER TENANT and a provider that
+    # honours it; until then the other tiers stay on PATs.
     - target: cloud
-      provider: github
+      provider: github-app
       license: paid
     - target: cloud
       provider: gitlab
@@ -132,16 +200,17 @@ cells:
     - target: cloud
       provider: github
       license: trial
-    # Community plan: post-trial tenant that configured its own LLM API
-    # key (BYOK). Free in Stripe terms but reviews still work (with the
-    # 10-rule limit). Distinct from `free` (= trial expired, no BYOK,
-    # gate blocks).
+    # Community plan: post-trial tenant that configured its own LLM API key
+    # (BYOK). Free in Stripe terms but reviews still work (with the 10-rule
+    # limit). Distinct from `free` (= trial expired, no BYOK, gate blocks).
     - target: cloud
       provider: github
       license: community-byok
-    # GitHub App (OAuth installation) variant. Same rationale as in
-    # fast.yml — covers the authenticateWithCodeOauth code path that
-    # the PAT cells don't exercise. Cloud-only.
+    # PAT canary, cloud side. Same rationale as the self-hosted one: the
+    # cloud auth path (authenticateWithToken) differs from the App path
+    # (authenticateWithCodeOauth), so both need a live check.
     - target: cloud
-      provider: github-app
+      provider: github
       license: paid
+      only:
+          - code-review-basic

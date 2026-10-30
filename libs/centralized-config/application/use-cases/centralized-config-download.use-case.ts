@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
 import { promises as fsPromises } from 'fs';
 import * as yaml from 'js-yaml';
+import { maskCliSecrets } from '@libs/code-review/domain/custom-agents/cli-secrets';
 
 import { GenerateKodusConfigFileUseCase } from '@libs/code-review/application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-parameter.use-case';
@@ -17,6 +18,7 @@ import {
 import { deepDifference, deepMerge } from '@libs/common/utils/deep';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 
+import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { KodusConfigFile } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -33,7 +35,7 @@ type FileEntry = { path: string; content: string };
 type CustomMessagesConfig = NonNullable<KodusConfigFile['customMessages']>;
 
 @Injectable()
-export class CentralizedConfigDownloadUseCase {
+export class CentralizedConfigDownloadUseCase implements IUseCase {
     private readonly logger = createLogger(
         CentralizedConfigDownloadUseCase.name,
     );
@@ -503,8 +505,7 @@ export class CentralizedConfigDownloadUseCase {
 
             for (const messageEntity of messages ?? []) {
                 const message = messageEntity?.toJson?.() as
-                    | IPullRequestMessages
-                    | undefined;
+                    IPullRequestMessages | undefined;
 
                 if (!message) {
                     continue;
@@ -653,6 +654,16 @@ export class CentralizedConfigDownloadUseCase {
         }
 
         if (
+            message.errorReviewMessage &&
+            this.hasDefinedValues(message.errorReviewMessage)
+        ) {
+            customMessages.errorReviewMessage = {
+                content: message.errorReviewMessage.content,
+                status: message.errorReviewMessage.status,
+            };
+        }
+
+        if (
             message.globalSettings &&
             this.hasDefinedValues(message.globalSettings)
         ) {
@@ -677,6 +688,10 @@ export class CentralizedConfigDownloadUseCase {
 
         if (customMessages?.endReviewMessage) {
             normalized.endReviewMessage = customMessages.endReviewMessage;
+        }
+
+        if (customMessages?.errorReviewMessage) {
+            normalized.errorReviewMessage = customMessages.errorReviewMessage;
         }
 
         if (customMessages?.globalSettings) {
@@ -830,7 +845,7 @@ export class CentralizedConfigDownloadUseCase {
             return null;
         }
 
-        return yaml.dump(configObject);
+        return yaml.dump(maskCliSecrets(configObject));
     }
 
     private parseConfigYaml(yamlString?: string): KodusConfigFile {

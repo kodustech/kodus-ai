@@ -1,0 +1,23 @@
+{
+    "name": "git-issue-ref-with-git-issues",
+    "issue": "#1941",
+    "repository": {
+        "issues": [
+            {
+                "number": 12,
+                "title": "Scale servings",
+                "body": "Let cooks change servings.\n\n- Amounts scale linearly\n- Amounts are rounded to two decimals"
+            }
+        ]
+    },
+    "gitIssuesConnected": true,
+    "trackers": [],
+    "pullRequest": {
+        "title": "feat: scale servings",
+        "body": "Closes #12"
+    },
+    "expect": {
+        "outcome": "validated",
+        "taskContains": ["rounded to two decimals"]
+    }
+}

@@ -1,3 +1,5 @@
+import { JwtModule } from '@nestjs/jwt';
+import { TeamModule } from '@libs/organization/modules/team.module';
 import { PullRequestsModule } from '@libs/code-review/modules/pull-requests.module';
 import { IssuesModule } from '@libs/issues/issues.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
@@ -6,6 +8,7 @@ import { DynamicModule, Module, Provider, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { McpController } from './controllers/mcp.controller';
 import { McpEnabledGuard } from './guards/mcp-enabled.guard';
+import { McpAuthModule } from './auth/mcp-auth.module';
 import { McpCoreModule } from './mcp-core.module';
 import { McpServerFactory } from './services/mcp-server.factory';
 import { McpServerService } from './services/mcp-server.service';
@@ -38,6 +41,9 @@ export class McpModule {
 
         if (isEnabled) {
             imports.push(
+                JwtModule,
+                McpAuthModule,
+                forwardRef(() => TeamModule),
                 forwardRef(() => PlatformModule),
                 forwardRef(() => KodyRulesModule),
                 forwardRef(() => IssuesModule),

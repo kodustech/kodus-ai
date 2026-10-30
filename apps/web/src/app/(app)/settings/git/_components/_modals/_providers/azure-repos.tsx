@@ -14,7 +14,7 @@ import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
 import { magicModal } from "@components/ui/magic-modal";
 import { useAsyncAction } from "@hooks/use-async-action";
-import { AxiosError } from "axios";
+import { setIntegrationError } from "src/core/utils/extract-error-message";
 import { Save } from "lucide-react";
 
 type Props = {
@@ -41,10 +41,7 @@ export const AzureReposModal = (props: Props) => {
                 magicModal.hide();
             } catch (error) {
                 magicModal.unlock();
-
-                if (error instanceof AxiosError && error.status === 400) {
-                    setError({ message: "Invalid organization name or token" });
-                }
+                setIntegrationError(error, setError);
             }
         },
     );

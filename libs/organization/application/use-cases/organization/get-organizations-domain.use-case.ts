@@ -27,13 +27,29 @@ export class GetOrganizationsByDomainUseCase implements IUseCase {
         private readonly organizationParametersService: IOrganizationParametersService,
     ) {}
 
-    public async execute(domain: string): Promise<Partial<IOrganization>[]> {
+    /**
+     * The result carries each organization's owner email, so a requester may
+     * only look up the domain of their own email (the one the web asks for on
+     * choose-workspace), never enumerate arbitrary domains.
+     */
+    public async execute(
+        domain: string,
+        requesterEmail: string,
+    ): Promise<Partial<IOrganization>[]> {
         try {
             if (!domain) {
                 this.logger.warn({
                     message: 'Domain is required to fetch organizations',
                     context: GetOrganizationsByDomainUseCase.name,
                 });
+                return [];
+            }
+
+            const requesterDomain = requesterEmail?.split('@')[1];
+            if (
+                !requesterDomain ||
+                domain.toLowerCase() !== requesterDomain.toLowerCase()
+            ) {
                 return [];
             }
 

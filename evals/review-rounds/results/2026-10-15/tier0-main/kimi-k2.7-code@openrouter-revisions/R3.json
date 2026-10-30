@@ -1,0 +1,727 @@
+{
+  "model": "kimi-k2.7-code@openrouter",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 4,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "53d0ebdf770e24c6841bb578c550fdf5cfc9f5fc4a717a339b1de93e7a48047d"
+  },
+  "startedAt": "2026-10-15T16:38:52.054Z",
+  "updatedAt": "2026-10-15T16:52:47.154Z",
+  "complete": true,
+  "selectedCases": [
+    "R3-consequence-status-stale"
+  ],
+  "summary": {
+    "measured": 4,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 4,
+        "violations": 1,
+        "rate": 0.25
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 4,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 8,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R3-consequence-status-stale · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 3,
+        "n": 4,
+        "delivered": 4
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 265168,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged causes pollCharge to call the non-idempotent gw.submit for charges that are already accepted but not yet settled. WHY: Gateway.submit explicitly creates a new charge on every call, so resubmitting an existing pending charge produces duplicate billings. HOW: Change pollCharge to retry/await on NotReadyError instead of resubmitting, or introduce a separate ChargeNotFoundError for 'never received' and only resubmit that.",
+          "keep": true,
+          "rationale": "fetchStatus currently re-throws NotReadyError unchanged, and pollCharge catches it and calls gw.submit(charge.payload) as a resend. gw.submit is described as creating a new charge on every call. If NotReadyError can also mean the charge is accepted but not yet settled (as the previous review decision itself described), then the resubmit path is reached for charges that should simply be awaited, producing duplicate billings. The poller comment claiming NotReadyError means 'never received' is just a comment and does not prove the gateway cannot raise it for pending charges. The failure path is concrete and the duplicate-billing consequence follows from the code.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "Revising earlier suggestion round-a-propagate: propagating NotReadyError unchanged from fetchStatus now reaches pollCharge (line 11), which catches it and calls gw.submit(charge.payload). Since gateway.ts declares submit non-idempotent, every poll tick resubmits a charge that is already held but pending, creating duplicate charges. pollCharge should not resubmit on NotReadyError; it should treat it as transient/pending and continue polling without calling submit.",
+          "keep": true,
+          "rationale": "The finding is technically correct. `fetchStatus` propagates `NotReadyError` unchanged (status.ts:8-10). `pollCharge` catches it at poller.ts:13 and calls `gw.submit(charge.payload)` at line 14. `Gateway.submit` is explicitly documented as non-idempotent: 'every call creates a new charge' (gateway.ts:3). Furthermore, `NotReadyError` is defined as 'The gateway has the charge but has not settled it yet (transient)' (errors.ts:1), so resubmitting is semantically wrong and would create duplicate pending charges on every poll tick. This is a fresh bug introduced by applying the earlier 'round-a-propagate' suggestion, not a repeat of the prior issue (which was about misclassifying NotReadyError as FailedError).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `gw.submit` is non-idempotent, letting `NotReadyError` reach `pollCharge` resubmits pending charges and creates duplicate billings. Retry or await on `NotReadyError`, or add a dedicated `ChargeNotFoundError` for never-received charges and only resubmit that."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/poller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nPropagating `NotReadyError` unchanged from `fetchStatus` to `pollCharge` (line 11) makes it call `gw.submit(charge.payload)`, and because `gateway.ts` declares `submit` non-idempotent, every poll tick duplicates an already-held pending charge. Treat `NotReadyError` as transient/pending and continue polling instead of resubmitting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 169755,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged exposes pollCharge's non-idempotent resubmit path. WHY: gw.submit is documented as creating a new charge on every call, while errors.ts defines NotReadyError as 'the gateway has the charge but has not settled it yet' (transient), so resubmitting for NotReadyError can create duplicate charges; before this change fetchStatus wrapped NotReadyError in FailedError, keeping that branch unreachable. HOW: Reconcile the NotReadyError semantics across errors.ts and poller.ts; if it truly means 'not settled yet', make pollCharge retry or re-poll instead of resubmitting, or if it means 'never received', update errors.ts and ensure callers do not resubmit idempotent charges.",
+          "keep": true,
+          "rationale": "The finding is supported by the source. errors.ts defines NotReadyError as 'the gateway has the charge but has not settled it yet (transient)', gateway.ts documents submit as 'NOT idempotent: every call creates a new charge', and poller.ts catches NotReadyError and calls gw.submit(payload) to resend. By propagating NotReadyError unchanged from fetchStatus, pollCharge's resubmit branch becomes reachable, so a 'not settled yet' state would trigger a duplicate charge. Before this change, wrapping NotReadyError in FailedError would have kept that resubmit branch unreachable. This is a different failure (duplicate charges) from the earlier review entry's failure (misclassifying transient errors as terminal), so it is not a repeat of the previous decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|FailedError",
+                "path": "src/billing",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit\\(",
+                "path": "src/billing",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged makes pollCharge call the non-idempotent gw.submit for every pending charge on every poll tick. WHY: pollCharge interprets NotReadyError as 'gateway never received it' and resubmits, but NotReadyError actually means the charge exists but is not settled yet, and gw.submit creates a new charge each time, causing duplicate charges. HOW: Introduce a separate error (e.g., MissingChargeError) for the 'never received' case and make pollCharge resubmit only on that error; keep NotReadyError as transient pending without resubmit.",
+          "keep": true,
+          "rationale": "The claim is supported by the code. errors.ts defines NotReadyError as 'the gateway has the charge but has not settled it yet (transient)', while poller.ts explicitly treats NotReadyError as 'the gateway never received it' and calls gw.submit(charge.payload) to resend. gateway.ts documents submit as 'NOT idempotent: every call creates a new charge.' Therefore, any pending charge that gw.status reports as NotReadyError will cause pollCharge to create a duplicate charge on every poll tick. This is a different failure from the previous decision (round-a-propagate), which concerned misreporting a pending charge as failed; the current issue is duplicate charge creation, a consequence of propagating NotReadyError unchanged without distinguishing the 'never received' case.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|fetchStatus|gw\\.submit",
+                "path": "src/billing",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nSince `NotReadyError` means the charge exists but is not settled yet and `gw.submit` creates a new charge on every call, letting this error propagate to `pollCharge` risks duplicate charges; previously `fetchStatus` wrapped it in `FailedError`, keeping that path unreachable. Reconcile the `NotReadyError` semantics in `errors.ts` and `poller.ts` so callers either retry/re-poll for a pending charge or resubmit only when the charge is genuinely missing."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\n`pollCharge` interprets `NotReadyError` as a missing charge and calls the non-idempotent `gw.submit` on every poll tick, but the error actually signals a pending unsettled charge, so repeated resubmission can create duplicates. Introduce a separate error such as `MissingChargeError` for the “never received” case and make `pollCharge` resubmit only on that error, leaving `NotReadyError` as a transient pending state without resubmitting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 3,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 170758,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Rethrowing NotReadyError from fetchStatus reaches pollCharge, which treats NotReadyError as 'gateway never received it' and calls the non-idempotent gw.submit. WHY: Each poll tick for a charge that is merely not settled yet will create an additional duplicate charge. HOW: Introduce a dedicated transient error (e.g., PendingError) for 'charge accepted but not settled yet' and propagate that instead, leaving NotReadyError for the 'never received' resubmit path in pollCharge.",
+          "keep": true,
+          "rationale": "The code confirms the claimed flow: fetchStatus rethrows NotReadyError from gw.status (src/billing/status.ts:8-9), and pollCharge catches NotReadyError and interprets it as 'the gateway never received it', calling the non-idempotent gw.submit (src/billing/poller.ts:13-15). The comment in pollCharge explicitly states this interpretation. If gw.status raises NotReadyError for a charge that is accepted but not yet settled, each poll tick will resubmit, creating duplicate charges. This is a different failure than the earlier 'round-a-propagate' suggestion (which complained about NotReadyError being wrapped as FailedError), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError activates pollCharge's handler, which resubmits the charge via the non-idempotent gw.submit. WHY: errors.ts defines NotReadyError as 'the gateway has the charge but has not settled it yet', so resubmitting creates duplicate charges; before this change the branch was dead code because fetchStatus always wrapped the error in FailedError. HOW: update pollCharge to retry the status check later (or return a pending state) instead of resubmitting, or introduce a separate error type for 'gateway never received it' if that semantic is truly intended.",
+          "keep": true,
+          "rationale": "The evidence confirms the claim. `errors.ts` defines `NotReadyError` as 'the gateway has the charge but has not settled it yet'. `pollCharge` in `poller.ts` catches `NotReadyError` and calls `gw.submit(charge.payload)`, and `gateway.ts` documents `submit` as 'NOT idempotent: every call creates a new charge'. Thus propagating `NotReadyError` from `fetchStatus` activates a resubmission path that will duplicate an already-held charge. The branch was previously dead because `fetchStatus` wrapped every error in `FailedError`. This is also a distinct issue from the prior review decision, which only argued for propagating the error rather than wrapping it; the current finding identifies the downstream duplicate-charge bug caused by that propagation.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|FailedError",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "path": ".",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nSince `errors.ts` defines `NotReadyError` as 'gateway has the charge but has not settled it yet', propagating it to `pollCharge` triggers the non-idempotent `gw.submit` and creates duplicate charges; before this change the branch was dead code because `fetchStatus` always wrapped it in `FailedError`. Update `pollCharge` to retry the status check later or return a pending state instead of resubmitting, or introduce a separate error type for 'gateway never received it' if that semantic is intended."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRethrowing `NotReadyError` from `fetchStatus` reaches `pollCharge`, which treats it as 'gateway never received it' and calls the non-idempotent `gw.submit`, creating an extra duplicate charge on every poll tick. Introduce a dedicated `PendingError` for 'charge accepted but not settled yet' and propagate that instead, keeping `NotReadyError` for the 'never received' resubmit path in `pollCharge`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 4,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 225133,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged from fetchStatus lets pollCharge catch it and call the non-idempotent gw.submit. WHY: errors.ts defines NotReadyError as 'the gateway has the charge but has not settled it yet', so resubmitting an already-held charge creates duplicate charge submissions. HOW: Either change pollCharge to stop resubmitting on NotReadyError, or split 'not received' from 'not settled' into distinct error types and only propagate the one whose caller should resubmit. This finding revises the earlier 'propagate NotReadyError unchanged' suggestion because making it reachable exposes the unsafe resubmit path in pollCharge.",
+          "keep": true,
+          "rationale": "The current code propagates NotReadyError unchanged from fetchStatus (lines 8-11). pollCharge then catches NotReadyError and calls gw.submit. errors.ts defines NotReadyError as 'the gateway has the charge but has not settled it yet', and gateway.ts documents submit as 'NOT idempotent: every call creates a new charge'. Therefore a 'held but not settled' charge can be resubmitted, creating a duplicate charge. This is a consequence of applying the earlier 'propagate NotReadyError' suggestion, so it is a genuine new problem rather than a repeat of the earlier entry.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit\\(",
+                "path": "src/billing",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "idempotent|submit",
+                "path": "src/billing",
+                "glob": "*.ts",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged from fetchStatus lets pollCharge catch it and call gw.submit, which Gateway documents as non-idempotent. WHY: A charge that is merely still settling will be resubmitted, creating duplicate charges and corrupt billing state. This revises the earlier 'propagate NotReadyError' suggestion because pollCharge's 'retry' is actually a destructive resubmit, not a safe poll retry. HOW: Change pollCharge so NotReadyError is re-thrown (or triggers another status poll later) instead of calling gw.submit; reserve resubmission for a distinct 'missing' error class.",
+          "keep": true,
+          "rationale": "The claim is supported by the code. src/billing/status.ts:8-10 propagates NotReadyError unchanged from gw.status. src/billing/poller.ts:13-14 catches that NotReadyError and calls gw.submit(charge.payload). src/billing/gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge.' Meanwhile src/billing/errors.ts defines NotReadyError as 'The gateway has the charge but has not settled it yet,' so the resubmit path is reached for a still-settling charge and will create a duplicate. This is a different (indeed, reversing) concern from the previous 'propagate NotReadyError' suggestion, which argued the error was being misclassified as terminal; the current finding correctly notes the propagation path leads to a destructive resubmit rather than a safe retry. No upstream guard prevents the resubmit.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|fetchStatus|NotReadyError|gw\\.submit",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit|status|idempotent|Gateway",
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "fetchStatus\\(|pollCharge\\(|NotReadyError|FailedError",
+                "path": "src"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 30,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nLetting `NotReadyError` propagate unchanged from `fetchStatus` exposes the unsafe resubmit path in `pollCharge`, which catches it and calls the non-idempotent `gw.submit`, duplicating a charge that `errors.ts` defines as already held but not yet settled. Revise the earlier 'propagate unchanged' suggestion and either stop `pollCharge` from resubmitting on `NotReadyError`, or split 'not received' from 'not settled' into distinct error types so only the missing-charge case triggers resubmission."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nPropagating `NotReadyError` unchanged from `fetchStatus` lets `pollCharge` catch it and call the non-idempotent `gw.submit`, so a charge that is merely settling is resubmitted and corrupts billing state, reversing the earlier 'propagate unchanged' suggestion because `pollCharge`'s retry is actually a destructive resubmit. Change `pollCharge` so `NotReadyError` is re-thrown or triggers another status poll later instead of calling `gw.submit`, and reserve resubmission for a distinct 'missing' error class."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

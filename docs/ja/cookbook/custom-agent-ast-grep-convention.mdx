@@ -1,0 +1,107 @@
+---
+title: "ast-grep で規約を徹底する"
+description: "ast-grep ルールでチームの規約を徹底し、すべての指摘を証明済みのマッチにするカスタムエージェント。"
+icon: "code"
+---
+
+## なぜ ast-grep か
+
+「ここでこの関数を呼ばない」「このオプションを必ず渡す」のように、構造的な規約があります。モデルはそれを見つけられますが、見落としたり、存在しない違反を想像したりもします。[ast-grep](https://ast-grep.github.io) のルールは構文木に対してマッチするので、マッチは証拠になります。実行でマッチしたルールを引用する指摘は、モデルのチェックをスキップして投稿されます。
+
+例はチェックアウトサービスで、規約は 1 つです：**金額は `Money` ヘルパーで扱う整数のセントであり、浮動小数点数にはしない。**
+
+## ステップ1 — リポジトリにルールを書く
+
+ルールファイルをデフォルトブランチにコミットします。Kodus は各プルリクエストのターゲットブランチからこれを読むため、プルリクエストが自分をチェックするルールを緩めることはできません。
+
+```yaml rules/money.yml
+id: no-parsefloat-amount
+language: typescript
+message: Parse amounts with Money.parse; parseFloat turns cents into a float.
+severity: error
+rule:
+  pattern: parseFloat($A)
+---
+id: no-tofixed-amount
+language: typescript
+message: Format amounts with Money.format; toFixed formats a float, not an amount.
+severity: error
+rule:
+  pattern: $A.toFixed($N)
+```
+
+各ルールの `message` が、コメントでルールとして引用されます。プルリクエストを読む人に向けて書いてください。
+
+パターンでは捉えられないケースのために、理由を doc にも書いておきます。
+
+```markdown docs/money.md
+# Money
+
+Amounts are integers in cents, wrapped in `Money`. Never store, add or compare an amount as a float.
+Convert at the edges only: `Money.parse` on input, `Money.format` on output.
+```
+
+## ステップ2 — エージェントを作成する
+
+**New agent → Templates → Blank** の後：
+
+```text Name
+Money handling
+```
+
+```text Instructions
+Enforce the money convention in checkout and billing code: amounts are integer cents in Money, never floats.
+
+First run the team's ast-grep rules on the changed files. Report every match as its own finding on the matched line, citing its rule.
+
+Beyond the rules, flag arithmetic or comparison on amounts held as plain numbers only when docs/money.md states the rule; quote it.
+
+Ignore tests and amounts that are not money (percentages, durations, counts).
+```
+
+| フィールド | 値 |
+| --- | --- |
+| **Files** | `src/checkout/**`, `src/billing/**` |
+| **Except** | `**/*.test.ts` |
+| **Skills & docs** | `docs/money.md`（**Add skill or doc → Add by path**） |
+
+## ステップ3 — ルールを指定する
+
+**Tools → Advanced → Structural search (ast-grep rules)** に、パスを 1 行で入力します。
+
+```text
+rules/money.yml
+```
+
+ヒントに見つかったルールが表示されます：`2 rules in rules/money.yml: no-parsefloat-amount, no-tofixed-amount`。パスの代わりに YAML をインラインで貼り付けることもできます。その場合、ルールはリポジトリではなくエージェントに保存されます。
+
+## ステップ4 — コメント
+
+| フィールド | 値 |
+| --- | --- |
+| **Format** | Inline comments |
+| **Minimum severity** | Team minimum |
+| **Suggested fix** | When confident |
+
+**Save** をクリックします。
+
+## ステップ5 — Try it
+
+価格に `parseFloat` を追加するプルリクエストで **Try it** を実行します。指摘は **kept** になり、コメントはルールを引用します。
+
+```markdown
+**Rule** (`ast-grep:no-parsefloat-amount`):
+> Parse amounts with Money.parse; parseFloat turns cents into a float.
+```
+
+エージェントが `docs/money.md` から出した指摘は doc を引用し、ターゲットブランチの doc にその引用がなければ破棄されます。
+
+## チェックリスト
+
+- [ ] ルールファイルをデフォルトブランチにコミットした
+- [ ] 各ルールに `id`、`rule`、読みやすい `message` がある
+- [ ] フィールドのヒントにすべてのルールが表示される
+- [ ] glob が規約の対象コードだけをカバーしている
+- [ ] 既知の違反を含むプルリクエストで試した
+
+フィールドの詳細は [ast-grep rules](/ja/how_to_use/code_review/custom_agents_knowledge_and_tools#ast-grep-rules) を参照してください。

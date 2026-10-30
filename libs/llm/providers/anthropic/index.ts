@@ -1,0 +1,376 @@
+/**
+ * Anthropic provider module (Phase 1, plan 01-02) — serves `anthropic` (native
+ * @ai-sdk/anthropic) and `anthropic_compatible` (Kimi Code, Z.ai, DeepSeek —
+ * same SDK, baseURL normalized to a `/v1` suffix). Reproduces byok-to-vercel.ts's
+ * ANTHROPIC / ANTHROPIC_COMPATIBLE cases.
+ */
+import type { LanguageModel } from 'ai';
+import { EFFORT_TO_BUDGET } from '../kernel/effort-budget';
+import { createAnthropic } from '@ai-sdk/anthropic';
+import { z } from 'zod';
+import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
+import {
+    anthropicReasoningConfig,
+    resolveAnthropicModelTraits,
+    supportsSamplingParams,
+} from './traits';
+import { detectModelFamily } from '../kernel/model-family';
+import { registerProvider } from '../kernel/registry';
+import { anthropicEphemeralCacheHint } from '../kernel/anthropic-cache';
+import { withThinkingSignatureRepair } from './thinking-repair';
+import { anthropicModelListing } from './listing';
+import type {
+    ModelCapabilities,
+    ProviderBuildConfig,
+    ProviderBuildOptions,
+    ProviderModule,
+    ProviderReasoningOptions,
+    ReasoningEffort,
+} from '../kernel/types';
+import type { TemperaturePolicy } from '../kernel/model-types';
+import {
+    resolveCompatibleReasoningTraits,
+    compatibleTemperaturePolicy,
+    type ModelReasoningTraits,
+    type StructuredOutputMode,
+} from '../kernel/reasoning-traits';
+import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
+import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
+import { effortFromOutputConfig } from '../kernel/override-wire-spelling';
+
+/** A real Claude id proxied over `anthropic_compatible` is still a Claude, so
+ *  its reasoning traits and temperature come from the native resolver — the
+ *  same check `reasoning()` makes. Kimi/GLM/DeepSeek ids resolve to `unknown`
+ *  (the resolver is anchored on `^claude-`) and keep the compatible table. */
+function isClaudeId(model?: string): boolean {
+    return resolveAnthropicModelTraits(model).generation !== 'unknown';
+}
+
+/** Claude families that support the newer adaptive thinking (type:'adaptive'
+ *  + effort); older families use enabled + budgetTokens. Delegates to the
+ *  single model-generation source so 4.6/4.7+/5 and the `anthropic:` /
+ *  `anthropic.` / `@date` id spellings all resolve the same way here as they
+ *  do in reasoning-options — the previous inline regex only knew 4.6–4.x and
+ *  silently mis-classified every Claude 5. */
+export const anthropicModule: ProviderModule = {
+    id: 'anthropic',
+    aliases: ['anthropic_compatible'],
+    label: 'Anthropic',
+    doc: 'https://docs.anthropic.com/en/docs/about-claude/models',
+
+    settingsSchema: z.object({ baseURL: z.string().optional() }),
+
+    capabilities(model: string): ModelCapabilities {
+        const reasoningConfig = anthropicReasoningConfig(model);
+        return {
+            supportsReasoning: !!reasoningConfig,
+            reasoningConfig,
+            // Anthropic does structured output via tool use, not a native
+            // response_format json_schema → 'none' at this tier.
+            structuredOutput: 'none',
+            toolCalling: 'native',
+            // A1 (code-verified, 03-10): @ai-sdk/anthropic sets
+            // outputTokens.reasoning = void 0 — Anthropic's Messages API `usage`
+            // reports NO separate thinking-token count (thinking is billed INTO
+            // output_tokens). So usage is 'output_only' even for extended-thinking
+            // models; supportsReasoning (above) is about REQUESTING thinking, which
+            // is a different axis from how usage is REPORTED. The D-05 conformance
+            // asserts this match against the captured fixture.
+            usageGranularity: 'output_only',
+            streaming: true,
+            promptCaching: true,
+        };
+    },
+
+    build(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): LanguageModel {
+        if ((cfg.provider as string) === 'anthropic_compatible') {
+            // @ai-sdk/anthropic appends /messages to the base, so the base must
+            // carry the /v1 suffix — normalize whatever the user pasted.
+            //
+            // Compatible upstreams (Kimi/Z.ai/DeepSeek) emit `thinking` blocks with
+            // no `signature`, which @ai-sdk/anthropic@4's schema rejects → repair the
+            // response before it parses. No-op for native Anthropic (always signed).
+            return createAnthropic({
+                apiKey: cfg.apiKey,
+                baseURL: `${anthropicCompatibleRootURL(cfg.baseURL || '')}/v1`,
+                // Compose, don't replace: a caller-supplied transport (the
+                // probe's redirect-refusing fetch) still needs the signature
+                // repair, and the repair still needs the caller's guard.
+                fetch: withThinkingSignatureRepair(opts?.fetch ?? fetch),
+                // OpenCode Go also exposes an Anthropic Messages-compatible
+                // endpoint (opencode.ai/zen/go/v1/messages) alongside its
+                // OpenAI-compatible one — the SAME `x-opencode-session`
+                // requirement the openai module works around for #1880 (see
+                // that module for the full rationale/history). Preemptive:
+                // not yet confirmed the 400 fires on this transport too, but
+                // the fix is free and shares the one exported helper pair.
+                ...(isOpenCodeGoBaseUrl(cfg.baseURL)
+                    ? {
+                          headers: {
+                              'x-opencode-session': openCodeSessionId(cfg),
+                          },
+                      }
+                    : {}),
+            })(cfg.model);
+        }
+        return createAnthropic({
+            apiKey: cfg.apiKey,
+            ...(cfg.baseURL ? { baseURL: cfg.baseURL } : {}),
+            ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+            ...(isOpenCodeGoBaseUrl(cfg.baseURL)
+                ? { headers: { 'x-opencode-session': openCodeSessionId(cfg) } }
+                : {}),
+        })(cfg.model);
+    },
+
+    reasoning(
+        cfg: ProviderBuildConfig,
+        effort: ReasoningEffort,
+    ): ProviderReasoningOptions {
+        if (effort === 'none') {
+            // "Off" must be said OUT LOUD on every model that thinks by default,
+            // or the user who picked Off still pays for thinking — and worse, a
+            // structured (forced-tool_choice) call 400s with "tool_choice
+            // 'required' is incompatible with thinking enabled".
+            //
+            // anthropic_compatible: the compatible THINKING models (Kimi K2.5/K2.6,
+            // GLM ≤5.2, DeepSeek) enable thinking by DEFAULT and accept
+            // `{ type: 'disabled' }` — omitting it leaves thinking ON (the PR#144-146
+            // Kody-Rules failure). But the ALWAYS-thinking ones (Kimi k2.7-code/k3,
+            // GLM-5.3) expose NO disable and would REJECT the field — for those,
+            // omitting IS the only "off". Decide per model via the shared traits.
+            // A real Claude id proxied here keeps its own rule (below).
+            if (
+                (cfg.provider as string) === 'anthropic_compatible' &&
+                !isClaudeId(cfg.model)
+            ) {
+                return resolveCompatibleReasoningTraits(cfg.model)
+                    .canDisableThinking
+                    ? { anthropic: { thinking: { type: 'disabled' } } }
+                    : {};
+            }
+            // Native Anthropic: only the adaptive generation both thinks-by-default
+            // AND accepts `disabled`; legacy models don't think unasked and
+            // Fable/Mythos reject `disabled` (400) — for those, omitting IS "off".
+            const traits = resolveAnthropicModelTraits(cfg.model);
+            return traits.thinkingShape === 'adaptive' &&
+                traits.canDisableThinking
+                ? { anthropic: { thinking: { type: 'disabled' } } }
+                : {};
+        }
+
+        const budget: ProviderReasoningOptions = {
+            anthropic: {
+                thinking: {
+                    type: 'enabled',
+                    budgetTokens: EFFORT_TO_BUDGET[effort],
+                },
+            },
+        };
+
+        // Compatible endpoints hosting a NON-Claude brand (Kimi/Z.ai/DeepSeek)
+        // never implement adaptive thinking → budget. The id is what decides,
+        // NOT the transport: a real Claude proxied over this endpoint is handled
+        // just below, because 4.7+ reject the budget shape outright.
+        //
+        // KNOWN CAVEAT (k3 / GLM-5.3): the newest generations control reasoning
+        // with a TOP-LEVEL `reasoning_effort` (low/high/max), NOT a thinking
+        // budget — and that param isn't expressible through the anthropic
+        // providerOptions namespace this transport uses. It's non-blocking: these
+        // models ALWAYS reason (canDisableThinking=false), a structured call on
+        // them REROUTES to json (no reasoning param sent to force a tool), and a
+        // finder call gets a budget hint they simply ignore. A faithful
+        // reasoning_effort needs the /v1 (OpenAI) transport, where the openai
+        // module now emits it from the same trait table (`effortScale`). Three
+        // production slots run a bare `k3` id, so this caveat is live, not
+        // hypothetical.
+        if ((cfg.provider as string) === 'anthropic_compatible') {
+            // An 'effort-only' brand (MiniMax) has no `thinking` object, and its
+            // `reasoning_effort` is a TOP-LEVEL field this transport's
+            // providerOptions namespace cannot express — the same limit as the
+            // k3 / GLM-5.3 caveat above. So send nothing rather than a field the
+            // model does not have: it keeps the brand's own default (medium)
+            // instead of risking a rejected body. The faithful effort needs the
+            // OpenAI transport, where the openai module now emits it.
+            if (
+                resolveCompatibleReasoningTraits(cfg.model)
+                    .reasoningControl === 'effort-only'
+            ) {
+                return {};
+            }
+            // A REAL Claude id proxied over a compatible endpoint is still a
+            // Claude, and the id says so. Claude 4.7 / 4.8 / Opus 5 / Sonnet 5 /
+            // Fable / Mythos REJECT `thinking:{type:'enabled'}` with a 400 - so
+            // the blanket budget shape below is a guaranteed failure for them.
+            // The generation resolver is anchored on `^claude-`, so a Kimi/GLM/
+            // DeepSeek id can never reach this branch and still gets `budget`.
+            const claude = resolveAnthropicModelTraits(cfg.model);
+            if (claude.thinkingShape === 'adaptive') {
+                return {
+                    anthropic: { thinking: { type: 'adaptive' }, effort },
+                };
+            }
+            // `budget` is for the compatible brands that DO implement the legacy
+            // Anthropic thinking shape — Kimi, GLM, DeepSeek all declare it. An
+            // id we cannot confirm reasons must not receive it: MiniMax M3 was
+            // reaching here (its table validates a toggle for M2 and explicitly
+            // declines to for M3) and going out with a fabricated
+            // `thinking:{type:'enabled',budgetTokens:40000}` — a field invented
+            // for a brand, on the transport four production slots use, and a
+            // 400 waiting to happen. Same rule the native branch below already
+            // applies to an unidentified id: omit rather than gamble.
+            // `budget` is right when SOMETHING confirms the model reasons in
+            // this shape: either the id is a Claude generation that takes the
+            // budget form (a real Claude proxied over a compatible endpoint is
+            // still a Claude), or the compatible family table declares the
+            // brand a thinker — Kimi, GLM and DeepSeek all do.
+            //
+            // Withheld only for a RECOGNIZED family whose table declined to
+            // declare THIS version a thinker. That is a decision: MiniMax
+            // validates `reasoning_effort` for M2 and explicitly does not for
+            // M3, so emitting a budget there invents a field for a brand that
+            // said no. An UNRECOGNIZED id is ignorance, not a decision, and the
+            // traits file documents the way out of it — "a user who DOES want
+            // thinking on their custom model sets the slot effort explicitly".
+            // Reaching here means they did, so a self-hosted vLLM or a custom
+            // proxy still gets the budget it asked for.
+            //
+            // `thinksByDefault` alone cannot tell those apart: M3 and a plain
+            // Llama both carry false, and so does `reasoningControl` — both
+            // undefined. The FAMILY is the only thing that separates a table
+            // that declined from a table that has no entry.
+            if (
+                claude.thinkingShape === 'none' &&
+                detectModelFamily(cfg.model) !== 'unknown' &&
+                !resolveCompatibleReasoningTraits(cfg.model).thinksByDefault
+            ) {
+                return {};
+            }
+            return budget;
+        }
+
+        // Native Anthropic: send the shape the model actually accepts. Claude
+        // 4.7+/5 REJECT budgetTokens (hard 400), so an UNIDENTIFIED id — the
+        // code-review loop passes an agent name, or nothing — must OMIT the
+        // config rather than gamble on budget and 400 the entire review.
+        switch (resolveAnthropicModelTraits(cfg.model).thinkingShape) {
+            case 'adaptive':
+                return {
+                    anthropic: { thinking: { type: 'adaptive' }, effort },
+                };
+            case 'budget':
+                return budget;
+            default:
+                return {};
+        }
+    },
+
+    // Per-model reasoning facts — native Claude from its own trait resolver;
+    // anthropic_compatible (Kimi/GLM/DeepSeek/unknown) from the shared table.
+    reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits {
+        if (
+            (cfg.provider as string) === 'anthropic_compatible' &&
+            !isClaudeId(cfg.model)
+        ) {
+            return resolveCompatibleReasoningTraits(cfg.model);
+        }
+        const t = resolveAnthropicModelTraits(cfg.model);
+        // Only the adaptive generation (4.6+, 5.x, Fable/Mythos) thinks by default;
+        // budget (3.7–4.5) and unknown do not. Native Claude always speaks the
+        // tool-use protocol and rejects a forced tool_choice while thinking.
+        return {
+            thinksByDefault: t.thinkingShape === 'adaptive',
+            canDisableThinking: t.canDisableThinking,
+            supportsForcedToolChoice: true,
+            forcedToolChoiceRejectsThinking: true,
+        };
+    },
+
+    // The anthropic protocol (native AND anthropic_compatible endpoints) accepts
+    // an ephemeral cacheControl on the system message → the long static system
+    // prompt is written to cache once and read on every subsequent loop step. A
+    // compatible upstream that doesn't honor it ignores the namespace (no-op).
+    systemCacheControl(): Record<string, unknown> {
+        return anthropicEphemeralCacheHint();
+    },
+
+    // ── Phase 3: real usage extraction (D-01 / Q4) ──────────────────────────
+    // Consumes the ai@7 generateText result's high-level LanguageModelUsage (the
+    // same shape observability.service.ts reads): inputTokens/outputTokens are
+    // numbers, reasoning is nested under outputTokenDetails.reasoningTokens (ai@7)
+    // with a flat reasoningTokens fallback (ai@6). A1 (code-verified): the
+    // @ai-sdk/anthropic adapter never populates reasoning (outputTokens.reasoning =
+    // void 0), so this reads 0 for native anthropic — the generic reader is kept so
+    // an anthropic-compatible upstream that DOES surface a split still works. output
+    // is the FULL completion count and is NEVER reduced by reasoning (Q4 double-count
+    // trap: reasoning is additive info only).
+    // The WIRE answer: the Anthropic protocol has no response_format at all —
+    // a structured call carries the schema on the protocol's own channel
+    // (`output_config`, or a forced tool definition), so the model is told the
+    // shape either way. Same for every brand built on this transport (Kimi over
+    // `anthropic_compatible`, Z.ai/GLM).
+    structuredOutputPolicy(_cfg: ProviderBuildConfig): StructuredOutputMode {
+        return 'none';
+    },
+
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
+        // `anthropic_compatible` upstreams (Kimi/Z.ai/DeepSeek) implement the legacy
+        // shape and ACCEPT temperature — but the always-thinking ones (Kimi
+        // k2.7-code/k3, GLM-5.3) reason UNCONDITIONALLY, and the Anthropic protocol
+        // pins temperature to 1 while thinking, so 1 is their only sound value.
+        // Disable-able ones (Kimi k2.6, DeepSeek) keep a free temperature.
+        if (
+            (cfg.provider as string) === 'anthropic_compatible' &&
+            !isClaudeId(cfg.model)
+        ) {
+            return compatibleTemperaturePolicy(cfg.model, cfg.reasoningEffort);
+        }
+        // Real Anthropic: 4.7+ REJECT temperature (a 400); older accept it. Native
+        // thinking models don't need a pin — they withhold temperature outright.
+        return supportsSamplingParams(true, cfg.model)
+            ? { kind: 'adjustable' }
+            : { kind: 'unsupported' };
+    },
+
+    normalizeUsage: normalizeSdkUsage,
+    normalize: normalizeSdkResult,
+
+    uiFields: [
+        {
+            key: 'apiKey',
+            label: 'API key',
+            type: 'password',
+            required: true,
+            scope: 'top',
+        },
+        {
+            key: 'baseURL',
+            label: 'Base URL',
+            type: 'url',
+            required: false,
+            scope: 'top',
+        },
+    ],
+    providerOptionsNamespace: () => 'anthropic',
+    // The adapter renders `output_config.effort` from `effort` and strips the
+    // `output_config` spelling Anthropic's own API docs show.
+    normalizeReasoningOverride: (_ns, options) =>
+        effortFromOutputConfig(options),
+    // Native Anthropic accepts the adaptive thinking shape (the form every Claude
+    // 4.6+ takes); an anthropic_compatible upstream isn't the brand, so it falls
+    // back to the generic enabled-thinking example (undefined here).
+    reasoningOverrideExample: (id) =>
+        id === 'anthropic_compatible'
+            ? // Kimi/Z.ai/DeepSeek over the Anthropic protocol implement the
+              // LEGACY thinking shape (type:enabled + a token budget), never the
+              // native adaptive+effort — so the example must carry budgetTokens or
+              // it 400s ("thinking.budget_tokens: required"). See `reasoning()`.
+              '{\n  "thinking": { "type": "enabled", "budgetTokens": 20000 }\n}'
+            : '{\n  "thinking": { "type": "adaptive" },\n  "effort": "high"\n}',
+    modelListing: anthropicModelListing,
+};
+
+registerProvider(anthropicModule);

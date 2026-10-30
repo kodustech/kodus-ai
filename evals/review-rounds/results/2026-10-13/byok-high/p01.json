@@ -1,0 +1,3594 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "high",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:33:51.931Z",
+  "updatedAt": "2026-10-13T23:08:29.138Z",
+  "complete": true,
+  "selectedCases": [
+    "P01-rule-skip-comment-incomplete",
+    "P01-rule-skip-comment-incomplete-control",
+    "P02-rule-screenshot-mask-still-missing",
+    "P02-rule-screenshot-mask-still-missing-control",
+    "P03-rule-nested-config-unguarded-after-reformat",
+    "P03-rule-nested-config-unguarded-after-reformat-control",
+    "P04-rule-local-path-doc-reworded",
+    "P04-rule-local-path-doc-reworded-control",
+    "P05-rule-local-path-fixture-touched",
+    "P05-rule-local-path-fixture-touched-control",
+    "P06-rule-cli-exit-code-weak-assertion",
+    "P06-rule-cli-exit-code-weak-assertion-control"
+  ],
+  "summary": {
+    "measured": 58,
+    "infra": 2,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 28,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 80,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 82,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P01-rule-skip-comment-incomplete · skip-comment-repeat [not_deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 0
+      },
+      "P01-rule-skip-comment-incomplete-control · skip-comment-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P02-rule-screenshot-mask-still-missing · screenshot-mask-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P02-rule-screenshot-mask-still-missing · screenshot-mask-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P02-rule-screenshot-mask-still-missing-control · screenshot-mask-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P02-rule-screenshot-mask-still-missing-control · screenshot-mask-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P03-rule-nested-config-unguarded-after-reformat · nested-config-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P03-rule-nested-config-unguarded-after-reformat · nested-config-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P03-rule-nested-config-unguarded-after-reformat-control · nested-config-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P03-rule-nested-config-unguarded-after-reformat-control · nested-config-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P04-rule-local-path-doc-reworded · local-path-doc-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P04-rule-local-path-doc-reworded · local-path-doc-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P04-rule-local-path-doc-reworded-control · local-path-doc-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P04-rule-local-path-doc-reworded-control · local-path-doc-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P05-rule-local-path-fixture-touched-control · local-path-fixture-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P05-rule-local-path-fixture-touched-control · local-path-fixture-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P06-rule-cli-exit-code-weak-assertion · cli-exit-code-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P06-rule-cli-exit-code-weak-assertion · cli-exit-code-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P06-rule-cli-exit-code-weak-assertion-control · cli-exit-code-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P06-rule-cli-exit-code-weak-assertion-control · cli-exit-code-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 212614,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 221738,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 4,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The bare `2` in `src/shipping/address.schema.ts` violates the magic-number rule and makes the country-code length hard to update consistently. Extract `const COUNTRY_CODE_LENGTH = 2;` above the schema and use it in `.length(...)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P01-rule-skip-comment-incomplete",
+      "error": "INFRA: Kody Rules were not fully evaluated: KODY_RULES_PARTIAL: 1 of 2 Kody Rules check(s) failed to run; the rules on them were not applied"
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 221575,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P01-rule-skip-comment-incomplete",
+      "error": "INFRA: Kody Rules were not fully evaluated: KODY_RULES_PARTIAL: 1 of 2 Kody Rules check(s) failed to run; the rules on them were not applied"
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P01-rule-skip-comment-incomplete-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 129737,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "The `// early exit` comment at the `pickupPoint` return does not state which inputs skip which checks or that every other input is validated, leaving the skipped validation undocumented at the return. Replace it with `// pickupPoint=true skips the postal-code pattern check; every other input is validated below.` so the behavior is explicit."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/shipping/address.schema.ts",
+          "line": 6,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The numeric literal `2` for the ISO-3166 alpha-2 country-code length is used directly in the address validation logic instead of a named constant. Add `const COUNTRY_CODE_LENGTH = 2;` above `addressSchema` and use `z.string().length(COUNTRY_CODE_LENGTH)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P01-rule-skip-comment-incomplete-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 50762,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "The `// early exit` comment inside `superRefine` doesn't say which inputs skip which checks or that all others are validated, so readers can't tell that pickup-point orders intentionally bypass the postal-code pattern check while every other country/postal code is still validated. Replace it with a comment that names the skipping condition and asserts the remaining inputs are validated, e.g. `// pickupPoint = true skips the postal-code pattern check; every other input is validated below.`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P01-rule-skip-comment-incomplete-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 58837,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "The `// early exit` comment in `superRefine` doesn't explain that `pickupPoint` inputs skip the `POSTAL_PATTERNS` check while every other input is validated, which Rule 21 requires it to state. Replace that comment with one that spells out this distinction (see `improvedCode`)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P01-rule-skip-comment-incomplete-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 58376,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "The `// early exit` comment in the `superRefine` validator does not state which inputs skip which checks, violating Rule 21. Replace it with a comment naming the skipped postal-code pattern test and `pickupPoint === true` as the input that skips it, and noting that all other inputs are validated below."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P01-rule-skip-comment-incomplete-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 60795,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "The `// early exit` comment on the early return for `pickupPoint` addresses does not say which inputs skip which checks or that every other input is validated, so readers may not realize the postal-code pattern check is deliberately bypassed only when `pickupPoint` is true. Per rule 21, replace it with a comment that states `pickupPoint` addresses skip the postal-code pattern check and every other input is validated below."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 206270,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "This snapshot is unstable because the drawer's author card contains an avatar and relative timestamps that vary between runs, so the test will flake without masking. Pass `mask: dynamicMasks(page)` to the `toHaveScreenshot('feed-drawer.png')` assertion as the collapsed-feed and empty-state tests do."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 94679,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "Because the entry drawer renders the author card with relative timestamps and avatars, this screenshot will differ between runs and flake, violating the rule \"Mask dynamic content in screenshot assertions\". Pass `{ mask: dynamicMasks(page) }` as the options argument to `toHaveScreenshot`, as the collapsed-feed and empty-state tests already do."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33981,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "Because the entry drawer renders the author card with an avatar and relative timestamps and no `mask` is passed, the snapshot differs between runs and the test will flake, violating the \"Mask dynamic content in screenshot assertions\" rule. Pass `{ mask: dynamicMasks(page) }` to `toHaveScreenshot`, as the collapsed-feed and empty-state tests already do."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 49134,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "Because the entry drawer renders the author card with avatars and relative timestamps, taking the screenshot without `mask: dynamicMasks(page)` violates the \"Mask dynamic content in screenshot assertions\" rule and makes the snapshot differ between runs, causing flakes. Pass `{ mask: dynamicMasks(page) }` to `toHaveScreenshot`, as the collapsed-feed and empty-state tests already do."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P02-rule-screenshot-mask-still-missing",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35531,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "Because the entry drawer renders the author card with avatars and relative timestamps, `feed-drawer.png` will differ between runs and the test will flake. Pass `mask: dynamicMasks(page)` to the drawer's `toHaveScreenshot`, as the collapsed-feed and empty-state assertions already do."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P02-rule-screenshot-mask-still-missing-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 23199,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "Relative timestamps and avatars in the expanded feed's 12 entries are captured as-is, so the baseline will flake between runs. Add `mask: dynamicMasks(page)` alongside `fullPage` in the screenshot assertion."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "The drawer's author card renders an avatar and relative timestamps, so this assertion will differ between runs. Pass the mask as the second argument: `{ mask: dynamicMasks(page) }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P02-rule-screenshot-mask-still-missing-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 25521,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "Because `toHaveScreenshot` on line 19 omits `mask: dynamicMasks(page)`, the relative timestamps and avatars in `feed-expanded.png` differ between runs, violating rule [1] and causing the visual test to flake. Add `mask: dynamicMasks(page)` to the existing options object while keeping `fullPage`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "Since the drawer `toHaveScreenshot` on line 31 has no options, `mask: dynamicMasks(page)` is not applied and the avatar and relative timestamps in `feed-drawer.png` change between runs, violating rule [1] and making the test flaky. Pass `mask: dynamicMasks(page)` as an option to that assertion."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P02-rule-screenshot-mask-still-missing-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 15729,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "The `feed-expanded.png` assertion omits the dynamic mask required by rule [1], so relative timestamps and avatars will differ between runs and flake. Add `mask: dynamicMasks(page)` to the options object alongside `fullPage: true`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "Passing no options leaves the drawer's author card avatar and relative timestamps unmasked, so this snapshot is not deterministic across runs. Pass an options object with `mask: dynamicMasks(page)` as the second argument to `toHaveScreenshot`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P02-rule-screenshot-mask-still-missing-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 19278,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "Without `mask: dynamicMasks(page)` the expanded feed snapshot includes relative timestamps and avatars, so it differs between runs and the visual test flakes. Add `mask: dynamicMasks(page)` alongside `fullPage` in the options object, since `dynamicMasks` is already imported on line 2."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "The drawer shows the author card with an avatar and relative timestamps, so this snapshot will differ between runs and flake without masking. Pass `{ mask: dynamicMasks(page) }` as the second argument to `toHaveScreenshot`, since `dynamicMasks` is already imported on line 2."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P02-rule-screenshot-mask-still-missing-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 52073,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 19,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "The `toHaveScreenshot` call for `feed-expanded.png` passes only `fullPage` and no `mask`, so relative timestamps and avatars are captured as-is and the baseline will flake between runs. Pass `mask: dynamicMasks(page)` alongside `fullPage` in the same options object (the helper is already imported at the top of the file)."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "e2e/visual/activity-feed.spec.ts",
+          "line": 31,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-visual-mask-dynamic"
+          ],
+          "marked": false,
+          "text": "Because the drawer screenshot assertion has no options object at all, no `mask` is applied and the author card's avatar/timestamp will differ between runs. Add `{ mask: dynamicMasks(page) }` as the second argument to `toHaveScreenshot` (the helper is already imported at the top of the file)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "screenshot-mask-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "screenshot-mask-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 127161,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "When `:integrations` or `:pagerduty` is absent from a workspace config, `escalate` raises `NoMethodError` before the pager is triggered because it chains `[]` on optional keys. Read the routing key with `@workspace.config.dig(:integrations, :pagerduty, :routing_key)`, the same safe pattern `send_hour` uses for `:schedule`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 259466,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "Escalating a critical digest in a workspace without PagerDuty configured raises `NoMethodError` (`nil[:pagerduty]` or `nil[:routing_key]`) instead of paging, because `:integrations` and each provider hash under it are optional. Read the value with `dig`, as `send_hour` already does for the digest hour: `@workspace.config.dig(:integrations, :pagerduty, :routing_key)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 55994,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "Integration settings are optional, so a workspace with no `:integrations` key or no PagerDuty configuration has `nil` at `[:integrations]` or `[:pagerduty]`, making `escalate` raise `NoMethodError` and preventing the critical digest page from firing. Read the routing key with `@workspace.config.dig(:integrations, :pagerduty, :routing_key)` instead of chained `[]` access."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 79209,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "When a workspace has no `:integrations` entry or no `:pagerduty` configuration, `@workspace.config[:integrations][:pagerduty][:routing_key]` raises `NoMethodError` in `escalate` before any page is sent. Read the key with `dig`, e.g. `@workspace.config.dig(:integrations, :pagerduty, :routing_key)`, and skip the trigger when it is nil, as `call` does for the Slack channel."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P03-rule-nested-config-unguarded-after-reformat",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 63927,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "Because `:integrations`, the `:pagerduty` hash, and `:routing_key` are optional, a workspace that has not configured PagerDuty gets `nil` at one of those levels, causing `escalate` to raise `NoMethodError` on every critical digest. Read the key with `dig`, as `send_hour` already does: `@workspace.config.dig(:integrations, :pagerduty, :routing_key)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P03-rule-nested-config-unguarded-after-reformat-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 65856,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 19,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "Because the `:integrations`, `:slack` and `:channel` keys are all optional, chaining `[]` raises `NoMethodError` (e.g. `nil[:slack]`) for any workspace without Slack configured, so the `return if slack_channel.nil?` guard never gets a chance to run. Read the whole path with `@workspace.config.dig(:integrations, :slack, :channel)`, which returns nil at the first missing level."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "Since PagerDuty routing is optional, the chained `[]` raises `NoMethodError` (`nil[:pagerduty]`) for any workspace without it, breaking `escalate` before the `@pager.trigger` call. Use `routing_key = @workspace.config.dig(:integrations, :pagerduty, :routing_key)` to read the optional path safely, and consider returning early when it is nil."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P03-rule-nested-config-unguarded-after-reformat-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 41197,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "If `:integrations` or `:slack` is missing, the `[]` chain raises `NoMethodError` (e.g. `nil[:channel]`) before the `return if slack_channel.nil?` guard on the next line can run, so the intended \"no Slack configured\" path crashes instead of returning. Read the value with `@workspace.config.dig(:integrations, :slack, :channel)` so every missing level yields `nil` and the existing guard works as intended."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "When `:integrations` or `:pagerduty` is absent, this line raises `NoMethodError` on `nil` instead of simply not escalating, so a critical digest can fail to dispatch. Use `@workspace.config.dig(:integrations, :pagerduty, :routing_key)` so every missing level yields `nil`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P03-rule-nested-config-unguarded-after-reformat-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 29024,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 19,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "A workspace with no Slack integration raises `NoMethodError` when `[:slack]` is called on a nil `config[:integrations]`, breaking the digest dispatch. Read the channel with `@workspace.config.dig(:integrations, :slack, :channel)` so a missing level yields nil and the `return if slack_channel.nil?` guard skips the Slack post cleanly."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "A workspace missing an `:integrations` entry or a `:pagerduty` hash raises `NoMethodError` on `[:routing_key]` for every critical digest. Read it with `@workspace.config.dig(:integrations, :pagerduty, :routing_key)` so an absent level returns nil and escalation can be guarded instead of crashing."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P03-rule-nested-config-unguarded-after-reformat-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 46171,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 19,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "Any workspace without a Slack integration raises `NoMethodError` (`nil[:channel]`) because the optional `:integrations`, `:slack` and `:channel` keys are chained through three levels of `[]`. Read the setting with `@workspace.config.dig(:integrations, :slack, :channel)`, which returns nil as soon as a level is missing and is already handled by the existing `return if slack_channel.nil?` guard."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "Escalating a critical digest raises `NoMethodError` for any workspace that has not configured `:integrations`, `:pagerduty`, or `:routing_key`, since this optional config is chained with `[]`. Use `@workspace.config.dig(:integrations, :pagerduty, :routing_key)` so a missing setting yields nil, and guard the nil before triggering the pager if a key is required."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P03-rule-nested-config-unguarded-after-reformat-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 39985,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 19,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "Because `:integrations`, `:slack`, and `:channel` may each be missing, the chained `[]` raises `NoMethodError` as soon as a workspace has no Slack integration, crashing the digest send. Read it with `@workspace.config.dig(:integrations, :slack, :channel)`, which returns nil for missing levels and is already handled by the `return if slack_channel.nil?` guard."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "app/services/notifications/digest_dispatcher.rb",
+          "line": 32,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-optional-integration-settings"
+          ],
+          "marked": false,
+          "text": "Since `config[:integrations]` is optional and may lack a `:pagerduty` hash or `:routing_key`, this chained `[]` raises `NoMethodError` on nil for any workspace without PagerDuty configured, breaking escalation. Use `@workspace.config.dig(:integrations, :pagerduty, :routing_key)` so a missing level yields nil instead of an exception."
+        }
+      ],
+      "claims": [
+        {
+          "id": "nested-config-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "nested-config-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 72240,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The new troubleshooting bullet points at `/Users/dev/tmp/replay-dlq.log`, an absolute path under a developer's home directory that violates the rule against local machine paths in committed files and only exists on the author's machine, so whoever is on call cannot find it to attach to the incident. Replace it with a location that exists on any host, such as `/tmp/replay-dlq.log`, or state that the script writes its log to a path configured by a setting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 73212,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "On-call engineers won't have `/Users/dev/tmp/` (or any `/Users/dev` directory), so when a batch fails twice they cannot find the log file the step tells them to attach, violating the rule against local machine paths in committed files. Point at a location every reader can resolve, such as `${TMPDIR:-/tmp}/replay-dlq.log` or a repository-relative path like the other commands using `scripts/dlq-stats.sh`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 123195,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `/Users/dev/tmp/replay-dlq.log` exists only on one developer's machine, whoever is on call cannot find or attach the log this runbook tells them to send, violating \"No local machine paths in committed files\". Replace the hardcoded path with a repository-relative path, a temporary path such as `$TMPDIR/replay-dlq.log`, or a documented setting, and keep it consistent with where `scripts/replay-dlq.sh` writes the log."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 69607,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Nobody else has that directory, so when a batch fails twice the log cannot be found or attached, violating the no-local-machine-paths rule. Point at a temporary directory instead, such as `/tmp/replay-dlq.log` or `${TMPDIR:-/tmp}/replay-dlq.log`, and have the replay script write there or read the location from a setting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 287173,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The instruction to attach `/Users/dev/tmp/replay-dlq.log` cannot be followed by anyone else because that absolute path is from one developer's machine and violates \"No local machine paths in committed files\". Reference a temporary directory or setting instead, such as `${TMPDIR:-/tmp}/replay-dlq.log`, or describe the log location generically."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P04-rule-local-path-doc-reworded-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 34093,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Anyone following the runbook outside that developer's machine gets a \"no such file\" error because their checkout is not under `/Users/dev/...`. Since the preceding sentence already says \"From the repository root\", use the repository-relative `scripts/replay-dlq.sh` as the other commands in this file do."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "On any other host the reader will not find the log to attach to the incident. Refer to a temporary directory or a configurable setting instead, such as `$TMPDIR/replay-dlq.log`, and adjust the script's log location to match."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P04-rule-local-path-doc-reworded-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 24153,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Anyone following the runbook on another machine or in CI cannot use a hard-coded developer path such as `/Users/dev/code/ledger/scripts/replay-dlq.sh`. Reference the script with the repository-relative path `scripts/replay-dlq.sh`, as the other commands in this file do (the surrounding text already says to run it from the repository root)."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "A reader on another machine cannot find the log at the hard-coded absolute path `/Users/dev/tmp/replay-dlq.log`. Describe it as a temporary log file such as `$TMPDIR/replay-dlq.log` or a repository-relative path instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P04-rule-local-path-doc-reworded-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 43490,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Embedding `/Users/dev/code/ledger/scripts/replay-dlq.sh` in a committed doc breaks the runbook on every other machine and leaks a local username. Because the instructions already say to run from the repository root, reference the script repo-relatively, consistent with the other commands in this file (`scripts/dlq-stats.sh`, `scripts/broker-login.sh`)."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The troubleshooting section points at `/Users/dev/tmp/replay-dlq.log`, an absolute path from one developer's machine, so the log location is wrong for anyone else following the runbook. Use a portable temporary location such as `/tmp/replay-dlq.log` (or a path relative to the repository root)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P04-rule-local-path-doc-reworded-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 25905,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "That absolute path will not exist on any other machine and leaks a local directory layout. Since the instruction already says \"From the repository root\", use the repository-relative path `scripts/replay-dlq.sh` instead."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "This absolute path is meaningless for anyone else following the runbook. Reference the script's temporary log location instead, e.g. `${TMPDIR:-/tmp}/replay-dlq.log`, so the instructions work on any machine."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P04-rule-local-path-doc-reworded-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 38502,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The documented command fails for every reader because `/Users/dev/code/ledger` exists only on the author's machine. Since the same paragraph already says \"From the repository root\", reference the script repository-relative as `scripts/replay-dlq.sh`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The instruction to attach that file cannot be followed by anyone else, because `/Users/dev/tmp/replay-dlq.log` exists only on the author's laptop. Reference a temporary directory such as `$TMPDIR/replay-dlq.log`, or state that the script prints its log location."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44192,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The `settings` fixture hard-codes `archive_dir` to `/Users/dev/billing-archive`, an absolute path that exists only on one developer machine, so any test reading or writing the archive directory fails in CI and for every other developer and violates the rule \"No local machine paths in committed files\". Add `tmp_path` to the `settings` fixture signature and set `archive_dir=str(tmp_path / \"billing-archive\")`, or point it at a repository-relative path built from `Path(__file__).parent`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 170231,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Any code that archives imported files through these settings will fail or write to an unrelated location when the suite runs in CI or on another checkout, since `/Users/dev/billing-archive` exists only on one machine. Add `tmp_path` to the `settings` fixture signature and set `archive_dir=str(tmp_path / \"billing-archive\")`, or use a repository-relative path such as `str(FIXTURES.parent / \"billing-archive\")`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 63538,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Hardcoding `/Users/dev/billing-archive` means the directory exists only on one developer's machine, so any test that archives invoices will fail or write outside the repository on CI and for other developers, breaking the no-local-paths rule. Make the `settings` fixture accept `tmp_path` and set `archive_dir` to `str(tmp_path / \"billing-archive\")`, or build a repo-relative path from `FIXTURES` as the other fixtures do."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 131394,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Hard-coding `archive_dir` to `/Users/dev/billing-archive` makes tests that exercise archiving fail or write to the wrong location in CI and on other developers' machines. Change the `settings` fixture to accept `tmp_path` via `def settings(tmp_path):` and point `archive_dir` at `tmp_path / \"billing-archive\"` (or another repository-relative/temp location), matching the other fixture paths."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 184244,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The `settings` fixture's hardcoded `archive_dir=\"/Users/dev/billing-archive\"` is an absolute `/Users/<name>/...` path from a developer machine, so it violates the rule No local machine paths in committed files and the importer's archive step will fail or write somewhere unexpected on CI and for other developers. Change the fixture signature from `def settings():` to `def settings(tmp_path):` and set `archive_dir=str(tmp_path / \"billing-archive\")` (a repo-relative path built from `FIXTURES` also works if the archive must be inspected by the test)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P05-rule-local-path-fixture-touched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 38865,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `SAMPLE_EXPORT` points at `/Users/dev/Downloads/invoices-2026-09.csv`, `sample_rows` raises FileNotFoundError for every other developer and on CI, and the committed absolute path leaks a personal directory layout into the repository. Store the sample export in the repository's fixtures directory and build the path relative to the test file (e.g. `SAMPLE_EXPORT = FIXTURES / \"invoices-2026-09.csv\"`, committing that fixture file), generate it in a temp directory inside the fixture, or read a machine-specific override from an environment variable or setting instead of embedding an absolute path."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "With `archive_dir=\"/Users/dev/billing-archive\"`, tests that write archives fail or pollute a directory that exists only on one machine, so CI and other contributors cannot run the suite unchanged. Use a repository-relative path or a temporary directory, either by giving the fixture pytest's `tmp_path` (`def settings(tmp_path):` with `archive_dir=str(tmp_path / \"billing-archive\")`) or by pointing at a relative build directory such as `archive_dir=\"build/billing-archive\"`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P05-rule-local-path-fixture-touched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 75866,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The `sample_rows` fixture raises `FileNotFoundError` on any other machine or CI because the path does not exist there, and the committed file leaks a developer's home directory. Point the constant at a repository-relative location such as the existing `FIXTURES` directory (`SAMPLE_EXPORT = FIXTURES / \"invoices-2026-09.csv\"`) and commit the sample export there, or expose the export location through `Settings` instead of hard-coding it."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The importer fails or writes outside the test sandbox everywhere except the author's laptop, and the committed file leaks a local home directory. Use a temporary or repository-relative path by taking pytest's `tmp_path` in the fixture (`def settings(tmp_path):`) and setting `archive_dir=str(tmp_path / \"billing-archive\")`, or make it configurable via `Settings` or an environment variable."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P05-rule-local-path-fixture-touched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 89027,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because the rule 'No local machine paths in committed files' forbids absolute paths such as `/Users/<name>/...`, `SAMPLE_EXPORT` pointing at `/Users/dev/Downloads/invoices-2026-09.csv` makes the test work only on that developer's Mac, fail in CI or for other contributors, and bakes a local username into the repo. Commit the sample export as a repository fixture such as `tests/fixtures/invoices-2026-09.csv` and build the path relative to the module so it resolves the same for everyone."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because the rule 'No local machine paths in committed files' forbids absolute paths from a developer machine such as `/Users/<name>/...`, the settings fixture hard-coding `archive_dir` to `/Users/dev/billing-archive` makes the importer read or write an archive directory that exists only on that machine, so the tests break elsewhere. Change the fixture to accept pytest's `tmp_path` (`def settings(tmp_path):`) and set `archive_dir` to `str(tmp_path / \"billing-archive\")`, or use a repository-relative or configurable setting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P05-rule-local-path-fixture-touched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 31220,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The hardcoded developer-machine path `/Users/dev/Downloads/...` in `tests/conftest.py` makes the fixture work only on that one machine and fail on CI and for every other contributor. Point it at a repository-relative location by resolving the sample export under the existing `FIXTURES` directory (`FIXTURES = Path(__file__).parent / \"fixtures\"`), or use pytest's `tmp_path` if the data must be generated at runtime."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The absolute `archive_dir` path `/Users/dev/billing-archive` does not exist on CI or other developer checkouts, so any test exercising the archive fails or writes outside the project. Add `tmp_path` to the `settings` fixture signature (`def settings(tmp_path):`) and pass `str(tmp_path / \"billing-archive\")`, or fall back to a repository-relative path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P05-rule-local-path-fixture-touched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 54403,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `SAMPLE_EXPORT` points at `/Users/dev/Downloads/invoices-2026-09.csv`, the `sample_rows` fixture breaks on CI and on every machine but the developer's. Commit the CSV under `tests/fixtures` and reference it repository-relatively with `SAMPLE_EXPORT = FIXTURES / \"invoices-2026-09.csv\"`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Passing `/Users/dev/billing-archive` into `Settings` leaves the archive directory bogus on any other machine. Give the fixture the `tmp_path` argument (`def settings(tmp_path):`) and set `archive_dir=str(tmp_path / \"billing-archive\")`, or fall back to a repository-relative directory such as `billing-archive`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 142107,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 25,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Because the test only checks that `stdout` contains `'failed'` and never asserts the exit code, a `validate` run that prints the message but exits 0 for a manifest with duplicate names would keep this test green and let CI accept the invalid manifest. Add an exact exit code assertion of `1` for a validation failure alongside the `stdout` check, per the rule \"CLI tests assert the exit code\"."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 140973,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 25,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "If `validate` reports the duplicate but exits 0, this test stays green while pipelines running `validate` would accept the broken manifest, because it only checks `stdout` for `'failed'` and never asserts the exit code as required by the CLI-test rule. Assert the exact exit code next to the message check, e.g. `expect(result.exitCode).toBe(1);`, matching the code used for other validation failures."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 179600,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "The duplicate-name test in `test/cli/validate.test.ts` checks only that `stdout` contains 'failed' against the rule that CLI tests assert the exit code, so if the CLI prints that message but exits 0 the test stays green and a pipeline running `validate` would accept a manifest with duplicate names. Assert the exact exit code alongside the message check, using the code the CLI actually returns for a validation failure, for example `expect(result.exitCode).toBe(1);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 78320,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "The duplicate-name test only checks that `stdout` contains \"failed\", so if the CLI prints the message but exits 0, a broken manifest can slip through CI despite the rule that CLI tests assert the exit code. Assert the exact exit code alongside the message check, e.g. `expect(result.exitCode).toBe(1)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 203270,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 25,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Because the test only checks that stdout contains 'failed', a manifest with duplicate entry names could exit 0 and still pass CI. Assert the exact exit code with `expect(result.exitCode).toBe(1)` alongside the message check, as the other cases in this file do."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P06-rule-cli-exit-code-weak-assertion-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 54177,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Rule [1] requires pinning the process exit status because the non-zero code is the contract consumers rely on, so a run that prints `error` but exits 0 or with an unexpected code would still pass this test. Add `expect(result.exitCode).toBe(1);` (replacing `1` with the actual documented code for validation failures) before the `stderr` assertions, keeping the message checks as secondary assertions."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Rule [1] requires the exact exit code in every CLI test, but without an assertion a duplicate-name manifest that prints `failed` but exits 0 or with a different status than the CLI documents would pass, leaving the failure contract untested. Add `expect(result.exitCode).toBe(1);` using the real exit code for a duplicate-name manifest before the `stdout` assertion, keeping the message check as a supplementary assertion."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P06-rule-cli-exit-code-weak-assertion-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 47822,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 13,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "A crash or wrong exit status could still print these words, so the test passes even when the CLI fails incorrectly. Add an exact exit-code assertion such as `expect(result.exitCode).toBe(1);` alongside the message checks, using the exit code the validate command actually returns for a schema violation."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 25,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "A substring check on stdout passes even when the CLI exits with the wrong status. Add `expect(result.exitCode).toBe(1);`, the exact exit code the duplicate-name failure produces, in addition to the output check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P06-rule-cli-exit-code-weak-assertion-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 50850,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Because this test only greps `stderr` for `'error'` and `'unknown field \"colour\"'` without checking `result.exitCode`, a regression that changes the exit code for validation failures would go unnoticed. Add `expect(result.exitCode).toBe(1);` (using whatever code the CLI actually returns for a validation failure) before the stderr assertions."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Because this test only checks that `stdout` contains `'failed'` without asserting `result.exitCode`, the duplicate-name failure path can pass even when the command exits 0 or with an unexpected status. Add `expect(result.exitCode).toBe(1);` (matching the CLI's actual code for this failure) alongside the stdout check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P06-rule-cli-exit-code-weak-assertion-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 62088,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 12,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Because the test only checks that `stderr` contains `'error'` and `'unknown field \"colour\"'`, it passes even if the CLI exits with the wrong status such as `0`. Add an exact exit-code assertion, such as `expect(result.exitCode).toBe(1)` for a validation failure, using the CLI's documented exit code for this case."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 24,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Because the test only checks that `stdout` contains `'failed'`, it passes even if the CLI exits `0`. Add an exact exit-code assertion, such as `expect(result.exitCode).toBe(1)` for the duplicate-name validation failure, using the CLI's documented exit code for this case."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P06-rule-cli-exit-code-weak-assertion-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 62577,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Substring checks alone would still pass if the CLI exited 0 or crashed after printing those words, so this test cannot catch a regression in the process exit status. Add `expect(result.exitCode).toBe(1)` immediately after the `runCli` call, confirming that code against the CLI contract."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 24,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "A word match on stdout is not sufficient because a passing message could be printed while the process exits with the wrong code, so a regression in the CLI's exit status would go undetected. Add `expect(result.exitCode).toBe(1)` right after the `runCli` call, confirming that code against the CLI contract."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

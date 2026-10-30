@@ -1,0 +1,577 @@
+{
+  "model": "kimi-k2.7-code@openrouter",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "132199b01626ae41e00492d534f84a759d83f954",
+    "sourceDigest": "57647ba521db87a00603e893daa4e6eb7bece36b09f22dfd1fa79783726b7de6"
+  },
+  "startedAt": "2026-10-15T16:21:24.693Z",
+  "updatedAt": "2026-10-15T16:30:48.558Z",
+  "complete": true,
+  "selectedCases": [
+    "R8-consequence-kody-rule-prior",
+    "K7-rule-repost-prod-profile",
+    "P22-rule-forward-parsed-pingpong"
+  ],
+  "casesSourceDigest": "86b7ff2e8a5db76dae3f7ed3df899f9e989d3763af9b9704b7cadc032db3d9c4",
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 4,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 1,
+        "violations": 1,
+        "rate": 1
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 6,
+        "violations": 1,
+        "rate": 0.167
+      },
+      "index-reference (#2039)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 2,
+        "delivered": 1
+      },
+      "K7-rule-repost-prod-profile · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "K7-rule-repost-prod-profile · dayKey-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P22-rule-forward-parsed-pingpong · create-order-raw-body-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P22-rule-forward-parsed-pingpong · cancel-order-raw-body-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.8,
+    "floor": null,
+    "baseline": null
+  },
+  "runs": 2,
+  "tokens": {
+    "in": 271641,
+    "out": 37285,
+    "cacheRead": 220160,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 6
+  },
+  "cases": [
+    {
+      "id": "R8-consequence-kody-rule-prior",
+      "checks": "resubmit-double-charge: posted and linked",
+      "hits": 0,
+      "total": 2,
+      "detail": [
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "id": "K7-rule-repost-prod-profile",
+      "checks": "rangeLabel-start-repeat: not posted; dayKey-new-site: posted",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P22-rule-forward-parsed-pingpong",
+      "checks": "Ping-pong on one function: an early comment asked to forward the raw input, a later Kody Rule comment asked to forward only the validated data (stored implemented); the developer forwards the raw object again; 40 earlier comments",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        },
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 60338,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 180459,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError from fetchStatus activates pollCharge's resubmit branch, which calls the non-idempotent gw.submit. WHY: errors.ts defines NotReadyError as 'the gateway has the charge but has not settled it yet', so resubmitting creates duplicate charges every time a charge is still pending settlement. HOW: In pollCharge, do not resubmit on NotReadyError; retry the status check or wait for the next tick, and only resubmit when the error semantics truly mean the charge was never received.",
+          "keep": true,
+          "rationale": "The finding identifies a real, distinct bug. errors.ts defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', but poller.ts catches NotReadyError and calls gw.submit(charge.payload) to resend it, with a comment claiming NotReadyError means 'the gateway never received it'. Because the gateway already has the charge, resubmitting is unsafe and will duplicate charges. This is a consequence of the earlier change (propagating NotReadyError unchanged from fetchStatus), not the same problem the previous decision addressed. The prior decision only fixed fetchStatus converting retryable NotReadyError into terminal FailedError; it did not address pollCharge's misinterpretation of NotReadyError and its non-idempotent resubmit.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "path": "src/billing",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `NotReadyError` means the gateway already holds the charge but has not settled it, propagating it from `fetchStatus` into `pollCharge`'s resubmit path causes `gw.submit` to create a duplicate charge whenever settlement is still pending. In `pollCharge`, treat `NotReadyError` as a pending state and retry the status check or wait for the next tick instead of resubmitting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 71851,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Rule [18] forbids deriving a calendar day from `at.toISOString().slice(0, 10)`, because for users west of UTC it returns the previous day. Use `formatLocalDate(at)` in the new `dayKey` function so the key stays consistent with local calendar dates."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 57305,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Using `dayKey = at.toISOString().slice(0, 10)` treats the timestamp as UTC and violates rule [18], so local dates west of UTC map to the previous day. Derive the calendar day with `formatLocalDate(at)` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 96268,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "The handler validates `req.body` with `CancelOrderSchema` but then publishes the raw `req.body` to the event bus, forwarding any extra fields the client sent. After validating, pass only the parsed `result.data` so downstream consumers receive exactly the checked fields."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 91333,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Publishing raw `req.body` after `CancelOrderSchema` validation lets extra or unvalidated fields reach downstream services and violates Rule [21]. Pass `result.data` to `bus.publish` instead of `req.body`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

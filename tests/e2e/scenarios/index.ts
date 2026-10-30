@@ -2,16 +2,31 @@ import type { Scenario } from '../lib/types.js';
 import centralizedConfigSync from './centralized-config-sync.js';
 import cockpitAnalytics from './cockpit-analytics.js';
 import codeReviewBasic from './code-review-basic.js';
+import conditionalApprovalProvider from './conditional-approval-provider.js';
 import codeReviewVertexByok from './code-review-vertex-byok.js';
+import crossRepoConfig from './cross-repo-config.js';
 import conversationVertexByok from './conversation-vertex-byok.js';
 import conversationAnthropicByok from './conversation-anthropic-byok.js';
+import conversationImplicitReply from './conversation-implicit-reply.js';
 import commandReview from './command-review.js';
 import commandReviewFocus from './command-review-focus.js';
+import commandReviewWhileBusy from './command-review-while-busy.js';
+import kodusCreditsGate from './kodus-credits-gate.js';
+import kodusCreditsReview from './kodus-credits-review.js';
 import kodyRulesCreateAndApply from './kody-rules.js';
+import kodyRulesFileSync from './kody-rules-file-sync.js';
+import kodyRulesLifecycle from './kody-rules-lifecycle.js';
+import ruleFileDetection from './rule-file-detection.js';
+import kodyRulesCoverage from './kody-rules-coverage.js';
 import licenseAttribution from './license-attribution.js';
 import onboardingWebhookRegistration from './onboarding-webhook-registration.js';
+import finishOnboardingSlo from './finish-onboarding-slo.js';
 import perSeatLicenseToggle from './per-seat-license-toggle.js';
+import prExecutionSse from './pr-execution-sse.js';
 import publicPrDemo from './public-pr-demo.js';
+import reviewDecisionMemory from './review-decision-memory.js';
+import reviewDecisionMemoryRevert from './review-decision-memory-revert.js';
+import reviewDecisionMemoryKodyRules from './review-decision-memory-kody-rules.js';
 import rbacAuthorization from './rbac-authorization.js';
 import rbacFrontendRoutes from './rbac-frontend-routes.js';
 import rbacUiRender from './rbac-ui-render.js';
@@ -25,24 +40,39 @@ import upgradeNMinusOneToN from './upgrade.js';
 
 export const allScenarios: Record<string, Scenario> = {
     [onboardingWebhookRegistration.id]: onboardingWebhookRegistration,
+    [finishOnboardingSlo.id]: finishOnboardingSlo,
     [codeReviewBasic.id]: codeReviewBasic,
+    [conditionalApprovalProvider.id]: conditionalApprovalProvider,
     [codeReviewVertexByok.id]: codeReviewVertexByok,
+    [crossRepoConfig.id]: crossRepoConfig,
     [conversationVertexByok.id]: conversationVertexByok,
     [conversationAnthropicByok.id]: conversationAnthropicByok,
+    [conversationImplicitReply.id]: conversationImplicitReply,
     [centralizedConfigSync.id]: centralizedConfigSync,
     [commandReview.id]: commandReview,
     [commandReviewFocus.id]: commandReviewFocus,
+    [commandReviewWhileBusy.id]: commandReviewWhileBusy,
     [cockpitAnalytics.id]: cockpitAnalytics,
     [kodyRulesCreateAndApply.id]: kodyRulesCreateAndApply,
+    [kodyRulesFileSync.id]: kodyRulesFileSync,
+    [kodyRulesLifecycle.id]: kodyRulesLifecycle,
+    [ruleFileDetection.id]: ruleFileDetection,
+    [kodyRulesCoverage.id]: kodyRulesCoverage,
     [licenseAttribution.id]: licenseAttribution,
     [perSeatLicenseToggle.id]: perSeatLicenseToggle,
+    [prExecutionSse.id]: prExecutionSse,
     [publicPrDemo.id]: publicPrDemo,
+    [reviewDecisionMemory.id]: reviewDecisionMemory,
+    [reviewDecisionMemoryRevert.id]: reviewDecisionMemoryRevert,
+    [reviewDecisionMemoryKodyRules.id]: reviewDecisionMemoryKodyRules,
     [rbacAuthorization.id]: rbacAuthorization,
     [rbacFrontendRoutes.id]: rbacFrontendRoutes,
     [rbacUiRender.id]: rbacUiRender,
     [ssoCookieDomain.id]: ssoCookieDomain,
     [ssoMultiUser.id]: ssoMultiUser,
     [stripeBilling.id]: stripeBilling,
+    [kodusCreditsGate.id]: kodusCreditsGate,
+    [kodusCreditsReview.id]: kodusCreditsReview,
     [trialCreditsConsume.id]: trialCreditsConsume,
     [trialEntitlementGate.id]: trialEntitlementGate,
     [trialManagedReview.id]: trialManagedReview,
@@ -66,13 +96,21 @@ export {
     cockpitAnalytics,
     codeReviewBasic,
     codeReviewVertexByok,
+    crossRepoConfig,
     conversationVertexByok,
     commandReview,
     commandReviewFocus,
+    commandReviewWhileBusy,
     kodyRulesCreateAndApply,
+    kodyRulesFileSync,
+    kodyRulesLifecycle,
+    ruleFileDetection,
+    kodyRulesCoverage,
     licenseAttribution,
     onboardingWebhookRegistration,
+    finishOnboardingSlo,
     perSeatLicenseToggle,
+    prExecutionSse,
     publicPrDemo,
     rbacAuthorization,
     rbacFrontendRoutes,
@@ -80,6 +118,8 @@ export {
     ssoCookieDomain,
     ssoMultiUser,
     stripeBilling,
+    kodusCreditsGate,
+    kodusCreditsReview,
     trialCreditsConsume,
     trialEntitlementGate,
     trialManagedReview,

@@ -1,0 +1,97 @@
+{
+    "name": "jira-community-reads-the-issue-not-its-watchers",
+    "issue": "#1884",
+    "trackers": [
+        {
+            "integrationId": "int-jira-community",
+            "appName": "Jira (mcp-atlassian)",
+            "provider": "custom",
+            "category": null,
+            "responseShape": "jira_community",
+            "tools": [
+                {
+                    "name": "jira_get_issue_watchers",
+                    "kind": "get",
+                    "idArg": "issue_key",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "issue_key": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["issue_key"]
+                    }
+                },
+                {
+                    "name": "jira_get_issue_dates",
+                    "kind": "get",
+                    "idArg": "issue_key",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "issue_key": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["issue_key"]
+                    }
+                },
+                {
+                    "name": "jira_get_issue",
+                    "kind": "get",
+                    "idArg": "issue_key",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "issue_key": {
+                                "type": "string"
+                            },
+                            "fields": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["issue_key"]
+                    }
+                },
+                {
+                    "name": "jira_search",
+                    "kind": "list",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "jql": {
+                                "type": "string"
+                            }
+                        },
+                        "required": ["jql"]
+                    }
+                }
+            ],
+            "extraWriteTools": ["jira_create_issue", "jira_update_issue"],
+            "tasks": [
+                {
+                    "id": "REC-7",
+                    "title": "Scale servings",
+                    "description": "Cooks change servings and see amounts recalculated.",
+                    "acceptanceCriteria": [
+                        "Amounts are rounded to two decimals",
+                        "Servings below 1 are rejected"
+                    ]
+                }
+            ]
+        }
+    ],
+    "pullRequest": {
+        "title": "feat(REC-7): scale servings",
+        "body": ""
+    },
+    "expect": {
+        "outcome": "validated",
+        "taskContains": [
+            "Amounts are rounded to two decimals",
+            "Servings below 1 are rejected"
+        ],
+        "toolsCalled": ["jira_get_issue"]
+    }
+}

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
 import { getIntegrationConfig } from "@services/integrations/integrationConfig/fetch";
+import { getWebhookCreationFailures } from "@services/codeManagement/webhookCreationFailures";
 import { getConnections } from "@services/setup/fetch";
 import { ErrorCard } from "src/core/components/ui/error-card";
 import {
@@ -13,7 +14,10 @@ import {
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
 import { getCurrentPathnameOnServerComponents } from "src/core/utils/headers";
 import { safeArray } from "src/core/utils/safe-array";
-import { getOrganizationMembers } from "src/features/ee/subscription/_services/billing/fetch";
+import {
+    getOrganizationMembers,
+    MEMBERS_UNAVAILABLE,
+} from "src/features/ee/subscription/_services/billing/fetch";
 import { getAutoLicenseAssignmentConfig } from "src/lib/services/organizationParameters/fetch";
 
 import { GitProviders } from "./_components/_providers";
@@ -33,7 +37,11 @@ export default async function GitSettings() {
     > = undefined;
     let organizationMembersRaw: Awaited<
         ReturnType<typeof getOrganizationMembers>
-    > = [];
+    > = MEMBERS_UNAVAILABLE;
+    let webhookFailures: Awaited<
+        ReturnType<typeof getWebhookCreationFailures>
+    > = {};
+    let webhookFailuresUnavailable = false;
     let connectionsError = false;
 
     try {
@@ -42,11 +50,22 @@ export default async function GitSettings() {
             connectedRepositories,
             autoLicenseAssignmentConfig,
             organizationMembersRaw,
+            webhookFailures,
         ] = await Promise.all([
             getConnections(teamId),
             getIntegrationConfig({ teamId }),
             getAutoLicenseAssignmentConfig().catch(() => undefined),
-            getOrganizationMembers({ teamId }).catch(() => []),
+            getOrganizationMembers({ teamId }).catch(() => MEMBERS_UNAVAILABLE),
+            // Ancillary read: left unguarded it would reject the whole batch
+            // and blank the connections and repositories that loaded fine,
+            // because those are only assigned by the destructuring. So it is
+            // guarded -- but NOT with an empty payload, which reads as the
+            // healthy "this team has no webhook failures": the table is told
+            // the status could not be loaded instead (#2003 review).
+            getWebhookCreationFailures(teamId).catch(() => {
+                webhookFailuresUnavailable = true;
+                return {};
+            }),
         ]);
     } catch (err) {
         console.error("[GitSettings] error fetching data:", err);
@@ -55,18 +74,19 @@ export default async function GitSettings() {
 
     const connections = safeArray(connectionsResult);
 
-    const organizationMembers = Array.isArray(organizationMembersRaw)
-        ? organizationMembersRaw.map((member) => {
-              const normalizedName =
-                  member.name?.trim() ||
-                  member.displayName?.trim() ||
-                  member.username?.trim() ||
-                  member.login?.trim() ||
-                  "Unknown member";
+    const organizationMembers =
+        organizationMembersRaw.status === "ok"
+            ? organizationMembersRaw.members.map((member) => {
+                  const normalizedName =
+                      member.name?.trim() ||
+                      member.displayName?.trim() ||
+                      member.username?.trim() ||
+                      member.login?.trim() ||
+                      "Unknown member";
 
-              return { id: member.id.toString(), name: normalizedName };
-          })
-        : [];
+                  return { id: member.id.toString(), name: normalizedName };
+              })
+            : [];
 
     const gitConnection = connections.find(
         (c) => c.category === "CODE_MANAGEMENT",
@@ -91,7 +111,13 @@ export default async function GitSettings() {
     return (
         <Page.Root>
             <Page.Header>
-                <Page.Title>Git Settings</Page.Title>
+                <Page.TitleContainer>
+                    <Page.Title>Repositories</Page.Title>
+                    <Page.Description>
+                        Which repositories Kody reviews, and which pull request
+                        authors it includes or skips.
+                    </Page.Description>
+                </Page.TitleContainer>
 
                 {gitConnection && (
                     <Page.HeaderActions>
@@ -129,6 +155,10 @@ export default async function GitSettings() {
                             <GitRepositoriesTable
                                 platformName={gitConnection.platformName}
                                 repositories={connectedRepositories}
+                                webhookFailures={webhookFailures}
+                                webhookFailuresUnavailable={
+                                    webhookFailuresUnavailable
+                                }
                             />
                         ) : (
                             <GitProviders />

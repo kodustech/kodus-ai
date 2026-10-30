@@ -46,6 +46,13 @@ export interface CliSessionClassifiedDecision {
     confidence?: number;
     evidence?: string[];
     autoPromoteCandidate?: boolean;
+    /**
+     * Repo-relative paths (or directory prefixes) the decision applies to.
+     * This is what makes the lookup path-keyed rather than semantic.
+     */
+    scope?: string[];
+    /** Human correction: a pinned decision always makes the context pack. */
+    pinned?: boolean;
 }
 
 export interface CliSessionCaptureSubmissionResult {

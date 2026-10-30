@@ -11,7 +11,7 @@
 # env on the container does nothing.
 
 # 1) Builder stage: install all deps and build
-FROM docker.io/library/node:22.22.2-slim AS builder
+FROM docker.io/library/node:22.23.4-slim AS builder
 WORKDIR /usr/src/app
 
 ARG RELEASE_VERSION=local
@@ -40,7 +40,7 @@ COPY . .
 RUN yarn build
 
 # 2) Production stage: only the final artifacts
-FROM docker.io/library/node:22.22.2-slim AS production
+FROM docker.io/library/node:22.23.4-slim AS production
 
 # curl for container/LB health checks against /health.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=private \

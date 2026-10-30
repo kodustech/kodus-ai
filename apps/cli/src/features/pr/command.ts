@@ -121,8 +121,9 @@ async function prSuggestionsAction(
             ? validateHttpUrl(options.prUrl, '--pr-url')
             : undefined;
 
-        const allowedSeverities: readonly (Severity | 'high' | 'medium' | 'low')[] =
-            ['info', 'warning', 'error', 'critical', 'high', 'medium', 'low'];
+        const allowedSeverities: readonly (
+            Severity | 'high' | 'medium' | 'low'
+        )[] = ['info', 'warning', 'error', 'critical', 'high', 'medium', 'low'];
         const allowedCategories: readonly (IssueCategory | 'documentation')[] =
             [
                 'security_vulnerability',
@@ -248,6 +249,10 @@ async function businessValidationAction(
 ): Promise<void> {
     const spinner = ora();
     const globalOpts = cmd.optsWithGlobals() as GlobalOptions;
+    const ctx = createCommandContext('pr business-validation', globalOpts);
+    // An agent reads the structured verdict: per requirement, its state,
+    // evidence and the change to make.
+    const structured = ctx.isAgent || globalOpts.format === 'json';
 
     try {
         if (options.taskUrl && options.taskId) {
@@ -277,6 +282,29 @@ async function businessValidationAction(
             diff,
         };
 
+        if (options.dryRun && structured) {
+            const dryRun = { dryRun: true, payload };
+            if (ctx.isAgent) {
+                await emitAgentEnvelope(
+                    buildAgentSuccessEnvelope(
+                        ctx.command,
+                        dryRun,
+                        ctx.startedAt,
+                    ),
+                    ctx.outputFile,
+                );
+            } else if (globalOpts.output) {
+                await fs.writeFile(
+                    globalOpts.output,
+                    JSON.stringify(dryRun, null, 2),
+                    'utf-8',
+                );
+            } else {
+                process.stdout.write(`${JSON.stringify(dryRun, null, 2)}\n`);
+            }
+            return;
+        }
+
         if (options.dryRun) {
             cliInfo(
                 chalk.cyan(
@@ -287,11 +315,38 @@ async function businessValidationAction(
             return;
         }
 
-        if (!globalOpts.quiet) {
+        if (!globalOpts.quiet && !structured) {
             spinner.start(chalk.cyan('Running business validation...'));
         }
 
         const response = await reviewService.triggerBusinessValidation(payload);
+
+        if (structured) {
+            const verdict = {
+                command: response.command,
+                repository: response.repositoryName,
+                task: response.taskReference,
+                ...(response.verdict ?? { result: response.result }),
+            };
+            if (ctx.isAgent) {
+                await emitAgentEnvelope(
+                    buildAgentSuccessEnvelope(
+                        ctx.command,
+                        verdict,
+                        ctx.startedAt,
+                    ),
+                    ctx.outputFile,
+                );
+                return;
+            }
+            const output = JSON.stringify(verdict, null, 2);
+            if (globalOpts.output) {
+                await fs.writeFile(globalOpts.output, output, 'utf-8');
+            } else {
+                process.stdout.write(`${output}\n`);
+            }
+            return;
+        }
 
         if (!globalOpts.quiet) {
             spinner.succeed(chalk.green('Business validation completed.'));
@@ -308,7 +363,24 @@ async function businessValidationAction(
         cliInfo('');
         cliInfo(response.result);
     } catch (error) {
-        if (!globalOpts.quiet) {
+        if (ctx.isAgent) {
+            const normalized = normalizeCommandError(error);
+            await emitAgentEnvelope(
+                buildAgentErrorEnvelope(
+                    ctx.command,
+                    {
+                        code: normalized.code,
+                        message: normalized.message,
+                        details: normalized.details,
+                    },
+                    ctx.startedAt,
+                ),
+                ctx.outputFile,
+            );
+            exitWithCode(normalized.exitCode > 0 ? normalized.exitCode : 1);
+        }
+
+        if (!globalOpts.quiet && !structured) {
             spinner.fail(chalk.red('Failed to trigger business validation'));
         }
 

@@ -1,10 +1,9 @@
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
     CrossFileContextSnippet,
     RemoteCommands,
 } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
-import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     DocumentationContextItem,
@@ -42,15 +41,6 @@ export interface ISuggestionService {
         prNumber?: number,
     ): Promise<any>;
 
-    /**
-     * Removes suggestions related to files that already have saved suggestions
-     */
-    removeSuggestionsRelatedToSavedFiles(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: string,
-        savedSuggestions: Partial<CodeSuggestion>[],
-        newSuggestions: Partial<CodeSuggestion>[],
-    ): Promise<Partial<CodeSuggestion>[]>;
 
     /**
      * Filters suggestions by review options configured by the user
@@ -80,7 +70,7 @@ export interface ISuggestionService {
         suggestions: Partial<CodeSuggestion>[],
         languageResultPrompt: string,
         reviewMode: ReviewModeResponse,
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedModel,
         crossFileSnippets?: CrossFileContextSnippet[],
         remoteCommands?: RemoteCommands,
         memories?: Array<Partial<IKodyRule>>,
@@ -179,7 +169,7 @@ export interface ISuggestionService {
         codeSuggestions: Partial<CodeSuggestion>[],
         selectedCategories: ReviewOptions,
         codeReviewVersion?: CodeReviewVersion,
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<Partial<CodeSuggestion>[]>;
 
     /**
@@ -190,7 +180,7 @@ export interface ISuggestionService {
         suggestionControl: SuggestionControlConfig,
         prNumber: number,
         suggestions: Partial<CodeSuggestion>[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<{
         prioritizedSuggestions: Partial<CodeSuggestion>[];
         discardedSuggestionsBySeverityOrQuantity: Partial<CodeSuggestion>[];
@@ -305,7 +295,6 @@ export interface ISuggestionService {
         repository: Partial<Repository>;
         prNumber: number;
         platformType: PlatformType;
-        dryRun?: CodeReviewPipelineContext['dryRun'];
     }): Promise<void>;
 }
 

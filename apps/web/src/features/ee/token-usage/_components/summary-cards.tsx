@@ -1,18 +1,12 @@
 import { Button } from "@components/ui/button";
-import { Card } from "@components/ui/card";
+import { Card, CardTitle } from "@components/ui/card";
 import {
     Tooltip,
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import {
-    ArrowDownIcon,
-    ArrowUpIcon,
-    DatabaseIcon,
-    HelpCircleIcon,
-    LayersIcon,
-    UploadIcon,
-} from "lucide-react";
+import { HelpCircleIcon } from "lucide-react";
+import { PercentageDiff } from "src/features/ee/cockpit/_components/percentage-diff";
 
 function formatNumber(num: number): string {
     if (num >= 1_000_000) {
@@ -26,35 +20,15 @@ function formatNumber(num: number): string {
 
 function formatCurrency(amount: number): string {
     if (amount >= 1000) {
+        // Truncate instead of round to avoid overstating values
         const truncated = Math.floor((amount / 1000) * 100) / 100;
         return `$${truncated.toFixed(2)}K`;
     }
     return `$${amount.toFixed(2)}`;
 }
 
-const colorStyles = {
-    primary: {
-        bgDark: "bg-primary-dark",
-        text: "text-primary-light",
-    },
-    secondary: {
-        bgDark: "bg-secondary-dark",
-        text: "text-secondary-light",
-    },
-    tertiary: {
-        bgDark: "bg-tertiary-dark",
-        text: "text-tertiary-light",
-    },
-    success: {
-        bgDark: "bg-success/10",
-        text: "text-success",
-    },
-} as const;
-
-type CardColor = keyof typeof colorStyles;
-
 interface TotalUsageShape {
-    input: number;          // uncached input shown to user
+    input: number; // uncached input shown to user
     output: number;
     total: number;
     outputReasoning: number;
@@ -69,41 +43,89 @@ interface TotalUsageShape {
 
 interface CardSpec {
     label: string;
-    tokens: number;
-    cost: number;
-    icon: typeof ArrowDownIcon;
-    color: CardColor;
+    value: string;
+    footer?: string;
     tooltip?: string;
+    /** Percent change vs the previous window (cockpit PercentageDiff). */
+    delta?: number;
 }
 
-export const SummaryCards = ({ totalUsage }: { totalUsage: TotalUsageShape }) => {
-    // Backend's `totals.input` already excludes cache reads — name the local
-    // alias explicitly so the rendering is unambiguous.
-    const uncachedInput = Math.max(0, totalUsage.input - totalUsage.cacheRead);
+/** % change current vs previous; null when there's no meaningful baseline. */
+const pctChange = (current: number, previous?: number | null) =>
+    previous && previous > 0
+        ? Math.round(((current - previous) / previous) * 100)
+        : null;
+
+/**
+ * KPI row in the cockpit MetricCard vocabulary (see
+ * cockpit/@kodusReviewTab/_components/review-cards.tsx): label on top,
+ * one bold value, quiet footer. Cost is the lead metric; the token cards
+ * carry their own billed cost in the footer, so nothing repeats.
+ */
+export const SummaryCards = ({
+    totalUsage,
+    avgPerDay,
+    avgPerPR,
+    savedByCache = 0,
+    previousTotals,
+}: {
+    totalUsage: TotalUsageShape;
+    avgPerDay: number;
+    avgPerPR: number;
+    /** USD saved by prompt caching vs paying the full input rate. */
+    savedByCache?: number;
+    /** Totals of the same-length window immediately before this one. */
+    previousTotals?: { cost: number; tokens: number } | null;
+}) => {
+    // `totals.input` is the TOTAL prompt tokens (ai@7: input = noCache +
+    // cacheRead + cacheWrite), so the full-price "uncached" pool excludes BOTH
+    // cacheRead and cacheWrite. Dropping the cacheWrite term inflates this card
+    // (and, on models with prompt-cache writes, double-counts those tokens with
+    // the separate Cache-write figure). Mirrors model-cost-calculator.ts.
+    const uncachedInput = Math.max(
+        0,
+        totalUsage.input - totalUsage.cacheRead - (totalUsage.cacheWrite ?? 0),
+    );
 
     const cards: CardSpec[] = [
         {
-            label: "Uncached Input",
-            tokens: uncachedInput,
-            cost: totalUsage.inputCost,
-            icon: ArrowDownIcon,
-            color: "primary",
+            label: "Total cost",
+            value: formatCurrency(totalUsage.totalCost),
+            footer: `≈ ${formatCurrency(avgPerDay)}/day · ${formatCurrency(avgPerPR)}/PR`,
+            delta:
+                pctChange(totalUsage.totalCost, previousTotals?.cost) ??
+                undefined,
         },
         {
-            label: "Cache Read",
-            tokens: totalUsage.cacheRead,
-            cost: totalUsage.cacheReadCost,
-            icon: DatabaseIcon,
-            color: "tertiary",
+            label: "Total tokens",
+            value: formatNumber(totalUsage.total),
+            footer:
+                totalUsage.outputReasoning > 0
+                    ? `incl. ${formatNumber(totalUsage.outputReasoning)} reasoning`
+                    : undefined,
+            delta:
+                pctChange(totalUsage.total, previousTotals?.tokens) ??
+                undefined,
+        },
+        {
+            label: "Uncached input",
+            value: formatNumber(uncachedInput),
+            footer: formatCurrency(totalUsage.inputCost),
+        },
+        {
+            label: "Cache read",
+            value: formatNumber(totalUsage.cacheRead),
+            footer:
+                savedByCache > 0.01
+                    ? `${formatCurrency(totalUsage.cacheReadCost)} · saved ${formatCurrency(savedByCache)}`
+                    : formatCurrency(totalUsage.cacheReadCost),
             tooltip:
-                "Input tokens served from the provider's prompt cache. Already counted inside Input Tokens — shown separately because they're billed at a discounted rate.",
+                "Input tokens served from the provider's prompt cache. Already counted inside input tokens; shown separately because they're billed at a discounted rate. \"Saved\" compares against paying the full input rate for these tokens.",
         },
         {
             label: "Output",
-            tokens: totalUsage.output,
-            cost: totalUsage.outputCost,
-            icon: ArrowUpIcon,
-            color: "secondary",
+            value: formatNumber(totalUsage.output),
+            footer: formatCurrency(totalUsage.outputCost),
             tooltip:
                 totalUsage.outputReasoning > 0
                     ? `Includes ${formatNumber(totalUsage.outputReasoning)} reasoning tokens (billed at the output rate).`
@@ -113,73 +135,64 @@ export const SummaryCards = ({ totalUsage }: { totalUsage: TotalUsageShape }) =>
 
     if (totalUsage.cacheWrite > 0) {
         cards.push({
-            label: "Cache Write",
-            tokens: totalUsage.cacheWrite,
-            cost: totalUsage.cacheWriteCost,
-            icon: UploadIcon,
-            color: "tertiary",
+            label: "Cache write",
+            value: formatNumber(totalUsage.cacheWrite),
+            footer: formatCurrency(totalUsage.cacheWriteCost),
             tooltip:
                 "Input tokens that populated a cache entry on this call (Anthropic). Other providers don't charge a write premium.",
         });
     }
 
-    cards.push({
-        label: "Total",
-        tokens: totalUsage.total,
-        cost: totalUsage.totalCost,
-        icon: LayersIcon,
-        color: "success",
-    });
-
     return (
         <div
-            className="grid gap-3"
-            style={{ gridTemplateColumns: `repeat(${cards.length}, minmax(0, 1fr))` }}>
-            {cards.map((card) => {
-                const Icon = card.icon;
-                const styles = colorStyles[card.color];
-                return (
-                    <Card
-                        key={card.label}
-                        className="group relative overflow-hidden p-4">
-                        <div className="relative space-y-2">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div
-                                        className={`flex size-7 items-center justify-center rounded-md ${styles.bgDark}`}>
-                                        <Icon
-                                            className={`size-4 ${styles.text}`}
-                                        />
-                                    </div>
-                                    <span className="text-text-secondary text-sm">
-                                        {card.label}
-                                    </span>
-                                </div>
-                                {card.tooltip && (
-                                    <Tooltip>
-                                        <TooltipContent className="text-text-primary max-w-64 text-pretty">
-                                            {card.tooltip}
-                                        </TooltipContent>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                variant="cancel"
-                                                size="icon-xs">
-                                                <HelpCircleIcon className="size-3.5" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                    </Tooltip>
-                                )}
-                            </div>
-                            <p className="text-text-primary text-2xl font-semibold tabular-nums">
-                                {formatNumber(card.tokens)}
-                            </p>
-                            <p className="text-text-tertiary text-sm tabular-nums">
-                                {formatCurrency(card.cost)}
-                            </p>
+            className="grid gap-2"
+            style={{
+                gridTemplateColumns: `repeat(${cards.length}, minmax(0, 1fr))`,
+            }}>
+            {cards.map((card) => (
+                <Card
+                    key={card.label}
+                    color="lv1"
+                    className="justify-between gap-2 p-5">
+                    <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="text-text-secondary text-xs leading-snug font-semibold">
+                            {card.label}
+                        </CardTitle>
+                        {card.tooltip && (
+                            <Tooltip>
+                                <TooltipContent className="text-text-primary max-w-64 text-pretty">
+                                    {card.tooltip}
+                                </TooltipContent>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="cancel"
+                                        size="icon-xs"
+                                        className="-my-1">
+                                        <HelpCircleIcon className="size-3.5" />
+                                    </Button>
+                                </TooltipTrigger>
+                            </Tooltip>
+                        )}
+                    </div>
+                    <div className="flex items-end justify-between gap-3">
+                        <div className="text-3xl font-bold tabular-nums">
+                            {card.value}
                         </div>
-                    </Card>
-                );
-            })}
+                        {card.delta != null && card.delta !== 0 && (
+                            <div className="flex justify-end pb-1 text-xs font-semibold">
+                                <PercentageDiff
+                                    mode="lower-is-better"
+                                    status={card.delta > 0 ? "bad" : "good"}>
+                                    {Math.abs(card.delta)}%
+                                </PercentageDiff>
+                            </div>
+                        )}
+                    </div>
+                    <div className="text-text-tertiary min-h-4 text-xs leading-snug tabular-nums">
+                        {card.footer}
+                    </div>
+                </Card>
+            ))}
         </div>
     );
 };

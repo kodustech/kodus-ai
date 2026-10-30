@@ -1,8 +1,57 @@
+import { AgentDegradedError } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { KodyRulesAgentProvider } from '@libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider';
 import {
     KodyRulesScope,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
+import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
+import { LocalSandboxService } from '@libs/sandbox/infrastructure/providers/local-sandbox.service';
+import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import {
+    judgeKodyRulesSharded,
+    shardViolationsWireSchema,
+} from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
+
+// The sharded judge now runs on the LOCAL (Vercel) stack via
+// runStructuredReviewCall; mock it at that boundary (one canned response per
+// shard call) instead of the old LangChain builder.
+//
+// LLM.run({ schema }) delegates to runStructuredReviewCall (see libs/llm/llm.ts:
+// the structured branch calls `runStructuredReviewCall({ ...params, schema })`),
+// so mocking this module IS mocking the real LLM.run boundary this provider hits
+// inside its `runJudge` closure. Every field the provider threads
+// (schema/system/user/runName/organizationId/attrs/byokConfig) is asserted off
+// `mockRunStructuredReviewCall.mock.calls`.
+jest.mock('@libs/llm/structured-review-call', () => ({
+    runStructuredReviewCall: jest.fn(),
+}));
+const mockRunStructuredReviewCall = runStructuredReviewCall as jest.Mock;
+
+// The provider's `runJudge` closure is a private, un-exported inner function.
+// To reach the LLM.run boundary in isolation (request assembly + envelope
+// extraction) we mock the sharded judge with a jest.fn that DEFAULTS to the
+// REAL implementation (so the existing end-to-end tests keep running the real
+// file×rule sweep), and in the boundary tests we capture the `runJudge`
+// argument the provider builds and invoke it directly with a controlled
+// LLM.run mock. `shardViolationsWireSchema` (and the other named exports) stay
+// real via the spread, so schema-identity assertions hold.
+jest.mock(
+    '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge',
+    () => {
+        const actual = jest.requireActual(
+            '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge',
+        );
+        return {
+            ...actual,
+            judgeKodyRulesSharded: jest.fn(actual.judgeKodyRulesSharded),
+        };
+    },
+);
+const mockJudge = judgeKodyRulesSharded as jest.Mock;
 
 describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
     let provider: KodyRulesAgentProvider;
@@ -15,7 +64,6 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
 
     beforeEach(() => {
         provider = new KodyRulesAgentProvider(
-            {} as any, // promptRunnerService
             {} as any, // permissionValidationService
             {} as any, // observabilityService
         );
@@ -151,7 +199,7 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
     });
 
     describe('formatKodyRules — external file reference', () => {
-        it('hints at readFile for an in-repo path and surfaces readReference as the cross-repo fallback', () => {
+        it('says a reference file is inlined, and promises no tool to fetch it', () => {
             const rules = [
                 {
                     uuid: 'r-ext',
@@ -165,11 +213,11 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
             const out = formatRules(rules, [{ filename: 'a.ts' }]);
 
             expect(out).toContain('**Reference**: `docs/conventions.md`');
-            expect(out).toContain('use readFile');
-            expect(out).toContain('readReference');
+            expect(out).toContain('its content is inlined with this rule');
+            expect(out).not.toContain('readReference');
         });
 
-        it('mentions both readFile and readReference for cross-repo-shaped source paths so the LLM can choose', () => {
+        it('says the same for a cross-repo-shaped source path — there is no fetch either way', () => {
             const rules = [
                 {
                     uuid: 'r-ext-cross',
@@ -185,8 +233,8 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
             expect(out).toContain(
                 '**Reference**: `kodustech/design-system/docs/conventions.md`',
             );
-            expect(out).toContain('use readFile');
-            expect(out).toContain('readReference');
+            expect(out).toContain('its content is inlined with this rule');
+            expect(out).not.toContain('readReference');
         });
 
         it('appends the section anchor to the Reference line when sourceAnchor is set', () => {
@@ -239,6 +287,37 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
                 pattern: 'src.with.dots/x.ts',
                 expected: false, // literal dots in pattern, not regex .
             },
+            // Comma-joined globs, as the repo-file importer persists them
+            // (#1483): picomatch reads the comma literally, so multi-glob rules
+            // matched nothing. Any glob may match, braces stay intact, and a
+            // directory prefix applies per glob without leaking into siblings.
+            {
+                path: 'lib/e2e_sync/report.ts',
+                pattern: 'src/e2e_sync/**/*.ts,lib/e2e_sync/**/*.ts',
+                expected: true,
+            },
+            {
+                path: 'src/e2e_sync/a/b.ts',
+                pattern: 'src/e2e_sync/**/*.ts,lib/e2e_sync/**/*.ts',
+                expected: true,
+            },
+            {
+                path: 'app/other.ts',
+                pattern: 'src/e2e_sync/**/*.ts,lib/e2e_sync/**/*.ts',
+                expected: false,
+            },
+            { path: 'app/x.rb', pattern: '{app,lib}/**/*.rb', expected: true },
+            { path: 'lib/y.rb', pattern: '{app,lib}/**/*.rb', expected: true },
+            { path: 'src/deep/file.ts', pattern: 'src/,lib/', expected: true },
+            { path: 'lib/x.ts', pattern: 'src/,lib/', expected: true },
+            { path: 'other/x.ts', pattern: 'src/,lib/', expected: false },
+            {
+                path: 'src-legacy/index.ts',
+                pattern: 'src/,lib/',
+                expected: false,
+            },
+            { path: 'libx/a.ts', pattern: 'src/,lib/', expected: false },
+            { path: 'other/foo.ts', pattern: 'src/**/*.ts', expected: false },
         ])(
             '$path matches $pattern → $expected',
             ({ path, pattern, expected }) => {
@@ -346,5 +425,1793 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
 
             expect(result.suggestions).toEqual([]);
         });
+    });
+});
+
+// ── end-to-end wiring of the sharded execute() (#1449) ───────────────────────
+// Drives the REAL execute() — model resolution, BYOK runner construction, the
+// mechanical/semantic split, the sharded judge, and the merge through
+// mapAgentFindings — with the LLM mocked at the builder boundary. Catches
+// provider wiring bugs without a live model or a Nest bootstrap.
+describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => {
+    // Chainable builder mock: config methods return `this`; execute() returns
+    // the next canned response (one per shard call).
+    function makeProvider(responses: any[]) {
+        let i = 0;
+        mockRunStructuredReviewCall.mockReset();
+        mockRunStructuredReviewCall.mockImplementation(
+            async () => responses[i++] ?? { violations: [] },
+        );
+        const provider = new KodyRulesAgentProvider(
+            {
+                // model-factory routes the run's model through the per-task slot
+                // entry point; no BYOK → undefined slot → LLM.run's managed default.
+                resolveTaskSlot: jest.fn(async () => undefined),
+            } as any, // permission (system model)
+            {} as any, // observability (unused — runStructuredReviewCall mocked)
+        );
+        return { provider, judge: mockRunStructuredReviewCall };
+    }
+
+    const input = (over: any = {}) => ({
+        prNumber: 1,
+        organizationAndTeamData: {
+            organizationId: '11111111-1111-1111-1111-111111111111',
+            teamId: '22222222-2222-2222-2222-222222222222',
+        },
+        changedFiles: [
+            {
+                filename: 'src/a.ts',
+                patchWithLinesStr: '10 +console.log(1)\n11 +const x: any = 2',
+                patch: '10 +console.log(1)\n11 +const x: any = 2',
+            },
+        ],
+        remoteCommands: undefined,
+        prTitle: 'test',
+        prBody: '',
+        ...over,
+    });
+
+    it('semantic path: judge violations become tagged CodeSuggestions', async () => {
+        const { provider } = makeProvider([
+            {
+                violations: [
+                    {
+                        ruleId: 1, // → the shard's only rule: no-any
+                        relevantLinesStart: 11,
+                        relevantLinesEnd: 11,
+                        existingCode: 'const x: any = 2',
+                        suggestionContent: 'avoid any',
+                        oneSentenceSummary: 'no any',
+                    },
+                ],
+            },
+        ]);
+        const out = await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'no-any',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+            }) as any,
+        );
+        expect(out.suggestions).toHaveLength(1);
+        expect((out.suggestions[0] as any).brokenKodyRulesIds).toEqual([
+            'no-any',
+        ]);
+        expect(out.suggestions[0].relevantFile).toBe('src/a.ts');
+    });
+
+    // Issue #1313 Fase 1b: this execute() override bypasses super.execute
+    // (see class docstring), so the base provider's loopParams-forwarding
+    // pattern for previousDecisions never applies here — this is the ONLY
+    // place that can thread it into the sharded judge.
+    it('forwards input.previousDecisions to judgeKodyRulesSharded (issue #1313)', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        const previousDecisions = [
+            {
+                suggestionId: 'sug-1',
+                relevantFile: 'src/a.ts',
+                suggestionContent: 'Use const instead of let.',
+                label: 'bug',
+                outcome: 'implemented' as const,
+                decidedAt: '2026-01-01T00:00:00.000Z',
+            },
+        ];
+        await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'no-any',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+                previousDecisions,
+            }) as any,
+        );
+        const lastCall =
+            mockJudge.mock.calls[mockJudge.mock.calls.length - 1][0];
+        expect(lastCall.previousDecisions).toBe(previousDecisions);
+    });
+
+    // ── language resolution + forwarding (customer-reported) ──────────
+    // The sharded judge's system prompts have zero language templating on
+    // their own; execute() must resolve `input.languageResultPrompt` via the
+    // SAME `resolveLanguageLabel` helper the other review agents use
+    // (prompt-builder.ts) and forward it into the shard user prompt that
+    // `runStructuredReviewCall` receives as `user`.
+    it('resolves languageResultPrompt and forwards a respond-in-language instruction to the shard prompt', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        await provider.execute(
+            input({
+                languageResultPrompt: 'pt-BR',
+                kodyRules: [
+                    {
+                        uuid: 'no-any',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+            }) as any,
+        );
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(1);
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.user).toContain('Respond in');
+        expect(call.user.toLowerCase()).toContain('portuguese');
+    });
+
+    it('does NOT add a language instruction when languageResultPrompt is absent (no regression)', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'no-any',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+            }) as any,
+        );
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(1);
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.user).not.toContain('Respond in');
+    });
+
+    // ── #1831: the detector routes, it does not publish ──────────────────────
+    // It used to emit a finding per regex hit with no LLM anywhere in the path.
+    // Measured on 40 real polyglot PRs, one Ruby-scoped rule published 614
+    // comments that way and not one was a true violation; in production the
+    // path rejected at 44.6% thumbs-down against the judge's 6.2%.
+
+    const mechanicalRule = {
+        uuid: 'no-console',
+        title: 'no console',
+        rule: 'no console.log',
+        status: 'active',
+        severity: 'high',
+        path: '**/*.ts',
+        detector: {
+            type: 'regex',
+            pattern: 'console\\.(log|warn|error)\\(',
+        },
+    };
+
+    it('mechanical path: a detector hit is CONFIRMED by the judge before it ships', async () => {
+        const { provider, judge } = makeProvider([
+            {
+                violations: [
+                    {
+                        ruleId: 1,
+                        relevantLinesStart: 10,
+                        existingCode: 'console.log(1)',
+                        suggestionContent: 'use the logger',
+                        oneSentenceSummary: 'no console',
+                    },
+                ],
+            },
+        ]);
+        const out = await provider.execute(
+            input({ kodyRules: [mechanicalRule] }) as any,
+        );
+        expect(judge).toHaveBeenCalledTimes(1);
+        expect(out.suggestions).toHaveLength(1);
+        expect((out.suggestions[0] as any).brokenKodyRulesIds).toEqual([
+            'no-console',
+        ]);
+        expect(out.suggestions[0].relevantLinesStart).toBe(10);
+    });
+
+    it('mechanical path: a detector hit the judge REJECTS never reaches the PR', async () => {
+        // The whole point. The regex matched, the judge looked at the file and
+        // said no — e.g. the line is a comment, or JS embedded in an .erb, or
+        // SQL inside a heredoc. Before #1831 this shipped regardless.
+        const { provider, judge } = makeProvider([{ violations: [] }]);
+        const out = await provider.execute(
+            input({ kodyRules: [mechanicalRule] }) as any,
+        );
+        expect(judge).toHaveBeenCalledTimes(1);
+        expect(out.suggestions).toHaveLength(0);
+    });
+
+    it('mechanical path: the shard prompt offers the hit as a candidate to reject, not as a finding', async () => {
+        const { provider, judge } = makeProvider([{ violations: [] }]);
+        await provider.execute(input({ kodyRules: [mechanicalRule] }) as any);
+        const user = judge.mock.calls[0][0].user as string;
+        expect(user).toContain('<Candidates>');
+        expect(user).toContain('rule [1] -> line(s) 10');
+        // Anti-rubber-stamp: the model must be told the pre-filter is blind and
+        // that rejecting is a normal outcome. Without this the confirmation
+        // step degrades into a confirmation bias.
+        expect(user).toContain('QUESTION, not a finding');
+        expect(user).toMatch(/Rejecting candidates is the normal outcome/);
+    });
+
+    it('mechanical path: a detector that matches nothing costs no LLM call at all', async () => {
+        // The cost argument for T0 survives the fix: files the regex did not hit
+        // never reach a model, so a precise detector is still nearly free.
+        const { provider, judge } = makeProvider([]);
+        const out = await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        ...mechanicalRule,
+                        detector: { type: 'regex', pattern: 'debugger' },
+                    },
+                ],
+            }) as any,
+        );
+        expect(judge).not.toHaveBeenCalled();
+        expect(out.suggestions).toHaveLength(0);
+    });
+
+    it('mixed: mechanical and semantic rules share ONE shard for the file', async () => {
+        // Both rules apply to src/a.ts and the detector fired there, so they are
+        // batched into a single call — the mechanical rule rides along on a
+        // shard the semantic rule was paying for anyway.
+        const { provider, judge } = makeProvider([
+            {
+                violations: [
+                    {
+                        ruleId: 2, // no-any
+                        relevantLinesStart: 11,
+                        suggestionContent: 'avoid any',
+                        oneSentenceSummary: 'no any',
+                    },
+                    {
+                        ruleId: 1, // no-console, confirmed from the candidate
+                        relevantLinesStart: 10,
+                        suggestionContent: 'use the logger',
+                        oneSentenceSummary: 'no console',
+                    },
+                ],
+            },
+        ]);
+        const out = await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'no-console',
+                        title: 'no console',
+                        rule: 'no console.log',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                        detector: {
+                            type: 'regex',
+                            pattern: 'console\\.(log|warn|error)\\(',
+                        },
+                    },
+                    {
+                        uuid: 'no-any',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+            }) as any,
+        );
+        expect(judge).toHaveBeenCalledTimes(1); // one shard, both rules
+        const ids = out.suggestions
+            .map((s: any) => s.brokenKodyRulesIds?.[0])
+            .sort();
+        expect(ids).toEqual(['no-any', 'no-console']);
+    });
+
+    // ── total shard failure escalates (matrix-gaps item 10) ──────────────────
+    // When EVERY judge shard errors (e.g. an OpenAI-strict wire-schema 400 that
+    // 400s every shard identically), the review used to complete "successfully"
+    // with 0 findings and only warn logs — a green review that evaluated none
+    // of its semantic rules (§2.1 of the retro). The provider now throws so the
+    // orchestrator's allSettled marks it PARTIAL_ERROR.
+    it('throws when ALL judge shards fail (no silent 0-finding review)', async () => {
+        const { provider } = makeProvider([]);
+        // Every shard call rejects → shardsErrored === shardsRun.
+        mockRunStructuredReviewCall.mockReset();
+        mockRunStructuredReviewCall.mockRejectedValue(
+            new Error('HTTP 400 structured outputs: required mismatch'),
+        );
+
+        await expect(
+            provider.execute(
+                input({
+                    kodyRules: [
+                        {
+                            uuid: 'no-any',
+                            title: 'no any',
+                            rule: 'do not use any',
+                            status: 'active',
+                            severity: 'high',
+                            path: '**/*.ts',
+                        },
+                    ],
+                }) as any,
+            ),
+            // The message reaches the PR logs UI and the check text, so it
+            // reads as user-facing copy — the internal rationale for failing
+            // loudly lives in a comment at the throw site, not in the string.
+        ).rejects.toThrow(/Kody Rules could not be evaluated: all 1 rule/i);
+    });
+
+    // A PARTIAL shard failure must NOT escalate — the surviving shard's finding
+    // still ships. Guards against over-aggressively failing a mostly-fine review.
+    // It must ALSO be observable: a silent partial degrade is the exact "one
+    // shard dead while the other posts" shape of the wire-schema regression
+    // (matrix-gaps item 8), so the provider emits a structured WARN with the
+    // shard counts — assert both the survival AND the alert here.
+    it('does NOT throw but WARNS with shard counts when only some shards fail (degrades to survivors, observably)', async () => {
+        const { provider } = makeProvider([]);
+        // Spy the shard logger so we can assert the partial degrade is surfaced,
+        // not swallowed into an info line.
+        const warnSpy = jest
+            .spyOn((provider as any).shardLogger, 'warn')
+            .mockImplementation(() => undefined);
+
+        let call = 0;
+        mockRunStructuredReviewCall.mockReset();
+        // Two files → two file shards. First rejects, second returns a finding.
+        mockRunStructuredReviewCall.mockImplementation(async () => {
+            call++;
+            if (call === 1) throw new Error('one shard down');
+            return {
+                violations: [
+                    {
+                        ruleId: 1,
+                        relevantLinesStart: 11,
+                        suggestionContent: 'avoid any',
+                        oneSentenceSummary: 'no any',
+                    },
+                ],
+            };
+        });
+
+        const out = await provider.execute(
+            input({
+                changedFiles: [
+                    { filename: 'src/a.ts', patch: '11 +const x: any = 2' },
+                    { filename: 'src/b.ts', patch: '11 +const y: any = 3' },
+                ],
+                kodyRules: [
+                    {
+                        uuid: 'no-any',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+            }) as any,
+        );
+
+        // Survived: the second shard's finding shipped, no throw.
+        expect(out.suggestions.length).toBeGreaterThanOrEqual(1);
+
+        // Observable: exactly one PARTIAL-degrade warn carrying the shard
+        // accounting so it's alertable per-execution (not buried in the info
+        // done-line). The judge also warns per failed shard about the root
+        // cause — filter to the provider's aggregate PARTIAL signal.
+        const partialWarns = warnSpy.mock.calls.filter((c) =>
+            /PARTIAL judge-shard failure/i.test((c[0] as any)?.message ?? ''),
+        );
+        expect(partialWarns).toHaveLength(1);
+        const warnArg = partialWarns[0][0] as any;
+        expect(warnArg.metadata).toMatchObject({
+            shardsRun: 2,
+            shardsErrored: 1,
+            shardsSucceeded: 1,
+        });
+
+        // Recorded on the run too, so the dashboard and the doctor see that
+        // some rules were not applied (#2066).
+        const partial = (out.warnings ?? []).find(
+            (w) => w.kind === 'KODY_RULES_PARTIAL',
+        );
+        expect(partial).toMatchObject({
+            reason: 'judge_shard_failed',
+            detail: expect.stringContaining('1 of 2 Kody Rules check(s)'),
+        });
+    });
+
+    // The healthy path must stay quiet: no partial-degrade warn when every
+    // shard succeeds (guards against a noisy false alert on green reviews).
+    it('does NOT warn about partial failure when all shards succeed', async () => {
+        const { provider } = makeProvider([
+            {
+                violations: [
+                    {
+                        ruleId: 1,
+                        relevantLinesStart: 11,
+                        suggestionContent: 'avoid any',
+                        oneSentenceSummary: 'no any',
+                    },
+                ],
+            },
+        ]);
+        const warnSpy = jest
+            .spyOn((provider as any).shardLogger, 'warn')
+            .mockImplementation(() => undefined);
+
+        const out = await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'no-any',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+            }) as any,
+        );
+
+        const partialWarns = warnSpy.mock.calls.filter((c) =>
+            /PARTIAL judge-shard failure/i.test((c[0] as any)?.message ?? ''),
+        );
+        expect(partialWarns).toHaveLength(0);
+        expect(
+            (out.warnings ?? []).some((w) => w.kind === 'KODY_RULES_PARTIAL'),
+        ).toBe(false);
+    });
+});
+
+describe('KodyRulesAgentProvider — Context OS reference loading', () => {
+    const makeInput = () => ({
+        prNumber: 7,
+        organizationAndTeamData: {
+            organizationId: 'org-1',
+            teamId: 'team-1',
+        },
+        repositoryId: 'repo-1',
+        repositoryFullName: 'owner/repo',
+        baseBranch: 'main',
+    });
+
+    const makeProvider = (loader?: any) => {
+        // 5-arg constructor (promptRunnerService was removed with the LangChain
+        // exit): permission, observability, documentationSearch, byokErrorCounter,
+        // externalReferenceLoaderService.
+        const p = new KodyRulesAgentProvider(
+            {} as any, // permissionValidationService
+            {} as any, // observabilityService
+            undefined, // documentationSearchService
+            undefined, // byokErrorCounter
+            loader, // externalReferenceLoaderService
+        );
+        // Swap the real structured logger for spies.
+        (p as any).shardLogger = { warn: jest.fn(), log: jest.fn() };
+        return p;
+    };
+
+    const call = (p: any, rules: any[], input: any) =>
+        (p as any).inlineContextOsReferences(rules, input);
+
+    it('inlines resolved content and does NOT warn', async () => {
+        const loader = {
+            loadReferencesForRules: jest.fn().mockResolvedValue({
+                referencesMap: new Map([
+                    [
+                        'r1',
+                        [{ filePath: 'CLAUDE.md', content: 'the convention' }],
+                    ],
+                ]),
+                mcpResultsMap: new Map(),
+            }),
+        };
+        const p = makeProvider(loader);
+        const rules = [
+            { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'base' },
+        ];
+
+        const out = await call(p, rules, makeInput());
+
+        expect(out[0].rule).toContain('the convention');
+        expect((p as any).shardLogger.warn).not.toHaveBeenCalled();
+    });
+
+    it('WARNS (with organizationId) when a contextReferenceId rule resolves ZERO references', async () => {
+        const loader = {
+            loadReferencesForRules: jest.fn().mockResolvedValue({
+                referencesMap: new Map(),
+                mcpResultsMap: new Map(),
+            }),
+        };
+        const p = makeProvider(loader);
+        const rules = [
+            { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'base' },
+        ];
+
+        const out = await call(p, rules, makeInput());
+
+        expect(out).toEqual(rules); // judged blind, unchanged
+        const warn = (p as any).shardLogger.warn as jest.Mock;
+        expect(warn).toHaveBeenCalledTimes(1);
+        const entry = warn.mock.calls[0][0];
+        expect(entry.metadata.ruleUuids).toEqual(['r1']);
+        expect(entry.metadata.organizationAndTeamData).toEqual(
+            makeInput().organizationAndTeamData,
+        );
+    });
+
+    it('sends ONLY rules with a contextReferenceId to the loader (pre-filter)', async () => {
+        const loader = {
+            loadReferencesForRules: jest.fn().mockResolvedValue({
+                referencesMap: new Map(),
+                mcpResultsMap: new Map(),
+            }),
+        };
+        const p = makeProvider(loader);
+        const rules = [
+            { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'a' },
+            { uuid: 'r2', title: 't', rule: 'b' }, // no contextReferenceId
+        ];
+
+        await call(p, rules, makeInput());
+
+        expect(loader.loadReferencesForRules).toHaveBeenCalledTimes(1);
+        const passed = loader.loadReferencesForRules.mock.calls[0][0];
+        expect(passed).toHaveLength(1);
+        expect(passed[0].uuid).toBe('r1');
+    });
+
+    it('skips the loader entirely when no rule carries a contextReferenceId', async () => {
+        const loader = { loadReferencesForRules: jest.fn() };
+        const p = makeProvider(loader);
+        const rules = [{ uuid: 'r1', title: 't', rule: 'a' }];
+
+        const out = await call(p, rules, makeInput());
+
+        expect(out).toBe(rules);
+        expect(loader.loadReferencesForRules).not.toHaveBeenCalled();
+    });
+
+    it('degrades (warns with organizationId) when the loader throws', async () => {
+        const loader = {
+            loadReferencesForRules: jest
+                .fn()
+                .mockRejectedValue(new Error('boom')),
+        };
+        const p = makeProvider(loader);
+        const rules = [
+            { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'base' },
+        ];
+
+        const out = await call(p, rules, makeInput());
+
+        expect(out).toBe(rules);
+        const warn = (p as any).shardLogger.warn as jest.Mock;
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0].metadata.organizationAndTeamData).toEqual(
+            makeInput().organizationAndTeamData,
+        );
+    });
+
+    it('is a no-op when the loader service is not wired', async () => {
+        const p = makeProvider(undefined);
+        const rules = [
+            { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'base' },
+        ];
+
+        const out = await call(p, rules, makeInput());
+
+        expect(out).toBe(rules);
+        expect((p as any).shardLogger.warn).not.toHaveBeenCalled();
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LLM.run I/O CONTRACT MATRIX — kody-rules-agent.provider.ts
+//
+// The single LLM.run site in this file is the `runJudge` closure (execute(),
+// lines ~201-222): it calls
+//     LLM.run({ byokConfig, schema: shardViolationsWireSchema, system, user,
+//               runName, organizationId, attrs })
+// and extracts the payload with the ONE line of parse logic in this file:
+//     return ((parsed as any)?.violations ?? []) as RawShardViolation[];   // L220
+//
+// Declared schema D = `{ violations: RawShardViolation[] }`. The deep parse /
+// repair / strict-vs-fallback json gate all live DOWNSTREAM in
+// runStructuredReviewCall + structured-output-repair + structured-output-gate
+// (mocked here). So at THIS boundary the contract is:
+//   - request assembly: exact args/schema/system/user/byokConfig/attrs threading
+//   - envelope extraction: `parsed?.violations ?? []` — recover the array, or
+//     return [] for anything else
+//   - fail-safe via execute()'s per-shard degrade.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RULE_UUID = 'rule-1';
+
+function makeSlot(provider: string) {
+    // Minimal NormalizedModel-shaped slot: getModelName only reads
+    // provider+model; `fallback: undefined` makes runWithModelFailover a single
+    // pass-through so exactly one runStructuredReviewCall lands.
+    return { provider, model: 'test-model', fallback: undefined } as any;
+}
+
+function makeBoundaryProvider(slotProvider?: string) {
+    const resolveTaskSlot = jest.fn(async () =>
+        slotProvider ? makeSlot(slotProvider) : undefined,
+    );
+    return new KodyRulesAgentProvider(
+        { resolveTaskSlot } as any, // permissionValidationService
+        {} as any, // observabilityService
+    );
+}
+
+function boundaryInput(over: any = {}) {
+    return {
+        prNumber: 42,
+        organizationAndTeamData: {
+            organizationId: 'org-xyz',
+            teamId: 'team-1',
+        },
+        changedFiles: [{ filename: 'src/a.ts', patch: '11 +const x: any = 2' }],
+        prTitle: 'boundary',
+        prBody: '',
+        remoteCommands: undefined,
+        kodyRules: [
+            {
+                uuid: RULE_UUID,
+                title: 'no any',
+                rule: 'do not use any',
+                status: 'active',
+                severity: 'high',
+                path: '**/*.ts',
+            },
+        ],
+        ...over,
+    };
+}
+
+type CapturedRunJudge = (args: {
+    system: string;
+    user: string;
+    filename: string | null;
+    ruleUuids: string[];
+}) => Promise<any[]>;
+
+// Drive the real execute() far enough to build the `runJudge` closure, capture
+// it via the (mocked) judge, and hand it back WITHOUT running the real sweep —
+// so runStructuredReviewCall is untouched until we invoke runJudge ourselves.
+async function captureRunJudge(
+    slotProvider?: string,
+): Promise<CapturedRunJudge> {
+    const provider = makeBoundaryProvider(slotProvider);
+    let captured: CapturedRunJudge | undefined;
+    mockJudge.mockImplementationOnce(async (args: any) => {
+        captured = args.runJudge;
+        return { violations: [], shardsRun: 1, shardsErrored: 0 };
+    });
+    await provider.execute(boundaryInput() as any);
+    if (!captured) throw new Error('runJudge was not captured');
+    return captured;
+}
+
+const invoke = (runJudge: CapturedRunJudge, over: any = {}) =>
+    runJudge({
+        system: 'SYS',
+        user: 'USR',
+        filename: 'src/a.ts',
+        ruleUuids: [RULE_UUID],
+        ...over,
+    });
+
+describe('KodyRulesAgentProvider — LLM.run request assembly (runJudge)', () => {
+    beforeEach(() => {
+        mockRunStructuredReviewCall.mockReset();
+        mockJudge.mockClear();
+    });
+
+    it('sends the WIRE schema object (not the zod object) as `schema`', async () => {
+        const runJudge = await captureRunJudge();
+        mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
+        await invoke(runJudge);
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        // Same reference — the provider must pass shardViolationsWireSchema, not
+        // re-derive a zod schema (which would reintroduce the OpenAI-strict 400).
+        expect(call.schema).toBe(shardViolationsWireSchema);
+    });
+
+    it('threads system, user, runName, organizationId, and per-shard attrs verbatim', async () => {
+        const runJudge = await captureRunJudge();
+        mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
+        await invoke(runJudge, { system: 'THE-SYS', user: 'THE-USR' });
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.system).toBe('THE-SYS');
+        expect(call.user).toBe('THE-USR');
+        expect(call.runName).toBe('kodus-rules-review-agent.shard');
+        expect(call.organizationId).toBe('org-xyz');
+        expect(call.attrs).toMatchObject({
+            prNumber: 42,
+            agentName: 'kodus-rules-review-agent',
+            file: 'src/a.ts',
+        });
+    });
+
+    it('omits the `file` attr for the PR-level shard (filename === null)', async () => {
+        const runJudge = await captureRunJudge();
+        mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
+        await invoke(runJudge, { filename: null });
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.attrs).toMatchObject({
+            prNumber: 42,
+            agentName: 'kodus-rules-review-agent',
+        });
+        expect('file' in call.attrs).toBe(false);
+    });
+
+    it('passes NO byokConfig (undefined) when the org has no BYOK slot', async () => {
+        const runJudge = await captureRunJudge(/* no slot */);
+        mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
+        await invoke(runJudge);
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.byokConfig).toBeUndefined();
+    });
+
+    it('threads the resolved BYOK slot into the call unchanged', async () => {
+        const runJudge = await captureRunJudge('openai');
+        mockRunStructuredReviewCall.mockResolvedValueOnce({ violations: [] });
+        await invoke(runJudge);
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.byokConfig).toEqual(makeSlot('openai'));
+    });
+});
+
+describe('KodyRulesAgentProvider — LLM.run envelope extraction (matrix A/B/C)', () => {
+    beforeEach(() => {
+        mockRunStructuredReviewCall.mockReset();
+        mockJudge.mockClear();
+    });
+
+    const runWith = async (parsed: any) => {
+        const runJudge = await captureRunJudge();
+        mockRunStructuredReviewCall.mockResolvedValueOnce(parsed);
+        return invoke(runJudge);
+    };
+
+    const oneViolation = { ruleId: 1, suggestionContent: 'avoid any' };
+
+    it('row 1 — exact D {violations:[...]} recovers the array (happy path)', async () => {
+        const out = await runWith({ violations: [oneViolation] });
+        expect(out).toEqual([oneViolation]);
+    });
+
+    it('row 17 — null / undefined return → [] (safe default, no crash)', async () => {
+        expect(await runWith(null)).toEqual([]);
+        expect(await runWith(undefined)).toEqual([]);
+    });
+
+    it('row 30 — runJudge does NOT swallow an LLM.run throw (the per-shard catch owns fail-safe)', async () => {
+        const runJudge = await captureRunJudge();
+        mockRunStructuredReviewCall.mockRejectedValueOnce(
+            new Error('network down'),
+        );
+        await expect(invoke(runJudge)).rejects.toThrow('network down');
+    });
+});
+
+describe('KodyRulesAgentProvider — input variants + return shape (matrix D)', () => {
+    beforeEach(() => {
+        mockRunStructuredReviewCall.mockReset();
+        mockJudge.mockClear();
+    });
+
+    // Real judge sweep + LLM mocked at runStructuredReviewCall.
+    function makeExecProvider(runImpl?: (params: any) => Promise<any>) {
+        mockRunStructuredReviewCall.mockImplementation(
+            runImpl ?? (async () => ({ violations: [] })),
+        );
+        return makeBoundaryProvider(/* no BYOK */);
+    }
+
+    const execInput = (over: any = {}) => ({
+        prNumber: 7,
+        organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+        changedFiles: [{ filename: 'src/a.ts', patch: '11 +const x: any = 2' }],
+        prTitle: 'p',
+        prBody: '',
+        remoteCommands: undefined,
+        ...over,
+    });
+
+    const fileRule = {
+        uuid: RULE_UUID,
+        title: 'no any',
+        rule: 'do not use any',
+        status: 'active',
+        severity: 'high',
+        path: '**/*.ts',
+    };
+    const prRule = { ...fileRule, scope: KodyRulesScope.PULL_REQUEST };
+
+    it('row 35 — file-scope rule but ZERO changed files → no shard, empty result, no LLM call', async () => {
+        const provider = makeExecProvider();
+        const out = await provider.execute(
+            execInput({
+                changedFiles: [],
+                kodyRules: [{ ...fileRule, scope: KodyRulesScope.FILE }],
+            }) as any,
+        );
+        expect(out.suggestions).toEqual([]);
+        expect(mockRunStructuredReviewCall).not.toHaveBeenCalled();
+    });
+
+    it('row 38 — duplicate changed files → one shard per entry, no crash', async () => {
+        const provider = makeExecProvider(async () => ({ violations: [] }));
+        await provider.execute(
+            execInput({
+                changedFiles: [
+                    { filename: 'dup.ts', patch: '11 +const x: any = 2' },
+                    { filename: 'dup.ts', patch: '11 +const x: any = 2' },
+                ],
+                kodyRules: [fileRule],
+            }) as any,
+        );
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(2);
+    });
+
+    it('row 39 — changed file with undefined patch + rule with null fields → no crash, empty result', async () => {
+        const provider = makeExecProvider(async () => ({ violations: [] }));
+        const out = await provider.execute(
+            execInput({
+                changedFiles: [
+                    {
+                        filename: 'a.ts',
+                        patch: undefined,
+                        patchWithLinesStr: undefined,
+                    },
+                ],
+                kodyRules: [
+                    {
+                        uuid: RULE_UUID,
+                        title: null,
+                        rule: null,
+                        status: 'active',
+                        path: '**/*.ts',
+                    },
+                ],
+            }) as any,
+        );
+        expect(out.suggestions).toEqual([]);
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(1);
+    });
+
+    it('row 40 — whitespace-only + special-char diff is preserved in the shard prompt, no crash', async () => {
+        const provider = makeExecProvider(async () => ({ violations: [] }));
+        const weird = '10 +  \t 😀 <script>"quote"\\n';
+        await provider.execute(
+            execInput({
+                changedFiles: [{ filename: 'a.ts', patch: weird }],
+                kodyRules: [fileRule],
+            }) as any,
+        );
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.user).toContain('😀');
+        expect(call.user).toContain('<script>"quote"');
+    });
+
+    it('row 41 — PR diff budget boundary is off-by-one exact (== included, +1 omitted)', async () => {
+        // Exactly at budget → included (no marker).
+        let provider = makeExecProvider();
+        await provider.execute(
+            execInput({
+                changedFiles: [
+                    { filename: 'x.ts', patch: 'a'.repeat(150_000) },
+                ],
+                kodyRules: [prRule],
+            }) as any,
+        );
+        expect(mockRunStructuredReviewCall.mock.calls[0][0].user).not.toContain(
+            'diff omitted — PR diff budget exceeded',
+        );
+
+        // One char over → omitted (marker present).
+        mockRunStructuredReviewCall.mockReset();
+        provider = makeExecProvider();
+        await provider.execute(
+            execInput({
+                changedFiles: [
+                    { filename: 'x.ts', patch: 'a'.repeat(150_001) },
+                ],
+                kodyRules: [prRule],
+            }) as any,
+        );
+        expect(mockRunStructuredReviewCall.mock.calls[0][0].user).toContain(
+            'diff omitted — PR diff budget exceeded',
+        );
+    });
+
+    it('row 42 — permuting changed-file order yields the same set of suggestions (metamorphic)', async () => {
+        // The judge routes each file to its own shard; runJudge stamps attrs.file
+        // with the filename, so the mock returns a finding only for a.ts.
+        const runImpl = async (params: any) =>
+            params.attrs?.file === 'a.ts'
+                ? {
+                      violations: [
+                          {
+                              ruleId: 1,
+                              relevantLinesStart: 11,
+                              relevantLinesEnd: 11,
+                              existingCode: 'const x: any = 2',
+                              suggestionContent: 'avoid any',
+                              oneSentenceSummary: 'no any',
+                          },
+                      ],
+                  }
+                : { violations: [] };
+
+        const filesAB = [
+            { filename: 'a.ts', patch: '11 +const x: any = 2' },
+            { filename: 'b.ts', patch: '11 +const y = 3' },
+        ];
+        const filesBA = [...filesAB].reverse();
+
+        const out1 = await makeExecProvider(runImpl).execute(
+            execInput({ changedFiles: filesAB, kodyRules: [fileRule] }) as any,
+        );
+        mockRunStructuredReviewCall.mockReset();
+        const out2 = await makeExecProvider(runImpl).execute(
+            execInput({ changedFiles: filesBA, kodyRules: [fileRule] }) as any,
+        );
+
+        const files1 = out1.suggestions.map((s: any) => s.relevantFile).sort();
+        const files2 = out2.suggestions.map((s: any) => s.relevantFile).sort();
+        expect(files1).toEqual(files2);
+        expect(files1).toEqual(['a.ts']);
+    });
+
+    // ── B. semantic-but-wrong (the fields this boundary actually carries) ─────
+    //
+    // Rows 21 (boolean-as-string), 22 (boolean-as-yes/no) and 24 (enum out of
+    // allowed set) are NOT applicable to this boundary: RawShardViolation (the D
+    // it carries) has NO model-emitted boolean or enum field — the only decision
+    // field is `ruleId` (a rule index) and the rest are free-text/line numbers;
+    // severity is sourced from the RULE, not the model output. See rowsNA.
+    // Row 26 (duplicate JSON keys) is a raw-JSON-parse concern resolved
+    // last-wins DOWNSTREAM before `parsed` reaches L220 as a JS object — NA here.
+    //
+    // Row 23's dimension — "valid JSON, wrong VALUE ENCODING of a field" — DOES
+    // apply: the one numeric decision field, `ruleId`, is routinely emitted as a
+    // stringified number. resolveRuleId coerces "1" → index 1, so the violation
+    // still resolves to its rule (recover, not drop).
+    it('row 23 — ruleId emitted as a stringified number ("1") still resolves to its rule (encoding tolerance)', async () => {
+        const provider = makeExecProvider(async () => ({
+            violations: [
+                {
+                    ruleId: '1', // stringified index, not the number 1
+                    relevantLinesStart: 11,
+                    relevantLinesEnd: 11,
+                    existingCode: 'const x: any = 2',
+                    suggestionContent: 'avoid any',
+                    oneSentenceSummary: 'no any',
+                },
+            ],
+        }));
+        const out = await provider.execute(
+            execInput({ kodyRules: [fileRule] }) as any,
+        );
+        expect(out.suggestions).toHaveLength(1);
+        expect((out.suggestions[0] as any).brokenKodyRulesIds).toEqual([
+            RULE_UUID,
+        ]);
+    });
+
+    it('row 23 (guard) — a non-scalar ruleId (boolean) is dropped, never mapped to a rule', async () => {
+        const provider = makeExecProvider(async () => ({
+            violations: [
+                {
+                    ruleId: true as any, // wrong-type encoding → resolveRuleId returns null
+                    relevantLinesStart: 11,
+                    suggestionContent: 'avoid any',
+                    oneSentenceSummary: 'no any',
+                },
+            ],
+        }));
+        const out = await provider.execute(
+            execInput({ kodyRules: [fileRule] }) as any,
+        );
+        expect(out.suggestions).toEqual([]);
+    });
+
+    it('row 25 — a ruleId index beyond the shard rule list is dropped (hallucinated index, not shipped)', async () => {
+        const provider = makeExecProvider(async () => ({
+            violations: [
+                {
+                    ruleId: 99, // only 1 rule in this shard
+                    relevantLinesStart: 11,
+                    suggestionContent: 'avoid any',
+                    oneSentenceSummary: 'no any',
+                },
+            ],
+        }));
+        const out = await provider.execute(
+            execInput({ kodyRules: [fileRule] }) as any,
+        );
+        expect(out.suggestions).toEqual([]);
+    });
+
+    // ── guaranteed return shape across layers ────────────────────────────────
+});
+
+// ── #1826: the claim checker sits between the judge and the mapper ───────────
+// This path bypasses super.execute and with it the agentic finder's `verify`
+// gate, so the claim check is the only thing between the model's word and a
+// published comment. Derived from spec.md's P1 claim story:
+//   KRC-04  a refuted claim never reaches mapAgentFindings
+//   KRC-05  a verifiable claim with no lookup is discarded
+//   KRC-06  every discard is logged with rule uuid, file and reason
+//   KRC-09  a finding with no claim publishes exactly as before
+// Plus the #1864 consequence: detector-derived findings now come out of the
+// same judge, so they are claim-checked too.
+describe('KodyRulesAgentProvider — claim check before publishing (#1826)', () => {
+    beforeEach(() => {
+        mockRunStructuredReviewCall.mockReset();
+        mockJudge.mockClear();
+    });
+
+    const claimRule = {
+        uuid: RULE_UUID,
+        title: 'no unused imports',
+        rule: 'Remove imports that are not used in the file.',
+        status: 'active',
+        severity: 'high',
+        path: '**/*.ts',
+    };
+
+    const claimInput = (over: any = {}) => ({
+        prNumber: 7,
+        organizationAndTeamData: {
+            organizationId: 'org-xyz',
+            teamId: 'team-1',
+        },
+        changedFiles: [
+            {
+                filename: 'src/a.ts',
+                patch: "3 +import { formatDate } from '../shared/date';",
+                patchWithLinesStr:
+                    "3 +import { formatDate } from '../shared/date';",
+            },
+        ],
+        prTitle: 'p',
+        prBody: '',
+        remoteCommands: undefined,
+        kodyRules: [claimRule],
+        ...over,
+    });
+
+    const lookup = (over: any = {}): any => ({
+        available: true,
+        unavailableReason: '',
+        grep: async () => 'No matches found.',
+        read: async () => '',
+        exists: async () => false,
+        probe: async () => {},
+        ...over,
+    });
+
+    const unusedFinding = {
+        ruleId: 1,
+        relevantLinesStart: 3,
+        relevantLinesEnd: 3,
+        existingCode: "import { formatDate } from '../shared/date';",
+        suggestionContent: 'this import is unused',
+        oneSentenceSummary: 'unused import',
+        claimKind: 'unused',
+        claimSymbol: 'formatDate',
+    };
+
+    it('never maps a finding whose claim the repository refutes', async () => {
+        // The #1724 shape: the symbol IS used, twenty lines below the window.
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const provider = makeBoundaryProvider();
+        const out = await provider.execute(
+            claimInput({
+                repoLookup: lookup({
+                    grep: async () => 'src/a.ts:24:  return formatDate(x);',
+                }),
+            }) as any,
+        );
+        expect(out.suggestions).toEqual([]);
+    });
+
+    it('publishes the same finding when the repository confirms the claim', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const provider = makeBoundaryProvider();
+        const out = await provider.execute(
+            claimInput({ repoLookup: lookup() }) as any,
+        );
+        expect(out.suggestions).toHaveLength(1);
+        expect((out.suggestions[0] as any).brokenKodyRulesIds).toEqual([
+            RULE_UUID,
+        ]);
+    });
+
+    it('publishes a claim-free finding untouched, exactly as before', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [
+                {
+                    ruleId: 1,
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                    existingCode: 'x',
+                    suggestionContent: 'avoid this',
+                    oneSentenceSummary: 's',
+                },
+            ],
+        }));
+        const provider = makeBoundaryProvider();
+        const out = await provider.execute(
+            claimInput({
+                // even with no lookup at all — a finding that claims nothing is
+                // not the checker's business
+                repoLookup: undefined,
+            }) as any,
+        );
+        expect(out.suggestions).toHaveLength(1);
+    });
+
+    it('discards a verifiable claim when the review has no repository lookup (KRC-05)', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const provider = makeBoundaryProvider();
+        const out = await provider.execute(
+            claimInput({ repoLookup: undefined }) as any,
+        );
+        expect(out.suggestions).toEqual([]);
+    });
+
+    it('claim-checks a detector-derived finding too — one stream since #1864', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const provider = makeBoundaryProvider();
+        const out = await provider.execute(
+            claimInput({
+                kodyRules: [
+                    {
+                        ...claimRule,
+                        detector: { type: 'regex', pattern: 'formatDate' },
+                    },
+                ],
+                repoLookup: lookup({
+                    grep: async () => 'src/a.ts:24:  return formatDate(x);',
+                }),
+            }) as any,
+        );
+        // the detector fired, the judge ran, and the claim check still dropped it
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(1);
+        expect(out.suggestions).toEqual([]);
+    });
+
+    it('logs every discard with the org/team, the rule uuid, the file and a reason', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const provider = makeBoundaryProvider();
+        const warn = jest
+            .spyOn((provider as any).shardLogger, 'warn')
+            .mockImplementation(() => {});
+
+        await provider.execute(
+            claimInput({
+                repoLookup: lookup({
+                    grep: async () => 'src/a.ts:24:  return formatDate(x);',
+                }),
+            }) as any,
+        );
+
+        const discard = warn.mock.calls
+            .map((c) => c[0] as any)
+            .find((e) => e?.metadata?.ruleUuid === RULE_UUID);
+        expect(discard).toBeDefined();
+        expect(discard.metadata.organizationAndTeamData).toEqual({
+            organizationId: 'org-xyz',
+            teamId: 'team-1',
+        });
+        expect(discard.metadata.filename).toBe('src/a.ts');
+        expect(discard.metadata.claimKind).toBe('unused');
+        expect(discard.metadata.reason).toContain('formatDate');
+        expect(discard.message).toContain('discarded a finding');
+    });
+
+    it('drops only the refuted finding and keeps the rest of the shard', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [
+                unusedFinding,
+                {
+                    ruleId: 1,
+                    relevantLinesStart: 4,
+                    relevantLinesEnd: 4,
+                    existingCode: 'y',
+                    suggestionContent: 'unrelated finding',
+                    oneSentenceSummary: 's',
+                },
+            ],
+        }));
+        const provider = makeBoundaryProvider();
+        const out = await provider.execute(
+            claimInput({
+                repoLookup: lookup({
+                    grep: async () => 'src/a.ts:24:  return formatDate(x);',
+                }),
+            }) as any,
+        );
+        expect(out.suggestions).toHaveLength(1);
+        expect(out.suggestions[0].relevantLinesStart).toBe(4);
+    });
+});
+
+// ── #1826: a rule we cannot judge is skipped, and said so ───────────────────
+// Derived from spec.md's P2 story:
+//   KRC-15  an unsatisfied context need means the rule is NOT judged
+//   KRC-16  skipped rules are reported with their count and titles
+//   KRC-31  an all-skipped review reports as degraded, never as a clean pass
+describe('KodyRulesAgentProvider — skipping a rule whose context is unavailable (#1826)', () => {
+    beforeEach(() => {
+        mockRunStructuredReviewCall.mockReset();
+        mockJudge.mockClear();
+    });
+
+    const needyRule = (over: any = {}) => ({
+        uuid: RULE_UUID,
+        title: 'endpoints keep their symbol usage consistent',
+        rule: 'Check every other use of a symbol this change touches.',
+        status: 'active',
+        severity: 'high',
+        path: '**/*.ts',
+        contextNeed: {
+            need: 'symbol-references',
+            sourceHash: 'h',
+            source: 'compiler',
+            inferredAt: new Date(0),
+        },
+        ...over,
+    });
+
+    const needyInput = (over: any = {}) => ({
+        prNumber: 9,
+        organizationAndTeamData: {
+            organizationId: 'org-xyz',
+            teamId: 'team-1',
+        },
+        changedFiles: [
+            {
+                filename: 'src/a.ts',
+                patch: '@@ -1,1 +3,2 @@\n+export function renderInvoice(order) {}',
+                patchWithLinesStr: '3 +export function renderInvoice(order) {}',
+            },
+        ],
+        prTitle: 'p',
+        prBody: '',
+        remoteCommands: undefined,
+        kodyRules: [needyRule()],
+        ...over,
+    });
+
+    const workingLookup = (over: any = {}): any => ({
+        available: true,
+        unavailableReason: '',
+        grep: async () => 'src/b.ts:9: renderInvoice(order)',
+        read: async () => 'export function renderInvoice(order) {}',
+        exists: async () => true,
+        probe: async () => {},
+        ...over,
+    });
+
+    it('does not shard a rule whose declared context could not be retrieved (KRC-15)', async () => {
+        const provider = makeBoundaryProvider();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+
+        // No lookup at all -> the symbol grep throws -> the need is unmet. The
+        // rule is the only one in the review, so nothing is left to judge.
+        await expect(
+            provider.execute(
+                needyInput({
+                    // a second, diff-only rule keeps this out of the
+                    // all-skipped escalation so we can observe the skip alone
+                    kodyRules: [
+                        needyRule(),
+                        {
+                            uuid: 'rule-diff-only',
+                            title: 'no any',
+                            rule: 'do not use any',
+                            status: 'active',
+                            severity: 'high',
+                            path: '**/*.ts',
+                        },
+                    ],
+                    repoLookup: undefined,
+                }) as any,
+            ),
+        ).resolves.toBeDefined();
+
+        const shardedRuleUuids = mockRunStructuredReviewCall.mock.calls
+            .map((call) => call[0]?.user as string)
+            .join('\n');
+        expect(shardedRuleUuids).toContain('no any');
+        expect(shardedRuleUuids).not.toContain(
+            'endpoints keep their symbol usage consistent',
+        );
+    });
+
+    it('judges the rule normally when the context IS retrieved', async () => {
+        const provider = makeBoundaryProvider();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+
+        await provider.execute(
+            needyInput({ repoLookup: workingLookup() }) as any,
+        );
+
+        const user = mockRunStructuredReviewCall.mock.calls
+            .map((call) => call[0]?.user as string)
+            .join('\n');
+        expect(user).toContain('endpoints keep their symbol usage consistent');
+        expect(user).toContain('<Context>');
+        expect(user).toContain('src/b.ts:9: renderInvoice(order)');
+    });
+
+    it('reports the skipped rules as a review warning naming them (KRC-16)', async () => {
+        const provider = makeBoundaryProvider();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+
+        const out = await provider.execute(
+            needyInput({
+                kodyRules: [
+                    needyRule(),
+                    {
+                        uuid: 'rule-diff-only',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+                repoLookup: undefined,
+            }) as any,
+        );
+
+        expect(out.warnings).toHaveLength(1);
+        expect(out.warnings![0].kind).toBe('RULE_CONTEXT_UNAVAILABLE');
+        expect(out.warnings![0].reason).toBe('lookup_unavailable');
+        expect(out.warnings![0].contextWindowTokens).toBe(0);
+        expect(out.warnings![0].detail).toContain('1 Kody Rule(s)');
+        expect(out.warnings![0].detail).toContain(
+            'endpoints keep their symbol usage consistent',
+        );
+    });
+
+    it('emits no warning when every rule was judged', async () => {
+        const provider = makeBoundaryProvider();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+
+        const out = await provider.execute(
+            needyInput({ repoLookup: workingLookup() }) as any,
+        );
+
+        expect(out.warnings).toBeUndefined();
+    });
+
+    it('fails the review rather than reporting a clean pass when EVERY rule was skipped (KRC-31)', async () => {
+        const provider = makeBoundaryProvider();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+
+        await expect(
+            provider.execute(needyInput({ repoLookup: undefined }) as any),
+        ).rejects.toThrow(
+            /all 1 rule\(s\) need repository context this review could not retrieve/,
+        );
+        // and it names what was skipped, so the PR check text is actionable
+        await expect(
+            provider.execute(needyInput({ repoLookup: undefined }) as any),
+        ).rejects.toThrow(/endpoints keep their symbol usage consistent/);
+
+        // The message alone never reaches the PR: it renders only for a FAILED
+        // review, and kody-rules is not a critical agent, so this one is
+        // partial. The names travel on the error, which the orchestrator
+        // harvests on rejection — so the PRODUCER half needs its own guard.
+        // Without it, throwing with an empty warning list left the whole gate
+        // green (Verifier round 3, gap 1).
+        const thrown = await provider
+            .execute(needyInput({ repoLookup: undefined }) as any)
+            .then(
+                () => null,
+                (err) => err,
+            );
+        expect(thrown).toBeInstanceOf(AgentDegradedError);
+        expect(thrown.warnings).toHaveLength(1);
+        expect(thrown.warnings[0]).toMatchObject({
+            kind: 'RULE_CONTEXT_UNAVAILABLE',
+            reason: 'lookup_unavailable',
+        });
+        expect(thrown.warnings[0].detail).toContain(
+            'endpoints keep their symbol usage consistent',
+        );
+
+        // nothing was judged, so no shard call was ever made
+        expect(mockRunStructuredReviewCall).not.toHaveBeenCalled();
+    });
+
+    it('leaves a review of diff-only rules completely unchanged', async () => {
+        const provider = makeBoundaryProvider();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+        const lookup = workingLookup();
+        const grep = jest.spyOn(lookup, 'grep');
+
+        const out = await provider.execute(
+            needyInput({
+                kodyRules: [
+                    {
+                        uuid: RULE_UUID,
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+                repoLookup: lookup,
+            }) as any,
+        );
+
+        expect(out.warnings).toBeUndefined();
+        expect(grep).not.toHaveBeenCalled();
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(1);
+        expect(mockRunStructuredReviewCall.mock.calls[0][0].user).not.toContain(
+            '<Context>',
+        );
+    });
+});
+
+// ── #1826 KRC-22: the empty-read protection has to fire IN a review ─────────
+// `probe()` existed and was unit-tested but had no production call site, so a
+// lookup answering with silence stayed "available" for the whole review and
+// every claim check read that silence as evidence. These tests drive the real
+// `buildRepoLookup` through `provider.execute`, which is the only place the
+// protection can be observed end to end.
+describe('KodyRulesAgentProvider — probing the lookup before trusting it (#1826, KRC-22)', () => {
+    beforeEach(() => {
+        mockRunStructuredReviewCall.mockReset();
+        mockJudge.mockClear();
+    });
+
+    const RULE = {
+        uuid: RULE_UUID,
+        title: 'no unused imports',
+        rule: 'Remove imports that are not used in the file.',
+        status: 'active',
+        severity: 'high',
+        path: '**/*.ts',
+    };
+
+    const unusedFinding = {
+        ruleId: 1,
+        relevantLinesStart: 3,
+        relevantLinesEnd: 3,
+        existingCode: "import { formatDate } from '../shared/date';",
+        suggestionContent: 'this import is unused',
+        oneSentenceSummary: 'unused import',
+        claimKind: 'unused',
+        claimSymbol: 'formatDate',
+    };
+
+    /** A sandbox handle the real buildRepoLookup reports as available. */
+    const handle = (remote: any = {}): any => ({
+        type: 'e2b',
+        remoteCommands: {
+            grep: async () => 'No matches found.',
+            read: async () => 'export const a = 1;\n',
+            listDir: async () => '',
+            ...remote,
+        },
+    });
+
+    const input = (over: any = {}) => ({
+        prNumber: 7,
+        organizationAndTeamData: {
+            organizationId: 'org-xyz',
+            teamId: 'team-1',
+        },
+        changedFiles: [
+            {
+                filename: 'src/a.ts',
+                status: 'modified',
+                patch: "3 +import { formatDate } from '../shared/date';",
+                patchWithLinesStr:
+                    "3 +import { formatDate } from '../shared/date';",
+            },
+        ],
+        prTitle: 'p',
+        prBody: '',
+        remoteCommands: undefined,
+        kodyRules: [RULE],
+        ...over,
+    });
+
+    it('drops a claim the lookup only "confirmed" with silence, and records the flip', async () => {
+        // The lookup says it is available, but every read comes back empty:
+        // NULL_SANDBOX_INSTANCE's exact signature. Its grep answers "No
+        // matches found.", which would CONFIRM the unused claim and publish
+        // the finding — the silence-as-evidence bug KRC-22 exists to stop.
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const warn = jest.fn();
+        const lookup = buildRepoLookup(handle({ read: async () => '' }), {
+            warn,
+        } as any);
+        const provider = makeBoundaryProvider();
+
+        const out = await provider.execute(
+            input({ repoLookup: lookup }) as any,
+        );
+
+        expect(lookup.available).toBe(false);
+        expect(out.suggestions).toEqual([]);
+        const flip = warn.mock.calls
+            .map((c) => c[0] as any)
+            .find((e) => e?.message?.includes('[repo-lookup] disabled'));
+        expect(flip).toBeDefined();
+        expect(flip.metadata.file).toBe('src/a.ts');
+    });
+
+    it('publishes that same finding when the probe reads real content', async () => {
+        // Same review, same "No matches found." grep — the ONLY difference is
+        // that the lookup can actually read the repository.
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const lookup = buildRepoLookup(handle());
+        const provider = makeBoundaryProvider();
+
+        const out = await provider.execute(
+            input({ repoLookup: lookup }) as any,
+        );
+
+        expect(lookup.available).toBe(true);
+        expect(out.suggestions).toHaveLength(1);
+    });
+
+    it('probes the largest surviving patch, never a removed file', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+        const read = jest.fn(
+            async (_path: string, _start: number, _end: number) => 'content',
+        );
+        const lookup = buildRepoLookup(handle({ read }));
+        const provider = makeBoundaryProvider();
+
+        await provider.execute(
+            input({
+                repoLookup: lookup,
+                changedFiles: [
+                    {
+                        filename: 'gone.ts',
+                        status: 'removed',
+                        patch: 'x'.repeat(500),
+                    },
+                    { filename: 'tiny.ts', status: 'modified', patch: 'y' },
+                    {
+                        filename: 'big.ts',
+                        status: 'modified',
+                        patch: 'z'.repeat(200),
+                    },
+                ],
+            }) as any,
+        );
+
+        expect(read).toHaveBeenCalled();
+        expect(read.mock.calls[0][0]).toBe('big.ts');
+    });
+
+    it('does not probe when the PR carries no readable changed file', async () => {
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+        const read = jest.fn(async () => '');
+        const lookup = buildRepoLookup(handle({ read }));
+        const provider = makeBoundaryProvider();
+
+        await provider.execute(
+            input({
+                repoLookup: lookup,
+                changedFiles: [
+                    { filename: 'gone.ts', status: 'removed', patch: 'x' },
+                ],
+            }) as any,
+        );
+
+        expect(read).not.toHaveBeenCalled();
+        expect(lookup.available).toBe(true);
+    });
+
+    it('shares one lookup instance: a flip reaches the retrieval AND the claim check', async () => {
+        // A needy rule plus a claim-carrying finding in the SAME review. The
+        // provider used to build two independent RepoLookups, so a flip caught
+        // by one could not reach the other.
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [unusedFinding],
+        }));
+        const lookup = buildRepoLookup(handle({ read: async () => '' }));
+        const provider = makeBoundaryProvider();
+
+        const out = await provider.execute(
+            input({
+                repoLookup: lookup,
+                kodyRules: [
+                    RULE,
+                    {
+                        uuid: 'rule-needy',
+                        title: 'symbol usage stays consistent',
+                        rule: 'Check every other use of a symbol this change touches.',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                        contextNeed: {
+                            need: 'symbol-references',
+                            sourceHash: 'h',
+                            source: 'compiler',
+                            inferredAt: new Date(0),
+                        },
+                    },
+                ],
+            }) as any,
+        );
+
+        // retrieval side: the needy rule was never sharded
+        const sharded = mockRunStructuredReviewCall.mock.calls
+            .map((call) => call[0]?.user as string)
+            .join('\n');
+        expect(sharded).not.toContain('symbol usage stays consistent');
+        // and it is reported
+        expect(
+            out.warnings?.some(
+                (w: any) => w.kind === 'RULE_CONTEXT_UNAVAILABLE',
+            ),
+        ).toBe(true);
+        // claim-check side: the same flipped instance dropped the finding
+        expect(out.suggestions).toEqual([]);
+    });
+});
+
+// Azure Repos names changed files with a leading "/" ("/src/util.ts") and the
+// sandbox rejects absolute paths. A companion-file rule on such a PR has to be
+// judged with the repository's answer, not skipped as context unavailable.
+describe('KodyRulesAgentProvider — a PR whose changed files start with "/" (Azure Repos)', () => {
+    let dir: string;
+
+    beforeEach(() => {
+        mockRunStructuredReviewCall.mockReset();
+        mockRunStructuredReviewCall.mockImplementation(async () => ({
+            violations: [],
+        }));
+        dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kody-azure-paths-'));
+        const write = (rel: string, content: string) => {
+            fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+            fs.writeFileSync(path.join(dir, rel), content);
+        };
+        write('src/main.ts', 'export const total = (n: number[]) => n.length;\n');
+        write('src/util.ts', 'export const slugify = (t: string) => t;\n');
+        write('src/main.spec.ts', "import { total } from './main';\n");
+    });
+
+    afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+    it('judges a companion-file rule with what the repository holds', async () => {
+        const lookup = buildRepoLookup({
+            type: 'local',
+            sandboxId: dir,
+            repoDir: dir,
+            remoteCommands: (
+                new LocalSandboxService({} as any) as any
+            ).buildRemoteCommands(dir),
+        } as any);
+        const provider = makeBoundaryProvider();
+
+        const out = await provider.execute({
+            prNumber: 9,
+            organizationAndTeamData: { organizationId: 'org-xyz', teamId: 'team-1' },
+            changedFiles: [
+                {
+                    filename: '/src/util.ts',
+                    status: 'modified',
+                    patch: '@@ -1 +1 @@\n-export const slugify = (t: string) => t.trim();\n+export const slugify = (t: string) => t;',
+                },
+                {
+                    filename: '/src/main.ts',
+                    status: 'modified',
+                    patch: '@@ -1 +1 @@\n-export const total = (n: number[]) => 0;\n+export const total = (n: number[]) => n.length;',
+                },
+            ],
+            prTitle: 'p',
+            prBody: '',
+            remoteCommands: undefined,
+            repoLookup: lookup,
+            kodyRules: [
+                {
+                    uuid: RULE_UUID,
+                    title: 'modules have a companion spec',
+                    rule: 'Every changed module must have a companion spec file.',
+                    status: 'active',
+                    severity: 'high',
+                    scope: 'file',
+                    path: '**/*.ts',
+                    contextNeed: {
+                        need: 'sibling-file',
+                        sourceHash: 'h',
+                        source: 'compiler',
+                        inferredAt: new Date(0),
+                    },
+                },
+            ],
+        } as any);
+
+        expect(lookup.available).toBe(true);
+        expect(
+            out.warnings?.some((w: any) => w.kind === 'RULE_CONTEXT_UNAVAILABLE'),
+        ).toBeFalsy();
+        const prompts = mockRunStructuredReviewCall.mock.calls
+            .map((call) => call[0]?.user as string)
+            .join('\n');
+        expect(prompts).toContain('- /src/main.spec.ts: exists');
+        expect(prompts).toContain('- /src/util.spec.ts: does not exist');
     });
 });

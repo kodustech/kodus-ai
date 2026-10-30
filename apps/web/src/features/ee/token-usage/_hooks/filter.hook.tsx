@@ -17,8 +17,21 @@ export const useTokenUsageFilters = (models: string[]) => {
     // screen looks frozen for seconds. useTransition surfaces that pending
     // window so the UI can show a loading overlay.
     const [isPending, startTransition] = useTransition();
-    const navigate = (url: string) =>
+    // Skip no-op navigations. The prNumber/developer effects below depend on
+    // `searchParams`, so every router.replace re-fires them; without this guard
+    // they keep re-issuing a semantically-identical URL and spin into a reload
+    // loop (worsened once the `?models=` seed effect writes to the URL on
+    // mount). Compare order-independently so `a=1&b=2` == `b=2&a=1`.
+    const normalizeQuery = (query: string) => {
+        const params = new URLSearchParams(query);
+        params.sort();
+        return params.toString();
+    };
+    const navigate = (url: string) => {
+        const nextQuery = normalizeQuery(url.split("?")[1] ?? "");
+        if (nextQuery === normalizeQuery(searchParams.toString())) return;
         startTransition(() => router.replace(url));
+    };
 
     // Seed the model selection from `?models=` so a deep-link (e.g. the BYOK
     // per-model cost chip) opens the screen already scoped to that model.
@@ -51,6 +64,26 @@ export const useTokenUsageFilters = (models: string[]) => {
         searchParams.get("developer") ?? "",
     );
     const debouncedDeveloper = useDebounce(developer, 500);
+
+    const selectedRepositoryId = searchParams.get("repositoryId") ?? "";
+
+    const handleRepositoryChange = (repositoryId: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (repositoryId) params.set("repositoryId", repositoryId);
+        else params.delete("repositoryId");
+        navigate(`${pathname}?${params.toString()}`);
+    };
+
+    // Direct selection from the developer combobox — set (or clear) the
+    // developer scope immediately, mirroring the repo picker. Keep the local
+    // `developer` state in sync so the debounced effect below doesn't fight it.
+    const handleDeveloperSelect = (developerName: string) => {
+        setDeveloper(developerName);
+        const params = new URLSearchParams(searchParams.toString());
+        if (developerName) params.set("developer", developerName);
+        else params.delete("developer");
+        navigate(`${pathname}?${params.toString()}`);
+    };
 
     const handleFilterChange = (value: string) => {
         const params = new URLSearchParams(searchParams.toString());
@@ -147,10 +180,13 @@ export const useTokenUsageFilters = (models: string[]) => {
         selectedModels,
         prNumber,
         developer,
+        selectedRepositoryId,
+        handleRepositoryChange,
         handleFilterChange,
         handleModelChange,
         handlePrNumberChange,
         handleDeveloperChange,
+        handleDeveloperSelect,
         getModelSelectionText,
         setSelectedModels,
     };

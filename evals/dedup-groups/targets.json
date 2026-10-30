@@ -1,0 +1,10 @@
+{
+    "__doc": [
+        "Floors per set and model for the share of gold duplicate pairs the dedup joins (run.js --gate). controlled: the pool of the nightly model, DeepSeek's 30 PRs; full: every pool.",
+        "No floor yet: the step's version is changing (#1821's dedup), so the floors come from two runs once it settles."
+    ],
+    "sets": {
+        "controlled": { "models": {} },
+        "full": { "models": {} }
+    }
+}

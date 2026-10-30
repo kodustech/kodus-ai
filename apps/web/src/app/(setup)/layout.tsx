@@ -35,6 +35,15 @@ export default async function Layout(props: React.PropsWithChildren) {
             auth(),
         ]);
 
+    // Read the selected-team cookie server-side and pass it to
+    // SelectedTeamProvider so its first client render matches the server —
+    // otherwise the client-only cookie read diverges the tree and shifts the
+    // Radix useId()s under SupportDropdown / SetupUserNav (hydration mismatch).
+    const { cookies } = await import("next/headers");
+    const selectedTeamIdFromCookie = (await cookies()).get(
+        "global-selected-team-id",
+    )?.value;
+
     const userStatus = session?.user?.status
         ? String(session.user.status).toLowerCase()
         : undefined;
@@ -73,7 +82,8 @@ export default async function Layout(props: React.PropsWithChildren) {
                     name: organizationName,
                 }}>
                 <AllTeamsProvider teams={teams}>
-                    <SelectedTeamProvider>
+                    <SelectedTeamProvider
+                        initialTeamId={selectedTeamIdFromCookie}>
                         <SetupProgressSaver />
                         <div className="bg-background relative min-h-screen">
                             <div className="border-primary-dark bg-card-lv1 fixed inset-x-0 top-0 z-50 flex h-16 items-center gap-4 border-b-2 px-6">

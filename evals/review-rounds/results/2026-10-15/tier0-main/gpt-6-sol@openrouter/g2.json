@@ -1,0 +1,516 @@
+{
+  "model": "gpt-6-sol@openrouter",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "53d0ebdf770e24c6841bb578c550fdf5cfc9f5fc4a717a339b1de93e7a48047d"
+  },
+  "startedAt": "2026-10-15T16:21:24.665Z",
+  "updatedAt": "2026-10-15T16:24:28.915Z",
+  "complete": true,
+  "selectedCases": [
+    "R8-consequence-kody-rule-prior",
+    "K7-rule-repost-prod-profile",
+    "P22-rule-forward-parsed-pingpong"
+  ],
+  "casesSourceDigest": "86b7ff2e8a5db76dae3f7ed3df899f9e989d3763af9b9704b7cadc032db3d9c4",
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 4,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 2,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "K7-rule-repost-prod-profile · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "K7-rule-repost-prod-profile · dayKey-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P22-rule-forward-parsed-pingpong · create-order-raw-body-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P22-rule-forward-parsed-pingpong · cancel-order-raw-body-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "gpt-6-sol@openrouter",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 60905,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Rethrowing NotReadyError from fetchStatus routes an accepted charge into pollCharge's resubmission branch. WHY: Gateway.submit is explicitly non-idempotent, so each poll tick that encounters this transient settlement error creates another charge. HOW: Keep NotReadyError retryable without treating it as evidence that the gateway never received the charge; change the poller to retry status rather than submit for this error.",
+          "keep": true,
+          "rationale": "fetchStatus rethrows status()'s NotReadyError, and pollCharge catches that same error and calls gw.submit for an already-accepted charge on each poll. Gateway.submit is documented non-idempotent, so repeated transient status errors create additional charges. This is a different consequence of the earlier implemented propagation suggestion, not a repeat of its terminal-failure issue.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|fetchStatus|pollCharge|submit\\(",
+                "glob": "*.ts",
+                "path": "src/billing",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 35
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 35
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 35
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nA transient `NotReadyError` from `fetchStatus` sends an accepted charge through `pollCharge`’s resubmission branch, creating another charge on each poll tick because `Gateway.submit` is non-idempotent. Keep `NotReadyError` retryable, but have `pollCharge` retry the status check instead of submitting again."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-sol@openrouter",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58361,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError from status causes pollCharge to resubmit a charge that the gateway already accepted. WHY: pollCharge runs on every tick, and Gateway.submit is explicitly non-idempotent, so an unsettled charge can create a new charge on each tick. HOW: Keep the error retryable, but change pollCharge's NotReadyError handler to wait for the next status poll instead of calling submit; this revises the earlier propagation suggestion because its downstream effect was not accounted for.",
+          "keep": true,
+          "rationale": "fetchStatus now propagates NotReadyError to pollCharge, whose handler calls gw.submit on every affected tick. pollCharge is documented as polling accepted charges, and Gateway.submit is explicitly non-idempotent, so repeated NotReadyError responses can create duplicate charges. This is a different downstream failure caused by the earlier propagation change, not a repeat of the earlier terminal-error finding.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|fetchStatus",
+                "glob": "status.ts",
+                "path": "src/billing",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge\\(|submit\\(",
+                "glob": "*.ts",
+                "path": "src",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 65
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nPropagating `NotReadyError` from `status` makes `pollCharge` call non-idempotent `Gateway.submit` on every tick, potentially creating duplicate charges while the original remains unsettled. Keep `NotReadyError` retryable, but have `pollCharge` return a pending result and wait for the next status poll instead of calling `gw.submit(charge.payload)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-sol@openrouter",
+      "rep": 1,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13916,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Near a timezone boundary, `dayKey` can return the wrong calendar day because `toISOString()` uses UTC rather than the user’s local time. Use the already imported `formatLocalDate(at)` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-sol@openrouter",
+      "rep": 2,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14515,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "A UTC-derived `dayKey` can select the wrong local calendar day; this is separate from the earlier `rangeLabel` finding. Use `formatLocalDate(at)` instead of `at.toISOString().slice(0, 10)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-sol@openrouter",
+      "rep": 1,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15873,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Publishing `req.body` can forward fields the schema did not accept to the `order.cancel_requested` event. Publish `result.data` instead so the event contains only parsed values."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-sol@openrouter",
+      "rep": 2,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14720,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Fields not accepted by `CancelOrderSchema` can reach the event bus because the handler publishes `req.body` after validation. Publish `result.data` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

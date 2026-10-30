@@ -28,7 +28,10 @@ function result(over: Partial<FinderWithVerifyResult> = {}): FinderWithVerifyRes
         reasoning: 'r',
         kept: [],
         keptEvidence: [],
+        keptParseMode: [],
         droppedByVerify: [],
+        unverified: [],
+        droppedByQuoteCheck: [],
         finderState: { steps: [], usage: {} } as any,
         verifyUsage: {} as any,
         recallUsage: {} as any,
@@ -77,6 +80,7 @@ describe('review-finding', () => {
                         finding: sugg({ relevantFile: 'src/x.ts' }),
                         evidence: 'not reachable in this path',
                         verifierEvidence: EMPTY_EVIDENCE,
+                        parseMode: 'tool' as const,
                     },
                 ],
             });
@@ -87,12 +91,6 @@ describe('review-finding', () => {
                 outcome: 'dropped',
                 reason: 'not reachable in this path',
             });
-        });
-
-        it('carries self-confidence from the payload into provenance', () => {
-            const r = result({ kept: [sugg({ confidence: 7 })] });
-            const [f] = buildFindingsFromVerify(r, { agent: 'bug', pass: 'initial' });
-            expect(f.provenance.selfConfidence).toBe(7);
         });
     });
 
@@ -107,11 +105,13 @@ describe('review-finding', () => {
                             finding: sugg({ severity: 'high', label: 'bug' }),
                             evidence: 'x',
                             verifierEvidence: EMPTY_EVIDENCE,
+                            parseMode: 'tool' as const,
                         },
                         {
                             finding: sugg({ severity: 'low', label: 'performance' }),
                             evidence: 'y',
                             verifierEvidence: EMPTY_EVIDENCE,
+                            parseMode: 'tool' as const,
                         },
                     ],
                 }),

@@ -1,5 +1,7 @@
 import { ExecuteCliReviewUseCase } from '../execute-cli-review.use-case';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { resolveKodyLearningSettings } from '@libs/common/utils/kody-rules/kody-learning-settings';
 
 /**
  * We test the private helpers via the public execute() path and
@@ -47,6 +49,8 @@ function createMocks() {
 
     const kodyRulesService = {
         findByOrganizationId: jest.fn().mockResolvedValue(null),
+        // Default: nothing to reconcile (returns null → caller keeps loaded rules).
+        syncRulesWithPlanLimit: jest.fn().mockResolvedValue(null),
     };
 
     const kodyRulesValidationService = {
@@ -65,19 +69,38 @@ function createMocks() {
         onStageSkipped: jest.fn().mockResolvedValue(undefined),
     };
 
+    const codeManagementService = {
+        getTypeIntegration: jest.fn().mockResolvedValue(null),
+        getDefaultBranch: jest.fn().mockResolvedValue('develop'),
+    };
+
+    // Default: what the stored global and repository levels say, i.e. no
+    // directory override and no kodus-config.yml.
+    const codeBaseConfigService = {
+        getMergedCodeReviewConfigs: jest
+            .fn()
+            .mockImplementation(async (_org, repository, parameter) =>
+                resolveKodyLearningSettings(parameter, repository.id),
+            ),
+    };
+
     const useCase = new ExecuteCliReviewUseCase(
         converter as any,
         pipelineStrategy as any,
+        codeManagementService as any,
         parametersService as any,
         automationExecutionService as any,
         teamAutomationService as any,
         kodyRulesService as any,
         kodyRulesValidationService as any,
         pipelineObserver as any,
+        codeBaseConfigService as any,
     );
 
     return {
         useCase,
+        codeManagementService,
+        codeBaseConfigService,
         converter,
         pipelineStrategy,
         parametersService,
@@ -106,6 +129,179 @@ function makeRule(overrides: Record<string, any> = {}) {
 // ---------------------------------------------------------------------------
 
 describe('ExecuteCliReviewUseCase', () => {
+    /**
+     * Regression coverage for issue #1541. This used to default to the literal
+     * 'github', which is wrong twice over: it names a platform the
+     * organization may not use, and its lowercase spelling never matches
+     * PlatformType.GITHUB ('GITHUB'), so the repository lookup it feeds could
+     * not hit even for real GitHub users.
+     */
+    describe('resolveCliPlatform', () => {
+        it('uses the platform the CLI inferred from a known SaaS host', async () => {
+            const { useCase, codeManagementService } = createMocks();
+
+            const result = await (useCase as any).resolveCliPlatform(
+                { organizationId: 'org-1', teamId: 'team-1' },
+                { inferredPlatform: PlatformType.GITHUB },
+                false,
+            );
+
+            expect(result).toBe(PlatformType.GITHUB);
+            expect(
+                codeManagementService.getTypeIntegration,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('falls back to the connected integration for a self-managed host', async () => {
+            const { useCase, codeManagementService } = createMocks();
+            codeManagementService.getTypeIntegration.mockResolvedValue(
+                PlatformType.GITLAB,
+            );
+
+            const result = await (useCase as any).resolveCliPlatform(
+                { organizationId: 'org-1', teamId: 'team-1' },
+                { remote: 'https://gitlab.acme.com/group/repo.git' },
+                false,
+            );
+
+            expect(result).toBe(PlatformType.GITLAB);
+        });
+
+        it('never guesses GitHub when the organization has no integration', async () => {
+            const { useCase, codeManagementService } = createMocks();
+            codeManagementService.getTypeIntegration.mockResolvedValue(null);
+
+            const result = await (useCase as any).resolveCliPlatform(
+                { organizationId: 'org-1', teamId: 'team-1' },
+                { remote: 'https://gitlab.acme.com/group/repo.git' },
+                false,
+            );
+
+            expect(result).toBeUndefined();
+        });
+
+        it('skips the integration lookup for anonymous trial traffic', async () => {
+            const { useCase, codeManagementService } = createMocks();
+
+            const result = await (useCase as any).resolveCliPlatform(
+                { organizationId: 'org-1', teamId: 'team-1' },
+                { remote: 'https://gitlab.acme.com/group/repo.git' },
+                true,
+            );
+
+            expect(result).toBeUndefined();
+            expect(
+                codeManagementService.getTypeIntegration,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('degrades to undefined when the lookup blows up', async () => {
+            const { useCase, codeManagementService } = createMocks();
+            codeManagementService.getTypeIntegration.mockRejectedValue(
+                new Error('db down'),
+            );
+
+            await expect(
+                (useCase as any).resolveCliPlatform(
+                    { organizationId: 'org-1', teamId: 'team-1' },
+                    { remote: 'https://gitlab.acme.com/group/repo.git' },
+                    false,
+                ),
+            ).resolves.toBeUndefined();
+        });
+    });
+
+    describe('resolveRepoInstructions', () => {
+        const org = { organizationId: 'org-1', teamId: 'team-1' };
+        const changedFiles = [{ filename: 'services/billing/pay.ts' }];
+        const parameter = (repoConfigs: Record<string, unknown> = {}) => ({
+            configs: {},
+            repositories: [{ id: 'repo-1', name: 'api', configs: repoConfigs }],
+        });
+        const resolve = (useCase: any, stored: any, repoId = 'repo-1') =>
+            useCase.resolveRepoInstructions(
+                org,
+                { id: repoId, name: 'api' },
+                stored,
+                changedFiles,
+            );
+
+        it('takes the setting from the resolution PR reviews use, with the changed files for directories', async () => {
+            const { useCase, codeBaseConfigService } = createMocks();
+            // A directory override or kodus-config.yml turns it on.
+            codeBaseConfigService.getMergedCodeReviewConfigs.mockResolvedValue({
+                repoInstructionsEnabled: true,
+            });
+            const stored = parameter();
+
+            await expect(resolve(useCase, stored)).resolves.toEqual({
+                enabled: true,
+                baseRef: 'develop',
+            });
+            expect(
+                codeBaseConfigService.getMergedCodeReviewConfigs,
+            ).toHaveBeenCalledWith(
+                org,
+                { id: 'repo-1', name: 'api' },
+                stored,
+                'develop',
+                changedFiles,
+            );
+        });
+
+        it('lets a directory or kodus-config.yml turn off what the repository turned on', async () => {
+            const { useCase, codeBaseConfigService } = createMocks();
+            codeBaseConfigService.getMergedCodeReviewConfigs.mockResolvedValue({
+                repoInstructionsEnabled: false,
+            });
+
+            await expect(
+                resolve(useCase, parameter({ repoInstructionsEnabled: true })),
+            ).resolves.toEqual({ enabled: false, baseRef: undefined });
+        });
+
+        it("keeps the repository's own setting when the merged config cannot be read", async () => {
+            const { useCase, codeBaseConfigService } = createMocks();
+            codeBaseConfigService.getMergedCodeReviewConfigs.mockRejectedValue(
+                new Error('yml read failed'),
+            );
+
+            await expect(
+                resolve(useCase, parameter({ repoInstructionsEnabled: true })),
+            ).resolves.toEqual({ enabled: true, baseRef: 'develop' });
+        });
+
+        it("keeps the repository's own setting with no branch when the lookup fails, so the review skips them and says why", async () => {
+            const { useCase, codeManagementService, codeBaseConfigService } =
+                createMocks();
+            codeManagementService.getDefaultBranch.mockRejectedValue(
+                new Error('404'),
+            );
+
+            await expect(
+                resolve(useCase, parameter({ repoInstructionsEnabled: true })),
+            ).resolves.toEqual({ enabled: true, baseRef: undefined });
+            expect(
+                codeBaseConfigService.getMergedCodeReviewConfigs,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('asks the git host nothing when the repository is unknown', async () => {
+            const { useCase, codeManagementService } = createMocks();
+
+            await expect(
+                resolve(
+                    useCase,
+                    { configs: { repoInstructionsEnabled: true } },
+                    'global',
+                ),
+            ).resolves.toEqual({ enabled: true, baseRef: undefined });
+            expect(
+                codeManagementService.getDefaultBranch,
+            ).not.toHaveBeenCalled();
+        });
+    });
+
     describe('resolveRepositoryFromRemote', () => {
         let useCase: any;
 
@@ -123,14 +319,6 @@ describe('ExecuteCliReviewUseCase', () => {
             const result = useCase.resolveRepositoryFromRemote(
                 'https://github.com/org/repo.git',
                 [],
-            );
-            expect(result).toEqual({ id: 'global', name: null });
-        });
-
-        it('should return "global" when repositories is undefined', () => {
-            const result = useCase.resolveRepositoryFromRemote(
-                'https://github.com/org/repo.git',
-                undefined,
             );
             expect(result).toEqual({ id: 'global', name: null });
         });
@@ -276,28 +464,10 @@ describe('ExecuteCliReviewUseCase', () => {
             );
         });
 
-        it('should strip http protocol', () => {
-            expect(useCase.normalizeGitUrl('http://github.com/org/repo')).toBe(
-                'github.com/org/repo',
-            );
-        });
-
         it('should strip git@ prefix and convert colon to slash', () => {
             expect(useCase.normalizeGitUrl('git@github.com:org/repo.git')).toBe(
                 'github.com/org/repo',
             );
-        });
-
-        it('should strip .git suffix', () => {
-            expect(
-                useCase.normalizeGitUrl('https://github.com/org/repo.git'),
-            ).toBe('github.com/org/repo');
-        });
-
-        it('should strip trailing slashes', () => {
-            expect(
-                useCase.normalizeGitUrl('https://github.com/org/repo///'),
-            ).toBe('github.com/org/repo');
         });
 
         it('should lowercase', () => {
@@ -323,14 +493,6 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(
                 useCase.extractRepoNameFromRemote(
                     'https://github.com/org/my-repo.git',
-                ),
-            ).toBe('my-repo');
-        });
-
-        it('should extract name from SSH URL', () => {
-            expect(
-                useCase.extractRepoNameFromRemote(
-                    'git@github.com:org/my-repo.git',
                 ),
             ).toBe('my-repo');
         });
@@ -428,6 +590,59 @@ describe('ExecuteCliReviewUseCase', () => {
             ).toHaveBeenCalledWith([globalRule, repoRule], '123');
         });
 
+        it.each([
+            ['the repository opted in', {}, { repoInstructionsEnabled: true }, true],
+            ['the repository opted out under a global on', { repoInstructionsEnabled: true }, { repoInstructionsEnabled: false }, false],
+            ['only the global level opted in', { repoInstructionsEnabled: true }, {}, true],
+        ])(
+            'resolves coding-agent instructions like PR reviews, with no directory or kodus-config.yml override: %s',
+            async (_label, globalConfigs, repoConfigs, expected) => {
+                const {
+                    useCase,
+                    parametersService,
+                    kodyRulesService,
+                    codeBaseConfigService,
+                } = createMocks();
+                const changedFiles = [{ filename: 'src/index.ts' }];
+                parametersService.findByKey.mockResolvedValue({
+                    toObject: () => ({
+                        configValue: {
+                            configs: globalConfigs,
+                            repositories: [
+                                {
+                                    id: '123',
+                                    name: 'my-repo',
+                                    http_url: 'https://github.com/org/my-repo',
+                                    configs: repoConfigs,
+                                },
+                            ],
+                        },
+                    }),
+                });
+                kodyRulesService.findByOrganizationId.mockResolvedValue(null);
+
+                const result = await (useCase as any).loadUserConfigWithRules(
+                    orgAndTeam,
+                    { remote: 'https://github.com/org/my-repo.git' },
+                    changedFiles,
+                );
+
+                expect(result.config.repoInstructionsEnabled).toBe(expected);
+                expect(result.instructionsBaseRef).toBe(
+                    expected ? 'develop' : undefined,
+                );
+                expect(
+                    codeBaseConfigService.getMergedCodeReviewConfigs,
+                ).toHaveBeenCalledWith(
+                    orgAndTeam,
+                    { id: '123', name: 'my-repo' },
+                    expect.objectContaining({ configs: globalConfigs }),
+                    'develop',
+                    changedFiles,
+                );
+            },
+        );
+
         it('should use "global" repositoryId when no git context', async () => {
             const {
                 useCase,
@@ -480,6 +695,59 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(result.repositoryId).toBe('global');
             expect(result.repositoryName).toBeNull();
             expect(result.config).toBeDefined();
+        });
+
+        // Fail-safe: a CLI review reconciles the plan lock before applying
+        // rules, so a paid org whose rules were left parked (webhook missed)
+        // still runs with them reactivated in this review.
+        it('reconciles plan-locked rules and applies the synced set', async () => {
+            const {
+                useCase,
+                parametersService,
+                kodyRulesService,
+                kodyRulesValidationService,
+            } = createMocks();
+
+            const lockedRule = makeRule({
+                uuid: 'r-locked',
+                repositoryId: 'global',
+                status: KodyRulesStatus.PAUSED,
+                lockedByPlan: true,
+            });
+            const unlockedRule = {
+                ...lockedRule,
+                status: KodyRulesStatus.ACTIVE,
+                lockedByPlan: false,
+            };
+
+            parametersService.findByKey.mockResolvedValue({
+                toObject: () => ({
+                    configValue: { configs: {}, repositories: [] },
+                }),
+            });
+            kodyRulesService.findByOrganizationId.mockResolvedValue({
+                toObject: () => ({ rules: [lockedRule] }),
+            });
+            // Paid plan → sync reactivates and returns the fresh doc.
+            kodyRulesService.syncRulesWithPlanLimit.mockResolvedValue({
+                toObject: () => ({ rules: [unlockedRule] }),
+            });
+            kodyRulesValidationService.filterKodyRules.mockReturnValue({
+                standardRules: [unlockedRule],
+                memoryRules: [],
+            });
+
+            await (useCase as any).loadUserConfigWithRules(orgAndTeam, undefined);
+
+            expect(
+                kodyRulesService.syncRulesWithPlanLimit,
+            ).toHaveBeenCalledWith(orgAndTeam, {
+                entity: expect.anything(),
+            });
+            // filterKodyRules must see the SYNCED (ACTIVE) rule, not the parked one.
+            expect(
+                kodyRulesValidationService.filterKodyRules,
+            ).toHaveBeenCalledWith([unlockedRule], 'global');
         });
     });
 

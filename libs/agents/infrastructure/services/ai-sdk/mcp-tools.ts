@@ -1,11 +1,39 @@
-import { createMCPAdapter, type MCPServerConfig } from '@libs/mcp-server/mcp-adapter';
+import { createLogger } from '@libs/core/log/logger';
+import {
+    createMCPAdapter,
+    type MCPServerConfig,
+} from '@libs/mcp-server/mcp-adapter';
+import { PROACTIVE_HINT_META_KEY } from '@libs/mcp-server/types/mcp-tool.interface';
+import { isFirstPartyMcpIntegration } from '@libs/mcp-server/utils/mcp-auth.constants';
 import { jsonSchema, tool, type Tool } from 'ai';
 
+const logger = createLogger('connectMcpTools');
+
 export type { MCPServerConfig };
+
+/**
+ * What a tool declares about itself (MCP tool annotations). Carried beside the
+ * tool map rather than inside it: the AI SDK `Tool` type has no slot for this,
+ * and consumers (audit, proactive offers) need it without the model seeing it.
+ */
+export interface McpToolMetadata {
+    /** False when the tool mutates state. Absent when the server omits it. */
+    readOnlyHint?: boolean;
+    /** True when the effect is irreversible. */
+    destructiveHint?: boolean;
+    /**
+     * When an agent should offer this action, if it may offer it at all. Read
+     * from the tool's `_meta`, and only from a first-party server: the line
+     * goes into the agent's prompt.
+     */
+    proactiveHint?: string;
+}
 
 export interface ConnectedMcpTools {
     /** Tool map ready to spread into `generateText({ tools })`. */
     tools: Record<string, Tool>;
+    /** Per-tool annotations, keyed by the same names as `tools`. */
+    metadata: Record<string, McpToolMetadata>;
     /** Disconnects the underlying local MCP adapter. Always call in a finally. */
     close: () => Promise<void>;
 }
@@ -54,15 +82,43 @@ export async function connectMcpTools(
             error instanceof Error ? error : new Error(String(error)),
             'mcp-adapter',
         );
-        return { tools: {}, close: async () => undefined };
+        return { tools: {}, metadata: {}, close: async () => undefined };
     }
 
     const tools: Record<string, Tool> = {};
+    const metadata: Record<string, McpToolMetadata> = {};
+
+    // Tools are attributed to servers by name, so a name any other server
+    // also uses is not trusted.
+    const otherServers = new Set(
+        servers
+            .filter((s) => !isFirstPartyMcpIntegration(s.integrationId))
+            .map((s) => s.name),
+    );
+    const firstPartyServers = new Set(
+        servers
+            .filter((s) => isFirstPartyMcpIntegration(s.integrationId))
+            .map((s) => s.name)
+            .filter((name) => !otherServers.has(name)),
+    );
+    const ignoredHints: { tool: string; serverName?: string }[] = [];
 
     try {
         const mcpTools = await adapter.getTools();
 
         for (const mcpTool of mcpTools) {
+            const hint = readProactiveHint(mcpTool._meta);
+            const trusted = firstPartyServers.has(mcpTool.serverName ?? '');
+            if (hint && !trusted) {
+                ignoredHints.push({
+                    tool: mcpTool.name,
+                    serverName: mcpTool.serverName,
+                });
+            }
+            metadata[mcpTool.name] = {
+                ...readAnnotations(mcpTool.annotations),
+                ...(hint && trusted ? { proactiveHint: hint } : {}),
+            };
             tools[mcpTool.name] = tool({
                 description: mcpTool.description ?? '',
                 inputSchema: jsonSchema(
@@ -87,12 +143,52 @@ export async function connectMcpTools(
         );
     }
 
+    if (ignoredHints.length) {
+        logger.warn({
+            message:
+                'Ignored proactive hints from MCP servers that are not first-party',
+            context: 'connectMcpTools',
+            metadata: { ignoredHints },
+        });
+    }
+
     return {
         tools,
+        metadata,
         close: async () => {
             await adapter.disconnect().catch(() => undefined);
         },
     };
+}
+
+/**
+ * Read the annotation keys we act on, ignoring anything else a server sends.
+ * Every field stays optional — a server that omits them is normal, and the
+ * consumer decides what an unknown tool defaults to.
+ */
+function readAnnotations(raw: unknown): McpToolMetadata {
+    if (!raw || typeof raw !== 'object') {
+        return {};
+    }
+
+    const a = raw as Record<string, unknown>;
+    return {
+        ...(typeof a.readOnlyHint === 'boolean'
+            ? { readOnlyHint: a.readOnlyHint }
+            : {}),
+        ...(typeof a.destructiveHint === 'boolean'
+            ? { destructiveHint: a.destructiveHint }
+            : {}),
+    };
+}
+
+function readProactiveHint(meta: unknown): string | undefined {
+    if (!meta || typeof meta !== 'object') {
+        return undefined;
+    }
+
+    const hint = (meta as Record<string, unknown>)[PROACTIVE_HINT_META_KEY];
+    return typeof hint === 'string' && hint ? hint : undefined;
 }
 
 /**

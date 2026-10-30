@@ -50,6 +50,38 @@ export interface IKodyRules {
     updatedAt?: Date;
 }
 
+/**
+ * The few fields a picker needs to list a rule and link to it: no rule body,
+ * no examples, no detector. An org with thousands of rules ships kilobytes
+ * here instead of megabytes (see `findRulesIndex`).
+ */
+export interface IKodyRuleIndexEntry {
+    uuid: string;
+    title: string;
+    repositoryId: string;
+    directoryId?: string;
+    type?: KodyRulesType;
+    status: KodyRulesStatus;
+}
+
+export type KodyRuleAutoPauseState = 'ignored' | 'noisy';
+
+export interface IKodyRuleAutoPause {
+    state: KodyRuleAutoPauseState;
+    pausedAt: Date;
+    /** Usage window the decision was taken on. */
+    windowStart: Date;
+    windowEnd: Date;
+    triggers: number;
+    implemented: number;
+    /** implemented / triggers, 0..1. */
+    rate: number;
+    thumbsUp: number;
+    thumbsDown: number;
+    /** When the weekly digest listed this pause; `null` until then. */
+    digestedAt: Date | null;
+}
+
 export interface IKodyRule {
     uuid?: string;
     title: string;
@@ -64,7 +96,90 @@ export interface IKodyRule {
     type?: KodyRulesType;
     extendedContext?: IKodyRulesExtendedContext;
     examples?: IKodyRulesExample[];
+    /**
+     * T0 compiled detector (issue #1449). When present, this rule is mechanical
+     * and is checked at review time by running this pattern over added lines —
+     * no LLM. Compiled once at authoring by the detector compiler and validated
+     * by its gate; absent when the rule is semantic (judged by the LLM). Stored
+     * inline on the embedded rule (the Mongo `rules` array is Mixed, so no
+     * schema migration is needed).
+     */
+    detector?: IKodyRuleDetector;
+    /**
+     * Structured validation summary for LONG rules (> 1000 chars), generated
+     * once by an LLM ("WHAT TO VALIDATE / HOW TO VALIDATE" bullets) and reused
+     * on every review — measured to nearly double occurrence-recall on terse
+     * models without regressing strong ones (#1567).
+     *
+     * Consumed EXCLUSIVELY by the code-review path (the shard prompt swaps
+     * `rule` for `summary.content` when `sourceHash` matches the current rule
+     * text). UI, sync and export always use the full `rule`. A stale summary
+     * (hash mismatch after an edit some write path missed) is ignored and
+     * logged, never used. Stored inline on the embedded rule (the Mongo
+     * `rules` array is a plain Array, so no schema migration is needed).
+     */
+    summary?: IKodyRuleSummary;
+    /**
+     * Atomic decomposition (see IKodyRuleAtoms). Review-path only, like
+     * `summary`; stored inline on the embedded rule (plain Array in Mongo,
+     * no migration).
+     */
+    atoms?: IKodyRuleAtoms;
+    /**
+     * What this rule must SEE to be judged honestly (issue #1826). Absent means
+     * `diff-only`, i.e. today's behavior — every rule judged against one file's
+     * hunks and about three lines of context. Inferred once at save by the same
+     * compile call that decides the detector, or set by the author; stored
+     * inline on the embedded rule, like `detector`, `summary` and `atoms`.
+     */
+    contextNeed?: IKodyRuleContextNeed;
+    /**
+     * The file kinds this rule's own text scopes it to (issue #1826).
+     *
+     * Distinct from `path`, which the AUTHOR writes as a glob, and from
+     * `scope`, which says file-level vs PR-level. This is the language scope
+     * the rule states in prose — "Ruby does not require semicolons", "in our
+     * migrations", "in React components" — inferred once at save by the same
+     * compile call that decides the detector, or set by the author.
+     *
+     * Why it lives on the RULE and not inside `detector.extensions`, where
+     * #1831 first put it: a detector exists only for MECHANICAL rules. Measured
+     * on the fleet, that is 816 of 10.918 active rules (7,5%) — so as long as
+     * the scope lived in the detector plan, the other 92,5% had nowhere to
+     * record it and the semantic judge sharded every rule against every file
+     * regardless of what the rule said about itself. `detector.extensions`
+     * stays as the mechanical router's copy; both narrow through the same
+     * `extensionScopeAppliesToFile` predicate.
+     */
+    fileScope?: IKodyRuleFileScope;
+    /**
+     * Record that the detector compiler already ran on this exact rule text and
+     * examples. Purely a cost gate — it changes no review behavior.
+     *
+     * Without it the nightly sweep asked "does this rule have a detector?" to
+     * decide what to compile, and a DECLINED rule never gets one: 92,5% of the
+     * fleet was therefore recompiled every night forever, on the customer's own
+     * BYOK key, to reach the same verdict. See `ruleCompileHash`.
+     */
+    compileAttempt?: IKodyRuleCompileAttempt;
     repositoryId: string;
+    /**
+     * For rules synced into the global scope (`repositoryId="global"`,
+     * `origin=GLOBAL_REPO_FILE_SYNC`), the id of the source repository the file
+     * was imported from. Undefined for every other kind of rule. Required to
+     * (a) route incremental updates from that repo's merged PRs, (b) soft-delete
+     * only this repo's global rules when it's removed as a source (never touching
+     * user-authored global rules), and (c) key the upsert as
+     * (`"global"`, `sourceRepositoryId`, `sourcePath`) so two source repos with
+     * the same file path (e.g. `CLAUDE.md`) don't collide.
+     */
+    sourceRepositoryId?: string;
+    /**
+     * Git blob SHA of the source file at the last successful sync. Enables the
+     * cheap short-circuit on manual resync: skip re-converting files whose SHA
+     * is unchanged. Populated by the global sync flow.
+     */
+    lastContentHash?: string;
     origin?: KodyRulesOrigin;
     createdAt?: Date;
     updatedAt?: Date;
@@ -78,20 +193,52 @@ export interface IKodyRule {
     resolvedAt?: Date;
     resolvedBy?: string;
     /**
-     * Set by the IDE-rule sync flow when the source file currently
-     * carries an `@kody-sync` marker — the per-file override that
-     * keeps a rule synchronized even with the repository's
-     * `ideRulesSyncEnabled=false`. Recomputed from file content on
-     * every sync, so flipping the toggle or editing the marker
-     * self-corrects on the next sync of that file.
-     *
-     * Consumed by the web UI to exclude such rules from the
-     * "orphan auto-sync" chip (they're not orphans, the backend
-     * keeps maintaining them) and to render a pin affordance on
-     * the Auto-sync origin badge.
+     * @deprecated Marked rules whose source file carried `@kody-sync`. The
+     * marker no longer does anything (Kody rule files always sync,
+     * coding-agent files never convert), the sync no longer writes it, and the
+     * agent-file freeze migration cleared it. Kept so old documents parse.
      */
     pinnedSync?: boolean;
+    /**
+     * Set when this rule was auto-paused at creation/reactivation time
+     * because activating it would have exceeded the free plan's active-rule
+     * quota (`KodyRulesService.resolveStatusWithinPlanLimit`). Distinguishes a
+     * plan-limit lock from a rule the user paused themselves — the web UI
+     * renders these as "Locked" with an upgrade CTA instead of a plain
+     * pause toggle. Cleared whenever the rule transitions to `ACTIVE`
+     * (`KodyRulesService.createOrUpdate` clears it once the org is back
+     * under quota or the plan changes).
+     *
+     * NOTE: This flag is persisted at write time and is stale-safe on reads
+     * — the review pipeline (`codeBaseConfig.service.ts`) normalizes
+     * `PAUSED + lockedByPlan` back to `ACTIVE` when `shouldLimitResources`
+     * is false (i.e., the org is on a paid plan). See #1626.
+     */
+    lockedByPlan?: boolean;
+    /**
+     * Set by the repository sync when this rule's `.kody/rules` file stopped
+     * parsing as a rule template (no frontmatter with a title and a body).
+     * The rule keeps its last text and status; the Kody Rules page asks the
+     * team to fix the file. Cleared (`null`) when the file parses again.
+     */
+    sourceFileIssue?: KodyRuleSourceFileIssue | null;
+    /**
+     * Set when the rule-health cron paused this rule because Cockpit labelled
+     * it ignored or noisy (`kodyRulesAutoPauseEnabled`). Carries the numbers
+     * shown to admins as the reason. Cleared (`null`) on resume, when it moves
+     * to `lastAutoPause` so the weekly digest can still list it.
+     */
+    autoPause?: IKodyRuleAutoPause | null;
+    lastAutoPause?: IKodyRuleAutoPause | null;
+    /**
+     * Last transition into ACTIVE from any other status. The auto-pause cron
+     * only judges usage after it, so a resumed rule isn't re-paused on the
+     * same history that paused it.
+     */
+    resumedAt?: Date | null;
 }
+
+export type KodyRuleSourceFileIssue = 'not_a_rule_template';
 
 export interface IKodyRuleCentralizedConfig {
     path: string;
@@ -119,6 +266,194 @@ export interface IKodyRulesExtendedContext {
 export interface IKodyRulesExample {
     snippet: string;
     isCorrect: boolean;
+}
+
+/**
+ * The context a rule needs beyond the diff to be judged (issue #1826).
+ *
+ * Rules whose truth lives outside the hunk either fire wrongly ("this import is
+ * unused" when it is used twenty lines below) or cannot fire at all ("every new
+ * endpoint has a test"). Declaring the need is what lets the pipeline retrieve
+ * exactly that slice — and, when it cannot, skip the rule instead of judging it
+ * blind.
+ *
+ * `diff-only` is the safe direction and the default: an over-declared need
+ * means the customer's rule stops being judged on a sandbox-less review.
+ */
+export type KodyRuleContextNeed =
+    | 'diff-only'
+    /**
+     * The rest of THIS file. The issue's own table calls this the majority
+     * case: "is this import used later", "is this function too long", "does
+     * every class here have a docstring", "is this block already written above".
+     * None of them can be judged from a hunk, and only the first leaves an
+     * assertion a grep could refute afterwards — so for the rest, seeing the
+     * scope is the only thing that works.
+     *
+     * It was tried once as an unconditional whole-file attachment on every
+     * shard instead of a declared need, and measured worse on every axis:
+     * -14pp recall (untouched code invites comments on untouched code),
+     * +85.4% input tokens on every shard including the ones that never needed
+     * it, and 94.2% of changed bytes never delivered anyway because a file over
+     * the budget was dropped whole. Declared and sliced, the cost lands only on
+     * the rules that asked and a large file degrades to its enclosing scope
+     * instead of to nothing.
+     */
+    | 'full-file'
+    | 'symbol-references'
+    | 'sibling-file'
+    | 'cited-file';
+
+export interface IKodyRuleContextNeed {
+    need: KodyRuleContextNeed;
+    /** sha256 of the exact `rule` text the inference was made from. */
+    sourceHash: string;
+    /**
+     * Who decided. An `author` value is never overwritten by inference — the
+     * rule's owner outranks the compiler's guess about their own rule.
+     */
+    source: 'compiler' | 'author';
+    inferredAt: Date;
+    /** Model id that inferred it. Absent for an author-set value. */
+    model?: string;
+}
+
+/**
+ * A rule's inferred language scope (see `IKodyRule.fileScope`). Same envelope
+ * as `IKodyRuleContextNeed` — hash-gated against the rule text, and an author
+ * value the compiler never overwrites — because it is inferred by the same
+ * call, from the same text, and must go stale on the same edit.
+ */
+export interface IKodyRuleFileScope {
+    /**
+     * Lowercase, dot-prefixed suffixes: ['.rb', '.rake', '.erb'], and compound
+     * kinds like '.blade.php' or '.spec.ts'. Matched by SUFFIX, so '.ts'
+     * covers 'a.spec.ts' while '.spec.ts' covers only the spec files.
+     *
+     * Never empty: an empty list would be indistinguishable from "scoped to
+     * nothing", so a rule that is genuinely language-agnostic ("no hardcoded
+     * credentials") carries NO `fileScope` at all.
+     */
+    extensions: string[];
+    /** sha256 of the exact `rule` text the inference was made from. */
+    sourceHash: string;
+    /**
+     * Who decided. An `author` value is never overwritten by inference — the
+     * rule's owner outranks the compiler's guess about their own rule.
+     */
+    source: 'compiler' | 'author';
+    inferredAt: Date;
+    /** Model id that inferred it. Absent for an author-set value. */
+    model?: string;
+}
+
+/**
+ * A record that the compiler RAN, independent of what it concluded.
+ *
+ * Deliberately not merged into `detector`: the whole point is to remember the
+ * attempt on the rules that got no detector, which is most of them. And
+ * deliberately not merged into `fileScope` or `contextNeed` either — those
+ * record a RESULT and are absent when the result is "nothing", so neither can
+ * distinguish "never asked" from "asked, answer was none".
+ */
+export interface IKodyRuleCompileAttempt {
+    /** `ruleCompileHash` of the rule text + examples this attempt ran on. */
+    sourceHash: string;
+    attemptedAt: Date;
+    /**
+     * What the gate concluded. `declined` is the normal outcome and is exactly
+     * the case the marker exists for; an ERRORED attempt is never recorded, so
+     * a transport failure cannot freeze a rule out of ever being compiled.
+     */
+    outcome: 'compiled' | 'declined';
+    /** Why, when declined — the same vocabulary `CompileResult` reports. */
+    declineReason?: string;
+    /** Model marker that ran it ('byok' | 'system'). */
+    model?: string;
+}
+
+export interface IKodyRuleSummary {
+    /** "WHAT TO VALIDATE / HOW TO VALIDATE" bullets, English, plain text. */
+    content: string;
+    /** sha256 of the exact `rule` text the summary was generated from. */
+    sourceHash: string;
+    generatedAt: Date;
+    /** Model id that generated it (BYOK main or managed default). */
+    model: string;
+}
+
+/**
+ * One atomic requirement decomposed from a LONG compound rule. Atoms are the
+ * review-time unit of judgment: each is fed to the shard judge as its own
+ * numbered item (or, when `detector` compiled, checked by the T0 regex sweep
+ * with zero LLM). Suggestions always map back to the PARENT rule's uuid — the
+ * customer only ever sees their own rule cited.
+ */
+export interface IKodyRuleAtom {
+    /** Stable id: `${parentUuid}-atom-${n}`. */
+    id: string;
+    /** Short imperative label for the single condition. */
+    title: string;
+    /** One-condition "WHAT / HOW" validation spec, English. */
+    spec: string;
+    /** Atom-specific bad/good snippets — also the compile gate's material. */
+    examples?: IKodyRulesExample[];
+    /** Present when the atom compiled into a T0 regex (deterministic path). */
+    detector?: IKodyRuleDetector;
+    /** Audit: why the compiler kept this atom on the LLM path. */
+    declineReason?: string;
+}
+
+/**
+ * Atomic decomposition of a long rule (> threshold), generated once and
+ * reused on every review. Replaces `summary` as the primary review-time
+ * artifact when present and fresh; `summary` remains the fallback.
+ * Validated on the Rails convention analog eval (2 reps/model, deliverable
+ * recall): glm 76%→92%, gpt-5.4-mini 79%→84%, kimi flat — and the compound
+ * -rule blind spots (requirements buried among ~18 siblings) broke.
+ */
+export interface IKodyRuleAtoms {
+    items: IKodyRuleAtom[];
+    /**
+     * sha256 over `rule` text AND serialized `examples`: examples gate the
+     * atom detectors, so an example edit must invalidate the decomposition
+     * (unlike `summary.sourceHash`, which covers the rule text only).
+     */
+    sourceHash: string;
+    generatedAt: Date;
+    model: string;
+}
+
+/**
+ * A compiled, deterministic detector for a mechanical rule (T0, issue #1449).
+ * Currently a single regex applied to added-line CONTENT; the multi-clause DSL
+ * (any/all/unless/ast) is a later extension of this shape.
+ */
+export interface IKodyRuleDetector {
+    type: 'regex';
+    /** JS-compatible regex source (no slashes). */
+    pattern: string;
+    flags?: string;
+    /** model that compiled it (audit / recompile). */
+    compiledBy?: string;
+    /** short rationale from the compiler. */
+    reason?: string;
+    /**
+     * File extensions the rule's OWN TEXT scopes it to, lowercase and
+     * dot-prefixed (e.g. ['.rb', '.erb']). Emitted by the compiler when the
+     * rule names a language, absent when the rule is language-agnostic.
+     *
+     * Why (issue #1831): a regex has no notion of language, so a Ruby-only
+     * rule ("Ruby does not require semicolons") compiled to `;\s*$` matched
+     * every JS/SCSS/YAML line in the PR — 93.6% of its hits on a real
+     * polyglot corpus were on files the rule does not even apply to. This is
+     * a COST filter, not the safety net: a candidate outside these extensions
+     * is dropped before it costs an LLM call. The safety net is that no
+     * candidate is published without the judge confirming it.
+     *
+     * Absent/empty = no extension filter (unchanged behavior).
+     */
+    extensions?: string[];
 }
 
 export interface IKodyRulesInheritance {
@@ -152,6 +487,15 @@ export enum KodyRulesOrigin {
     LIBRARY = 'library',
     PAST_REVIEWS = 'past_reviews',
     REPO_FILE_SYNC = 'repo_file_sync',
+    /**
+     * Global Kody Rule imported by syncing rule files from a repository the user
+     * selected as a global-rules source (distinct from the per-repo
+     * `REPO_FILE_SYNC`). Stored under `repositoryId="global"` alongside
+     * user-authored global rules and the onboarding fast-sync scratch, so this
+     * origin (together with `sourceRepositoryId`) is what distinguishes these
+     * rules for filtering, cleanup on deselect, and the UI badge.
+     */
+    GLOBAL_REPO_FILE_SYNC = 'global_repo_file_sync',
     ONBOARDING_REPO_ANALYSIS = 'onboarding_repo_analysis',
     MCP_AGENT = 'mcp_agent',
     CLI = 'cli',
@@ -324,6 +668,8 @@ export const kodyRuleSchema = z.object({
     extendedContext: kodyRulesExtendedContextSchema.optional(),
     examples: z.array(kodyRulesExampleSchema).optional(),
     repositoryId: z.string(),
+    sourceRepositoryId: z.string().optional(),
+    lastContentHash: z.string().optional(),
     origin: kodyRulesOriginSchema.optional(),
     createdAt: z.date().optional(),
     updatedAt: z.date().optional(),

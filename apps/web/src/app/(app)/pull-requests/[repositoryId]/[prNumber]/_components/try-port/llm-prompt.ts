@@ -44,6 +44,47 @@ export function buildLlmPromptForIssue(
     return sections.join("\n\n");
 }
 
+/**
+ * A tighter, imperative handoff prompt aimed at an in-editor coding agent
+ * (Cursor / Claude Code) rather than a chat. Leads with the exact location so
+ * the agent can jump straight to the edit, states the tier + category, then the
+ * problem, and fences the suggested change when we have one.
+ */
+export function buildAgentPromptForIssue(
+    issue: ReviewIssue,
+    ctx: PromptContext = {},
+): string {
+    const lineRef =
+        issue.endLine && issue.endLine !== issue.line
+            ? `${issue.line}-${issue.endLine}`
+            : String(issue.line);
+
+    const severity = (issue.severity || "").trim();
+    const category = issue.category?.trim();
+    // "high security issue" / "high issue" / "issue" — no double spaces.
+    const descriptor = [severity, category, "issue"]
+        .filter(Boolean)
+        .join(" ");
+
+    const sections: string[] = [
+        `In ${issue.file} around lines ${lineRef}, fix this ${descriptor}: ${issue.message.trim()}`,
+    ];
+
+    if (issue.suggestion?.trim()) {
+        sections.push(
+            "Suggested change:\n```\n" + issue.suggestion.trim() + "\n```",
+        );
+    }
+
+    if (ctx.prRef) sections.push(`Context: ${ctx.prRef}`);
+
+    sections.push(
+        "Keep the change minimal and add/adjust tests if relevant.",
+    );
+
+    return sections.join("\n\n");
+}
+
 export function buildLlmPromptForFile(
     file: string,
     issues: ReviewIssue[],

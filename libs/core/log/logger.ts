@@ -1,3 +1,6 @@
+import { Agent, ClientRequest, IncomingMessage } from 'http';
+import { Socket } from 'net';
+
 import { trace } from '@opentelemetry/api';
 import pino from 'pino';
 
@@ -72,8 +75,7 @@ let pinoLogger: pino.Logger | null = null;
 
 let globalLogProcessors: SupportedLogProcessor[] = [];
 let spanContextProvider:
-    | (() => { traceId: string; spanId: string } | undefined)
-    | null = null;
+    (() => { traceId: string; spanId: string } | undefined) | null = null;
 let observabilityContextProvider:
     | (() =>
           | {
@@ -102,8 +104,14 @@ function getPinoLogger(): pino.Logger {
                 // throw with err.request.headers.authorization, err.options.headers,
                 // err.response.headers.set-cookie, etc.) are redacted by key name
                 // at any depth — no need to enumerate every possible path below.
-                error: (err: any) => deepSanitize(pino.stdSerializers.err(err)),
-                err: (err: any) => deepSanitize(pino.stdSerializers.err(err)),
+                //
+                // stdSerializers.err copies every enumerable own prop, so this is
+                // the path an uncapped provider payload travels (requestBodyValues,
+                // data, responseBody). boundErrorForLog applies the same rule as
+                // the `error.*` field: identity keys pass, scalars pass, and a
+                // non-scalar has to be allowlisted and is then capped.
+                error: (err: any) => deepSanitize(boundErrorForLog(err)),
+                err: (err: any) => deepSanitize(boundErrorForLog(err)),
                 req: pino.stdSerializers.req,
                 res: pino.stdSerializers.res,
             },
@@ -280,6 +288,16 @@ const SENSITIVE_KEYS = new Set([
     'clientsecret',
     'privatekey',
     'bearertoken',
+    // GitLab PAT header (`PRIVATE-TOKEN`) and webhook secret header.
+    'privatetoken',
+    'xgitlabtoken',
+    // Amazon Bedrock BYOK credentials (normalized: lowercased, separators
+    // stripped). These travel under aws* field names inside a credential's
+    // `settings` and must be redacted at any log depth.
+    'awssecretaccesskey',
+    'awsbearertoken',
+    'awsaccesskeyid',
+    'awssessiontoken',
     'jwt',
     'credential',
     'connectionstring',
@@ -293,12 +311,97 @@ const SENSITIVE_KEYS = new Set([
 const KEY_SENSITIVITY_CACHE = new Map<string, boolean>();
 const KEY_SENSITIVITY_CACHE_MAX = 512;
 
+function isSensitiveName(name: string): boolean {
+    return SENSITIVE_KEYS.has(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+}
+
+/**
+ * Customer content: fields that carry source code or model prompts derived
+ * from it. These are NOT secrets — we are authorized to process them, but not
+ * to retain them in operational logs, where they sit for the log group's
+ * retention period. They are therefore kept out of logs entirely, and replaced
+ * by a size marker so the operational signal ("there was content, this big")
+ * survives for debugging.
+ *
+ * Kept separate from SENSITIVE_KEYS on purpose: different policy, different
+ * censor, and mixing the two would make "[REDACTED]" ambiguous between
+ * "a secret was here" and "customer code was here".
+ */
+const CONTENT_KEYS = new Set([
+    'existingcode',
+    'improvedcode',
+    'suggestioncontent',
+    'llmprompt',
+]);
+
+function isContentName(name: string): boolean {
+    return CONTENT_KEYS.has(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+}
+
+const CONTENT_KEY_CACHE = new Map<string, boolean>();
+
+function isContentKey(key: string): boolean {
+    let result = CONTENT_KEY_CACHE.get(key);
+    if (result === undefined) {
+        result = isContentName(key);
+        if (CONTENT_KEY_CACHE.size < KEY_SENSITIVITY_CACHE_MAX) {
+            CONTENT_KEY_CACHE.set(key, result);
+        }
+    }
+    return result;
+}
+
+function describeOmitted(value: any): string {
+    // Two invariants, both load-bearing.
+    //
+    // Never serialize to measure: JSON.stringify on a ~200KB object costs
+    // ~0.25ms against ~5ns for String#length, and would defeat the very guard
+    // this function implements.
+    //
+    // Never throw: deepSanitize is exception-free by design — the WeakSet
+    // cycle guard, the depth cap and the typed-array marker all exist to keep
+    // it so — and callers rely on that. The MongoDB exporter's `exportLog`
+    // calls it unguarded and is itself fired without awaiting, so a throw here
+    // becomes an unhandled rejection that can take the process down. The value is discarded anyway, so a getter that throws
+    // must cost us a vaguer marker, never an exception.
+    try {
+        if (typeof value === 'string') {
+            return `[content omitted: ${formatBytes(value.length)}]`;
+        }
+        if (ArrayBuffer.isView(value)) {
+            return `[content omitted: ${formatBytes(value.byteLength)}]`;
+        }
+        if (Array.isArray(value)) {
+            return `[content omitted: ${value.length} items]`;
+        }
+    } catch {
+        // exotic object: a throwing length/byteLength getter, a hostile Proxy.
+    }
+    return '[content omitted]';
+}
+
+function formatBytes(n: number): string {
+    return n >= 1024 ? `${(n / 1024).toFixed(1)}KB` : `${n}B`;
+}
+
+/**
+ * UTF-8 byte length, not UTF-16 code units. String#length under-reports by up
+ * to 4x on non-ASCII (4096 chars of CJK is 12,288 bytes), and the ceiling we
+ * are defending is CloudWatch's, which counts bytes.
+ */
+function byteLen(s: string): number {
+    // Buffer.byteLength is native and beats a JS scan even on ASCII: measured
+    // ~0ns against ~12ns for a hand-rolled charCodeAt loop over 4096 chars.
+    return Buffer.byteLength(s, 'utf8');
+}
+
+// Object keys only. The cache never evicts, so names harvested from string
+// content (payload JSON keys, query params) would fill it for good; the
+// string scanners call isSensitiveName directly instead.
 function isSensitiveKey(key: string): boolean {
     let result = KEY_SENSITIVITY_CACHE.get(key);
     if (result === undefined) {
-        result = SENSITIVE_KEYS.has(
-            key.toLowerCase().replace(/[^a-z0-9]/g, ''),
-        );
+        result = isSensitiveName(key);
         if (KEY_SENSITIVITY_CACHE.size < KEY_SENSITIVITY_CACHE_MAX) {
             KEY_SENSITIVITY_CACHE.set(key, result);
         }
@@ -325,10 +428,72 @@ function isAuthorityTerminator(char: string | undefined): boolean {
 }
 
 /**
+ * Strips credentials embedded in a string: URL userinfo, sensitive query or
+ * form parameters, raw HTTP header lines and JSON key/value pairs. Key-based
+ * redaction in `deepSanitize` can't see these because the secret lives inside
+ * one string value — e.g. an AxiosError's `request._header` or `config.data`.
+ * Returns the original reference when nothing was redacted.
+ */
+function sanitizeString(value: string): string {
+    return redactEmbeddedSecrets(redactUrlUserinfo(value));
+}
+
+function stringifyUnknownError(value: unknown): string {
+    try {
+        return JSON.stringify(value) ?? String(value);
+    } catch {
+        return String(value);
+    }
+}
+
+// Cheap pre-check so ordinary strings (stacks, messages) skip the regexes.
+// Loose on purpose: a false hit only costs the scans below. The gate is
+// fail-open, so every name in SENSITIVE_KEYS must match one of these stems —
+// a spec walks the set and fails when a new key has no stem here.
+const EMBEDDED_SECRET_HINT =
+    /auth|cookie|token|secret|passw|key|credential|jwt|connection|ssn|cpf|cvv|card/i;
+
+// Linear patterns (no nested or overlapping quantifiers).
+// The optional leading `+`/`-` covers unified-diff lines, which get logged.
+const HEADER_LINE_PATTERN =
+    /(^|[\r\n])([+-]?[ \t]*)([A-Za-z0-9_.-]{1,100})([ \t]*:[ \t]*)([^\r\n]*)/g;
+// The optional `+`/`-` marker mirrors HEADER_LINE_PATTERN for diff lines.
+const QUERY_PARAM_PATTERN =
+    /(^|[?&;\s])([+-]?)([A-Za-z0-9_.-]{1,100})=([^&#\s"'<>]*)/g;
+const JSON_PAIR_PATTERN = /"([^"\\]{1,100})"(\s*:\s*)"((?:[^"\\]|\\.)*)"/g;
+
+function redactEmbeddedSecrets(value: string): string {
+    if (!EMBEDDED_SECRET_HINT.test(value)) {
+        return value;
+    }
+
+    const result = value
+        .replace(
+            HEADER_LINE_PATTERN,
+            (match, lineStart, indent, name, separator, headerValue) =>
+                isSensitiveName(name) && headerValue
+                    ? `${lineStart}${indent}${name}${separator}[REDACTED]`
+                    : match,
+        )
+        .replace(
+            QUERY_PARAM_PATTERN,
+            (match, prefix, marker, name, paramValue) =>
+                isSensitiveName(name) && paramValue
+                    ? `${prefix}${marker}${name}=[REDACTED]`
+                    : match,
+        )
+        .replace(JSON_PAIR_PATTERN, (match, name, separator) =>
+            isSensitiveName(name) ? `"${name}"${separator}"[REDACTED]"` : match,
+        );
+
+    return result === value ? value : result;
+}
+
+/**
  * Strips credentials embedded in URL strings using a linear scan.
  * e.g. "mongodb://user:secret@host/db" → "mongodb://user:[REDACTED]@host/db"
  */
-function sanitizeString(value: string): string {
+function redactUrlUserinfo(value: string): string {
     let searchFrom = 0;
     let lastCommittedIndex = 0;
     let result = '';
@@ -407,6 +572,137 @@ function sanitizeString(value: string): string {
 const DEEP_SANITIZE_MAX_DEPTH = 24;
 
 /**
+ * Size bounds — the siblings of DEEP_SANITIZE_MAX_DEPTH.
+ *
+ * Depth-bounding alone does not stop a single wide value: a 260KB string in a
+ * shallow object still produces a 260KB log line, which exceeds CloudWatch's
+ * 256KB per-event limit and arrives TRUNCATED — invalid JSON that no parser
+ * can read. These bounds catch the class that no denylist covers: the field
+ * nobody thought to name.
+ */
+const DEEP_SANITIZE_MAX_STRING = 4096;
+const DEEP_SANITIZE_MAX_ARRAY = 50;
+
+/**
+ * Aggregate budget, in UTF-8 bytes.
+ *
+ * Per-value caps do NOT bound the line: 100 fields sitting exactly AT the
+ * 4096-char cap, none of them content-named, serialize to ~410KB and still
+ * blow through CloudWatch's 256KB per-event ceiling — the very symptom this
+ * guard exists to stop. Nothing caps object key count either.
+ *
+ * So the recursion carries a running byte total and, once it is spent, heavy
+ * values become markers. The ceiling itself is derived below from the line
+ * shape, not chosen directly.
+ */
+const CLOUDWATCH_MAX_EVENT = 256 * 1024;
+/**
+ * The emitted line carries the SAME sanitized object more than once:
+ * `buildLogObject` spreads the sanitized metadata at the top level and stores
+ * it again under `metadata`, and `handleLog` adds `err`, which the pino serializer sanitizes with its own independent budget. So a
+ * per-call budget of B produces a line of up to 3B, and budgeting 192KB per
+ * call yields a ~576KB event — past the ceiling it was meant to defend.
+ */
+const MAX_LINE_COPIES = 3;
+const DEEP_SANITIZE_MAX_TOTAL = Math.floor(
+    (CLOUDWATCH_MAX_EVENT * 0.75) / MAX_LINE_COPIES,
+);
+const BUDGET_SPENT_MARKER = '[budget spent]';
+
+/**
+ * How many keys may still be emitted after the budget is spent, so a small
+ * trailing key (`createdAt`, `tu`) is never evicted by position alone.
+ */
+const KEY_TAIL_ALLOWANCE = 100;
+
+/** Bounds the flat-object case in sanitizeTailValue. */
+const CHEAP_OBJECT_MAX_KEYS = 12;
+
+
+/**
+ * JSON cost of a non-string leaf plus its punctuation. Deliberately generous:
+ * a float serializes to ~18 characters ("48.148148271000004"), so charging 8
+ * let a numeric tree overshoot the budget by ~2x.
+ */
+const PRIMITIVE_BUDGET_COST = 20;
+
+interface SanitizeBudget {
+    used: number;
+    /** Bytes spent on NESTED post-exhaustion tails; see TAIL_BYTES_ALLOWANCE. */
+    tailUsed?: number;
+    /** Bytes spent on the ROOT object's tail, reserved separately. */
+    rootTailUsed?: number;
+}
+
+/**
+ * Bytes that trailing keys may spend AFTER the main budget is exhausted.
+ *
+ * Two pools, each of this size: one shared by every NESTED object in the call,
+ * one reserved for the ROOT object. Sharing across nested objects stops
+ * nesting from multiplying the tail; reserving the root stops a nested tail
+ * from spending the pool first and evicting the root's own trailing keys —
+ * `createdAt` on the exporter's log document (its TTL index is built on it)
+ * and `tu` on span attributes (credits metering reads it). The line stays
+ * bounded by MAX_TOTAL + 2 * this.
+ */
+const TAIL_BYTES_ALLOWANCE = 4 * 1024;
+
+/**
+ * Validate AND sanitize a tail value in a single pass, reading each property
+ * exactly once. Returns undefined when the value is not cheap; the caller then
+ * emits a marker.
+ *
+ * Three earlier shapes of this code each leaked or broke, and this one exists
+ * to rule all three out:
+ *   - emitting cheap values raw skipped redaction entirely (secrets leaked);
+ *   - validating in one function and copying in another read every property
+ *     twice, so a getter returning something else on the second read (a nested
+ *     `{ password }`, a Buffer of customer code) was emitted unvalidated;
+ *   - calling Object.keys() on a Buffer enumerated every byte (53ms / MB).
+ * Only null, numbers, booleans, short strings (sanitized), a FRESH Date, and
+ * flat objects of those are ever emitted, so the result is always JSON-safe.
+ */
+function sanitizeTailValue(v: any): any {
+    try {
+        const type = typeof v;
+        if (v === null || type === 'number' || type === 'boolean') return v;
+        if (type === 'string') {
+            return v.length <= 256 ? sanitizeString(v) : undefined;
+        }
+        if (type !== 'object') return undefined; // bigint, symbol, function
+        if (v instanceof Date) {
+            // A fresh Date: a subclass could carry a hostile toJSON.
+            return new Date(Date.prototype.getTime.call(v));
+        }
+        if (Array.isArray(v) || ArrayBuffer.isView(v)) return undefined;
+        const ks = Object.keys(v);
+        if (ks.length > CHEAP_OBJECT_MAX_KEYS) return undefined;
+        const out: Record<string, any> = {};
+        for (const k of ks) {
+            const inner = v[k]; // the ONLY read of this property
+            if (isSensitiveKey(k)) {
+                out[k] = '[REDACTED]';
+            } else if (isContentKey(k)) {
+                out[k] = describeOmitted(inner);
+            } else if (
+                inner === null ||
+                typeof inner === 'number' ||
+                typeof inner === 'boolean'
+            ) {
+                out[k] = inner;
+            } else if (typeof inner === 'string' && inner.length <= 256) {
+                out[k] = sanitizeString(inner);
+            } else {
+                return undefined; // not flat or not small: whole value is a marker
+            }
+        }
+        return out;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
  * Deep-sanitizes an object, redacting sensitive keys at any depth.
  * Also strips URL-embedded credentials from string values.
  * Uses structural sharing: returns the original reference when nothing changed,
@@ -415,13 +711,75 @@ const DEEP_SANITIZE_MAX_DEPTH = 24;
  * Depth-bounded: stops recursing past `DEEP_SANITIZE_MAX_DEPTH` and
  * returns a `[Max-Depth]` marker.
  */
-function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
+function isRedirectableRequest(obj: any): boolean {
+    return (
+        '_currentRequest' in obj &&
+        '_options' in obj &&
+        Array.isArray(obj._requestBodyBuffers)
+    );
+}
+
+function deepSanitize(
+    obj: any,
+    seen?: WeakSet<object>,
+    depth = 0,
+    budget: SanitizeBudget = { used: 0, tailUsed: 0, rootTailUsed: 0 },
+): any {
+    if (budget.used >= DEEP_SANITIZE_MAX_TOTAL) {
+        return BUDGET_SPENT_MARKER;
+    }
+
     if (obj === null || typeof obj !== 'object') {
         if (typeof obj === 'string') {
+            // Truncate BEFORE scanning. The scanners are O(n) over the whole
+            // string, so a 260KB value costs 260KB of scanning to then throw
+            // 256KB away. Cutting first also means a secret living in the
+            // discarded tail is never read, let alone emitted.
+            if (obj.length > DEEP_SANITIZE_MAX_STRING) {
+                const head = sanitizeString(obj.slice(0, DEEP_SANITIZE_MAX_STRING));
+                budget.used += byteLen(head);
+                return `${head}…[truncated: ${formatBytes(byteLen(obj))} total]`;
+            }
             const sanitized = sanitizeString(obj);
+            budget.used += byteLen(sanitized);
             return sanitized !== obj ? sanitized : obj;
         }
+        // Numbers and booleans are not free: a tree of them (scores, embeddings)
+        // paid only for its root key and serialized to 721KB in testing.
+        budget.used += PRIMITIVE_BUDGET_COST;
         return obj;
+    }
+
+    // A Buffer (or any typed-array view) is walked index by index, comes out
+    // unchanged, and pino then serializes it via toJSON(): a 1 MB buffer costs
+    // ~131 ms here, expands to ~3 MB of JSON, and the bytes stay recoverable.
+    // This is also where an axios request body lands on a timeout
+    // (`_requestBodyBuffers`).
+    if (ArrayBuffer.isView(obj)) {
+        return `[Binary ${obj.byteLength} bytes]`;
+    }
+
+    // Live Node HTTP objects (an AxiosError's `request`, sockets, agents) carry
+    // the raw request head with credentials and TLS session buffers. Nothing
+    // in them is worth logging, so don't walk them.
+    if (obj instanceof ClientRequest) {
+        return '[ClientRequest]';
+    }
+    // follow-redirects' RedirectableRequest wraps the native request and is
+    // what axios attaches as `err.request` on timeouts and connection errors.
+    // It is a Writable, not a ClientRequest, and its `_options` carries the
+    // headers and the `auth` option ("user:password") under non-sensitive keys.
+    if (isRedirectableRequest(obj)) {
+        return '[RedirectableRequest]';
+    }
+    if (obj instanceof IncomingMessage) {
+        return '[IncomingMessage]';
+    }
+    if (obj instanceof Socket) {
+        return '[Socket]';
+    }
+    if (obj instanceof Agent) {
+        return '[Agent]';
     }
 
     if (
@@ -446,28 +804,157 @@ function deepSanitize(obj: any, seen?: WeakSet<object>, depth = 0): any {
     if (refs.has(obj)) return '[Circular]';
     refs.add(obj);
 
-    if (Array.isArray(obj)) {
-        let changed = false;
+    let arrayLength = -1;
+    try {
+        if (Array.isArray(obj)) arrayLength = obj.length;
+    } catch {
+        return '[unreadable]';
+    }
+
+    if (arrayLength >= 0) {
+        // Index loop, not `for…of obj.slice(...)`: slice() allocates a copy of
+        // every array, including the short clean ones that structural sharing
+        // exists to leave untouched.
+        const capped = arrayLength > DEEP_SANITIZE_MAX_ARRAY;
+        const limit = capped ? DEEP_SANITIZE_MAX_ARRAY : arrayLength;
+        let changed = capped;
         const out: any[] = [];
-        for (const item of obj) {
-            const sanitized = deepSanitize(item, refs, depth + 1);
+        for (let i = 0; i < limit; i++) {
+            if (budget.used >= DEEP_SANITIZE_MAX_TOTAL) {
+                out.push(`[+${arrayLength - i} more items omitted]`);
+                changed = true;
+                break;
+            }
+            let item: any;
+            try {
+                item = obj[i];
+            } catch {
+                out.push('[unreadable]');
+                changed = true;
+                continue;
+            }
+            const sanitized = deepSanitize(item, refs, depth + 1, budget);
             out.push(sanitized);
             if (sanitized !== item) changed = true;
+        }
+        if (capped && out.length === DEEP_SANITIZE_MAX_ARRAY) {
+            out.push(`[+${arrayLength - DEEP_SANITIZE_MAX_ARRAY} more items omitted]`);
         }
         // Return original array reference if nothing was redacted.
         return changed ? out : obj;
     }
 
     let changed = false;
+    let tailEmitted = 0;
     const out: Record<string, any> = {};
-    for (const key of Object.keys(obj)) {
+    let keys: string[];
+    try {
+        keys = Object.keys(obj);
+    } catch {
+        return '[unreadable]';
+    }
+    for (let k = 0; k < keys.length; k++) {
+        const key = keys[k];
+        // Once the budget is spent, keep going but emit only cheap values.
+        //
+        // Breaking outright made survival depend on key ORDER, and the keys
+        // that matter come last: `createdAt` is the final key of the exporter's
+        // log document and the collection's TTL index is built on it, so
+        // dropping it produced a document that NEVER EXPIRES — the opposite of
+        // the retention this guard exists to enforce. `startSpan` appends `tu`
+        // last, so credits metering silently undercounted for the same reason.
+        //
+        // A scalar costs ~20 bytes, so carrying the tail is cheap and only the
+        // heavy values collapse. KEY_TAIL_ALLOWANCE still bounds an object with
+        // tens of thousands of keys.
+        if (budget.used >= DEEP_SANITIZE_MAX_TOTAL) {
+            if (tailEmitted >= KEY_TAIL_ALLOWANCE) {
+                out['…'] = `[+${keys.length - k} more keys omitted]`;
+                changed = true;
+                break;
+            }
+            tailEmitted++;
+            changed = true;
+            let emitted: any;
+            if (isSensitiveKey(key)) {
+                emitted = '[REDACTED]';
+            } else {
+                let tailRaw: any;
+                let readable = true;
+                try {
+                    tailRaw = obj[key];
+                } catch {
+                    readable = false;
+                }
+                if (!readable) emitted = '[unreadable]';
+                else if (isContentKey(key)) emitted = describeOmitted(tailRaw);
+                else {
+                    const cheap = sanitizeTailValue(tailRaw);
+                    emitted = cheap === undefined ? BUDGET_SPENT_MARKER : cheap;
+                }
+            }
+
+            // Every tail branch — [unreadable] included — is charged here, so
+            // no emission escapes the allowance. The cost is computed
+            // defensively even though sanitizeTailValue only returns JSON-safe
+            // values: deepSanitize must never throw.
+            let cost = byteLen(key) + 4;
+            try {
+                cost +=
+                    typeof emitted === 'string'
+                        ? byteLen(emitted)
+                        : byteLen(JSON.stringify(emitted) ?? '');
+            } catch {
+                cost += TAIL_BYTES_ALLOWANCE; // unmeasurable: refuse it
+            }
+            const used = depth === 0 ? (budget.rootTailUsed ?? 0) : (budget.tailUsed ?? 0);
+            if (used + cost > TAIL_BYTES_ALLOWANCE) {
+                out['…'] = `[+${keys.length - k} more keys omitted]`;
+                break;
+            }
+            if (depth === 0) budget.rootTailUsed = used + cost;
+            else budget.tailUsed = used + cost;
+            out[key] = emitted;
+            continue;
+        }
+        // Charge the key in EVERY branch. Charging it only on the ordinary
+        // path let thousands of keys that normalize into one SENSITIVE_KEYS /
+        // CONTENT_KEYS entry (`p-assword`, `P.ASSWORD`, …) emit ~25 bytes each
+        // with budget.used still at 0.
+        budget.used += byteLen(key) + 4;
+
         if (isSensitiveKey(key)) {
             out[key] = '[REDACTED]';
+            budget.used += 12;
+            changed = true;
+            continue;
+        }
+
+        // Read the property under guard. A getter can throw — the repo's own
+        // notes record that shape in the MongoDB exporter: "getters that
+        // throw") — and the read happens HERE, before any try/catch inside a
+        // helper could cover it. deepSanitize is relied on to be exception-free
+        // (the exporter's `exportLog` calls it unguarded and is fired without
+        // awaiting, so a throw is an unhandled rejection that ends the
+        // process), so a hostile value must cost us a marker, never an exception.
+        let raw: any;
+        try {
+            raw = obj[key];
+        } catch {
+            out[key] = '[unreadable]';
+            changed = true;
+            continue;
+        }
+
+        if (isContentKey(key)) {
+            const marker = describeOmitted(raw);
+            out[key] = marker;
+            budget.used += byteLen(marker);
             changed = true;
         } else {
-            const val = deepSanitize(obj[key], refs, depth + 1);
+            const val = deepSanitize(raw, refs, depth + 1, budget);
             out[key] = val;
-            if (val !== obj[key]) changed = true;
+            if (val !== raw) changed = true;
         }
     }
     // Return original object reference if nothing was redacted.
@@ -543,18 +1030,18 @@ export class SimpleLogger {
                     };
                     if (error) {
                         fallbackPayload.errorName = (error as Error)?.name;
-                        fallbackPayload.errorMessage = (
-                            error as Error
-                        )?.message;
+                        fallbackPayload.errorMessage =
+                            typeof error === 'string'
+                                ? error
+                                : (error as Error)?.message;
                     }
                     const loggerErrAsError = loggerErr as Error | undefined;
                     fallbackPayload.loggerErrorName = loggerErrAsError?.name;
                     fallbackPayload.loggerErrorMessage =
                         loggerErrAsError?.message;
-                    // eslint-disable-next-line no-console
+
                     console.error(JSON.stringify(fallbackPayload));
                 } catch {
-                    // eslint-disable-next-line no-console
                     console.error(
                         '[logger:fallback-failed] level=' +
                             level +
@@ -565,7 +1052,7 @@ export class SimpleLogger {
             }
         }
 
-        let safeProcessorMetadata: Record<string, unknown> = {};
+        let safeProcessorMetadata: Record<string, unknown>;
         try {
             safeProcessorMetadata = deepSanitize({
                 ...metadata,
@@ -591,7 +1078,11 @@ export class SimpleLogger {
                 }
 
                 processor.process(level, message, safeProcessorMetadata, error);
-            } catch {}
+            } catch {
+                // A failing processor must never break the caller's log call,
+                // and must not be reported through the logger itself (that
+                // would re-enter this same loop). Skip it and keep going.
+            }
         }
     }
 
@@ -634,9 +1125,33 @@ export class SimpleLogger {
         };
 
         if (error) {
+            // Callers pass `error: err.message` too; a string has no .message,
+            // and sanitizeString(undefined) used to throw and drop the cause.
+            const raw = error as unknown;
+            const message =
+                typeof raw === 'string'
+                    ? raw
+                    : typeof error.message === 'string'
+                      ? error.message
+                      : stringifyUnknownError(raw);
             logObject.error = {
-                message: sanitizeString(error.message),
-                stack: error.stack ? sanitizeString(error.stack) : undefined,
+                message: sanitizeString(message),
+                stack:
+                    typeof raw !== 'string' && typeof error.stack === 'string'
+                        ? sanitizeString(error.stack)
+                        : undefined,
+                // #1829: provider/review errors carry actionable own props
+                // (statusCode, url, requestHeaders + in-repo scalars like
+                // status / code / gate / contextWindow / modelName) on the Error
+                // subclass. `pino.stdSerializers.err` copies enumerable own props
+                // onto the `err.*` field, but it copies them uncapped, so a
+                // provider payload like `requestBodyValues` could ride along in
+                // full; the allowlist below is what keeps the structured form
+                // bounded. Same rule on both fields, one definition
+                // (ERROR_LOG_PROPS, plus the matching bound on the err serializer).
+                // `responseBody` is deliberately excluded: it is the raw provider
+                // response body, so only its length is surfaced.
+                ...extractErrorProps(error),
             };
         }
 
@@ -669,8 +1184,550 @@ export class SimpleLogger {
     }
 }
 
+/**
+ * Provider-error fields worth surfacing in structured logs.
+ *
+ * Deliberately an allowlist: a vendor error subclass such as @ai-sdk/provider's
+ * `APICallError` also carries heavy own props (`requestBodyValues` is the whole
+ * request payload, `data` is an arbitrary object) that must never ride along in
+ * a log line.
+ *
+ * `responseBody` is NOT listed on purpose. It is the raw provider response
+ * body, which the logging policy keeps out of logs; the derived
+ * `responseBodyLength` still tells operators how much came back without
+ * emitting any of it.
+ */
+const ERROR_LOG_PROPS = new Set([
+    'statusCode',
+    'url',
+    // `responseHeaders` is deliberately absent: a headers collection carries
+    // credentials (session `set-cookie`, `www-authenticate` challenges, custom
+    // `x-api-key`/`x-team-key` names) that key-name redaction cannot catch, which
+    // is the same reason the raw `responseBody` never reaches a log line.
+    // Diagnostics attached in-repo that operators rely on: azure `status`,
+    // code-review job `gate`/`target`/`requestId`, mcp `code`, llm
+    // context-window errors `contextWindow`/`overheadTokens`/`estimatedTokens`/
+    // `contextWindowTokens`/`modelName`. Mostly small scalars, with one
+    // deliberate exception: `target` carries the CommandReviewFeedbackTarget
+    // object, so every non-scalar is capped (see capSerialized) instead of
+    // assuming the values are scalars.
+    'status',
+    'code',
+    'gate',
+    'target',
+    'requestId',
+    'contextWindow',
+    'overheadTokens',
+    'estimatedTokens',
+    'contextWindowTokens',
+    'modelName',
+]);
+
+/** Longest string, or serialized non-scalar, a log field may carry. */
+const ERROR_PROP_MAX_STRING_LENGTH = 2_000;
+
+/** Emitted when a value cannot be represented in a log line at all. */
+const UNREPRESENTABLE_PROP_MARKER = '[unserializable value]';
+
+/**
+ * The non-content fields kept from an axios-shaped `response`/`config` on the
+ * `err.*` path. HTTP status and URL are what operators alert on and neither is
+ * response content; everything else those objects carry (data, headers, the
+ * request body) is dropped like any other non-allowlisted non-scalar.
+ */
+const ERROR_SERIALIZER_HTTP_CONTEXT = new Map<string, readonly string[]>([
+    ['response', ['status', 'statusText']],
+    ['config', ['method', 'url']],
+]);
+
+/** Identity keys pino's error serializer always keeps. */
+const ERROR_SERIALIZER_PASSTHROUGH_KEYS = new Set([
+    'type',
+    'name',
+    'message',
+    'stack',
+]);
+
+/**
+ * Own props the `err.*` serializer never emits, whatever their shape.
+ *
+ * Logging policy, not diagnostics: `responseBody` is the raw provider body,
+ * `requestBodyValues` is the request payload (the whole prompt), `data` is an
+ * arbitrary provider object, and the two header collections carry
+ * `set-cookie` / `www-authenticate` / custom api-key names that key-name
+ * redaction cannot see once they are values under a safe key (#1829, #1835
+ * review).
+ *
+ * The two nested error holders are the same story one level down: a whole
+ * nested error carries its own URLs (query strings the provider uses to pass
+ * credentials) and payload. The failing attempt on `lastError` is still
+ * unwrapped above, but only for its status and its URL with the query dropped,
+ * which is the sanitized form an operator needs.
+ *
+ * Every OTHER non-scalar is capped and kept: `driverError` on a TypeORM
+ * `QueryFailedError`, `errInfo`/`keyValue` on `MongoServerError`, `errors` on
+ * `AggregateError` and `issues` on `ZodError` are what make those failures
+ * diagnosable, and the allowlist that dropped them was only ever needed for
+ * the payload props above.
+ */
+const ERROR_SERIALIZER_NEVER_EMIT = new Set([
+    'responseBody',
+    'requestBodyValues',
+    'data',
+    'requestHeaders',
+    'responseHeaders',
+    'lastError',
+    'cause',
+]);
+
+/**
+ * Context surfaced when a non-scalar prop fails to serialize, so the warn
+ * carries enough to be operational (cap + org id when the value is a
+ * `target`-shaped object).
+ */
+interface SerializeFailureContext {
+    maxStringLength: number;
+    organizationId?: string;
+    error: unknown;
+}
+
+type SerializeFailureReporter = (ctx: SerializeFailureContext) => void;
+
+function readErrorProperty(
+    source: Record<string, unknown>,
+    key: string,
+): unknown {
+    try {
+        return source[key];
+    } catch {
+        // One unreadable diagnostic must not discard the rest of the log line.
+        return undefined;
+    }
+}
+
+function sanitizeErrorUrl(value: string): string {
+    // Provider endpoints may carry credentials under arbitrary parameter names.
+    // Keep the endpoint, never its query or fragment, on every error-log path.
+    return sanitizeString(value.split(/[?#]/, 1)[0]);
+}
+
+/**
+ * Best-effort pull of an org id off the failing value, so the drop warning is
+ * attributable. Mirrors the in-repo `target` shape
+ * (`target.organizationAndTeamData.organizationId`), falling back to a
+ * top-level `organizationId` when present.
+ */
+function organizationIdOf(value: unknown): string | undefined {
+    if (!value || typeof value !== 'object') {
+        return undefined;
+    }
+    const record = value as Record<string, unknown>;
+    const nested = readErrorProperty(record, 'organizationAndTeamData');
+    if (nested && typeof nested === 'object') {
+        const nestedId = readErrorProperty(
+            nested as Record<string, unknown>,
+            'organizationId',
+        );
+        if (typeof nestedId === 'string') {
+            return nestedId;
+        }
+    }
+    const organizationId = readErrorProperty(record, 'organizationId');
+    return typeof organizationId === 'string' ? organizationId : undefined;
+}
+
+/**
+ * Module-local reporter for a prop that could not be serialized. Never imports
+ * PinoLoggerService (that would create a core→app dependency cycle); it uses the
+ * pino logger this module already owns, and is self-contained so a logging
+ * failure can never bubble into the caller's log call.
+ */
+function warnSerializeFailure(ctx: SerializeFailureContext): void {
+    let baseLogger: pino.Logger;
+    try {
+        baseLogger = getPinoLogger();
+    } catch {
+        return;
+    }
+    const err = ctx.error instanceof Error ? ctx.error : undefined;
+    const payload: Record<string, unknown> = {
+        context: 'logger.errorProps',
+        errorMessage: err?.message ?? String(ctx.error),
+        maxStringLength: ctx.maxStringLength,
+    };
+    if (ctx.organizationId) {
+        payload.organizationId = ctx.organizationId;
+    }
+    try {
+        baseLogger.warn(payload, 'Circular or non-serializable prop dropped');
+    } catch {
+        // Never let a drop-warning bring down the caller's log emission.
+    }
+}
+
+/**
+ * `JSON.stringify` that survives BigInt (stringified as `<digits>n`) and throws
+ * nothing, so a value can be proven serializable before it is handed to pino.
+ * Returns undefined when even that fails (cycles, throwing toJSON/getters).
+ */
+function safeStringify(value: unknown): string | undefined {
+    try {
+        const out = JSON.stringify(value, (_key, val) =>
+            typeof val === 'bigint' ? `${val.toString()}n` : val,
+        );
+        return typeof out === 'string' ? out : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * Size of a provider response body, as a number operators can alert on, without
+ * ever emitting the body itself.
+ */
+function responseBodyLengthOf(value: unknown): number | undefined {
+    if (typeof value === 'string') {
+        return value.length;
+    }
+    if (value === null || value === undefined) {
+        return undefined;
+    }
+    const serialized = safeStringify(value);
+    return serialized === undefined ? undefined : serialized.length;
+}
+
+/**
+ * Emit a non-scalar prop with a deterministic, size-bounded shape.
+ *
+ * Scalars (number / boolean / null) pass through unchanged so e.g. a
+ * `statusCode` number stays a number. A non-scalar (object / array / …) keeps
+ * its sanitized object shape while its JSON stays under `maxStringLength` (so
+ * nested log queries like `error.target.organizationAndTeamData` keep
+ * resolving); only oversized values degrade to a bounded JSON string. The value
+ * is always sanitized first (redaction, depth/cycle bound), and the result is
+ * always something pino can serialize: a value that cannot be JSON-stringified
+ * is re-serialized with a BigInt-safe replacer, and anything beyond that
+ * degrades to a bounded marker instead of the non-serializable clone.
+ */
+export function capSerialized(
+    value: unknown,
+    maxStringLength: number = ERROR_PROP_MAX_STRING_LENGTH,
+    onSerializeFailed: SerializeFailureReporter = warnSerializeFailure,
+): unknown {
+    if (
+        value === undefined ||
+        value === null ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
+    ) {
+        // `undefined` passes through: deepSanitize returns it unchanged and
+        // JSON.stringify(undefined) is undefined, so it used to land in the
+        // failure branch and emit the unserializable marker plus a warning for
+        // an optional field that was simply never set.
+        return value;
+    }
+    const clamped = deepSanitize(value as any);
+    const serialized = safeStringify(clamped);
+    if (serialized === undefined) {
+        // Cycles, throwing getters/toJSON, …: report the drop and emit a bounded
+        // marker. Returning `clamped` here is what made the whole log line
+        // unresolvable: pino stringifies the log object, so handing it a value
+        // that cannot be stringified degrades the line to the console fallback
+        // and loses traceId/metadata for exactly the error being described.
+        onSerializeFailed({
+            maxStringLength,
+            organizationId: organizationIdOf(value),
+            error: new TypeError('value is not JSON-serializable'),
+        });
+        return UNREPRESENTABLE_PROP_MARKER;
+    }
+    if (serialized.length <= maxStringLength) {
+        // Small non-scalars keep their object shape (sanitized) so nested log
+        // queries keep resolving; only oversized values degrade to a string.
+        // JSON.parse is safe here: the text came out of JSON.stringify, so it is
+        // valid JSON of this exact shape (a BigInt leaf survives as "<digits>n").
+        return JSON.parse(serialized);
+    }
+    // Oversized: degrade to a bounded JSON string. (A wide object with many
+    // in-range leaves can still cross the cap, hence this final trim.)
+    return `${serialized.substring(0, maxStringLength)}…`;
+}
+
+/**
+ * The failing attempt an AI SDK `RetryError` carries on `lastError`.
+ *
+ * Running out of retries is the most common BYOK failure (429/5xx), and the
+ * retry error itself has nothing to log: name, reason, message. The attempt
+ * that failed is one level down.
+ */
+function innerErrorForHttpContext(
+    source: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+    const inner = readErrorProperty(source, 'lastError');
+    return typeof inner === 'object' && inner !== null
+        ? (inner as Record<string, unknown>)
+        : undefined;
+}
+
+/**
+ * The HTTP context of an error, and only that: the status, the URL and the
+ * LENGTH of the response body - the body itself is never emitted. Read from
+ * whichever level carries it, sanitized and clamped like any other string.
+ */
+function httpContextOf(
+    source: Record<string, unknown>,
+    maxStringLength: number,
+): Record<string, unknown> {
+    const picked: Record<string, unknown> = {};
+    const rawStatusCode = readErrorProperty(source, 'statusCode');
+    const status =
+        rawStatusCode === undefined
+            ? readErrorProperty(source, 'status')
+            : rawStatusCode;
+    if (typeof status === 'number') {
+        picked.statusCode = status;
+    }
+    const rawUrl = readErrorProperty(source, 'url');
+    if (typeof rawUrl === 'string') {
+        const sanitized = sanitizeErrorUrl(rawUrl);
+        picked.url =
+            sanitized.length > maxStringLength
+                ? `${sanitized.substring(0, maxStringLength)}…`
+                : sanitized;
+    }
+    const length = responseBodyLengthOf(
+        readErrorProperty(source, 'responseBody'),
+    );
+    if (length !== undefined) {
+        picked.responseBodyLength = length;
+    }
+    return picked;
+}
+
+/**
+ * Collect the user-facing fields a provider error carries on itself.
+ *
+ * `pino.stdSerializers.err` copies own enumerable props, but uncapped, and it
+ * also copies the heavy ones. This picks the allowlisted fields (see
+ * ERROR_LOG_PROPS) for the structured `error.*` form, sanitizes string values
+ * (URL-embedded credential redaction) BEFORE truncating so an oversized
+ * credential-shaped string cannot skip redaction, caps every non-scalar, and
+ * reports anything it had to drop or degrade.
+ */
+export function extractErrorProps(
+    error: Error,
+    maxStringLength: number = ERROR_PROP_MAX_STRING_LENGTH,
+    onSerializeFailed: SerializeFailureReporter = warnSerializeFailure,
+): Record<string, unknown> {
+    const props: Record<string, unknown> = {};
+    const source = error as unknown as Record<string, unknown>;
+    for (const key of ERROR_LOG_PROPS) {
+        const value = readErrorProperty(source, key);
+        if (value === undefined) {
+            continue;
+        }
+        if (typeof value === 'string') {
+            const sanitized =
+                key === 'url' ? sanitizeErrorUrl(value) : sanitizeString(value);
+            props[key] =
+                sanitized.length > maxStringLength
+                    ? `${sanitized.substring(0, maxStringLength)}…`
+                    : sanitized;
+        } else if (
+            typeof value === 'number' ||
+            typeof value === 'boolean' ||
+            value === null
+        ) {
+            props[key] = value;
+        } else {
+            props[key] = capSerialized(value, maxStringLength, onSerializeFailed);
+        }
+    }
+    // Derived signal for the response body we deliberately never log.
+    const bodyLength = responseBodyLengthOf(
+        readErrorProperty(source, 'responseBody'),
+    );
+    if (bodyLength !== undefined) {
+        props.responseBodyLength = bodyLength;
+    }
+    // A retry-exhausted provider error carries the attempt that failed on
+    // `lastError`, so without this the line holds only type, message and
+    // reason. Only the HTTP context is unwrapped, never the inner message.
+    const inner = innerErrorForHttpContext(source);
+    if (inner) {
+        for (const [key, value] of Object.entries(
+            httpContextOf(inner, maxStringLength),
+        )) {
+            if (props[key] === undefined) {
+                props[key] = value;
+            }
+        }
+    }
+    return props;
+}
+
+/**
+ * Keep only the named fields of an axios-shaped `response`/`config` object,
+ * sanitized and clamped like any other string, so a status and a URL survive
+ * without the response content travelling with them. Returns undefined when
+ * there is nothing to keep, so the caller drops the key rather than logging an
+ * empty object.
+ */
+function pickHttpContext(
+    value: unknown,
+    keys: readonly string[],
+    maxStringLength: number,
+): Record<string, unknown> | undefined {
+    if (typeof value !== 'object' || value === null) {
+        return undefined;
+    }
+    const source = value as Record<string, unknown>;
+    const picked: Record<string, unknown> = {};
+    for (const key of keys) {
+        const raw = readErrorProperty(source, key);
+        if (raw === undefined) {
+            continue;
+        }
+        if (typeof raw === 'string') {
+            // Sanitize the WHOLE value before clamping, same order (and same
+            // reason) as `boundErrorForLog` below: a pair whose closing
+            // delimiter falls beyond the cut never matches a pattern, so its
+            // opening prefix — the credential — is emitted in the clear.
+            const sanitized =
+                key === 'url' ? sanitizeErrorUrl(raw) : sanitizeString(raw);
+            picked[key] =
+                sanitized.length > maxStringLength
+                    ? `${sanitized.substring(0, maxStringLength)}…`
+                    : sanitized;
+            continue;
+        }
+        if (
+            raw === null ||
+            typeof raw === 'number' ||
+            typeof raw === 'boolean'
+        ) {
+            picked[key] = raw;
+        }
+    }
+    return Object.keys(picked).length > 0 ? picked : undefined;
+}
+
+/**
+ * Bound what pino's error serializer puts on the `err.*` field.
+ *
+ * The serializer copies every enumerable own prop of the error, which is how a
+ * provider payload (`requestBodyValues` is the whole prompt, `data`, the raw
+ * `responseBody`) used to reach the log line uncapped on that path. Identity
+ * keys and scalars pass through, a non-scalar has to be allowlisted and is then
+ * capped, `responseBody` is replaced by its length, and an axios-shaped
+ * `response`/`config` keeps only its status and URL. Same rule as the
+ * structured `error.*` form, so the two can no longer disagree. A primitive
+ * `err` (the documented `error: err.message` shape) becomes a message instead of
+ * being enumerated character by character.
+ */
+export function boundErrorForLog(
+    err: unknown,
+    maxStringLength: number = ERROR_PROP_MAX_STRING_LENGTH,
+): Record<string, unknown> {
+    // `error: err.message` is a documented call shape, so a primitive reaches
+    // this path routinely: pino's serializer enumerates a string character by
+    // character ({'0':'R', …}) and Object.entries(null) throws. Neither is a log
+    // line; keep the message and drop the rest.
+    if (err === null || err === undefined) {
+        return {};
+    }
+    if (typeof err !== 'object') {
+        return { message: sanitizeString(String(err)) };
+    }
+    const flat = pino.stdSerializers.err(err as Error) as Record<string, unknown>;
+    const bounded: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(flat)) {
+        if (ERROR_SERIALIZER_PASSTHROUGH_KEYS.has(key)) {
+            bounded[key] = value;
+            continue;
+        }
+        // The raw provider body is never emitted, whatever shape it has; same
+        // for the request payload and the header collections. Grouped here so
+        // one set says what policy keeps out, and every other non-scalar below
+        // is kept as a capped diagnostic (#1829, #1835 review).
+        if (ERROR_SERIALIZER_NEVER_EMIT.has(key)) {
+            continue;
+        }
+        const httpContextKeys = ERROR_SERIALIZER_HTTP_CONTEXT.get(key);
+        if (httpContextKeys) {
+            const context = pickHttpContext(
+                value,
+                httpContextKeys,
+                maxStringLength,
+            );
+            if (context) {
+                bounded[key] = context;
+            }
+            continue;
+        }
+        if (
+            value === null ||
+            typeof value === 'number' ||
+            typeof value === 'boolean'
+        ) {
+            bounded[key] = value;
+            continue;
+        }
+        if (typeof value === 'string') {
+            // Redact BEFORE clamping, and redact the WHOLE value: clamping first
+            // cuts a credential-shaped value mid-token, and a bounded scan is the
+            // same defect one window further out — a pair whose closing delimiter
+            // sits past the window never matches JSON_PAIR_PATTERN or
+            // redactUrlUserinfo, so its opening prefix (the credential itself) is
+            // emitted in the clear. The later deepSanitize pass cannot redact what
+            // no longer matches a pattern, so this ordering is the only place the
+            // leak can be closed. The scan is one linear pass over a value that is
+            // about to be clamped anyway, and `redactEmbeddedSecrets` skips
+            // strings with nothing credential-shaped in them; same order as
+            // extractErrorProps, so the two paths cannot disagree.
+            const sanitized =
+                key === 'url' ? sanitizeErrorUrl(value) : sanitizeString(value);
+            bounded[key] =
+                sanitized.length > maxStringLength
+                    ? `${sanitized.substring(0, maxStringLength)}…`
+                    : sanitized;
+            continue;
+        }
+        // Any other non-scalar is a diagnostic, not payload: keep it sanitized
+        // and bounded rather than dropping it. This is where a QueryFailedError
+        // keeps `driverError`/`parameters`, a MongoServerError `errInfo`/
+        // `keyValue`, an AggregateError `errors` and a ZodError `issues`
+        // (#1835 review).
+        bounded[key] = capSerialized(value, maxStringLength);
+    }
+    const bodyLength = responseBodyLengthOf(flat.responseBody);
+    if (bodyLength !== undefined) {
+        bounded.responseBodyLength = bodyLength;
+    }
+    // Same unwrapping as extractErrorProps: a retry-exhausted provider error
+    // holds the failing attempt on `lastError`, and only its HTTP context is
+    // read - the status and URL it carries are the ones the log line needs.
+    const inner = innerErrorForHttpContext(flat);
+    if (inner) {
+        for (const [key, value] of Object.entries(
+            httpContextOf(inner, maxStringLength),
+        )) {
+            if (bounded[key] === undefined) {
+                bounded[key] = value;
+            }
+        }
+    }
+    return bounded;
+}
+
 /** Exported for testing only. */
-export { deepSanitize, isSensitiveKey, sanitizeString };
+export {
+    deepSanitize,
+    isSensitiveKey,
+    KEY_SENSITIVITY_CACHE,
+    sanitizeString,
+    SENSITIVE_KEYS,
+};
 
 export function createLogger(component: string): SimpleLogger {
     return new SimpleLogger(component);

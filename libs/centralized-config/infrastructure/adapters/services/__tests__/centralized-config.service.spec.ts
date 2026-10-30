@@ -168,6 +168,77 @@ describe('CentralizedConfigService', () => {
     });
 
     describe('synchronizeConfigs', () => {
+        /**
+         * Discovery emits `directoryPaths` (plural) and stopped setting
+         * `directoryPath`. Keying the config level off the singular spelling
+         * sent every directory scope down the REPOSITORY branch, so the
+         * directory's custom messages were written onto the repository —
+         * overwriting the repository's own messages and never creating a
+         * directory-level one.
+         *
+         * Reproduced end to end before writing this: two files, one with
+         * `MSG-DO-REPO` and one with `MSG-DO-DIRETORIO`, produced a single
+         * message at repository level carrying the directory's content.
+         */
+        it('writes a directory scope custom message at DIRECTORY level', async () => {
+            const configFiles: IConfigFileMeta[] = [
+                {
+                    repositoryId: 'repo-1',
+                    centralizedDirectoryPath: 'repo1/src',
+                    // What discovery actually emits for a directory scope.
+                    directoryPaths: ['/src'],
+                } as any,
+            ];
+
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [{ id: 'repo-1', name: 'repo1', full_name: 'org/repo1' }],
+            );
+            mockCodeBaseConfigService.getDirectoryIdForPath.mockResolvedValue(
+                'dir-1',
+            );
+            mockPullRequestMessagesService.findOne.mockResolvedValue(null);
+            mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValue({
+                version: '2.0',
+                customMessages: {
+                    startReviewMessage: {
+                        status: 'every_push',
+                        content: 'MSG-DO-DIRETORIO',
+                    },
+                },
+            });
+            mockParametersService.findByKey.mockImplementation((key) => {
+                if (key === ParametersKey.CENTRALIZED_CONFIG) {
+                    return Promise.resolve({
+                        configValue: {
+                            enabled: true,
+                            repository: { id: 'c-1', name: 'centralized' },
+                        },
+                    });
+                }
+                return Promise.resolve({ configValue: {} });
+            });
+
+            await service.synchronizeConfigs({
+                organizationAndTeamData,
+                configFiles,
+                actor,
+            });
+
+            // Asserted on the payload directly: the use case takes three
+            // arguments and `toHaveBeenCalledWith` matches arity too.
+            const payload =
+                mockCreateOrUpdatePullRequestMessagesUseCase.execute.mock
+                    .calls[0][1];
+
+            expect(payload).toEqual(
+                expect.objectContaining({
+                    configLevel: ConfigLevel.DIRECTORY,
+                    repositoryId: 'repo-1',
+                    directoryId: 'dir-1',
+                }),
+            );
+        });
+
         it('should sync custom messages from centralized config', async () => {
             const configFiles: IConfigFileMeta[] = [
                 {
@@ -270,6 +341,10 @@ describe('CentralizedConfigService', () => {
                     endReviewMessage: {
                         status: 'every_push',
                         content: 'Custom end message',
+                    },
+                    errorReviewMessage: {
+                        status: 'off',
+                        content: '',
                     },
                     globalSettings: {
                         hideComments: false,
@@ -374,6 +449,10 @@ describe('CentralizedConfigService', () => {
                         status: 'off',
                         content: '',
                     },
+                    errorReviewMessage: {
+                        status: 'off',
+                        content: '',
+                    },
                     globalSettings: {
                         hideComments: true,
                         suggestionCopyPrompt: false,
@@ -463,6 +542,10 @@ describe('CentralizedConfigService', () => {
                     endReviewMessage: {
                         status: 'every_push',
                         content: 'Custom end message',
+                    },
+                    errorReviewMessage: {
+                        status: 'off',
+                        content: '',
                     },
                     globalSettings: {
                         hideComments: false,
@@ -693,7 +776,12 @@ describe('CentralizedConfigService', () => {
 
     describe('removeStaleConfigs', () => {
         it('should remove stale custom messages even when regular config does not change', async () => {
-            const configFiles: IConfigFileMeta[] = [];
+            // Non-empty discovery (a repo scope) so the #1518 empty-discovery
+            // guard does not trigger; the GLOBAL message is stale because a
+            // previous sync owned a global config file that is gone now.
+            const configFiles: IConfigFileMeta[] = [
+                { repositoryId: 'repo-1' } as any,
+            ];
 
             const codeReviewConfig = {
                 configValue: {
@@ -705,6 +793,14 @@ describe('CentralizedConfigService', () => {
             mockParametersService.findByKey.mockImplementation((key) => {
                 if (key === ParametersKey.CODE_REVIEW_CONFIG) {
                     return Promise.resolve(codeReviewConfig);
+                }
+
+                if (key === ParametersKey.CENTRALIZED_CONFIG) {
+                    // Ownership is what makes this a removal rather than a
+                    // message the centralized config simply never managed.
+                    return Promise.resolve({
+                        configValue: { managedGlobalConfig: true },
+                    });
                 }
 
                 return Promise.resolve({ configValue: {} });
@@ -732,9 +828,324 @@ describe('CentralizedConfigService', () => {
             expect(mockPullRequestMessagesService.delete).toHaveBeenCalledWith(
                 'global-message-1',
             );
+            // The code review config itself must not be rewritten. Sync does
+            // record its managed-repository baseline (#1579), but that lives
+            // under CENTRALIZED_CONFIG — a different key.
+            expect(
+                mockCreateOrUpdateParametersUseCase.execute,
+            ).not.toHaveBeenCalledWith(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                expect.anything(),
+                expect.anything(),
+            );
+        });
+
+        it('should NOT remove a global custom message it never owned', async () => {
+            // Same discovery as above, one difference: no previous sync ever
+            // owned a global `kodus-config.yml`. The message was authored in
+            // the UI and the centralized config has no claim on it.
+            const configFiles: IConfigFileMeta[] = [
+                { repositoryId: 'repo-1' } as any,
+            ];
+
+            mockParametersService.findByKey.mockImplementation((key) => {
+                if (key === ParametersKey.CODE_REVIEW_CONFIG) {
+                    return Promise.resolve({
+                        configValue: { configs: {}, repositories: [] },
+                    });
+                }
+
+                return Promise.resolve({ configValue: {} });
+            });
+
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [],
+            );
+
+            mockPullRequestMessagesService.find.mockResolvedValue([
+                { uuid: 'global-message-1', configLevel: ConfigLevel.GLOBAL },
+            ]);
+
+            const result = await service.removeStaleConfigs({
+                organizationAndTeamData,
+                configFiles,
+                actor,
+            });
+
+            expect(result.success).toBe(true);
+            expect(mockPullRequestMessagesService.delete).not.toHaveBeenCalled();
+        });
+    });
+
+    // ---------------------------------------------------------------------
+    // Issue #1518 — empty/failed discovery must NOT wipe data. A read failure
+    // (repositories mapping unavailable, tree read failed) yields the same
+    // empty result as a genuinely empty repo, and the non-transactional
+    // reconcile then deleted every rule and reset the org's global config
+    // (default model / BYOK) plus custom messages. These assert the SAFE
+    // post-guard behavior and are the regression coverage for the fix.
+    // ---------------------------------------------------------------------
+    describe('#1518 empty-discovery wipe guard', () => {
+        it('discoverKodyRulesFiles THROWS (not []) when the repositories mapping cannot be loaded', async () => {
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([
+                { type: 'file', path: 'my-repo/.kody-rules/review/a.yml' },
+            ]);
+            // Transient integration-config read failure → null (a FAILURE, not
+            // "zero files"). Must surface so the sync aborts before deletion.
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                null,
+            );
+
+            await expect(
+                service.discoverKodyRulesFiles({
+                    organizationAndTeamData,
+                    repository: { name: 'config-repo', id: 'repo-1' },
+                }),
+            ).rejects.toThrow();
+        });
+
+        it('discoverConfigFiles THROWS (not []) when the repositories mapping cannot be loaded', async () => {
+            // Twin of discoverKodyRulesFiles — both go through scanRepositoryTree,
+            // and both feed removeStale*, so both must fail loudly on a read error.
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([
+                { type: 'file', path: 'my-repo/kodus-config.yml' },
+            ]);
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                null,
+            );
+
+            await expect(
+                service.discoverConfigFiles({
+                    organizationAndTeamData,
+                    repository: { name: 'config-repo', id: 'repo-1' },
+                }),
+            ).rejects.toThrow();
+        });
+
+        // H5 — a `kodus-config.yml` more than one level below the repository
+        // folder is dropped by discovery with nothing but a log line. Executed
+        // rather than assumed: this is what a user who hand-writes
+        // `my-repo/src/api/kodus-config.yml` actually gets. Not a data-loss
+        // bug — the file is ignored, not acted on — but the silence is the
+        // problem, and any change to it is a product decision.
+        it('discoverConfigFiles silently ignores a nested path deeper than one level', async () => {
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([
+                { type: 'file', path: 'my-repo/kodus-config.yml' },
+                { type: 'file', path: 'my-repo/src/api/kodus-config.yml' },
+            ]);
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [{ id: 'r-1', name: 'my-repo', full_name: 'acme/my-repo' }],
+            );
+
+            const discovered = await service.discoverConfigFiles({
+                organizationAndTeamData,
+                repository: { name: 'config-repo', id: 'repo-1' },
+            });
+
+            // Only the repository-level file survives; the nested one is gone
+            // and the caller has no way to know it existed.
+            expect(discovered).toHaveLength(1);
+            expect(discovered[0]).toEqual(
+                expect.objectContaining({ repositoryId: 'r-1' }),
+            );
+            expect(discovered[0].directoryPaths).toBeUndefined();
+        });
+
+        it('removeStaleKodyRules does NOT delete centralized rules when discovery is empty', async () => {
+            const ruleFiles: any[] = []; // empty discovery
+
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                toJson: () => ({
+                    rules: [
+                        {
+                            uuid: 'r1',
+                            title: 'A',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/a.yml',
+                            },
+                        },
+                        {
+                            uuid: 'r2',
+                            title: 'B',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/b.yml',
+                            },
+                        },
+                    ],
+                }),
+            });
+
+            const result = await service.removeStaleKodyRules({
+                organizationAndTeamData,
+                ruleFiles,
+                actor,
+            });
+
+            expect(result.success).toBe(true);
+            expect(result.removedRuleCount).toBe(0);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('removeStaleConfigs does NOT reset global config / delete repo configs / delete messages when discovery is empty', async () => {
+            const configFiles: IConfigFileMeta[] = []; // empty discovery
+
+            const codeReviewConfig = {
+                configValue: {
+                    // org-wide defaults: LLM provider + model + BYOK reference
+                    configs: {
+                        llmProvider: 'openai_byok',
+                        byokConfig: { apiKey: 'sk-live-secret' },
+                    },
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            isSelected: true,
+                            configs: { reviewOptions: { security: true } },
+                            directories: [],
+                        },
+                    ],
+                },
+            };
+
+            mockParametersService.findByKey.mockImplementation((key: any) =>
+                key === ParametersKey.CODE_REVIEW_CONFIG
+                    ? Promise.resolve(codeReviewConfig)
+                    : Promise.resolve({ configValue: {} }),
+            );
+            mockPullRequestMessagesService.find.mockResolvedValue([
+                { uuid: 'global-message-1', configLevel: ConfigLevel.GLOBAL },
+            ]);
+
+            const result = await service.removeStaleConfigs({
+                organizationAndTeamData,
+                configFiles,
+                actor,
+            });
+
+            expect(result.success).toBe(true);
+            // None of the destructive paths may fire on empty discovery.
             expect(
                 mockCreateOrUpdateParametersUseCase.execute,
             ).not.toHaveBeenCalled();
+            expect(
+                mockDeleteRepositoryCodeReviewParameterUseCase.execute,
+            ).not.toHaveBeenCalled();
+            expect(
+                mockPullRequestMessagesService.delete,
+            ).not.toHaveBeenCalled();
+        });
+    });
+
+    // Backfill for the four methods that had no direct unit test — the gap
+    // that let #1518 through (methods only exercised via mocks in the use-case
+    // spec, never their own logic).
+    describe('untested method coverage', () => {
+        describe('validateCentralizedConfig', () => {
+            it('fails when centralized config is not enabled', async () => {
+                mockParametersService.findByKey.mockResolvedValue({
+                    configValue: { enabled: false },
+                });
+                const r = await service.validateCentralizedConfig({
+                    organizationAndTeamData,
+                });
+                expect(r.success).toBe(false);
+                expect(r.message).toContain('not enabled');
+            });
+
+            it('fails when enabled but no repository is configured', async () => {
+                mockParametersService.findByKey.mockResolvedValue({
+                    configValue: { enabled: true, repository: {} },
+                });
+                const r = await service.validateCentralizedConfig({
+                    organizationAndTeamData,
+                });
+                expect(r.success).toBe(false);
+                expect(r.message).toContain('no repository');
+            });
+
+            it('succeeds when enabled and a repository is configured', async () => {
+                mockParametersService.findByKey.mockResolvedValue({
+                    configValue: {
+                        enabled: true,
+                        repository: { id: 'r1', name: 'kodus' },
+                    },
+                });
+                const r = await service.validateCentralizedConfig({
+                    organizationAndTeamData,
+                });
+                expect(r.success).toBe(true);
+            });
+        });
+
+        describe('getCentralizedConfigRepository', () => {
+            it('throws when no repository is configured', async () => {
+                mockParametersService.findByKey.mockResolvedValue({
+                    configValue: {},
+                });
+                await expect(
+                    service.getCentralizedConfigRepository(
+                        organizationAndTeamData,
+                    ),
+                ).rejects.toThrow(
+                    'Centralized config repository not configured',
+                );
+            });
+        });
+
+        describe('fetchConfigFile', () => {
+            it('returns null (does not throw) when the read fails', async () => {
+                mockCodeBaseConfigService.getKodusConfigFile.mockRejectedValue(
+                    new Error('boom'),
+                );
+                const file = await service.fetchConfigFile({
+                    organizationAndTeamData,
+                    repository: { name: 'r', id: 'r1' },
+                });
+                expect(file).toBeNull();
+            });
+        });
+
+        describe('fetchKodyRuleFile', () => {
+            it('returns null when the file has no content', async () => {
+                mockCodeManagementService.getDefaultBranch.mockResolvedValue(
+                    'main',
+                );
+                mockCodeManagementService.getRepositoryContentFile.mockResolvedValue(
+                    { data: {} },
+                );
+                const rule = await service.fetchKodyRuleFile({
+                    organizationAndTeamData,
+                    repository: { name: 'r', id: 'r1' },
+                    filePath: '.kody-rules/review/a.yml',
+                });
+                expect(rule).toBeNull();
+            });
+
+            it('decodes and parses a base64 YAML rule file', async () => {
+                mockCodeManagementService.getDefaultBranch.mockResolvedValue(
+                    'main',
+                );
+                const yamlContent = 'title: My rule\nrule: do the thing\n';
+                mockCodeManagementService.getRepositoryContentFile.mockResolvedValue(
+                    {
+                        data: {
+                            content: Buffer.from(
+                                yamlContent,
+                                'utf-8',
+                            ).toString('base64'),
+                            encoding: 'base64',
+                        },
+                    },
+                );
+                const rule = await service.fetchKodyRuleFile({
+                    organizationAndTeamData,
+                    repository: { name: 'r', id: 'r1' },
+                    filePath: '.kody-rules/review/a.yml',
+                });
+                expect(rule).toMatchObject({ title: 'My rule' });
+            });
         });
     });
 
@@ -1190,6 +1601,173 @@ describe('CentralizedConfigService', () => {
             );
         });
 
+        it('should resurrect a DELETED rule when the YAML file is present again', async () => {
+            // Stale cleanup can soft-delete a rule whose file is only on an
+            // open PR. After that PR merges, git is source of truth: the
+            // file is on the default branch, so sync must restore ACTIVE
+            // instead of preserving DELETED (which hid the rule in the UI).
+            const ruleFiles: any[] = [
+                {
+                    centralizedDirectoryPath: '.kody-rules/review',
+                    repositoryId: undefined,
+                    directoryPath: undefined,
+                    ruleType: 'standard' as any,
+                    ruleFilePath: '.kody-rules/review/docs.yml',
+                    path: '.kody-rules/review/docs.yml',
+                },
+            ];
+
+            const mockRuleContent = {
+                title: 'Docs must not contradict the change',
+                rule: 'Flag contradictions, not missing docs',
+                examples: [],
+                inheritance: { inheritable: true, exclude: [], include: [] },
+            };
+
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([]);
+            mockCodeManagementService.getDefaultBranch.mockResolvedValue(
+                'main',
+            );
+            mockCodeManagementService.getRepositoryContentFile.mockResolvedValue(
+                {
+                    data: {
+                        content: Buffer.from(
+                            yaml.dump(mockRuleContent),
+                        ).toString('base64'),
+                        encoding: 'base64',
+                    },
+                },
+            );
+
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    repository: { name: 'central-repo', id: 'central-repo-id' },
+                },
+            });
+
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [],
+            );
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                rules: [
+                    {
+                        uuid: 'deleted-rule-uuid',
+                        status: 'deleted',
+                        origin: 'user',
+                        centralizedConfig: {
+                            path: '.kody-rules/review/docs.yml',
+                            status: 'synced',
+                        },
+                    },
+                ],
+            });
+            mockCreateOrUpdateKodyRulesUseCase.execute.mockResolvedValue({
+                uuid: 'deleted-rule-uuid',
+            });
+
+            await service.synchronizeKodyRules({
+                organizationAndTeamData,
+                ruleFiles,
+                actor,
+            });
+
+            expect(
+                mockCreateOrUpdateKodyRulesUseCase.execute,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    uuid: 'deleted-rule-uuid',
+                    status: 'active',
+                    origin: 'user',
+                    centralizedConfig: {
+                        path: '.kody-rules/review/docs.yml',
+                        status: 'synced',
+                    },
+                }),
+                'org-1',
+                expect.any(Object),
+                true,
+            );
+        });
+
+        it('should resurrect a DELETED rule as PAUSED when YAML enabled is false', async () => {
+            const ruleFiles: any[] = [
+                {
+                    centralizedDirectoryPath: '.kody-rules/review',
+                    repositoryId: undefined,
+                    directoryPath: undefined,
+                    ruleType: 'standard' as any,
+                    ruleFilePath: '.kody-rules/review/paused.yml',
+                    path: '.kody-rules/review/paused.yml',
+                },
+            ];
+
+            const mockRuleContent = {
+                title: 'Paused after restore',
+                rule: 'Stay paused',
+                enabled: false,
+                examples: [],
+                inheritance: { inheritable: true, exclude: [], include: [] },
+            };
+
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([]);
+            mockCodeManagementService.getDefaultBranch.mockResolvedValue(
+                'main',
+            );
+            mockCodeManagementService.getRepositoryContentFile.mockResolvedValue(
+                {
+                    data: {
+                        content: Buffer.from(
+                            yaml.dump(mockRuleContent),
+                        ).toString('base64'),
+                        encoding: 'base64',
+                    },
+                },
+            );
+
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    repository: { name: 'central-repo', id: 'central-repo-id' },
+                },
+            });
+
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [],
+            );
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                rules: [
+                    {
+                        uuid: 'deleted-paused-uuid',
+                        status: 'deleted',
+                        centralizedConfig: {
+                            path: '.kody-rules/review/paused.yml',
+                            status: 'synced',
+                        },
+                    },
+                ],
+            });
+            mockCreateOrUpdateKodyRulesUseCase.execute.mockResolvedValue({
+                uuid: 'deleted-paused-uuid',
+            });
+
+            await service.synchronizeKodyRules({
+                organizationAndTeamData,
+                ruleFiles,
+                actor,
+            });
+
+            expect(
+                mockCreateOrUpdateKodyRulesUseCase.execute,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    uuid: 'deleted-paused-uuid',
+                    status: 'paused',
+                }),
+                'org-1',
+                expect.any(Object),
+                true,
+            );
+        });
+
         it('should handle YAML parsing errors gracefully', async () => {
             const ruleFiles: any[] = [
                 {
@@ -1224,7 +1802,10 @@ describe('CentralizedConfigService', () => {
                 actor,
             });
 
-            expect(result.success).toBe(true);
+            // #1518: a per-file failure must NOT be reported as an overall
+            // success — the sync is incomplete and the caller has to know.
+            expect(result.success).toBe(false);
+            expect(result.message).toContain('incomplete');
             expect(result.failureDetails).toHaveLength(1);
             expect(result.failureDetails![0].file).toBe(
                 '.kody-rules/memories/invalid.yml',
@@ -1257,7 +1838,12 @@ describe('CentralizedConfigService', () => {
             const result = await service.removeStaleKodyRules({
                 organizationAndTeamData,
                 actor,
-                ruleFiles: [],
+                // Non-empty discovery (a real file list that just doesn't
+                // include pending.yml) so the #1518 empty-discovery guard does
+                // not trigger — this validates genuine stale removal.
+                ruleFiles: [
+                    { path: '.kody-rules/review/other.yml' } as any,
+                ],
             });
 
             expect(result.success).toBe(true);
@@ -1311,5 +1897,269 @@ describe('CentralizedConfigService', () => {
                 mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
             ).not.toHaveBeenCalled();
         });
+
+        it('should NOT delete PENDING_ADD rules whose file is only on an open PR', async () => {
+            // Sync reads the default branch. A newly created rule is exported
+            // to a mutation PR first, so its YAML is not in discovery yet.
+            // Treating that as "stale" is what made existing rules vanish
+            // from the UI when adding another rule with centralized config.
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                toJson: () => ({
+                    rules: [
+                        {
+                            uuid: 'pending-add-rule',
+                            title: 'Docs must not contradict the change',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/docs.yml',
+                                status: 'pending_add',
+                            },
+                        },
+                        {
+                            uuid: 'synced-rule',
+                            title: 'Keep me',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/kept.yml',
+                                status: 'synced',
+                            },
+                        },
+                    ],
+                }),
+            });
+
+            const result = await service.removeStaleKodyRules({
+                organizationAndTeamData,
+                actor,
+                ruleFiles: [
+                    { path: '.kody-rules/review/kept.yml' } as any,
+                ],
+            });
+
+            expect(result.success).toBe(true);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('should NOT delete PENDING_EDIT rules whose file is only on an open PR', async () => {
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                toJson: () => ({
+                    rules: [
+                        {
+                            uuid: 'pending-edit-rule',
+                            title: 'Renamed on the PR',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/renamed.yml',
+                                status: 'pending_edit',
+                            },
+                        },
+                    ],
+                }),
+            });
+
+            const result = await service.removeStaleKodyRules({
+                organizationAndTeamData,
+                actor,
+                ruleFiles: [
+                    { path: '.kody-rules/review/other.yml' } as any,
+                ],
+            });
+
+            expect(result.success).toBe(true);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('should still delete a truly removed synced rule while keeping PENDING_ADD', async () => {
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                toJson: () => ({
+                    rules: [
+                        {
+                            uuid: 'pending-add-rule',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/new.yml',
+                                status: 'pending_add',
+                            },
+                        },
+                        {
+                            uuid: 'removed-synced-rule',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/gone.yml',
+                                status: 'synced',
+                            },
+                        },
+                    ],
+                }),
+            });
+
+            mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute.mockResolvedValue(
+                true,
+            );
+
+            const result = await service.removeStaleKodyRules({
+                organizationAndTeamData,
+                actor,
+                ruleFiles: [
+                    { path: '.kody-rules/review/other.yml' } as any,
+                ],
+            });
+
+            expect(result.success).toBe(true);
+            expect(result.removedRuleCount).toBe(1);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).toHaveBeenCalledWith('removed-synced-rule', actor);
+        });
+
+        it('should NOT delete PENDING_ADD when discovery is empty but the tree read is proven', async () => {
+            // First production incident: only the new rule existed (pending_add),
+            // default-branch discovery found kodus-config.yml and zero rule
+            // files, and #1518 treated that as "user deleted the last rule".
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                toJson: () => ({
+                    rules: [
+                        {
+                            uuid: 'pending-add-only',
+                            title: 'Docs must not contradict the change',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/docs.yml',
+                                status: 'pending_add',
+                            },
+                        },
+                    ],
+                }),
+            });
+
+            const result = await service.removeStaleKodyRules({
+                organizationAndTeamData,
+                actor,
+                ruleFiles: [],
+                configFiles: [{ path: 'kodus-config.yml' } as any],
+            });
+
+            expect(result.success).toBe(true);
+            expect(result.removedRuleCount).toBe(0);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+    });
+});
+
+/**
+ * `synchronizeKodyRules` — what a rejected rule file tells its owner.
+ *
+ * Production 2026-09-28: one org synced 7 rule files and failed 22, every one
+ * reported as "Rule file does not comply with required schema" — no field, no
+ * reason. The zod result that knew which field was wrong was discarded, so the
+ * owner (and we) could not tell what to change in the YAML.
+ */
+describe('CentralizedConfigService.synchronizeKodyRules — rejected rule files', () => {
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    } as any;
+    const actor = {
+        organizationId: 'org-1',
+        source: 'sync' as const,
+        userEmail: 'sync@kodus.io',
+        userId: 'u-1',
+    };
+
+    function makeService(ruleContent: Record<string, unknown>) {
+        const createOrUpdateKodyRulesUseCase = { execute: jest.fn() };
+        const service = new CentralizedConfigService(
+            {} as any, // parametersService
+            {
+                findIntegrationConfigFormatted: jest.fn().mockResolvedValue([]),
+            } as any,
+            {} as any, // codeManagementService
+            { execute: jest.fn() } as any, // updateOrCreateCodeReviewParameterUseCase
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any, // codeBaseConfigService
+            createOrUpdateKodyRulesUseCase as any,
+            {} as any,
+            { findByOrganizationId: jest.fn().mockResolvedValue(null) } as any,
+        );
+        jest.spyOn(service, 'getCentralizedConfigRepository').mockResolvedValue(
+            { id: 'repo-central', name: 'central' } as any,
+        );
+        jest.spyOn(service, 'fetchKodyRuleFile').mockResolvedValue(
+            ruleContent as any,
+        );
+        return { service, createOrUpdateKodyRulesUseCase };
+    }
+
+    const ruleFile = {
+        ruleFilePath: 'app-baseline/.kody-rules/review/add-tests.yml',
+        repositoryId: 'repo-1',
+    } as any;
+
+    it('names the offending field when a rule fails the schema', async () => {
+        const { service, createOrUpdateKodyRulesUseCase } = makeService({
+            title: 'Add tests',
+            rule: 'Every defensive branch needs a test',
+            severity: 'urgent', // not one of low | medium | high | critical
+        });
+
+        const result = await service.synchronizeKodyRules({
+            organizationAndTeamData,
+            ruleFiles: [ruleFile],
+            actor,
+        });
+
+        expect(createOrUpdateKodyRulesUseCase.execute).not.toHaveBeenCalled();
+        expect(result.failureDetails).toHaveLength(1);
+        expect(result.failureDetails![0].file).toBe(ruleFile.ruleFilePath);
+        expect(result.failureDetails![0].error).toContain('severity');
+    });
+
+    it('names every offending field, nested ones by their full path', async () => {
+        const { service } = makeService({
+            title: 'Add tests',
+            rule: 'Every defensive branch needs a test',
+            severity: 'urgent',
+            inheritance: { inheritable: 'yes', include: [], exclude: [] },
+        });
+
+        const result = await service.synchronizeKodyRules({
+            organizationAndTeamData,
+            ruleFiles: [ruleFile],
+            actor,
+        });
+
+        const error = result.failureDetails![0].error;
+        expect(error).toContain('inheritance.inheritable: ');
+        expect(error).toContain('severity: ');
+        expect(error).toContain('; ');
+    });
+
+    it('still syncs a rule that passes the schema', async () => {
+        const { service, createOrUpdateKodyRulesUseCase } = makeService({
+            title: 'Add tests',
+            rule: 'Every defensive branch needs a test',
+            severity: 'high',
+        });
+
+        const result = await service.synchronizeKodyRules({
+            organizationAndTeamData,
+            ruleFiles: [ruleFile],
+            actor,
+        });
+
+        expect(createOrUpdateKodyRulesUseCase.execute).toHaveBeenCalledTimes(1);
+        expect(result.failureDetails).toBeUndefined();
     });
 });

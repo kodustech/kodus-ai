@@ -1,0 +1,1108 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "gpt-5.6-luna",
+  "judgeReasoningEffort": "low",
+  "reps": 3,
+  "engine": {
+    "commit": "14439a95335f07c92cb445ccea3069a9b2904e30",
+    "sourceDigest": "6839eb92aa6ee4b3fcbd7cc377dec4b558d6ebd7377b6d94ec098b0729e00139"
+  },
+  "startedAt": "2026-10-03T13:04:40.361Z",
+  "updatedAt": "2026-10-03T14:16:09.622Z",
+  "complete": true,
+  "selectedCases": [
+    "R2-consequence-status-implemented",
+    "R3-consequence-status-stale",
+    "R3p-consequence-status-pending"
+  ],
+  "summary": {
+    "measured": 9,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 9,
+        "violations": 9,
+        "rate": 1
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 9,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 11,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R2-consequence-status-implemented · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R3-consequence-status-stale · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      },
+      "R3p-consequence-status-pending · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 3,
+        "delivered": 3
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 527904,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged from fetchStatus makes pollCharge's resubmit branch (poller.ts:13-15) newly reachable, and that branch calls gw.submit, which gateway.ts:3 documents as NOT idempotent ('every call creates a new charge'). WHY: errors.ts:1-2 defines NotReadyError as 'The gateway has the charge but has not settled it yet', so a charge that is merely unsettled is now resubmitted, creating a duplicate charge (double charge) for a charge the gateway already holds. Before this PR fetchStatus wrapped NotReadyError into FailedError, so pollCharge never hit the resubmit path. HOW: treat NotReadyError as transient and re-poll instead of resubmitting, e.g. in pollCharge return a 'pending' state on NotReadyError (or make submit idempotent by passing an idempotency key), rather than calling the non-idempotent gw.submit.",
+          "keep": true,
+          "rationale": "The reachability claim is factually correct: before this PR fetchStatus caught NotReadyError and rethrew it as FailedError, so pollCharge's `catch (err) { if (err instanceof NotReadyError) ... }` branch was unreachable. The diff now rethrows NotReadyError unchanged, making that branch live, and poller.ts:14 calls gw.submit, which gateway.ts:3 documents as NOT idempotent ('every call creates a new charge'). errors.ts:1-2 defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', which directly contradicts poller.ts:7's assumption ('the gateway never received it: resubmit'). Under the error-class semantics, a merely-unsettled charge is resubmitted, risking a duplicate charge. I cannot refute this without assuming the errors.ts doc is wrong; the contradiction is real and the failure path is concrete, so it warrants human review.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|fetchStatus"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Propagating NotReadyError unchanged from fetchStatus makes pollCharge's resubmit branch (poller.ts:13-15) newly reachable and calls gw.submit, which gateway.ts:3 documents as not idempotent; because errors.ts:1-2 defines NotReadyError as 'The gateway has the charge but has not settled it yet', this resubmits a merely unsettled charge and creates a duplicate/double charge, whereas before this PR fetchStatus wrapped NotReadyError into FailedError so pollCharge never hit the resubmit path. Treat NotReadyError as transient and re-poll instead of resubmitting—e.g., have pollCharge return a 'pending' state on NotReadyError or make submit idempotent by passing an idempotency key—rather than calling the non-idempotent gw.submit."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 445172,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Rethrowing NotReadyError unchanged makes pollCharge's resubmit branch (poller.ts:13-15) reachable, and that branch calls the non-idempotent gw.submit for a charge the gateway already holds. WHY: NotReadyError is documented in errors.ts:1-2 as 'The gateway has the charge but has not settled it yet (transient)', while Gateway.submit is documented in gateway.ts:3 as 'NOT idempotent: every call creates a new charge' — so a transient not-settled state now triggers a duplicate charge (double billing). Before this diff, fetchStatus wrapped NotReadyError in FailedError, so the resubmit branch was unreachable. HOW: The caller should re-poll status on NotReadyError rather than resubmit; only call gw.submit when the gateway confirms it never received the charge (e.g. a distinct 'not received' error).",
+          "keep": true,
+          "rationale": "Confirmed by tracing the actual code: status.ts:8-11 rethrows NotReadyError, pollCharge (poller.ts:13-15) matches it and calls gw.submit, errors.ts:1-2 documents NotReadyError as 'gateway HAS the charge but not settled', and gateway.ts:3 documents submit as non-idempotent ('every call creates a new charge'). Thus the transient state now triggers a duplicate charge (double billing), and before the diff the resubmit branch was unreachable because fetchStatus wrapped NotReadyError in FailedError. The previous decision resolved a different issue (misclassification as terminal; 'propagate so the caller can retry') and the finding's fix (caller should re-poll, not resubmit) retains the propagation — it does not reverse the applied change, and the real caller's resubmit behavior is concrete evidence the applied change produces a harmful outcome the decision never adjudicated. No guard or idempotency refutes the claim.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge\\(|fetchStatus\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "status\\(chargeId|async status|submit\\(payload"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 28,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Rethrowing NotReadyError unchanged makes pollCharge's resubmit branch (poller.ts:13-15) reachable, and since NotReadyError means the gateway has the charge but has not settled it (errors.ts:1-2) while Gateway.submit is non-idempotent (gateway.ts:3), this triggers a duplicate charge and double billing; previously fetchStatus wrapped NotReadyError in FailedError, keeping the branch unreachable. Re-poll status on NotReadyError instead of resubmitting, and only call gw.submit when the gateway confirms it never received the charge (e.g. a distinct 'not received' error)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 238221,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged makes pollCharge's previously-dead resend branch (poller.ts:13-15) newly reachable, and that branch calls gw.submit(charge.payload) even though NotReadyError is documented in errors.ts:1 as 'the gateway has the charge but has not settled it yet'. WHY: gateway.ts:3 documents submit as NOT idempotent ('every call creates a new charge'), so on every poll tick where the gateway has the charge but has not settled it, a new charge is created — duplicate/double billing. The two documented meanings of NotReadyError (errors.ts 'gateway has the charge' vs poller.ts:7 'gateway never received it: resubmit') directly contradict each other, and this change activates the resubmit path. HOW: Reconcile the semantics — if NotReadyError means the gateway already holds the charge, pollCharge must NOT resubmit (treat it as 'wait/pending' and return a pending state), or the resubmit must go through an idempotency key so a repeated submit cannot create a second charge.",
+          "keep": true,
+          "rationale": "Confirmed: status.ts:8-10 re-throws NotReadyError, which was previously converted to FailedError by fetchStatus, so pollCharge's `err instanceof NotReadyError` catch (poller.ts:13-15) was dead code and is now reachable. That branch calls gw.submit, documented in gateway.ts:3 as NOT idempotent (each call creates a new charge), while errors.ts:1 documents NotReadyError as 'the gateway has the charge but has not settled it yet' — directly contradicting poller.ts:7's resubmit semantics. Thus a poll tick on a held-but-unsettled charge now issues a duplicate non-idempotent submit, i.e. duplicate billing. The earlier 'implemented' decision addressed only the misclassification issue, not this downstream resubmit/duplicate-charge interaction, so it does not excuse it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge\\("
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The two documented meanings of NotReadyError (errors.ts:1 'gateway has the charge' vs poller.ts:7 'gateway never received it: resubmit') contradict each other, and propagating it unchanged makes pollCharge's previously-dead resend branch (poller.ts:13-15) newly reachable — that branch calls gw.submit(charge.payload) even though gateway.ts:3 documents submit as NOT idempotent, so every poll tick where the gateway holds the charge but has not settled it creates a new charge (duplicate billing). Reconcile the semantics: if NotReadyError means the gateway already holds the charge, pollCharge must treat it as pending and return a pending state rather than resubmit, or the resubmit must go through an idempotency key so a repeated submit cannot create a second charge."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 440098,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError here makes pollCharge's resubmit branch live, and that branch calls the non-idempotent gw.submit for a charge the gateway already holds. WHY: errors.ts:1-2 defines NotReadyError as a transient \"the gateway has the charge but has not settled it yet\" state, while gateway.ts:3 documents submit as \"NOT idempotent: every call creates a new charge\" — so every poll tick on a merely-unsettled charge now creates a duplicate charge (double billing). Previously the wrapping in FailedError made pollCharge's NotReadyError branch dead code, so this path was unreachable; this change newly exposes it. HOW: in the caller (src/billing/poller.ts:13-16), treat NotReadyError as pending (retry later / return a pending state) instead of resubmitting, and only resubmit when the gateway confirms it never received the charge.",
+          "keep": true,
+          "rationale": "Confirmed the concrete path. errors.ts:1 defines NotReadyError as \"the gateway has the charge but has not settled it yet\", and gateway.ts:3 documents submit as non-idempotent (\"every call creates a new charge\"). status.ts:8-9 re-throws NotReadyError, which makes poller.ts:13-15's resubmit branch live (previously the FailedError wrap in status.ts made it dead code). So each poll tick on a merely-unsettled charge calls gw.submit and creates a duplicate charge (double billing). No upstream guard exists: submit has no idempotency key. The earlier review decision (not_implemented) only addressed transient-vs-terminal classification and does not cover this double-billing consequence. No concrete evidence refutes the claim.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Re-throwing NotReadyError makes pollCharge's resubmit branch live and call the non-idempotent gw.submit for a charge the gateway already holds: errors.ts:1-2 defines NotReadyError as a transient \"gateway has the charge but has not settled it yet\" state, while gateway.ts:3 documents submit as \"NOT idempotent: every call creates a new charge\", so every poll tick on a merely-unsettled charge creates a duplicate charge (double billing) — previously the FailedError wrapping left pollCharge's NotReadyError branch as dead code. In the caller (src/billing/poller.ts:13-16), treat NotReadyError as pending (retry later / return a pending state) instead of resubmitting, and only resubmit when the gateway confirms it never received the charge."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 573570,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError from fetchStatus makes pollCharge's resubmit branch (poller.ts:13-15) reachable, which calls the non-idempotent gw.submit on a charge the gateway already holds. WHY: errors.ts:1 defines NotReadyError as 'The gateway has the charge but has not settled it yet' and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge', so any status poll that returns NotReadyError now creates a duplicate charge (double-billing). HOW: Do not resubmit on NotReadyError — treat it as transient and keep polling (or make submit idempotent by deduping on chargeId); the two contradictory NotReadyError definitions (errors.ts vs poller.ts:7) must be reconciled before this propagation is safe.",
+          "keep": true,
+          "rationale": "Confirmed: status.ts re-throws NotReadyError, poller.ts:13-15 catches it and calls the documented non-idempotent gw.submit with no guard, so a gw.status that throws NotReadyError (established possible by PreviousDecision #1) now produces a duplicate charge. errors.ts (transient 'not settled') and poller.ts:7 ('never received it') genuinely contradict, and the resubmit branch was previously unreachable because fetchStatus wrapped NotReadyError into FailedError. The PR's propagation activates the double-billing path; nothing upstream guards it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "Because fetchStatus now re-throws NotReadyError instead of swallowing it, the previously unreachable NotReadyError branch in pollCharge (poller.ts:13-15) becomes reachable and calls gw.submit. gateway.ts:3 documents submit as non-idempotent, so this propagation turns a transient NotReady condition into a duplicate charge. This is the same root cause as the already-recorded duplicate-charge defect; it is restated here only as the concrete code location of that defect, not as a new finding. Fixing it requires guarding the submit call (e.g., an idempotency key or a status/chargeId check before submitting) rather than re-throwing the error upstream unguarded.",
+          "keep": true,
+          "rationale": "Mechanics verified: fetchStatus re-throws NotReadyError (status.ts:8-9), making the pollCharge catch branch (poller.ts:13-14) reachable, which calls gw.submit — documented as NON-idempotent (gateway.ts:3, \"every call creates a new charge\"). The only refutation angle — the pollCharge docstring claiming NotReady means \"the gateway never received it\" — is contradicted by the same code: pollCharge runs \"for charges the gateway has ACCEPTED\" and queries gw.status(charge.id), so the charge already has an ID and was received; a NotReady from status reflects a transient/in-flight state, and resubmitting through a non-idempotent submit yields a duplicate charge. No concrete evidence refutes the described failure path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "fetchStatus|NotReadyError|submit",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 28,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Re-throwing NotReadyError from fetchStatus makes pollCharge's resubmit branch (poller.ts:13-15) reachable, which calls the non-idempotent gw.submit on a charge the gateway already holds; errors.ts:1 defines NotReadyError as 'The gateway has the charge but has not settled it yet' and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge', so any status poll returning NotReadyError double-bills. Do not resubmit on NotReadyError — treat it as transient and keep polling (or make submit idempotent by deduping on chargeId), and reconcile the two contradictory NotReadyError definitions (errors.ts vs poller.ts:7) before this propagation is safe."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/poller.ts",
+          "line": 13,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "duplicate charge via re-thrown NotReadyError",
+          "marked": false,
+          "text": "Because fetchStatus now re-throws NotReadyError instead of swallowing it, the previously unreachable NotReadyError branch in pollCharge (poller.ts:13-15) becomes reachable and calls gw.submit, which gateway.ts:3 documents as non-idempotent, turning a transient NotReady condition into a duplicate charge (the same root cause as the already-recorded duplicate-charge defect, restated here as its concrete code location). Guard the submit call instead of re-throwing upstream unguarded, e.g. with an idempotency key or a status/chargeId check before submitting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 346452,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Rethrowing `NotReadyError` unchanged makes poller's `err instanceof NotReadyError` branch reachable, and that branch calls `gw.submit(charge.payload)` on a gateway whose `submit` is documented as NOT idempotent (each call creates a new charge). WHY: `NotReadyError` is documented as \"the gateway has the charge but has not settled it yet (transient)\" — so a transient not-settled status now triggers a resubmit that creates a duplicate charge (double billing), whereas previously this path was unreachable because `fetchStatus` always wrapped the error in `FailedError`. HOW: Either make `gw.status` throw `NotReadyError` only when the charge was truly never accepted (align the poller's \"never received it\" comment with errors.ts), or change `pollCharge` to poll/retry the existing charge instead of resubmitting when the gateway already holds it — the resubmit must be idempotent (e.g. keyed by `charge.id`) before this branch can be safely enabled.",
+          "keep": true,
+          "rationale": "Verified against actual code: status.ts:8-9 rethrows NotReadyError, making poller.ts:13-14 reachable; that branch calls the explicitly non-idempotent gw.submit (gateway.ts:3 \"every call creates a new charge\"). errors.ts:1 documents NotReadyError as the gateway already holding the charge (transient), so resubmitting produces a duplicate charge (double billing). Previously fetchStatus always wrapped errors in FailedError (NotReadyError is not a subclass), so the branch was unreachable. Concrete, unguarded failure path; prior decision (not_implemented) concerned a different issue and does not refute this.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|submit\\(|pollCharge|fetchStatus",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Rethrowing `NotReadyError` unchanged makes poller's `err instanceof NotReadyError` branch reachable, which calls `gw.submit(charge.payload)` on a gateway whose `submit` is not idempotent and creates a new charge per call; because `NotReadyError` means the gateway already has the charge but has not settled it yet (transient), this resubmit can create a duplicate charge (double billing), whereas the path was previously unreachable since `fetchStatus` always wrapped the error in `FailedError`. Either make `gw.status` throw `NotReadyError` only when the charge was truly never accepted (aligning the poller's \"never received it\" comment with errors.ts), or change `pollCharge` to poll/retry the existing charge instead of resubmitting when the gateway already holds it, and make the resubmit idempotent (e.g. keyed by `charge.id`) before enabling this branch."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 777731,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Rethrowing NotReadyError unchanged from fetchStatus makes the poller's NotReadyError branch (src/billing/poller.ts:13-16) newly reachable, where it calls the non-idempotent gw.submit() to resubmit the charge. WHY: errors.ts defines NotReadyError as 'the gateway HAS the charge but has not settled it yet (transient)', and gateway.ts documents submit as 'NOT idempotent: every call creates a new charge' — so a charge that is merely unsettled now triggers a resubmit that creates a duplicate charge (double billing). Previously fetchStatus wrapped NotReadyError into FailedError, so this branch never fired from the status path. HOW: change the poller to treat NotReadyError as 'pending, retry later' (e.g. return { state: 'pending' }) instead of resubmitting, so a transiently-unsettled charge is not submitted again.",
+          "keep": true,
+          "rationale": "Confirmed via src/billing/status.ts:8-9 that NotReadyError from gw.status is now rethrown instead of wrapped into FailedError, and src/billing/poller.ts:11-16 shows pollCharge's only call is fetchStatus, so this NotReadyError branch was previously unreachable from the status path and is now reachable. That branch calls gw.submit() (poller.ts:14), which gateway.ts:3 explicitly documents as 'NOT idempotent: every call creates a new charge'. errors.ts:1 defines NotReadyError as 'the gateway has the charge but has not settled it yet (transient)', which directly contradicts poller.ts:7's assumption ('the gateway never received it: resubmit'). Given the canonical definition, an unsettled-but-received charge would trigger a duplicate submit, i.e. double billing. The prior review decision (index 1) itself relies on gw.status being able to throw NotReadyError, confirming the trigger is realistic. I found no guard or upstream check that prevents the branch from firing, so the claim is not refutable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 60,
+                "path": "src/billing/gateway.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|submit\\(|status\\(",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|\\.status\\(|\\.submit\\(",
+                "excludeTests": false
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|fetchStatus"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 29,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Rethrowing NotReadyError unchanged from fetchStatus makes the poller's NotReadyError branch (src/billing/poller.ts:13-16) newly reachable, where it calls the non-idempotent gw.submit() and creates a duplicate charge (double billing) for a charge that is merely unsettled; previously fetchStatus wrapped NotReadyError into FailedError, so this branch never fired from the status path. Change the poller to treat NotReadyError as pending and retry later (e.g. return { state: 'pending' }) instead of resubmitting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 341666,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The newly propagated NotReadyError now reaches pollCharge, whose handler (poller.ts:13-16) calls gw.submit(charge.payload) for a charge that errors.ts documents as already held by the gateway. WHY: errors.ts:1 defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge' — so the resubmit creates a second charge for the same logical payment (duplicate/double billing). Before this change NotReadyError was wrapped in FailedError, so this resubmit branch was unreachable; the diff makes it live. HOW: For the 'gateway already has the charge, not settled' condition, retry gw.status later (poll again) rather than calling submit; only resubmit when the gateway genuinely never received the charge (a distinct error type). Note poller.ts:7's comment ('NotReadyError means the gateway never received it') contradicts errors.ts:1 and must be reconciled.",
+          "keep": true,
+          "rationale": "The path is concrete and activated by the diff. errors.ts:1 defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge'. status.ts previously wrapped NotReadyError into FailedError, so pollCharge's `err instanceof NotReadyError` branch (poller.ts:13-16) was unreachable; the diff now rethrows NotReadyError unchanged (status.ts:8-9), making that branch live and causing a resubmit of a charge the gateway already holds — a duplicate charge. poller.ts:7's comment ('the gateway never received it') contradicts errors.ts:1, but that unresolved contradiction is exactly what the finding calls out, and it does not refute the duplicate-billing consequence documented by the authoritative type. The PreviousDecision (index 1) only addressed misclassification as terminal; it did not judge the downstream resubmit behavior, and it is 'pending' anyway. This is a real, reachable behavior bug, not style.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|FailedError|submit\\(|status\\(",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 27,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The newly propagated NotReadyError reaches pollCharge, whose handler at poller.ts:13-16 calls gw.submit(charge.payload) even though errors.ts:1 defines NotReadyError as the gateway already holding the charge and gateway.ts:3 documents submit as not idempotent, so this resubmit creates a duplicate charge for the same logical payment; before this change NotReadyError was wrapped in FailedError, making the branch unreachable. Retry gw.status later instead of calling submit, resubmit only for a distinct 'gateway never received the charge' error type, and reconcile the contradicting comment at poller.ts:7."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 585815,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The new `if (err instanceof NotReadyError) throw err;` propagates the transient NotReadyError up to pollCharge, whose handler (poller.ts:13-15) calls the non-idempotent `gw.submit` to resubmit. WHY: NotReadyError is documented (errors.ts:1) as 'the gateway has the charge but has not settled it yet', so the charge already exists; `gw.submit` is documented (gateway.ts:3) as 'NOT idempotent: every call creates a new charge', so each poll tick that sees a merely-unsettled charge creates an additional charge — duplicate billing. The poller's comment ('the gateway never received it: resubmit') contradicts errors.ts, so the resubmit is based on the wrong semantic. HOW: Do not resubmit on NotReadyError; instead treat it as a transient 'not settled' state and re-poll status later (or return a 'pending' state), and only resubmit when the gateway explicitly signals it never received the charge (e.g. a distinct NotFound/NotReceived error).",
+          "keep": true,
+          "rationale": "Confirmed against the code. status.ts:8-10 now rethrows NotReadyError unchanged, so it propagates to pollCharge (poller.ts:13-15), whose catch calls the non-idempotent gw.submit ('every call creates a new charge', gateway.ts:3). errors.ts:1 documents NotReadyError as 'the gateway has the charge but has not settled it yet', i.e. the charge already exists. The poller's own comment (poller.ts:7, 'the gateway never received it: resubmit') contradicts that semantics, so every poll tick observing a merely-unsettled charge issues an additional submit, producing duplicate charges. No upstream guard prevents this path. The previous review decision (propagate NotReadyError) is 'pending' and does not address the caller's resubmit behavior; the finding is a distinct, valid consequence.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The new `if (err instanceof NotReadyError) throw err;` makes `pollCharge`'s `NotReadyError` branch reachable, and that branch calls `gw.submit(...)` — but `NotReadyError` means the gateway already holds the charge and `submit` is documented as non-idempotent. WHY: A charge that is merely not settled yet now causes a resubmit, which \"creates a new charge\" (gateway.ts:3), producing a duplicate charge on every poll tick until the original settles. HOW: Since NotReadyError is transient (gateway already has the charge), the caller must not resubmit it — it should retry polling later. Fix the caller in src/billing/poller.ts so the resubmit path is reserved for a genuine \"never received\" signal.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:1 defines NotReadyError as 'the gateway has the charge but has not settled it yet (transient)', while gateway.ts:3 documents submit as non-idempotent ('creates a new charge'). poller.ts:13-15 calls gw.submit on NotReadyError. Previously fetchStatus wrapped NotReadyError into FailedError, so pollCharge's resubmit branch was unreachable; the new 'throw err;' at status.ts:8-9 propagates NotReadyError and activates that branch, causing a duplicate charge each poll tick. The prior review decision addressed a different issue (misclassification) and does not cover this newly reachable resubmit path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 60,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new `if (err instanceof NotReadyError) throw err;` makes `pollCharge`'s `NotReadyError` branch reachable, and that branch calls `gw.submit(...)` even though `NotReadyError` means the gateway already holds the charge, producing a duplicate charge on every poll tick until the original settles. Since `NotReadyError` is transient, the caller in src/billing/poller.ts should retry polling later instead of resubmitting, reserving the resubmit path for a genuine \"never received\" signal."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new `if (err instanceof NotReadyError) throw err;` propagates the transient `NotReadyError` up to `pollCharge`, whose handler (poller.ts:13-15) calls the non-idempotent `gw.submit`; because `NotReadyError` means the gateway already holds the charge (errors.ts:1) and `gw.submit` creates a new charge on every call (gateway.ts:3), each poll tick that sees a merely-unsettled charge duplicates the billing. Treat `NotReadyError` as a transient \"not settled\" state and re-poll status later (or return \"pending\"), reserving resubmit for an explicit never-received signal such as a distinct NotFound/NotReceived error."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    }
+  ]
+}

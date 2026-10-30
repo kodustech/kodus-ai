@@ -1,0 +1,10 @@
+{
+    "_note": "Recorded generate result for a non-reasoning Azure OpenAI deployment (gpt-4o family). Usage carries NO reasoning details, so normalizeUsage.reasoning must be 0 (a number, never null/undefined) — otherwise the observability `reasoning_tokens > 0` guard mis-fires.",
+    "text": "{\"decisions\":[]}",
+    "finishReason": "stop",
+    "usage": {
+        "inputTokens": 480,
+        "outputTokens": 96,
+        "totalTokens": 576
+    }
+}

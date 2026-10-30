@@ -50,6 +50,17 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
     private normalTelemetryBuffer: MongoDBTelemetryItem[] = []; // Normal spans
     private readonly maxBufferSize = 5000; // Normal buffer
     private readonly maxCriticalBufferSize = 10000; // Critical buffer (larger, never discards)
+    // Hard guards so observability can never consume unbounded heap.
+    // Values stay below Mongo's 16MB BSON/document ceiling and below
+    // practical command-payload limits with margin.
+    private maxLogDocumentBytes = 12 * 1024 * 1024;
+    private maxLogInsertBatchBytes = 14 * 1024 * 1024;
+    private maxLogBufferBytes = 64 * 1024 * 1024;
+    // Memoized serialized size per log item. Items are stable references
+    // (never mutated after creation) and flow unchanged through screening,
+    // oversize checks, and batch splitting — so each is serialized once
+    // instead of 3-4x per flush. WeakMap lets dropped items be GC'd freely.
+    private readonly serializedByteCache = new WeakMap<object, number>();
 
     // Flush timers
     private logFlushTimer: NodeJS.Timeout | null = null;
@@ -497,6 +508,10 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
 
     async initialize(): Promise<void> {
         if (this.isInitialized) return;
+        if (!this.config.enableObservability) {
+            this.isInitialized = true;
+            return;
+        }
 
         try {
             const { MongoClient: mongoClient } = await import('mongodb');
@@ -847,6 +862,10 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         error?: Error,
         legacyError?: Error,
     ): Promise<void> {
+        if (!this.config.enableObservability) {
+            return;
+        }
+
         let component = 'unknown';
         let metadata: LogContext | undefined;
         const actualError = error || legacyError;
@@ -869,6 +888,10 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         context?: LogContext,
         error?: Error,
     ) {
+        if (!this.config.enableObservability) {
+            return;
+        }
+
         // Honor the SAME threshold the console uses (API_LOG_LEVEL, default
         // 'info') so the Mongo log store mirrors what's logged instead of
         // persisting everything — debug was ~75% of the collection (e.g.
@@ -879,14 +902,6 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             (LOG_LEVEL_RANK[level] ?? 1) < (LOG_LEVEL_RANK[minLevel] ?? 1)
         ) {
             return;
-        }
-
-        // Prevent buffer overflow
-        if (this.logBuffer.length >= this.maxBufferSize) {
-            // Drop oldest logs to make space for new ones
-            const droppedCount = this.logBuffer.length - this.maxBufferSize + 1;
-            this.logBuffer.splice(0, droppedCount);
-            // Optionally log internally that we dropped logs, but be careful not to loop
         }
 
         // Extract and normalize critical fields for Bucketing (Configurable)
@@ -940,14 +955,42 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             }
         }
 
-        // Ensure correlationId always exists (Index Key)
-        const correlationId =
-            (normalizedContext?.correlationId as string) || randomUUID();
+        // Ensure correlationId always exists (Index Key).
+        //
+        // A generated id keeps the index dense, but it is NOT a correlation:
+        // three log lines from one failure each got their own random UUID, so
+        // the cascade they describe could not be reassembled. Chasing the NUL
+        // outage, 51 events looked like 153 unrelated ones, and the only way to
+        // tell was to read the stack traces one by one.
+        //
+        // So the synthetic id stays — and now says that it is synthetic.
+        // `correlationIdSynthetic` is the difference between "these lines are
+        // unrelated" and "we do not know whether these lines are related",
+        // which are opposite conclusions to draw from the same query.
+        const providedCorrelationId = normalizedContext?.correlationId as
+            | string
+            | undefined;
+        const correlationId = providedCorrelationId || randomUUID();
 
-        // Ensure tenantId exists in metadata (common requirement)
-        if (!metadata.tenantId) {
+        // Ensure tenantId exists in metadata (common requirement).
+        //
+        // Nothing in the codebase ever SETS `tenantId`, so this bucket resolved
+        // to the literal string 'unknown' for every log line ever written: two
+        // hours of production put 23,420 error and warn rows, spanning 106
+        // components, into that single bucket. The field was populated and
+        // useless — no error could be attributed to a customer, which is the
+        // first question asked about any of them.
+        //
+        // `organizationId` is the tenant here, and it IS carried (lifted from
+        // `organizationAndTeamData` just above). Falling back to it turns the
+        // bucket into the grouping key it was meant to be. Kept as a fallback
+        // rather than a rename so an explicit `tenantId`, if a caller ever
+        // sends one, still wins.
+        if (!metadata.tenantId || metadata.tenantId === 'unknown') {
             metadata.tenantId =
-                (normalizedContext?.tenantId as string) || 'unknown';
+                (normalizedContext?.tenantId as string) ||
+                (normalizedContext?.organizationId as string) ||
+                'unknown';
         }
 
         // Callers frequently pass shapes with circular refs (Axios errors
@@ -966,6 +1009,11 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             message,
             component,
             correlationId, // Guaranteed UUID
+            // Present only when the id was invented here, so a query can
+            // exclude these rows instead of grouping on a value that means
+            // nothing. Absent (not `false`) on real ids — a time-series
+            // collection should not carry a field for the common case.
+            ...(providedCorrelationId ? {} : { correlationIdSynthetic: true }),
             tenantId: metadata.tenantId,
             executionId: normalizedContext?.executionId as string | undefined,
             sessionId: normalizedContext?.sessionId as string | undefined,
@@ -982,8 +1030,22 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         } as any; // Cast necessary due to dynamic 'attributes' field injection
 
         const logItem = deepSanitize(rawLogItem) as MongoDBLogItem;
+        if (this.isLogItemOversized(logItem)) {
+            this.logger.warn({
+                message:
+                    'Dropping oversized log entry before buffering (exceeds BSON safety threshold)',
+                context: this.constructor.name,
+                metadata: {
+                    maxLogDocumentBytes: this.maxLogDocumentBytes,
+                    message,
+                    component,
+                },
+            });
+            return;
+        }
 
         this.logBuffer.push(logItem);
+        this.trimLogBufferToCapacity();
 
         if (this.logBuffer.length >= this.config.batchSize) {
             void this.flushLogs();
@@ -1000,6 +1062,10 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
     }
 
     exportTelemetry(item: TraceItem): void {
+        if (!this.config.enableObservability) {
+            return;
+        }
+
         const duration = item.endTime - item.startTime;
         const correlationId =
             (item.attributes[AGENT.CORRELATION_ID] as string) ||
@@ -1141,6 +1207,153 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
         return { sanitized, droppedCount };
     }
 
+    private estimateSerializedBytes(value: unknown): number {
+        const isObject = typeof value === 'object' && value !== null;
+        if (isObject) {
+            const cached = this.serializedByteCache.get(value as object);
+            if (cached !== undefined) {
+                return cached;
+            }
+        }
+
+        let size: number;
+        try {
+            size = Buffer.byteLength(JSON.stringify(value), 'utf8');
+        } catch {
+            // Items that can't be serialized are screened out by screenForBson.
+            size = Number.MAX_SAFE_INTEGER;
+        }
+
+        if (isObject) {
+            this.serializedByteCache.set(value as object, size);
+        }
+        return size;
+    }
+
+    private isLogItemOversized(item: MongoDBLogItem): boolean {
+        return this.estimateSerializedBytes(item) > this.maxLogDocumentBytes;
+    }
+
+    private trimLogBufferToCapacity(): void {
+        if (this.logBuffer.length === 0) {
+            return;
+        }
+
+        let droppedCount = 0;
+        let droppedBytes = 0;
+        // Cache-backed: each item is serialized once (WeakMap memo) and the
+        // running total is decremented as we drop, so this stays a cheap scan
+        // even when the buffer is large during a Mongo outage.
+        let totalBytes = 0;
+        for (const item of this.logBuffer) {
+            totalBytes += this.estimateSerializedBytes(item);
+        }
+
+        while (
+            this.logBuffer.length > this.maxBufferSize ||
+            totalBytes > this.maxLogBufferBytes
+        ) {
+            const removed = this.logBuffer.shift();
+            if (!removed) {
+                break;
+            }
+            const removedBytes = this.estimateSerializedBytes(removed);
+            totalBytes = Math.max(0, totalBytes - removedBytes);
+            droppedBytes += removedBytes;
+            droppedCount++;
+        }
+
+        if (droppedCount > 0) {
+            this.logger.warn({
+                message:
+                    'Log buffer capacity exceeded; dropping oldest buffered log items',
+                context: this.constructor.name,
+                metadata: {
+                    droppedCount,
+                    droppedBytes,
+                    maxBufferSize: this.maxBufferSize,
+                    maxLogBufferBytes: this.maxLogBufferBytes,
+                    bufferedItems: this.logBuffer.length,
+                    bufferedBytes: totalBytes,
+                },
+            });
+        }
+    }
+
+    private splitLogsIntoInsertBatches(
+        items: MongoDBLogItem[],
+    ): MongoDBLogItem[][] {
+        if (items.length === 0) {
+            return [];
+        }
+
+        const batches: MongoDBLogItem[][] = [];
+        let currentBatch: MongoDBLogItem[] = [];
+        let currentBytes = 0;
+
+        for (const item of items) {
+            const itemBytes = this.estimateSerializedBytes(item);
+            const wouldExceed =
+                currentBatch.length > 0 &&
+                currentBytes + itemBytes > this.maxLogInsertBatchBytes;
+
+            if (wouldExceed) {
+                batches.push(currentBatch);
+                currentBatch = [];
+                currentBytes = 0;
+            }
+
+            currentBatch.push(item);
+            currentBytes += itemBytes;
+        }
+
+        if (currentBatch.length > 0) {
+            batches.push(currentBatch);
+        }
+
+        return batches;
+    }
+
+    private dropOversizedLogItems(items: MongoDBLogItem[]): {
+        accepted: MongoDBLogItem[];
+        droppedCount: number;
+    } {
+        const accepted: MongoDBLogItem[] = [];
+        let droppedCount = 0;
+        for (const item of items) {
+            if (this.isLogItemOversized(item)) {
+                droppedCount++;
+                continue;
+            }
+            accepted.push(item);
+        }
+        return { accepted, droppedCount };
+    }
+
+    private isNonRetryableLogWriteError(error: unknown): boolean {
+        const err = error as { message?: string; code?: number };
+        const message = (err?.message || '').toLowerCase();
+        const code = err?.code;
+
+        // 10334: BSONObjectTooLarge. Message variants observed in driver/server:
+        // "BSONObj size ... is invalid", "document is larger than the maximum size".
+        return (
+            code === 10334 ||
+            message.includes('bsonobj size') ||
+            message.includes('maximum size') ||
+            message.includes('object to insert too large') ||
+            message.includes('document is larger than the maximum size')
+        );
+    }
+
+    private rebufferLogs(items: MongoDBLogItem[]): void {
+        if (items.length === 0) {
+            return;
+        }
+        this.logBuffer.unshift(...items);
+        this.trimLogBufferToCapacity();
+    }
+
     /**
      * Given a failed `insertMany` (with `ordered: false`) and the
      * original batch, return ONLY the items the server did not commit.
@@ -1218,6 +1431,10 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
      * Flush logs para MongoDB
      */
     private async flushLogs(): Promise<void> {
+        if (!this.config.enableObservability) {
+            return;
+        }
+
         if (this.logBuffer.length === 0 || this.isFlushingLogs) {
             return;
         }
@@ -1252,7 +1469,22 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             });
         }
 
-        if (sanitizedLogs.length === 0) {
+        const {
+            accepted: flushableLogs,
+            droppedCount: oversizedCount,
+        } = this.dropOversizedLogItems(sanitizedLogs);
+        if (oversizedCount > 0) {
+            this.logger.warn({
+                message: `Dropping ${oversizedCount} oversized log entr${oversizedCount === 1 ? 'y' : 'ies'} from flush batch (exceeded BSON safety threshold)`,
+                context: this.constructor.name,
+                metadata: {
+                    droppedCount: oversizedCount,
+                    maxLogDocumentBytes: this.maxLogDocumentBytes,
+                },
+            });
+        }
+
+        if (flushableLogs.length === 0) {
             this.isFlushingLogs = false;
             return;
         }
@@ -1264,7 +1496,7 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             'teamId',
         ];
 
-        sanitizedLogs.sort((a, b) => {
+        flushableLogs.sort((a, b) => {
             for (const key of bucketKeys) {
                 const valA = (a.metadata as any)?.[key] || '';
                 const valB = (b.metadata as any)?.[key] || '';
@@ -1275,41 +1507,55 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
             return 0;
         });
 
+        const insertBatches = this.splitLogsIntoInsertBatches(flushableLogs);
+        const retryCandidates: MongoDBLogItem[] = [];
+
         try {
-            // ordered: false so a single bad doc doesn't stop the rest
-            // from committing, and so the BulkWriteError carries the
-            // full list of which indices made it in vs which didn't —
-            // we use that in `extractRebufferable` to avoid the E11000
-            // loop that happens when items are re-buffered with the
-            // same client-side `_id` after a partial commit.
-            await this.collections.logs.insertMany(sanitizedLogs, {
-                ordered: false,
-            });
-            // Removed debug log to avoid recursive logging and pollution
-        } catch (error) {
-            this.logger.error({
-                message: 'Failed to flush logs to MongoDB',
-                context: this.constructor.name,
-                error: error as Error,
-            });
+            for (const batch of insertBatches) {
+                // A connection error on an earlier batch nulls `collections`
+                // (via handleConnectionError -> resetConnection). Don't touch a
+                // null handle — re-buffer the remaining batches and let the
+                // scheduled reconnect pick them up next flush.
+                if (!this.collections) {
+                    retryCandidates.push(...batch);
+                    continue;
+                }
+                try {
+                    // ordered: false so one bad doc doesn't stop healthy docs.
+                    await this.collections.logs.insertMany(batch, {
+                        ordered: false,
+                    });
+                } catch (error) {
+                    this.logger.error({
+                        message: 'Failed to flush logs to MongoDB',
+                        context: this.constructor.name,
+                        error: error as Error,
+                    });
 
-            await this.handleConnectionError(error as Error, 'flushLogs');
+                    await this.handleConnectionError(error as Error, 'flushLogs');
 
-            // Re-buffer only the items the server did NOT commit, with
-            // their client-side `_id` stripped so the retry path lets
-            // Mongo generate fresh ids. Respect max buffer size; keep
-            // the most recent entries if capacity forces us to drop.
-            const toRetry = this.extractRebufferable(error, sanitizedLogs);
-            const availableSpace = this.maxBufferSize - this.logBuffer.length;
-            if (availableSpace > 0 && toRetry.length > 0) {
-                const toKeep = toRetry.slice(
-                    Math.max(0, toRetry.length - availableSpace),
-                );
-                this.logBuffer.unshift(...toKeep);
+                    const uncommitted = this.extractRebufferable(error, batch);
+                    if (this.isNonRetryableLogWriteError(error)) {
+                        if (uncommitted.length > 0) {
+                            this.logger.warn({
+                                message:
+                                    'Dropping non-retryable log batch after MongoDB write rejection',
+                                context: this.constructor.name,
+                                metadata: {
+                                    droppedCount: uncommitted.length,
+                                },
+                            });
+                        }
+                        continue;
+                    }
+
+                    retryCandidates.push(...uncommitted);
+                }
             }
 
-            // Exponential Backoff logic could be applied by pausing the timer, but here we just rely on interval.
-            // A more sophisticated approach would be to dynamically adjust flushIntervalMs, but simplest is just logging and retrying next tick.
+            if (retryCandidates.length > 0) {
+                this.rebufferLogs(retryCandidates);
+            }
         } finally {
             this.isFlushingLogs = false;
         }
@@ -1388,6 +1634,10 @@ export class MongoDBExporter implements LogProcessor, ObservabilityExporter {
      * Flush telemetry para MongoDB (Dual Buffer: Crítico + Normal)
      */
     private async flushTelemetry(): Promise<void> {
+        if (!this.config.enableObservability) {
+            return;
+        }
+
         if (
             this.criticalTelemetryBuffer.length === 0 &&
             this.normalTelemetryBuffer.length === 0

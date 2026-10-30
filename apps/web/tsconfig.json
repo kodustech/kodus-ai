@@ -1,47 +1,77 @@
 {
-    "compilerOptions": {
-        "ignoreDeprecations": "6.0",
-        "target": "ES2022",
-        "lib": ["dom", "dom.iterable", "ES2022"],
-        "allowJs": true,
-        "skipLibCheck": true,
-        "strict": true,
-        "forceConsistentCasingInFileNames": true,
-        "noEmit": true,
-        "esModuleInterop": true,
-        "module": "esnext",
-        "moduleResolution": "node",
-        "resolveJsonModule": true,
-        "isolatedModules": true,
-        "jsx": "preserve",
-        "baseUrl": ".",
-        "paths": {
-            "@app-types/*": ["src/types/*"],
-            "@services": ["src/lib/services"],
-            "@services/*": ["src/lib/services/*"],
-            "@utils": ["src/core/util/*"],
-            "@hooks/*": ["src/core/hooks/*"],
-            "@components/*": ["src/core/components/*"],
-            "@providers/*": ["src/core/providers/*"],
-            "@config/*": ["src/core/config/*"],
-            "@enums": ["src/core/enums"],
-            "@assets/*": ["public/assets/*"],
-            "@libs/*": ["../../libs/*"]
-        },
-        "incremental": true,
-        "plugins": [
-            {
-                "name": "next"
-            }
-        ]
-    },
-    "include": [
-        "next-env.d.ts",
-        "env.d.ts",
-        "**/*.ts",
-        "**/*.tsx",
-        ".next/types/**/*.ts",
-        "../../libs/feature-gate/**/*.ts"
+  "compilerOptions": {
+    "ignoreDeprecations": "6.0",
+    "target": "ES2022",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "ES2022"
     ],
-    "exclude": ["node_modules", "test/*"]
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@app-types/*": [
+        "src/types/*"
+      ],
+      "@services": [
+        "src/lib/services"
+      ],
+      "@services/*": [
+        "src/lib/services/*"
+      ],
+      "@utils": [
+        "src/core/util/*"
+      ],
+      "@hooks/*": [
+        "src/core/hooks/*"
+      ],
+      "@components/*": [
+        "src/core/components/*"
+      ],
+      "@providers/*": [
+        "src/core/providers/*"
+      ],
+      "@config/*": [
+        "src/core/config/*"
+      ],
+      "@enums": [
+        "src/core/enums"
+      ],
+      "@assets/*": [
+        "public/assets/*"
+      ],
+      "@libs/*": [
+        "../../libs/*"
+      ]
+    },
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "include": [
+    "next-env.d.ts",
+    "env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "../../libs/feature-gate/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "test/*"
+  ]
 }

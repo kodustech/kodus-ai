@@ -43,6 +43,7 @@ API_URL=$(jq -r .api_url "${STATE}")
 APP_URL=$(jq -r .app_url "${STATE}")
 BASE=$(jq -r .base "${STATE}")
 ORG_ID=$(jq -r .org_id "${STATE}")
+SSH_KEY=$(jq -r .ssh_key "${STATE}")
 IGNORE_TLS=$(jq -r .ignore_tls "${STATE}")
 NEWBIE=$(jq -r .newbie "${MULTI_STATE}")
 REMOVED=$(jq -r .removed "${MULTI_STATE}")
@@ -67,6 +68,7 @@ env \
     SSO_E2E_APP_URL="${APP_URL}" \
     SSO_E2E_BASE="${BASE}" \
     SSO_E2E_ORG_ID="${ORG_ID}" \
+    SSO_E2E_SSH_KEY="${SSH_KEY}" \
     SSO_E2E_NEWBIE_EMAIL="${NEWBIE}" \
     SSO_E2E_REMOVED_EMAIL="${REMOVED}" \
     SSO_E2E_USER_PASSWORD="${USER_PASSWORD}" \

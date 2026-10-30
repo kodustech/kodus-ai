@@ -19,6 +19,7 @@ import { forwardRef, Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 
 import { SpendLimitModule } from '@libs/analytics/modules/spend-limit.module';
+import { KodusCreditsModule } from '@libs/analytics/modules/kodus-credits.module';
 
 import { ForgejoChecksService } from '@libs/platform/infrastructure/adapters/services/forgejo/forgejo-checks.service';
 import { GithubChecksService } from '@libs/platform/infrastructure/adapters/services/github/github-checks.service';
@@ -27,10 +28,18 @@ import { CheckIfPRCanBeApprovedCronProvider } from './CheckIfPRCanBeApproved.cro
 import { ClassifyOrphanedSessionsCronProvider } from './classifyOrphanedSessions.cron';
 import { CodeReviewFeedbackCronProvider } from './codeReviewFeedback.cron';
 import { KodyLearningCronProvider } from './kodyLearning.cron';
+import { KodusCreditsSweepCronProvider } from './kodusCreditsSweep.cron';
+import { PruneLicenseSeatsCronProvider } from './pruneLicenseSeats.cron';
 import { SpendLimitAlertCronProvider } from './spendLimitAlert.cron';
 import { SSOTestSessionCleanupCronProvider } from './ssoTestSessionCleanup.cron';
 import { StaleReviewWatchdogCronProvider } from './staleReviewWatchdog.cron';
 import { SSOModule } from '@libs/ee/sso/sso.module';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
+import { FeatureGateModule } from '@libs/feature-gate';
+import { LicenseModule } from '@libs/ee/license/license.module';
+import { OrganizationModule } from '@libs/organization/modules/organization.module';
 
 @Module({
     imports: [
@@ -51,14 +60,25 @@ import { SSOModule } from '@libs/ee/sso/sso.module';
         forwardRef(() => CliReviewModule),
         forwardRef(() => SSOModule),
         SpendLimitModule,
+        KodusCreditsModule,
+        PlatformDataModule,
+        FeatureGateModule,
+        forwardRef(() => LicenseModule),
+        forwardRef(() => OrganizationModule),
     ],
     providers: [
+        {
+            provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+            useClass: ConditionalApprovalAccessService,
+        },
         CheckIfPRCanBeApprovedCronProvider,
         ClassifyOrphanedSessionsCronProvider,
         CodeReviewFeedbackCronProvider,
         KodyLearningCronProvider,
+        PruneLicenseSeatsCronProvider,
         SSOTestSessionCleanupCronProvider,
         SpendLimitAlertCronProvider,
+        KodusCreditsSweepCronProvider,
         StaleReviewWatchdogCronProvider,
         DistributedLockService,
         // Checks adapters for the stale review watchdog (same registration

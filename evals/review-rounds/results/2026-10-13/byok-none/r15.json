@@ -1,0 +1,750 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:27:29.587Z",
+  "updatedAt": "2026-10-13T21:42:01.817Z",
+  "complete": true,
+  "selectedCases": [
+    "R15-repost-stored-implemented",
+    "R15-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 8,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R15-repost-stored-implemented · await-sleep-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R15-control · await-sleep-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 100512,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 73870,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 114504,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: log.warn('retrying', { attempt }) runs on every caught error, including the final iteration (attempt === attempts), where the loop exits and the function throws instead of retrying. WHY: it emits a 'retrying' event for a call that is never retried, so logs misreport retry activity and can mislead incident triage/monitoring. HOW: only log when another attempt will actually follow, e.g. guard with `if (attempt < attempts) { log.warn('retrying', { attempt }); sleep(200 * attempt); }`.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/sync/retry.ts. The loop runs attempt from 1 to attempts inclusive (line 6); on the final iteration (attempt === attempts) a thrown error enters the catch block and unconditionally executes log.warn('retrying', { attempt }) (line 11) before the loop exits and throws lastError (line 15). Thus a 'retrying' event is emitted for a call that is never retried — the log misreports retry activity exactly as claimed. The claim's root cause is factually correct and the failure path is reachable on every exhausted retry. This is a distinct issue from the earlier decision (round-a-await-sleep), which was about the missing await on sleep; that is a different failure in the same block, not the same problem, so this finding is not a repeat. No guard prevents the terminal-iteration log, and this is a concrete telemetry-correctness behavior, not style/formatting.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "On the final iteration where `attempt === attempts`, `log.warn('retrying', { attempt })` emits a retrying event for a call that is never retried, misleading incident triage and monitoring. Only log and call `sleep(200 * attempt)` when another attempt will follow, e.g. guard both with `if (attempt < attempts)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 121068,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `log.warn('retrying', { attempt })` runs on every catch, including the final iteration where the loop exits and throws instead of retrying. WHY: on the last failure the code emits a 'retrying' log even though no retry will happen, producing misleading telemetry that hides real terminal failures. HOW: only log when another attempt will actually follow, e.g. wrap the log in `if (attempt < attempts)`.",
+          "keep": true,
+          "rationale": "Confirmed: the for-loop runs attempt=1..attempts, and the catch block unconditionally calls log.warn('retrying', { attempt }) before the loop can exit and throw lastError. On the final iteration (attempt === attempts) the log fires but no retry follows, so the 'retrying' message is emitted for a terminal failure. The claim's root cause and failure path are factually correct and no guard prevents it. It is a distinct issue from the earlier review entry about the missing await on sleep, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The final failure still emits a `'retrying'` log even though the loop exits and throws instead of retrying, producing misleading telemetry that hides real terminal failures. Only call `log.warn('retrying', { attempt })` when another attempt will actually follow, e.g. by wrapping it in `if (attempt < attempts)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 104765,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R15-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 67939,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` is called without `await` inside the async `withRetry`, so the returned Promise is discarded and the backoff never delays the loop. WHY: retries fire immediately with no wait, defeating the exponential-backoff intent of `200 * attempt` and hammering the failing operation as fast as possible. HOW: `await sleep(200 * attempt);`.",
+          "keep": true,
+          "rationale": "Confirmed: src/sync/sleep.ts defines `sleep = (ms) => new Promise<void>(resolve => setTimeout(resolve, ms))`, which returns a Promise. In withRetry, line 12 `sleep(200 * attempt);` is called without `await` inside the async loop, so the returned promise is discarded and execution continues immediately to the next attempt. The backoff does not delay anything, defeating the exponential-backoff intent and hammering the failing operation. Root cause and failure path are accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/sync/sleep.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the returned Promise from `sleep(200 * attempt)` is discarded inside async `withRetry`, retries fire immediately and the exponential backoff never delays the loop, hammering the failing operation. Add `await` before `sleep(200 * attempt)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R15-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 52789,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` returns a promise that is never awaited inside the async `withRetry`, so the retry loop does not actually pause between attempts. WHY: the intended exponential backoff is a no-op — all retries fire back-to-back immediately, defeating the retry delay (and hammering the failing dependency) exactly as the change intended to prevent. HOW: add `await` to the call so the backoff is honored: `await sleep(200 * attempt);`.",
+          "keep": true,
+          "rationale": "src/sync/retry.ts:12 calls sleep(200 * attempt) without await inside the async withRetry loop. sleep is defined as `new Promise<void>((resolve) => setTimeout(resolve, ms))` (src/sync/sleep.ts:1), so the call returns a pending promise that is discarded; the catch block falls through and the next iteration starts immediately. The intended exponential backoff is a genuine no-op, exactly as the finding states. Root cause and failure path are both verified.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "function sleep|const sleep|sleep ="
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`sleep(200 * attempt)` returns a promise that is never awaited inside the async `withRetry`, so the loop never pauses and every retry fires back-to-back, hammering the failing dependency instead of backing off. Add `await` to the call so the intended exponential backoff is actually honored."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R15-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 62537,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` is called without `await`, so the returned promise is fire-and-forget and the retry loop never waits. WHY: the backoff delay is completely skipped — the next attempt fires immediately after a failure, defeating the purpose of the retry/backoff logic (and any rate-limit/transient-error recovery that depends on the pause). HOW: `await sleep(200 * attempt);`.",
+          "keep": true,
+          "rationale": "Confirmed: sleep.ts defines `sleep = (ms) => new Promise(...)` returning a Promise, and retry.ts line 12 invokes `sleep(200 * attempt);` without `await` inside the async withRetry loop. The retry loop therefore never waits for the backoff delay and re-attempts immediately after a failure, exactly as described. Root cause and failure path are verified against the actual code.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "sleep",
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts",
+                "startLine": 1,
+                "endLine": 15
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`sleep(200 * attempt)` is called without `await`, so the returned promise is fire-and-forget and the retry loop never waits, skipping the backoff delay entirely and firing the next attempt immediately after a failure, which defeats the retry/backoff logic and any rate-limit or transient-error recovery that depends on the pause. Add `await` before the call, i.e. `await sleep(200 * attempt);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R15-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 71347,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` is called without `await`, so the returned Promise is discarded and the loop does not pause between attempts. WHY: the backoff this PR adds (200*attempt) is silently ineffective — a failing `fn` is retried immediately with no delay, so the retry can hammer the failing dependency instead of waiting. HOW: await the sleep call: `await sleep(200 * attempt);`.",
+          "keep": true,
+          "rationale": "Confirmed. Line 12 calls `sleep(200 * attempt)` without `await`. `sleep` (src/sync/sleep.ts:1) returns a Promise<void> via setTimeout, so discarding it means the loop iterates immediately without pausing. The added backoff is silently ineffective and the failing `fn` is retried with no delay. The finding's root cause and failure path are accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "sleep.ts",
+                "path": "src/sync"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: the catch block runs on the final iteration too, so it logs 'retrying' and calls sleep even though the loop then exits and throws `lastError`. WHY: emits a misleading 'retrying' log for an attempt that will never be retried and schedules a useless timer on the last failure. HOW: only log/sleep when another attempt remains, e.g. guard with `if (attempt < attempts) { log.warn(...); await sleep(200 * attempt); }`.",
+          "keep": true,
+          "rationale": "The catch block at lines 9-13 executes on every iteration including the final one (attempt === attempts). On that last failure it logs 'retrying' and calls sleep(200 * attempt), then the loop exits and throws lastError. No guard prevents this, so the finding's root cause is factually correct: a misleading 'retrying' log is emitted and a useless timer is scheduled for an attempt that will never be retried. Nothing refutes the claim.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the returned Promise from `sleep(200 * attempt)` is discarded, the backoff this PR adds is silently ineffective and a failing `fn` is retried immediately, hammering the dependency instead of waiting. Await the call as `await sleep(200 * attempt);` so the loop actually pauses between attempts."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "On the final iteration this logs a misleading `retrying` message and schedules a useless timer for an attempt that will never happen before the loop exits and throws `lastError`. Only log and sleep when another attempt remains, guarding both with `if (attempt < attempts)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R15-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 102174,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: The retry backoff `sleep(200 * attempt)` is invoked without `await`, so the returned Promise is discarded and the loop never waits. WHY: `sleep` returns a Promise (src/sync/sleep.ts:1); without `await` the next retry fires immediately, making the newly-introduced backoff (`200 * attempt`) dead code and hammering the failing operation with zero delay. HOW: await the call so the delay is actually applied.",
+          "keep": true,
+          "rationale": "Confirmed. `sleep` is defined as `(ms) => new Promise<void>(...)` returning a Promise (src/sync/sleep.ts:1). In src/sync/retry.ts:12 the call `sleep(200 * attempt)` is not awaited, so the returned Promise is discarded and the for-loop continues to the next attempt immediately. The newly-introduced backoff never delays retries, matching the finding exactly.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts",
+                "startLine": 1,
+                "endLine": 10
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `sleep` returns a Promise (src/sync/sleep.ts:1), discarding it means the loop never waits and the newly-introduced `200 * attempt` backoff is dead code, hammering the failing operation with zero delay. Add `await` to the call so the delay is actually applied."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

@@ -51,6 +51,18 @@ export const useSuspensePullRequestMessages = () => {
                             PullRequestMessageStatus.EVERY_PUSH,
                     },
                 },
+                errorReviewMessage: {
+                    content: {
+                        level: FormattedConfigLevel.DEFAULT,
+                        value: defaults?.errorReviewMessage?.content ?? "",
+                    },
+                    status: {
+                        level: FormattedConfigLevel.DEFAULT,
+                        value:
+                            defaults?.errorReviewMessage?.status ??
+                            PullRequestMessageStatus.OFF,
+                    },
+                },
                 globalSettings: {
                     hideComments: {
                         level: FormattedConfigLevel.DEFAULT,
@@ -112,6 +124,18 @@ export const useSuspensePullRequestMessagesFor = (
                             PullRequestMessageStatus.EVERY_PUSH,
                     },
                 },
+                errorReviewMessage: {
+                    content: {
+                        level: FormattedConfigLevel.DEFAULT,
+                        value: defaults?.errorReviewMessage?.content ?? "",
+                    },
+                    status: {
+                        level: FormattedConfigLevel.DEFAULT,
+                        value:
+                            defaults?.errorReviewMessage?.status ??
+                            PullRequestMessageStatus.OFF,
+                    },
+                },
                 globalSettings: {
                     hideComments: {
                         level: FormattedConfigLevel.DEFAULT,
@@ -162,16 +186,17 @@ export const useCustomMessagesOverrideCountsByRepository = (
     repositoryId: string,
     enabled = true,
 ) => {
-    return useFetch<PullRequestMessagesOverrideCountsByRepository>(
-        pathToApiUrl("/pull-request-messages/override-counts-by-repository"),
-        {
-            params: {
-                repositoryId,
-            },
-        },
+    // Every scope badge shares one query, independent of the repository count.
+    const result = useFetch<PullRequestMessagesOverrideCountsByRepository[]>(
+        pathToApiUrl("/pull-request-messages/override-counts"),
+        undefined,
         enabled,
         {
             staleTime: 60_000,
         },
     );
+    return {
+        ...result,
+        data: result.data?.find((entry) => entry.repositoryId === repositoryId),
+    };
 };

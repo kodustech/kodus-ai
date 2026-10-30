@@ -4,6 +4,7 @@ import { EmailFrom } from '@libs/common/email/from';
 import ByokErrorsThresholdEmail, {
     byokErrorsThresholdEmailMeta,
 } from '@libs/common/email/templates/byok-errors-threshold';
+import CreditsEmail, { creditsEmailMeta } from '@libs/common/email/templates/credits';
 import SpendLimitThresholdEmail, {
     spendLimitThresholdEmailMeta,
 } from '@libs/common/email/templates/spend-limit-threshold';
@@ -25,6 +26,9 @@ import IdeRulesSyncFailedEmail, {
 import InviteEmail, {
     inviteEmailMeta,
 } from '@libs/common/email/templates/invite';
+import KodyRulesAutoPauseDigestEmail, {
+    kodyRulesAutoPauseDigestEmailMeta,
+} from '@libs/common/email/templates/kody-rules-auto-pause-digest';
 import KodyRulesEmail, {
     kodyRulesEmailMeta,
 } from '@libs/common/email/templates/kody-rules';
@@ -62,7 +66,13 @@ import ReviewSkippedNoLicenseEmail, {
     reviewSkippedNoLicenseEmailMeta,
 } from '@libs/common/email/templates/review-skipped-no-license';
 
+import { rulesPageLink } from '../../../domain/catalog/app-links';
 import { NotificationEvent } from '../../../domain/catalog/events';
+import {
+    autoPausedRuleLink,
+    describeAutoPauseReason,
+    normaliseAutoPauseEntries,
+} from '../../../domain/catalog/kody-rule-auto-pause';
 
 export interface ResolvedEmailTemplate {
     from: EmailFrom;
@@ -100,6 +110,42 @@ export type EmailTemplateBuilder = (
  *   3. Add the React Email template under `@libs/common/email/templates`.
  *   4. Register the builder here. No changes to the channel adapter.
  */
+
+/**
+ * Coerce a rule list into the plain strings the email template renders.
+ *
+ * Anything that is not a string is reduced to its `title` (the shape the
+ * producer used to send) and, failing that, dropped. Dropping an entry costs
+ * one line in an email; letting a non-string through costs the whole
+ * execution, because React throws on an object child and the delivery retries
+ * five times before giving up.
+ *
+ * An empty title is dropped on the same terms, deliberately: it would render
+ * as a blank bullet and still count toward the "N new rules" headline, which
+ * reads as a bug to whoever opens the email.
+ */
+export function normaliseRuleList(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((entry) => {
+            if (typeof entry === 'string') return entry;
+            if (entry && typeof entry === 'object') {
+                const title = (entry as { title?: unknown }).title;
+                if (typeof title === 'string') return title;
+            }
+            return undefined;
+        })
+        .filter((entry): entry is string => Boolean(entry));
+}
+
+/** "$12.34" for a number-ish metadata value; "$0" when it isn't one. */
+const usdLabel = (value: unknown): string => {
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n)
+        ? `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : '$0';
+};
+
 export const EMAIL_TEMPLATE_REGISTRY: Partial<
     Record<NotificationEvent, EmailTemplateBuilder>
 > = {
@@ -146,7 +192,15 @@ export const EMAIL_TEMPLATE_REGISTRY: Partial<
     },
 
     [NotificationEvent.KODY_RULES_GENERATED]: (metadata, { webUrl }) => {
-        const rules = metadata.rules as string[];
+        // `as string[]` used to be a blind cast. The producer was sending
+        // `{title, rule, severity}` objects, the template rendered each entry
+        // as a React child, and the email threw at render — retried 5x per
+        // recipient and left the whole execution in `partial_error`.
+        //
+        // The producer now sends titles, but normalise here too: notification
+        // payloads are persisted and replayed, so an already-queued delivery
+        // from before the fix must not keep crashing the worker.
+        const rules = normaliseRuleList(metadata.rules);
         const organizationName = metadata.organizationName as string;
         const userName = (metadata as { userName?: string }).userName ?? '';
         return {
@@ -360,8 +414,12 @@ export const EMAIL_TEMPLATE_REGISTRY: Partial<
         const errorCount = (metadata.errorCount as number | undefined) ?? 0;
         const windowStart = metadata.windowStart as string | undefined;
         const windowEnd = metadata.windowEnd as string | undefined;
+        const status =
+            typeof metadata.httpStatus === 'number'
+                ? `HTTP ${metadata.httpStatus} — `
+                : '';
         const sampleError =
-            (metadata.sampleError as string) ?? 'see logs for details';
+            status + ((metadata.sampleError as string) ?? 'see logs for details');
         const labelFormat = (iso?: string) =>
             iso
                 ? new Date(iso).toLocaleString('en-US', {
@@ -382,6 +440,34 @@ export const EMAIL_TEMPLATE_REGISTRY: Partial<
             }),
         };
     },
+
+    [NotificationEvent.CREDITS_PURCHASED]: (metadata) => ({
+        ...creditsEmailMeta('purchased'),
+        react: CreditsEmail({
+            kind: 'purchased',
+            balanceLabel: usdLabel(metadata.balanceUsd),
+            amountLabel: usdLabel(metadata.creditUsd),
+        }),
+    }),
+
+    [NotificationEvent.CREDITS_LOW]: (metadata) => ({
+        ...creditsEmailMeta('low'),
+        react: CreditsEmail({
+            kind: 'low',
+            balanceLabel: usdLabel(metadata.balanceUsd),
+            thresholdLabel: usdLabel(metadata.thresholdUsd),
+            topUpUrl: metadata.topUpUrl as string | undefined,
+        }),
+    }),
+
+    [NotificationEvent.CREDITS_EXHAUSTED]: (metadata) => ({
+        ...creditsEmailMeta('exhausted'),
+        react: CreditsEmail({
+            kind: 'exhausted',
+            balanceLabel: usdLabel(metadata.balanceUsd),
+            topUpUrl: metadata.topUpUrl as string | undefined,
+        }),
+    }),
 
     [NotificationEvent.SPEND_LIMIT_THRESHOLD_REACHED]: (metadata) => {
         const percentage = (metadata.percentage as number) ?? 0;
@@ -434,6 +520,25 @@ export const EMAIL_TEMPLATE_REGISTRY: Partial<
                     filePath,
                     reason,
                 })),
+            }),
+        };
+    },
+
+    [NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST]: (metadata, { webUrl }) => {
+        const rules = normaliseAutoPauseEntries(metadata.rules);
+        return {
+            ...kodyRulesAutoPauseDigestEmailMeta({ count: rules.length }),
+            react: KodyRulesAutoPauseDigestEmail({
+                rules: rules.map((rule) => ({
+                    title: rule.title,
+                    scopeLabel: rule.repositoryId
+                        ? (rule.repositoryName ?? 'Repository rule')
+                        : 'All repositories',
+                    reason: describeAutoPauseReason(rule),
+                    url: `${webUrl}${autoPausedRuleLink(rule)}`,
+                    resumed: rule.resumed === true,
+                })),
+                settingsUrl: `${webUrl}${rulesPageLink()}`,
             }),
         };
     },

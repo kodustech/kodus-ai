@@ -29,8 +29,8 @@ vi.mock('../../services/lifecycle.service.js', () => ({
     },
 }));
 
-import { cursorHookAction } from '../memory/session-hooks/cursor.js';
-import { claudeCodeHookAction } from '../memory/session-hooks/claude-code.js';
+import { cursorHookAction } from '../trace/session-hooks/cursor.js';
+import { claudeCodeHookAction } from '../trace/session-hooks/claude-code.js';
 
 describe('cursorHookAction', () => {
     beforeEach(() => {

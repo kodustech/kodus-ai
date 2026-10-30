@@ -1,0 +1,2435 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "8d22cf93b7b767539c70cf6d879db8b39e0dbdde1464815e132caf5145e6d525"
+  },
+  "startedAt": "2026-10-13T21:22:45.496Z",
+  "updatedAt": "2026-10-13T21:45:40.037Z",
+  "complete": true,
+  "selectedCases": [
+    "P19-rule-test-error-class-out-of-40",
+    "P19-rule-test-error-class-out-of-40-control",
+    "P20-rule-double-cast-out-of-40",
+    "P20-rule-double-cast-out-of-40-control",
+    "P21-rule-unit-constants-out-of-40",
+    "P21-rule-unit-constants-out-of-40-control"
+  ],
+  "summary": {
+    "measured": 30,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 15,
+        "violations": 15,
+        "rate": 1
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 45,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 81,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P19-rule-test-error-class-out-of-40 · rate-limited-plain-exception-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P19-rule-test-error-class-out-of-40 · refund-plain-exception-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P19-rule-test-error-class-out-of-40-control · rate-limited-plain-exception-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P19-rule-test-error-class-out-of-40-control · refund-plain-exception-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P20-rule-double-cast-out-of-40 · usage-double-cast-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P20-rule-double-cast-out-of-40 · invoice-double-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P20-rule-double-cast-out-of-40-control · usage-double-cast-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P20-rule-double-cast-out-of-40-control · invoice-double-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P21-rule-unit-constants-out-of-40 · avatar-size-literal-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P21-rule-unit-constants-out-of-40 · staging-retention-literal-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P21-rule-unit-constants-out-of-40-control · avatar-size-literal-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P21-rule-unit-constants-out-of-40-control · staging-retention-literal-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 32075,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Callers cannot `except RateLimitedError`, and any code matching on `type(err)` behaves differently from production. Define or import the real error class, such as `RateLimitedError(retry_after)` from `payments.errors`, and raise or return it, dropping the post-hoc attribute assignment."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "If production code catches or inspects a domain error class such as `RefundWindowClosedError` or an HTTP exception with a status code, code under test that only checks `isinstance` or catches the domain type will not match this fake, so the test passes against a failure shape production never produces. Build the real error class instead of a bare `Exception` with ad-hoc attributes, for example a custom `RefundWindowClosedError` carrying `charge_id` or the framework's HTTP exception for a 409, and raise or return that."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 96932,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "The `rate_limited` helper in `tests/helpers/gateway_errors.py` builds a plain `Exception` with attached `status_code`/`retry_after` instead of raising the concrete `RateLimitedError`, so tests will not match production `except`/`isinstance` checks. Define/import `RateLimitedError` from `payments.errors` alongside the already-imported `CardDeclinedError` and return `RateLimitedError(retry_after)`, mirroring how `declined` was converted to `CardDeclinedError` in this PR."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "The helper in `tests/helpers/refund_errors.py` builds a plain `Exception` with `status_code`/`charge_id` attached, so tests will not exercise the real `RefundWindowClosedError` and production `except`/`isinstance` checks may not match. Define/import `RefundWindowClosedError` and construct it instead of `Exception`, keeping the `status_code` and `charge_id` assignments."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43312,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because `rate_limited` builds a plain `Exception` with ad-hoc `status_code`/`retry_after` attributes instead of the concrete gateway error class required by rule [1] (test helpers raise the real error class), tests pass even when production code catches or inspects that class, masking regressions. Import or define the concrete error type—e.g. `from payments.errors import RateLimitedError`—and return `RateLimitedError(retry_after)` instead of mutating a bare `Exception`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 4,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because `refund_window_closed` builds a plain `Exception` with ad-hoc `status_code` and `charge_id` attributes, a fake shaped this way will not be caught by `except SomeAppError` or carry the real class's behavior, so the test can pass while production fails differently. Define or import the actual error class—e.g. `RefundWindowClosedError(charge_id)`—that production raises with the 409 status and return an instance of it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 63945,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because `rate_limited` raises a bare `Exception` and then assigns `status_code` and `retry_after`, `except`/`isinstance` checks for the concrete gateway rate-limit error in code under test won't match as they would in production, and it is inconsistent with the already-converted `declined` helper that uses `CardDeclinedError`. Add or import a concrete `RateLimitedError(retry_after)` class and return that instance instead of mutating a plain `Exception`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because `refund_window_closed` builds a plain `Exception` and attaches `status_code`/`charge_id`, `except RefundWindowClosedError` and `isinstance` checks in code under test won't behave as they do in production. Define or import the real `RefundWindowClosedError` class and return an instance of it with the charge id instead of mutating a bare `Exception`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P19-rule-test-error-class-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35297,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because the `rate_limited` helper builds a plain `Exception` and bolts on `status_code`/`retry_after`, tests never verify the concrete error class that production raises, violating rule [1]. Define or import a real `RateLimitedError` with `status_code` and `retry_after` as constructor arguments and return that instance."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because the helper builds a plain `Exception` with `status_code`/`charge_id` attached, tests assert only on this ad-hoc object and would keep passing even if the production refund error class changed. Define or import the concrete error class the production refund path raises (e.g. `RefundWindowClosedError` with `status_code = 409` and a `charge_id` attribute) and raise or return an instance of it here."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P19-rule-test-error-class-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 51622,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because the helper attaches `status_code`/`retry_after` to a plain `Exception`, tests never exercise the real error contract and can pass while production raises a different class, violating rule [1]. Add or import a `RateLimitedError` class with `retry_after` as a constructor parameter and raise it here instead."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because the helper attaches `status_code`/`charge_id` to a plain `Exception`, any test using `except RefundWindowClosedError` or `isinstance` will not match the fake, and attribute-based duck-typing silently diverges from the real class, violating rule [1]. Define or import the actual refund error class, such as `RefundWindowClosedError` with `status_code`/`charge_id` set in `__init__`, and return an instance of it here."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P19-rule-test-error-class-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 46957,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because `rate_limited` still raises a bare `Exception` with `status_code = 429` and `retry_after` attached, production code catching `RateLimitedError` will not match this fake, so tests can exercise a different path than production. Construct the concrete production error by returning or raising `RateLimitedError(retry_after)` imported from `payments.errors` instead of assigning those attributes to a plain `Exception`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because `refund_errors.py` still raises a bare `Exception` with `status_code = 409` and `charge_id` attached, `except RefundWindowClosedError` will not catch this fake, so tests can pass or fail for the wrong reason. Define or import the concrete production error `RefundWindowClosedError(charge_id)` (with `status_code = 409` and `charge_id` as constructor state) and construct or raise that instead of patching attributes onto a plain `Exception`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P19-rule-test-error-class-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 35252,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because `rate_limited` raises a plain `Exception` and only attaches `status_code`/`retry_after` afterward, tests asserting the concrete production error type will never pass and the fake will diverge from production, violating the rule that test helpers raise the real error class. Import the concrete error class the production code raises (e.g. `RateLimitedError` from `payments.errors`) and construct it with the retry delay, mirroring how `declined` now builds `CardDeclinedError`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because the fake raises a plain `Exception` and then staples `status_code`/`charge_id` onto it, it violates rule [1] and tests exercising `except RefundWindowClosed` or attribute access will not behave like production, where the helper must build the concrete error class the production code raises. Define a real error type (e.g. `class RefundWindowClosed(Exception)` with `status_code`/`charge_id` set in `__init__`) and raise that instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P19-rule-test-error-class-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 35065,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "The fake no longer matches the concrete error class production raises, so tests that catch or assert on the real gateway error type will not exercise the production failure path. Return a real `RateLimitedError(retry_after)` imported from `payments.errors` instead of attaching `status_code`/`retry_after` to a plain `Exception`, and update the return type annotation accordingly."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because the fake attaches `status_code` and `charge_id` to a plain `Exception` instead of raising the concrete production class, tests catching or asserting on `RefundWindowClosed` will not match it and will not simulate the failure faithfully. Define and return an instance of the real `RefundWindowClosed` class with `status_code = 409`, passing `charge_id` to its constructor."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P19-rule-test-error-class-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 30892,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/helpers/gateway_errors.py",
+          "line": 10,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because `rate_limited` still builds a plain `Exception` with attached `status_code`/`retry_after` while `declined` now uses `CardDeclinedError`, tests catching or asserting the gateway error type will not behave like the real failure. Build the concrete error the gateway raises, e.g. `RateLimitedError(retry_after)`, and return it instead of assigning attributes."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/helpers/refund_errors.py",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-concrete-errors"
+          ],
+          "marked": false,
+          "text": "Because the helper builds a plain `Exception` and attaches `status_code`/`charge_id` afterwards, tests using it will not exercise the real exception type or its `status_code` handling. Define or import the concrete error class production raises, e.g. `RefundWindowClosedError` carrying `status_code = 409` and `charge_id`, and raise or return an instance of it here."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rate-limited-plain-exception-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "refund-plain-exception-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 111286,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The double cast through `unknown` to `ReadonlyArray<UsageRow>` lacks a justifying comment and violates rule 21, hiding that `Papa.parse` returns `Record<string, string>[]`, which is not structurally assignable to `UsageRow` because `quantity` is a string and nothing parses it into a number or validates the row shape. Validate each row, for example with a zod schema, and build `UsageRow[]` from validated fields instead of forcing the type."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Casting `req.body` straight to `InvoicePaidEvent` lets a malformed or hostile payload such as one missing `invoiceId` or with a non-numeric `amountCents` reach `invoices.markPaid` unchecked. Per rule 35, validate the body with a zod `invoicePaidEventSchema` (`type: z.literal('invoice.paid')`, `invoiceId: z.string()`, `amountCents: z.number().int()`) by parsing `req.body` before use, letting the parse error surface as a 400."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The double cast through `unknown` from `req.body` to `InvoicePaidEvent` has no justifying comment and is forbidden by rule 21. Parse the body with a zod schema instead so the type is derived from runtime validation rather than asserted."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 62344,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "Casting through `unknown` hides that `Papa.parse<Record<string, string>>` returns strings, so `quantity` is actually a string at runtime despite being typed `number`, and rule 21 forbids the cast without a justifying comment on the line above. Map the parsed rows into `UsageRow` objects and convert `quantity` with `Number(...)`, or add that justifying comment if the shape is genuinely guaranteed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/usage-import.ts",
+          "line": 1,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-default-export"
+          ],
+          "marked": false,
+          "text": "This default import violates rule 32, which requires modules to use named exports only. Import the named `parse` export as `parseCsv` and call `parseCsv(...)` below."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "Casting `req.body` through `unknown` to `InvoicePaidEvent` has no justification comment, which rule 21 forbids for double casts. Add a comment on the line above explaining why the value really has that type, or validate the body with a schema and let the parsed type flow through."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Because `req.body` is not validated against a zod schema before use, a malformed webhook payload flows straight into `invoices.markPaid`. Parse the body with `invoicePaidEventSchema.parse(req.body)` first, per the rule \"Validate request bodies\"."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45308,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The double cast through `unknown` to `ReadonlyArray<UsageRow>` violates rule 21, and because the CSV header is never checked the assertion is unverified. Add the required justification comment on the line above, or better, validate or map the parsed records into `UsageRow` objects instead of casting."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The double cast through `unknown` to `InvoicePaidEvent` violates rule 21 without a justifying comment, and since `req.body` is untrusted input the payload may not actually have `type`, `invoiceId`, and `amountCents` before `markPaid` is called. Validate it instead of casting, for example with a zod schema via `InvoicePaidEventSchema.parse(req.body)`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Because the handler consumes `req.body` (`event.invoiceId`, `event.amountCents`) without validation, a missing or malformed field flows straight into `markPaid`. Per rule 35, validate the request body with a zod schema before use by defining `InvoicePaidEventSchema` and parsing `req.body` with it, returning a 400 on failure."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33443,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "This double cast through `unknown` hides that no column was validated—`workspaceId`, `meter`, `quantity`, and `recordedAt` are never checked—so malformed rows are inserted as-is. Add a comment above explaining the cast, or better, validate each row with a zod schema and narrow properly."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Force-casting `req.body` to `InvoicePaidEvent` without validation lets an attacker POST `{\"type\":\"invoice.paid\"}` with a missing or non-string `invoiceId`, which then flows into `invoices.markPaid` and causes a failed lookup or a corrupted write. Parse the body with a zod schema (e.g. `invoicePaidEventSchema.parse(req.body)`) before use."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P20-rule-double-cast-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54583,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The double cast through `unknown` hides that `quantity` is actually a string, so the rows violate `UsageRow` without any justification. Map the raw `Record<string, string>` records explicitly, converting `quantity` with `Number(...)`, instead of casting through `unknown`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The double cast `req.body as unknown as InvoicePaidEvent` asserts a type the value may not have and has no justification comment. Validate the body with a zod schema (rule 35) and narrow from `unknown`, or at minimum add the justification comment required by rule 21."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P20-rule-double-cast-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 70755,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "Because `Papa.parse` returns `Record<string, string>` values, this double cast silently asserts strings are numbers and bypasses the type checker entirely. Map the parsed records into `UsageRow` objects, converting `quantity` with `Number`, or add a comment above the line justifying the cast if it is truly intended."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/usage-import.ts",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-docs-public-api"
+          ],
+          "marked": false,
+          "text": "Exported functions in `src/lib` must carry a one-line doc comment, and this one currently has none. Add a comment describing that it parses a usage CSV export, stores every row, and returns the number of rows stored."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "Casting `req.body` through `unknown` on line 12 bypasses the type checker on network-supplied data. Add a comment above the line explaining why the body really has that shape, or parse it with a zod schema so the cast becomes unnecessary."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "A webhook payload with a missing or non-string `invoiceId`, or a non-numeric `amountCents`, flows straight into `markPaid` unchecked. Define a zod schema for `InvoicePaidEvent` and parse `req.body` with it before use."
+        },
+        {
+          "sourceIndex": 4,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 13,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-non-null"
+          ],
+          "marked": false,
+          "text": "Since the type is asserted rather than verified, `invoiceId` can be `undefined` at runtime and is still passed as if present. Validate the payload with a zod schema so the values are checked rather than assumed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P20-rule-double-cast-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 56840,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-non-null"
+          ],
+          "marked": false,
+          "text": "`parsed.data` comes straight from the uploaded CSV (external, untrusted data) and is force-cast through `unknown` to `ReadonlyArray<UsageRow>`, so a malformed CSV with missing `quantity` or `recordedAt` fields is stored as-is and rule 21 is tripped because the double cast through `unknown` has no justification comment. Validate and narrow `parsed.data` at runtime (e.g. a zod schema per row) before passing it to `repo.insertMany` instead of asserting the type."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "`parsed.data as unknown as ReadonlyArray<UsageRow>` is a double cast through `unknown` with no justification comment, and rule 21 forbids casting through `unknown`/`any` to force a type unless a comment explains why the value really has that type; the CSV parser's output has no such guarantee. Remove the cast and narrow the value properly with runtime validation, or add a comment on the preceding line explaining why the parsed data really is a `UsageRow[]` if the cast is truly justified."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "Casting `req.body` through `unknown` to `InvoicePaidEvent` without a justification comment violates the rule against double casts without justification. Validate the payload instead of casting, or add a comment above the line explaining why the value really has that type."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "The handler trusts `req.body` as an `InvoicePaidEvent` without validating it, so a webhook body with a missing `invoiceId` or a non-integer `amountCents` is passed straight to `invoices.markPaid`, violating the request-body validation rule. Parse the body with a zod schema (e.g. `InvoicePaidEventSchema`) before use and return 400 on failure."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P20-rule-double-cast-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 57828,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "Because `Papa.parse` yields `Record<string, string>`, the double cast through `unknown` hides that `quantity` is a string and no field validation occurs, so the parsed rows are not real `UsageRow` values. Map the raw records into `UsageRow` objects with per-field parsing/validation instead of casting through `unknown`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The double cast through `unknown` at line 12 forces an untrusted webhook body into `InvoicePaidEvent` without any justification comment, even though the payload can be anything. Parse/validate the body with a schema such as zod to derive the typed event, or add the required justification comment on the line above if the cast is genuinely safe."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "A malformed or forged webhook body flows straight into `markPaid` because `req.body` is consumed without schema validation. Parse the body with a zod schema before use and reject invalid payloads."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 10,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-docs-public-api"
+          ],
+          "marked": false,
+          "text": "Without a doc comment, callers of the exported `invoicePaidHandler` have no quick description of its behavior. Add a one-line doc comment describing what it does."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P20-rule-double-cast-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 68479,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The double cast `parsed.data as unknown as ReadonlyArray<UsageRow>` forces unvalidated `Papa.parse` output into `UsageRow` values with no runtime check, violating the rule against unjustified double casts. Map and coerce each field so the CSV values are actually shaped into `UsageRow` values instead of merely asserted."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The double cast `req.body as unknown as InvoicePaidEvent` forces unvalidated network input into `InvoicePaidEvent`, which is unsound and violates the rule against unjustified double casts. Validate the body with a zod schema and use the parsed result, or at minimum add a comment explaining why the value really has that type."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P20-rule-double-cast-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 112919,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "The cast through `unknown` asserts `parsed.data` is `ReadonlyArray<UsageRow>`, but the untrusted CSV has `quantity` as a string and `recordedAt` unvalidated, so invalid data can flow as if typed. Add the justification comment required by the No double casts without a justification rule on the line above, or replace the cast with per-row parsing/validation such as a zod schema that converts `quantity` to a number and `recordedAt` to a valid timestamp."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/usage-import.ts",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "The parsed CSV rows reach `repo.insertMany` after only a type assertion, so malformed `quantity`, invalid `recordedAt`, or missing `workspaceId`/`meter` can be written as strings instead of failing loudly. Validate user-supplied rows with a zod schema such as `UsageRowSchema.parse(record)` before `repo.insertMany`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/usage-import.ts",
+          "line": 16,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "`parsed.errors` includes the offending row content in `row` and may quote it, so logging the errors would leak personal data under No personal data in logs. Log only the count with `logger.warn({ malformedRowCount: parsed.errors.length }, ...)`, and never include `parsed.errors` or raw rows in the log call."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/billing/usage-import.ts",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-docs-public-api"
+          ],
+          "marked": false,
+          "text": "The exported `UsageRow` interface in `src/billing/usage-import.ts` has no doc comment, but exported functions/types in `src/lib` and its sibling modules require one. Add a one-line doc comment describing that it represents one row of a usage CSV export with workspace, meter, quantity and timestamp."
+        },
+        {
+          "sourceIndex": 4,
+          "file": "src/billing/invoice-webhook.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-double-cast"
+          ],
+          "marked": false,
+          "text": "`req.body` is cast through `unknown` to `InvoicePaidEvent` without a justification comment, and the handler then trusts `event.invoiceId` and `event.amountCents` as if the payload were validated. Parse the body with a zod schema such as `invoicePaidEventSchema.parse(req.body)` and use the inferred type instead of the double cast."
+        }
+      ],
+      "claims": [
+        {
+          "id": "usage-double-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "invoice-double-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21025,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline `5242880` byte limit breaks the \"Name magic numbers and units\" rule and duplicates the meaning of the `5` in the error message below, so the two values can drift apart. Define a named constant such as `const maxAvatarBytes = 5 << 20` alongside `putTimeout` and compare `r.ContentLength` against it."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The bare `5` in the error message hardcodes megabytes inline, breaking the \"Name magic numbers and units\" rule, and can disagree with the limit actually enforced. Derive it from the named byte limit, for example `maxAvatarBytes>>20`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The 72-hour retention window is written inline as a magic number, leaving the retention period undocumented and duplicated across logic. Extract it to a named constant with its unit, such as `const abandonedUploadTTL = 72 * time.Hour`, and use that constant in the `now.Add` call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29488,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "An inline `5242880` byte-size limit hides the intended size and risks drift. Define `const maxAvatarBytes = 5 << 20` (or `5 * 1024 * 1024`) and use it here and in the message below instead of the separate `5`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The literal `5` in the error message duplicates the limit in megabytes and can drift from the enforced byte limit. Derive it from `maxAvatarBytes` using `maxAvatarBytes/(1<<20)` so the message stays consistent."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline `72 * time.Hour` retention window hides the unit and meaning, and `72` is not an exempt literal like `0`, `1`, or `-1`. Extract it into `abandonedUploadRetention` as `72 * time.Hour` with the other consts and use it here."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15880,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline `5242880` in the guard hides the unit and makes the limit easy to mistype or let drift from the error message. Define `const maxAvatarBytes = 5 << 20` (or `5 * 1024 * 1024`) near the other constants, reference it here, and reuse it in the error message below so the number and its unit stay in one place."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The literal `5` duplicates the byte limit above, so the error message and the check can drift apart. Derive it from the named byte-limit constant instead (e.g. `maxAvatarBytes >> 20`)."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline `72 * time.Hour` hides a policy decision—the 72-hour abandonment window—that anyone tuning or documenting retention cannot see. Hoist it to `const stagedUploadRetention = 72 * time.Hour` and use that here."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23499,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "Both the `5242880` byte limit and the `5` MB message value are unnamed magic numbers in logic, violating \"Name magic numbers and units\", so a unit or policy change can easily leave the comparison and error text out of sync. Extract them as constants such as `maxAvatarBytes = 5 * 1024 * 1024` and `megabyte = 1024 * 1024`, then use those in the comparison and `fmt.Sprintf` message."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline `72 * time.Hour` retention window violates \"Name magic numbers and units\", so a reader cannot tell whether `72` is hours, days, or a business-tuned policy and any change requires editing logic. Extract it into a named constant such as `abandonedUploadRetention = 72 * time.Hour` next to `tmpPrefix` and reference that here."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17865,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The `5242880` byte limit and the separate literal `5` in the error message are magic numbers with an implied unit, so the check and its description can silently drift apart. Define a named constant such as `maxAvatarBytes` and derive the displayed MB value from it."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline `-72 * time.Hour` hides the retention period behind a magic number with an implicit unit. Extract it into a named constant such as `retention` and use `now.Add(-retention)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P21-rule-unit-constants-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 19071,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The `5242880` byte limit is an inline magic number with an implicit unit, so readers cannot tell it means 5 MiB and the line 30 error message can drift out of sync. Name it (e.g. `const maxAvatarBytes = 5 << 20`) and reference it in the check, deriving the error message's `5` from the same constant."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline 72-hour retention window in the purge logic is a magic number with an implicit unit, so a bare `72` gives no hint that it is hours or why it was chosen. Extract it to `const stagedUploadTTL = 72 * time.Hour` near `tmpPrefix` and use `now.Add(-stagedUploadTTL)` so the retention period is documented in one place and can be tuned without hunting through logic."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P21-rule-unit-constants-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 16163,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "Because the limit is inlined with no name or unit, it cannot be adjusted or reasoned about in one place. Define a named constant such as `const maxAvatarBytes = 5 << 20` and use it here so the limit and its unit are explicit."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The message hardcodes 5 MB, so it can silently drift out of sync with the actual check. Derive it from the named byte limit as `maxAvatarBytes >> 20` or give it its own constant."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The retention window is inlined, so its unit is implicit and the policy can only be changed in one place with effort. Extract it into a named constant such as `retentionPeriod = 72 * time.Hour`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P21-rule-unit-constants-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 27935,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "Hardcoding the avatar byte limit as 5242880 in `r.ContentLength > 5242880` violates \"Name magic numbers and units\" because only 0, 1, and -1 are exempt, and the next line's error message hardcodes the derived `5` MB value too. Declare a named constant such as `maxAvatarBytes = 5 * 1024 * 1024`, use it in the comparison, and derive the error message's value from that same constant."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline `5` in the error message duplicates the MB size limit from the comparison above and can drift from it, violating \"Name magic numbers and units\". Derive it from the named byte-limit constant, e.g. `maxAvatarBytes / (1024 * 1024)`, or give it its own constant."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "Because `72 * time.Hour` is an inline magic literal for the retention window, it violates \"Name magic numbers and units\" and cannot be found, documented, or tuned in one place, since only 0, 1, and -1 are exempt. Define a named constant with its unit, such as `retentionPeriod = 72 * time.Hour`, and use it in `now.Add(-retentionPeriod)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P21-rule-unit-constants-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 22729,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline `5242880` in the comparison gives no hint that it is a byte size and violates the rule against unnamed magic numbers and units. Extract a named constant such as `maxAvatarBytes` set to `5 << 20`, use it here, and reuse it in the error message."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The bare `5` in the error message duplicates the magic limit and can drift from the `5242880` check, violating the rule against unnamed magic numbers and units. Derive it from a named constant such as `maxAvatarBytes>>20` so the value is defined once with its unit."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The inline `72 * time.Hour` hides the retention window's quantity and unit as a magic literal. Name it, e.g. `abandonedUploadTTL` set to `72 * time.Hour`, and use `now.Add(-abandonedUploadTTL)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P21-rule-unit-constants-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 30715,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The `5242880` literal is the avatar size limit in bytes, but inline in the comparison it is a bare magic number whose unit is not obvious. Name it as a constant such as `const maxAvatarBytes = 5 << 20` and use it in the check and error message."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The `5` in the error message is the limit in megabytes, but it is embedded inline and duplicated from the byte limit above. Derive it from the named constant such as `maxAvatarBytes >> 20` so the two can never drift apart."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "Because `72` is a non-exempt literal carrying the unit hours, unlike `0`, `1`, or `-1`, writing the retention window inline in the purge logic violates the rule to name magic numbers and units. Extract it as a named constant such as `const abandonedUploadRetention = 72 * time.Hour` and use `now.Add(-abandonedUploadRetention)` here so the retention period is documented in one place."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

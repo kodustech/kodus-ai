@@ -18,6 +18,7 @@ jest.mock('@libs/core/log/logger', () => ({
         warn: jest.fn(),
         error: jest.fn(),
         info: jest.fn(),
+        debug: jest.fn(),
     }),
 }));
 
@@ -270,7 +271,7 @@ describe('PipelineChecksService', () => {
                 CheckStatus.IN_PROGRESS,
             );
 
-            expect(loggerMock.warn).toHaveBeenCalledWith(
+            expect(loggerMock.debug).toHaveBeenCalledWith(
                 expect.objectContaining({
                     message: 'No checkRunId found in context for updateCheck',
                 }),
@@ -432,7 +433,7 @@ describe('PipelineChecksService', () => {
                 CheckConclusion.SUCCESS,
             );
 
-            expect(loggerMock.warn).toHaveBeenCalledWith(
+            expect(loggerMock.debug).toHaveBeenCalledWith(
                 expect.objectContaining({
                     message: 'No checkRunId found in context for finalizeCheck',
                 }),

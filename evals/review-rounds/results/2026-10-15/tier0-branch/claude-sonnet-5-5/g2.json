@@ -1,0 +1,585 @@
+{
+  "model": "claude-sonnet-5-5",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "132199b01626ae41e00492d534f84a759d83f954",
+    "sourceDigest": "55d21c1adb35bc93f7136c219c604b3d01da715dc09532246868dcd9ca8a56af"
+  },
+  "startedAt": "2026-10-15T15:37:21.943Z",
+  "updatedAt": "2026-10-15T15:39:26.815Z",
+  "complete": true,
+  "selectedCases": [
+    "R8-consequence-kody-rule-prior",
+    "K7-rule-repost-prod-profile",
+    "P22-rule-forward-parsed-pingpong"
+  ],
+  "casesSourceDigest": "86b7ff2e8a5db76dae3f7ed3df899f9e989d3763af9b9704b7cadc032db3d9c4",
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 4,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 1,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 6,
+        "violations": 1,
+        "rate": 0.167
+      },
+      "index-reference (#2039)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 1,
+        "n": 2,
+        "delivered": 1
+      },
+      "K7-rule-repost-prod-profile · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "K7-rule-repost-prod-profile · dayKey-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P22-rule-forward-parsed-pingpong · create-order-raw-body-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P22-rule-forward-parsed-pingpong · cancel-order-raw-body-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.9,
+    "floor": null,
+    "baseline": null
+  },
+  "runs": 2,
+  "tokens": {
+    "in": 234081,
+    "out": 9865,
+    "cacheRead": 132254,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 6
+  },
+  "cases": [
+    {
+      "id": "R8-consequence-kody-rule-prior",
+      "checks": "resubmit-double-charge: posted and linked",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "K7-rule-repost-prod-profile",
+      "checks": "rangeLabel-start-repeat: not posted; dayKey-new-site: posted",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P22-rule-forward-parsed-pingpong",
+      "checks": "Ping-pong on one function: an early comment asked to forward the raw input, a later Kody Rule comment asked to forward only the validated data (stored implemented); the developer forwards the raw object again; 40 earlier comments",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        },
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21912,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39567,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Rethrowing NotReadyError from fetchStatus now reaches pollCharge, which treats it as \"gateway never received it\" and calls gw.submit(charge.payload) again. errors.ts defines NotReadyError as \"gateway has the charge but has not settled it yet\". WHY: pollCharge only runs for charges the gateway has already accepted, so a not-yet-settled status makes it resubmit an existing charge on each poll tick. This can produce duplicate charges. Before this change the FailedError wrapping kept that branch from firing. HOW: Make the two meanings consistent. Either have pollCharge treat NotReadyError as 'pending' and retry the status poll without resubmitting, or add a distinct error type for 'never received' and use that for the resubmit branch. Also make gw.submit idempotent, for example with an idempotency key based on charge.id.",
+          "keep": true,
+          "rationale": "The code matches the claim. `fetchStatus` now rethrows `NotReadyError`. `pollCharge` runs for charges the gateway has already accepted, and it catches `NotReadyError` and calls `gw.submit(charge.payload)` again. Its comment says `NotReadyError` means \"never received\", but `errors.ts` defines it as \"has the charge but has not settled it yet\". A not-yet-settled charge is therefore resubmitted on each tick, which can create duplicate charges. The earlier review decision only asked for `NotReadyError` to be propagated. This finding is a different problem: a downstream consequence of applying that change, not a repeat of the wrapping issue.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRethrowing `NotReadyError` from `fetchStatus` now reaches `pollCharge`, which reads it as \"gateway never received it\" and calls `gw.submit(charge.payload)` again, so every poll tick on an already accepted but unsettled charge can create a duplicate charge. Make `pollCharge` treat `NotReadyError` as pending and retry the status poll without resubmitting (or add a distinct error type for the never-received case), and make `gw.submit` idempotent with a key based on `charge.id`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 1,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 12759,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Users west of UTC get the previous calendar day from `dayKey`, because `toISOString().slice(0, 10)` reads the date in UTC rather than local time, so range reports can group entries under the wrong day. Replace it with `formatLocalDate` from `./dates` so the key matches the user's local date."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 2,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14653,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` uses `toISOString().slice(0, 10)`, which returns the UTC date instead of the user's local calendar day, so reports can group entries under the wrong day near midnight. Use `formatLocalDate` from `src/reports/dates.ts` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 1,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13821,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Unvalidated extra fields from the client reach downstream consumers of the event bus, because the handler publishes the raw `req.body` rather than the output of `CancelOrderSchema`. Publish `result.data` instead so only the parsed fields are sent."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 2,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 11704,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Unvalidated extra fields from the client reach downstream consumers because the handler validates with `CancelOrderSchema` but publishes the raw `req.body` to the event bus. Publish the parsed `result.data` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

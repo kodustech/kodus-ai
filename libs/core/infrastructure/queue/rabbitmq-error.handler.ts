@@ -13,7 +13,7 @@ import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.e
  * Backoff configuration for consumer retries.
  * Uses workflow queue config for base interval and max retries.
  *
- * Default lowered from 5 → 2 after the QuintoAndar incident: every retry
+ * Default lowered from 5 → 2 after a customer incident: every retry
  * burned ~9 min of webhook slot (or 1h45 min of code-review slot) under
  * a saturated GitHub bucket, so 5 attempts cost up to 45 min per job for
  * an error that would never succeed within that window. With the

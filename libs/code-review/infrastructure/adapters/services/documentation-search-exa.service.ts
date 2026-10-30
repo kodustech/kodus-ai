@@ -3,13 +3,9 @@ export const DOCUMENTATION_SEARCH_EXA_SERVICE_TOKEN = Symbol.for(
 );
 
 import { createLogger } from '@libs/core/log/logger';
-import {
-    BYOKConfig,
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { LLM } from '@libs/llm/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import { z } from 'zod';
 import { DocumentationSearchCacheService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-cache.service';
 import {
     DocumentationItem,
@@ -17,7 +13,6 @@ import {
     DocumentationQueryTask,
 } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -26,7 +21,7 @@ import pLimit from 'p-limit';
 import {
     prompt_code_review_documentation_formatter_system,
     prompt_code_review_documentation_formatter_user,
-} from '../../../../common/utils/langchainCommon/prompts/codeReviewDocumentationFormatter';
+} from '../../../../common/utils/prompts/codeReviewDocumentationFormatter';
 
 const CACHE_PROVIDER = 'exa';
 type ExaSearchResponse = Awaited<ReturnType<Exa['search']>>;
@@ -58,6 +53,13 @@ type ResultLike = {
 const EXA_CONCURRENCY = 5;
 const exaCallLimiter = pLimit(EXA_CONCURRENCY);
 
+// Minimal `{ markdown }` envelope for the Exa formatter's single-document
+// structured output. Hoisted to module scope so the strict-wire governance
+// suite can assert it stays OpenAI-strict compatible.
+export const documentationSearchExaFormatSchema = z.object({
+    markdown: z.string(),
+});
+
 @Injectable()
 export class DocumentationSearchExaService {
     private readonly logger = createLogger(DocumentationSearchExaService.name);
@@ -70,11 +72,19 @@ export class DocumentationSearchExaService {
     constructor(
         private readonly configService: ConfigService,
         private readonly documentationSearchCacheService: DocumentationSearchCacheService,
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observabilityService: ObservabilityService,
     ) {
         const apiKey = this.configService.get<string>('API_EXA_KEY');
         this.exaClient = apiKey ? new Exa(apiKey) : null;
+    }
+
+    /**
+     * The search backend is usable only when an Exa API key is configured.
+     * Exposed so the agent-facing tool can say "search is unavailable" instead
+     * of "no documentation found" when it never ran (#1762).
+     */
+    isSearchAvailable(): boolean {
+        return this.exaClient !== null;
     }
 
     async searchByFilePlan(
@@ -82,7 +92,7 @@ export class DocumentationSearchExaService {
         options?: {
             organizationAndTeamData?: OrganizationAndTeamData;
             prNumber?: number;
-            byokConfig?: BYOKConfig;
+            byokConfig?: NormalizedModel;
         },
     ): Promise<Record<string, DocumentationItem[]>> {
         if (!this.exaClient) {
@@ -115,7 +125,7 @@ export class DocumentationSearchExaService {
         options?: {
             organizationAndTeamData?: OrganizationAndTeamData;
             prNumber?: number;
-            byokConfig?: BYOKConfig;
+            byokConfig?: NormalizedModel;
         },
     ): Promise<DocumentationItem[]> {
         const queryTasks = this.normalizeQueryTasks(plan.queryTasks);
@@ -147,7 +157,7 @@ export class DocumentationSearchExaService {
         options?: {
             organizationAndTeamData?: OrganizationAndTeamData;
             prNumber?: number;
-            byokConfig?: BYOKConfig;
+            byokConfig?: NormalizedModel;
         },
     ): Promise<DocumentationItem | null> {
         const queryNormalized = this.normalizeCacheSegment(task.query);
@@ -187,7 +197,7 @@ export class DocumentationSearchExaService {
         options?: {
             organizationAndTeamData?: OrganizationAndTeamData;
             prNumber?: number;
-            byokConfig?: BYOKConfig;
+            byokConfig?: NormalizedModel;
         },
     ): Promise<DocumentationItem | null> {
         if (!this.exaClient) {
@@ -221,9 +231,13 @@ export class DocumentationSearchExaService {
                 task.query,
             );
 
+            // No `category` filter on purpose. Exa's categories are page-type
+            // verticals ('company', 'news', 'research paper', ...) and none of
+            // them is documentation — scoping to 'company' returned vendor
+            // landing pages and same-named companies instead of API docs, so
+            // the agent got plausible marketing copy in place of the spec.
             const response = await exaCallLimiter(() =>
                 this.exaClient!.search(packageScopedQuery, {
-                    category: 'company',
                     type: 'auto',
                 }),
             );
@@ -416,7 +430,7 @@ export class DocumentationSearchExaService {
         rawSearchContent: string;
         organizationAndTeamData?: OrganizationAndTeamData;
         prNumber?: number;
-        byokConfig?: BYOKConfig;
+        byokConfig?: NormalizedModel;
     }): Promise<string> {
         if (!params.rawSearchContent.trim()) {
             return '';
@@ -424,62 +438,34 @@ export class DocumentationSearchExaService {
 
         try {
             const runName = 'documentationSearchExaFormat';
-            const spanName = `${DocumentationSearchExaService.name}::${runName}`;
 
-            const promptRunner = new BYOKPromptRunnerService(
-                this.promptRunnerService,
-                LLMModelProvider.GEMINI_3_FLASH_PREVIEW,
-                LLMModelProvider.GEMINI_3_FLASH_PREVIEW,
-                params.byokConfig,
-            );
+            // The formatter returns a single markdown document. runStructuredReviewCall
+            // is structured-output only (Output.object), so the markdown is carried in a
+            // minimal `{ markdown }` envelope and unwrapped below. Under this call the
+            // BYOK org runs on its own model unchanged; a non-BYOK org consolidates to
+            // the managed default instead of the pinned GEMINI_3_FLASH_PREVIEW (accepted,
+            // RESEARCH Pattern 1). The outer runLLMInSpan wrapper is dropped — the span
+            // is emitted once inside runStructuredReviewCall (Q4).
+            const response = await LLM.run({
+                byokConfig: params.byokConfig,
+                schema: documentationSearchExaFormatSchema,
+                organizationId: params.organizationAndTeamData?.organizationId,
+                runName: `${DocumentationSearchExaService.name}::${runName}`,
+                attrs: {
+                    provider: CACHE_PROVIDER,
+                    packageName: params.packageName,
+                    prNumber: params.prNumber,
+                    fallback: false,
+                },
+                system: prompt_code_review_documentation_formatter_system,
+                user: prompt_code_review_documentation_formatter_user({
+                    packageName: params.packageName,
+                    query: params.query,
+                    rawSearchContent: params.rawSearchContent,
+                }),
+            });
 
-            const { result: response } =
-                await this.observabilityService.runLLMInSpan({
-                    spanName,
-                    runName,
-                    byokConfig: params.byokConfig,
-                    attrs: {
-                        type: promptRunner.executeMode,
-                        organizationId:
-                            params.organizationAndTeamData?.organizationId,
-                        prNumber: params.prNumber,
-                        packageName: params.packageName,
-                    },
-                    exec: (callbacks) =>
-                        promptRunner
-                            .builder()
-                            .setParser(ParserType.STRING)
-                            .setPayload(params)
-                            .addPrompt({
-                                role: PromptRole.SYSTEM,
-                                prompt: prompt_code_review_documentation_formatter_system,
-                            })
-                            .addPrompt({
-                                role: PromptRole.USER,
-                                prompt: prompt_code_review_documentation_formatter_user,
-                            })
-                            .addMetadata({
-                                context: DocumentationSearchExaService.name,
-                                runName,
-                                metadata: {
-                                    provider: CACHE_PROVIDER,
-                                    packageName: params.packageName,
-                                    query: params.query,
-                                    rawSearchContentLength:
-                                        params.rawSearchContent.length,
-                                    hasByokConfig: Boolean(params.byokConfig),
-                                    organizationAndTeamData:
-                                        params.organizationAndTeamData,
-                                    prNumber: params.prNumber,
-                                },
-                            })
-                            .setTemperature(0)
-                            .setRunName(runName)
-                            .addCallbacks(callbacks)
-                            .execute(),
-                });
-
-            return this.extractPromptExecutionText(response);
+            return (response?.markdown ?? '').trim();
         } catch (error) {
             this.logger.warn({
                 message:
@@ -497,25 +483,6 @@ export class DocumentationSearchExaService {
 
             return '';
         }
-    }
-
-    private extractPromptExecutionText(response: unknown): string {
-        if (typeof response === 'string') {
-            return response.trim();
-        }
-
-        if (typeof response === 'object' && response !== null) {
-            const resultValue = (response as Record<string, unknown>).result;
-            if (typeof resultValue === 'string') {
-                return resultValue.trim();
-            }
-
-            if (resultValue != null) {
-                return String(resultValue).trim();
-            }
-        }
-
-        return '';
     }
 
     private deduplicateByQuery(

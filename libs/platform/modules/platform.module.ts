@@ -16,6 +16,7 @@ import { PermissionsModule } from '@libs/identity/modules/permissions.module';
 import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { TeamModule } from '@libs/organization/modules/team.module';
+import { OrganizationModule } from '@libs/organization/modules/organization.module';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import CodeManagementUseCases from '../application/use-cases/codeManagement';
 import { AzureReposPullRequestHandler } from '../infrastructure/webhooks/azure/azureReposPullRequest.handler';
@@ -24,12 +25,18 @@ import { ForgejoPullRequestHandler } from '../infrastructure/webhooks/forgejo/fo
 import { GitHubPullRequestHandler } from '../infrastructure/webhooks/github/githubPullRequest.handler';
 import { GitLabMergeRequestHandler } from '../infrastructure/webhooks/gitlab/gitlabPullRequest.handler';
 
+import { BusinessLogicPublisher } from '../application/services/business-logic-publisher.service';
+import { BusinessLogicReplies } from '../application/services/business-logic-replies.service';
+import { BusinessLogicRecheckService } from '../application/services/business-logic-recheck.service';
+import { OrganizationMemberListService } from '../application/services/organization-member-list.service';
 import { WebhookContextService } from '../application/services/webhook-context.service';
 import { GetConnectionsUseCase } from '../application/use-cases/integrations/get-connections.use-case';
 import { GetOrganizationLanguageUseCase } from '../application/use-cases/organization/get-organization-language.use-case';
 import { PlatformCoreModule } from './platform-core.module';
 
 import { AutomationModule } from '@libs/automation/modules/automation.module';
+import { LicenseModule } from '@libs/ee/license/license.module';
+import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
 import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-review-configuration.module';
 import { WorkflowModule } from '@libs/core/workflow/modules/workflow.module';
 import { IssuesModule } from '@libs/issues/issues.module';
@@ -51,6 +58,7 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         forwardRef(() => AgentsModule),
         forwardRef(() => OrganizationParametersModule),
         forwardRef(() => TeamModule),
+        forwardRef(() => OrganizationModule),
         forwardRef(() => ParametersModule),
         forwardRef(() => PlatformDataModule),
         PermissionsModule,
@@ -63,12 +71,18 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         forwardRef(() => McpCoreModule),
         forwardRef(() => CodeReviewConfigurationModule),
         forwardRef(() => SandboxModule),
+        forwardRef(() => LicenseModule),
+        forwardRef(() => PermissionValidationModule),
     ],
     providers: [
         ...CodeManagementUseCases,
         GetConnectionsUseCase,
         GetOrganizationLanguageUseCase,
+        OrganizationMemberListService,
         WebhookContextService,
+        BusinessLogicPublisher,
+        BusinessLogicReplies,
+        BusinessLogicRecheckService,
         AzureReposPullRequestHandler,
         GitHubPullRequestHandler,
         GitLabMergeRequestHandler,
@@ -101,7 +115,10 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         ...CodeManagementUseCases,
         GetConnectionsUseCase,
         GetOrganizationLanguageUseCase,
+        OrganizationMemberListService,
         WebhookContextService,
+        BusinessLogicPublisher,
+        BusinessLogicRecheckService,
         'AZURE_REPOS_WEBHOOK_HANDLER',
         'GITHUB_WEBHOOK_HANDLER',
         'GITLAB_WEBHOOK_HANDLER',

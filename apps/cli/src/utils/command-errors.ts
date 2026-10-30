@@ -14,16 +14,22 @@ function getApiUnavailableMessage(error: Error): string | null {
     const code = cause.cause?.code;
 
     if (
-        !isMessageMatch(error.message, ['fetch failed', 'network', 'econnrefused']) &&
+        !isMessageMatch(error.message, [
+            'fetch failed',
+            'network',
+            'econnrefused',
+        ]) &&
         !['ECONNREFUSED', 'ENOTFOUND', 'ECONNRESET'].includes(code ?? '')
     ) {
         return null;
     }
 
-    const apiUrl = process.env.KODUS_API_URL?.trim() || 'the configured Kodus API';
-    const localHint = apiUrl.includes('localhost') || apiUrl.includes('127.0.0.1')
-        ? ' If you are using the local API, make sure it is running.'
-        : '';
+    const apiUrl =
+        process.env.KODUS_API_URL?.trim() || 'the configured Kodus API';
+    const localHint =
+        apiUrl.includes('localhost') || apiUrl.includes('127.0.0.1')
+            ? ' If you are using the local API, make sure it is running.'
+            : '';
 
     return `Could not reach the Kodus API at ${apiUrl}.${localHint}`;
 }

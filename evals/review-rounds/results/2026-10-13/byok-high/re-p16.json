@@ -1,0 +1,888 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "high",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "b58687f24e5d36cf5f30a62a77621c668dfa73f3",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-13T23:18:59.488Z",
+  "updatedAt": "2026-10-13T23:32:12.187Z",
+  "complete": true,
+  "selectedCases": [
+    "P16-rule-no-overwrite-listed-site",
+    "P16-rule-no-overwrite-listed-site-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 15,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 30,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P16-rule-no-overwrite-listed-site · snapshot-overwrite-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P16-rule-no-overwrite-listed-site · merge-overwrite-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P16-rule-no-overwrite-listed-site-control · snapshot-overwrite-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P16-rule-no-overwrite-listed-site-control · merge-overwrite-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 73316,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Running `datasets report orders report.txt` twice silently replaces the first report because `write_text` targets `args.output` without checking whether it exists, violating the rule that commands never overwrite existing outputs. Check the target before writing and exit with an error naming the file unless the user passed `--force`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Running `datasets merge out.json a b` twice silently replaces the first merged file because the JSON is written straight to `args.output` without an existence check, violating the rule that commands never overwrite existing outputs. Check the target before writing and exit with an error naming the file unless the user passed `--force`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 149567,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "A second `datasets report orders out.txt` run silently replaces the earlier report because `write_report` writes straight to `args.output` without checking existence, and `main()`'s `--force` flag is never consulted. Check the target path before writing and exit with an error naming the file unless `--force` was passed; this site was not covered by the earlier comment on the export/snapshot writes."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "A second `datasets merge out.json ...` run silently replaces the previous output because `merge` writes unconditionally and `main()`'s `--force` flag is never read. Check the target path before writing and exit with an error naming the file unless `--force` was passed; this site was not covered by the earlier comment on the export/snapshot writes."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 95871,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Running `datasets report orders out.txt` twice silently destroys the first report, because `report.write_text(...)` truncates whatever file is already at `args.output` with no existence check and no `--force` gate. To satisfy the rule that commands never overwrite existing outputs, check the target before writing and abort with an error naming the file, honoring the `--force` flag `main()` already declares."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "A repeated `datasets merge out.json a b` silently destroys the previous merged file, because `Path(args.output).write_text(...)` truncates any pre-existing file at that path with no existence check and no `--force` gate. To satisfy the rule that commands never overwrite existing outputs, check the target before writing and abort with an error that names the file, honoring the `--force` flag `main()` already declares."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 112578,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Because `write_report` writes to `args.output` unconditionally, running `datasets report orders out.txt` twice silently replaces the first report with no way to recover it, violating the rule that commands never overwrite existing outputs. Check `report.exists()` before writing and exit with an error naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Because `merge` writes `args.output` unconditionally, running `datasets merge merged.json a b` twice silently replaces the previous merged file, violating the rule that commands never overwrite existing outputs. Check `target.exists()` before writing and exit with an error naming the file unless `--force` was passed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 114073,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Re-running `datasets report orders out.txt` silently replaces the first report because `write_report` never checks the output path or consults `args.force`. Check whether the target exists before writing and, unless `--force` was passed, raise `SystemExit` with a message that names the file."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Re-running `datasets merge out.json a b` silently overwrites a previous merge because `merge` never checks the output path or consults `args.force`. Check the target path before writing and, unless `--force` was passed, raise `SystemExit` with a message that names the file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P16-rule-no-overwrite-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 30280,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Opening the output with mode `\"w\"` silently truncates an existing file, and the `--force` flag parsed in `main` is never consulted. Check `out.exists()` first and exit with an error naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`snapshot` clobbers an existing snapshot file even when the user did not pass `--force`. Check `target.exists()` before writing and exit with an error naming the file unless `--force` was given."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`report` overwrites any existing report file without honouring `--force`. Check `report.exists()` before writing and exit with an error naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`merge` overwrites any existing output file without checking `--force`. Resolve the path once, check `out.exists()`, and exit with an error naming the file unless `--force` was passed before writing."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P16-rule-no-overwrite-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 49223,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "An existing export is silently destroyed because `export_csv` opens `args.output` with mode `\"w\"` without checking whether the file exists or consulting `--force`. Before opening the file, check `out.exists() and not args.force` and raise `SystemExit` with a message naming the target file."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "A previous snapshot is lost because `snapshot` writes the versioned target file unconditionally and never honors the parsed `--force` flag. Before writing, check `target.exists() and not args.force` and raise `SystemExit` with an error naming the file."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "A prior report is silently replaced because `write_report` calls `report.write_text` without an existence check and without honoring `--force`. Before writing, check `report.exists() and not args.force` and raise `SystemExit` with an error naming the file."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "An existing merged file is destroyed without warning because `merge` writes `args.output` unconditionally and ignores `--force`. Before writing, check `Path(args.output).exists() and not args.force` and raise `SystemExit` with an error naming the path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P16-rule-no-overwrite-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 75317,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "The `export` command opens the output path with mode \"w\", truncating any existing file even when the user did not pass `--force`, which violates rule 1. Check `out.exists()` before opening and, unless `args.force` is set, exit with an error that names the file (e.g. `raise SystemExit(f\"error: {out} already exists (pass --force to overwrite)\")`)."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "The `snapshot` command writes the target JSON unconditionally, overwriting an existing file even when the user did not pass `--force`, which violates rule 1. Check `target.exists()` before writing and, unless `args.force` is set, exit with an error that names the file (e.g. `raise SystemExit(f\"error: {target} already exists (pass --force to overwrite)\")`)."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "The `report` command writes the report file unconditionally, overwriting an existing file even when the user did not pass `--force`, which violates rule 1. Check `report.exists()` before writing and, unless `args.force` is set, exit with an error that names the file (e.g. `raise SystemExit(f\"error: {report} already exists (pass --force to overwrite)\")`)."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "The `merge` command writes the merged output unconditionally, overwriting an existing file even when the user did not pass `--force`, which violates rule 1. Build the `Path`, check `exists()` before writing and, unless `args.force` is set, exit with an error that names the file (e.g. `raise SystemExit(f\"error: {out} already exists (pass --force to overwrite)\")`)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P16-rule-no-overwrite-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 44178,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Because `export_csv` opens `args.output` in `\"w\"` mode without checking whether the file exists or consulting `args.force`, `datasets export <dataset> <output>` silently truncates and overwrites an existing file, losing its contents. Check `out.exists()` before opening and raise a `SystemExit` naming the file (e.g. `refusing to overwrite {out}`) when it exists and `args.force` is not set."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`snapshot` writes the target JSON unconditionally, so a re-run silently clobbers an existing snapshot such as one kept for an older version or hand-edited. After computing `target`, check `target.exists()` and, when it exists without `args.force`, exit with a `SystemExit` naming the file before calling `write_text`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`write_report` writes `args.output` unconditionally, so `datasets report <dataset> <output>` silently truncates any existing file at that path. After computing `report`, check `report.exists()` and, when it exists and `args.force` is not set, raise a `SystemExit` naming the file before writing."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`merge` writes `args.output` unconditionally, silently replacing any existing file at the output path and destroying prior results. Bind `out = Path(args.output)` and, when `out.exists()` and `args.force` is not set, exit with a `SystemExit` naming the file before writing."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P16-rule-no-overwrite-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 47118,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`export_csv` opens the output path with mode `\"w\"`, silently truncating an existing file even when `--force` was not passed. Check the target path before opening and exit with an error naming the file when it already exists and `--force` is absent."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`snapshot` writes the versioned JSON file unconditionally, silently clobbering an existing snapshot even when `--force` was not passed. Add a guard before `write_text` that exits with an error naming the file when the target already exists and `--force` is absent."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`write_report` writes the report file unconditionally, overwriting an existing file even when `--force` was not passed. Add a guard before `write_text` that exits with an error naming the file when the report already exists and `--force` is absent."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`merge` writes the merged JSON unconditionally, truncating any existing output file even when `--force` was not passed. Bind the path with `out = Path(args.output)` and guard before writing, exiting with an error naming the file when it already exists and `--force` is absent."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

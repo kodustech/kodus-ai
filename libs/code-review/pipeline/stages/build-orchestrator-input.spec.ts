@@ -10,6 +10,7 @@ import {
     type OrchestratorInputComputed,
 } from './build-orchestrator-input';
 import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
 
 const computed: OrchestratorInputComputed = {
     changedFiles: [],
@@ -20,6 +21,7 @@ const computed: OrchestratorInputComputed = {
     gitHubToken: undefined,
     callGraph: '',
     adaptiveProfile: { skipHeavyPasses: false } as any,
+    linkedRepoAccess: undefined,
 };
 
 const makeContext = (
@@ -34,48 +36,210 @@ const makeContext = (
     }) as unknown as CodeReviewPipelineContext;
 
 describe('buildOrchestratorInput — context→agent wiring', () => {
-    it('forwards reviewDirective from context into the agent input', () => {
+    it('forwards the optional context fields and stage locals the finder reads', () => {
+        const repoInstructions = {
+            files: [],
+            otherFiles: [],
+            dropped: [],
+            truncated: false,
+            indexedCount: 0,
+        };
+        const ciEvidence = [
+            { id: 'c1', name: 'semgrep', status: 'completed' },
+        ] as CodeReviewPipelineContext['ciEvidence'];
+        const traceDecisions = [
+            { type: 'tradeoff', decision: 'Keep retries bounded.', scope: [] },
+        ];
+        const previousDecisions = [
+            {
+                suggestionId: 'sug-1',
+                relevantFile: 'src/payments/index.ts',
+                suggestionContent: 'Use const instead of let.',
+                label: 'bug',
+                outcome: 'implemented' as const,
+                decidedAt: '2026-01-01T00:00:00.000Z',
+            },
+        ];
+
         const input = buildOrchestratorInput(
             makeContext({
                 reviewDirective: 'the auth and session logic',
-            }),
-            computed,
-        );
-        expect(input.reviewDirective).toBe('the auth and session logic');
-    });
-
-    it('leaves reviewDirective undefined for a normal review (no directive)', () => {
-        expect(
-            buildOrchestratorInput(makeContext(), computed).reviewDirective,
-        ).toBeUndefined();
-    });
-
-    it('maps the load-bearing prompt fields from context', () => {
-        const input = buildOrchestratorInput(
-            makeContext({
+                ciEvidence,
+                traceDecisions,
+                previousDecisions,
                 pullRequest: { title: 'My PR', body: 'desc' },
                 codeReviewConfig: { reviewMode: 'deep' },
             }),
-            computed,
+            {
+                ...computed,
+                repoInstructions,
+                callGraph: '<CallGraph>x</CallGraph>',
+                prNumber: 42,
+            },
         );
-        expect(input.prTitle).toBe('My PR');
-        expect(input.prBody).toBe('desc');
-        expect(input.reviewMode).toBe('deep');
-    });
 
-    it('defaults reviewMode to normal when unset', () => {
-        expect(
-            buildOrchestratorInput(makeContext(), computed).reviewMode,
-        ).toBe('normal');
-    });
-
-    it('passes the stage-computed locals through unchanged', () => {
-        const input = buildOrchestratorInput(makeContext(), {
-            ...computed,
+        expect(input).toMatchObject({
+            reviewDirective: 'the auth and session logic',
+            ciEvidence,
+            traceDecisions,
+            previousDecisions,
+            repoInstructions,
+            prTitle: 'My PR',
+            prBody: 'desc',
+            reviewMode: 'deep',
             callGraph: '<CallGraph>x</CallGraph>',
             prNumber: 42,
         });
-        expect(input.callGraph).toBe('<CallGraph>x</CallGraph>');
-        expect(input.prNumber).toBe(42);
+    });
+
+    it('defaults reviewMode to normal and leaves the optional fields unset for a plain review', () => {
+        const input = buildOrchestratorInput(makeContext(), computed);
+        expect(input.reviewMode).toBe('normal');
+        expect(input.reviewDirective).toBeUndefined();
+        expect(input.repoInstructions).toBeUndefined();
+    });
+
+    it('prefers stage-computed kodyRules (summary-swapped) over the raw config rules', () => {
+        const configRules = [{ uuid: 'r1', rule: 'full long text' }];
+        const swappedRules = [
+            { uuid: 'r1', rule: 'WHAT TO VALIDATE:\n- condition' },
+        ];
+        const input = buildOrchestratorInput(
+            makeContext({ codeReviewConfig: { kodyRules: configRules } }),
+            { ...computed, kodyRules: swappedRules as any },
+        );
+        expect(input.kodyRules).toBe(swappedRules);
+    });
+
+    it('falls back to the config kodyRules when the stage computes none', () => {
+        const configRules = [{ uuid: 'r1', rule: 'full long text' }];
+        const input = buildOrchestratorInput(
+            makeContext({ codeReviewConfig: { kodyRules: configRules } }),
+            computed,
+        );
+        expect(input.kodyRules).toBe(configRules);
+    });
+
+    // ── repository-lookup capability (issue #1826, KRC-01) ──────────────────
+    // The signal exists on the sandbox handle (`type`) and was discarded here.
+    // remoteCommands cannot carry it: the null sandbox implements grep/read and
+    // answers '' successfully, so `remoteCommands !== undefined` is true even
+    // when there is nothing to look at.
+    describe('repoLookup — the capability signal derived from the sandbox handle', () => {
+        it('reports available for a real sandbox handle', () => {
+            const input = buildOrchestratorInput(
+                makeContext({
+                    sandboxHandle: {
+                        type: 'e2b',
+                        remoteCommands: {
+                            grep: async () => '',
+                            read: async () => '',
+                            listDir: async () => '',
+                        },
+                    },
+                }),
+                computed,
+            );
+            expect(input.repoLookup?.available).toBe(true);
+        });
+
+        it('reports unavailable end to end for the NULL sandbox', () => {
+            const input = buildOrchestratorInput(
+                makeContext({ sandboxHandle: NULL_SANDBOX_INSTANCE }),
+                computed,
+            );
+            expect(input.repoLookup?.available).toBe(false);
+            expect(input.repoLookup?.unavailableReason).toBe('null sandbox');
+            // remoteCommands is NOT undefined here — that is exactly why it
+            // could never have been the capability signal.
+            expect(input.remoteCommands).toBeDefined();
+        });
+
+        it('reports unavailable when there is no sandbox at all (trial flow)', () => {
+            const input = buildOrchestratorInput(makeContext(), computed);
+            expect(input.repoLookup?.available).toBe(false);
+            expect(input.repoLookup?.unavailableReason).toBe(
+                'no sandbox handle',
+            );
+        });
+
+        it('an unavailable lookup raises from grep instead of answering empty', async () => {
+            const input = buildOrchestratorInput(
+                makeContext({ sandboxHandle: NULL_SANDBOX_INSTANCE }),
+                computed,
+            );
+            await expect(input.repoLookup!.grep('formatDate')).rejects.toThrow(
+                /repo lookup unavailable/,
+            );
+        });
+    });
+
+    describe('commits (issue #1313 follow-up)', () => {
+        it('maps sha/message/date from the nested Commit shape the type declares', () => {
+            const input = buildOrchestratorInput(
+                makeContext({
+                    prAllCommits: [
+                        {
+                            sha: 'abc123',
+                            commit: {
+                                message: 'fix: guard null user',
+                                author: { date: '2026-01-02T00:00:00.000Z' },
+                            },
+                        },
+                    ],
+                }),
+                computed,
+            );
+            expect(input.commits).toEqual([
+                {
+                    sha: 'abc123',
+                    message: 'fix: guard null user',
+                    date: '2026-01-02T00:00:00.000Z',
+                },
+            ]);
+        });
+
+        it('falls back to the flat message/created_at shape GitHub\'s own getCommitsForPullRequestForCodeReview actually returns', () => {
+            // Confirmed live (2026-09-11): that provider method returns
+            // {sha, message, created_at, author} with NO `commit` property at
+            // all — reading only `c.commit?.message` silently rendered every
+            // commit message as empty in the finder/verifier prompt.
+            const input = buildOrchestratorInput(
+                makeContext({
+                    prAllCommits: [
+                        {
+                            sha: 'def456',
+                            message: 'chore: unrelated formatting',
+                            created_at: '2026-01-03T00:00:00.000Z',
+                        } as any,
+                    ],
+                }),
+                computed,
+            );
+            expect(input.commits).toEqual([
+                {
+                    sha: 'def456',
+                    message: 'chore: unrelated formatting',
+                    date: '2026-01-03T00:00:00.000Z',
+                },
+            ]);
+        });
+
+        it('prefers prAllCommits over prCommits when both are present', () => {
+            const input = buildOrchestratorInput(
+                makeContext({
+                    prAllCommits: [{ sha: 'all-1', message: 'all' } as any],
+                    prCommits: [{ sha: 'new-1', message: 'new' } as any],
+                }),
+                computed,
+            );
+            expect(input.commits).toEqual([
+                { sha: 'all-1', message: 'all', date: undefined },
+            ]);
+        });
+
+        it('is undefined when neither prAllCommits nor prCommits exist', () => {
+            expect(buildOrchestratorInput(makeContext(), computed).commits).toBeUndefined();
+        });
     });
 });

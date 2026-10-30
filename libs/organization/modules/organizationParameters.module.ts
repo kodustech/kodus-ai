@@ -10,22 +10,36 @@ import { CreateOrUpdateOrganizationParametersUseCase } from '../application/use-
 import { FindByKeyOrganizationParametersUseCase } from '../application/use-cases/organizationParameters/find-by-key.use-case';
 import { DeleteByokConfigUseCase } from '../application/use-cases/organizationParameters/delete-byok-config.use-case';
 import { GetLLMConfigStatusUseCase } from '../application/use-cases/organizationParameters/get-llm-config-status.use-case';
+import { GetByokProvidersUseCase } from '../application/use-cases/organizationParameters/get-byok-providers.use-case';
 import { IgnoreBotsUseCase } from '../application/use-cases/organizationParameters/ignore-bots.use-case';
 import {
     GET_COCKPIT_METRICS_VISIBILITY_USE_CASE_TOKEN,
     GetCockpitMetricsVisibilityUseCase,
     GetModelsByProviderUseCase,
+    GetModelCapabilitiesUseCase,
     TestByokConnectionUseCase,
+    TestByokModelUseCase,
+    ListModelOverridesUseCase,
+    ClearModelOverridesUseCase,
 } from '../application/use-cases/organizationParameters';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { ProviderModule } from '@libs/core/infrastructure/services/providers/provider.module';
+import { ParametersModule } from './parameters.module';
+import { OrganizationModule } from './organization.module';
+import {
+    KODUS_PROVIDER_GATE_TOKEN,
+    KodusProviderGate,
+} from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([OrganizationParametersModel]),
         forwardRef(() => PlatformModule),
         forwardRef(() => CodebaseModule),
+        forwardRef(() => ParametersModule),
+        // The Kodus provider gate reads the org's release track.
+        forwardRef(() => OrganizationModule),
         ProviderModule,
     ],
     providers: [
@@ -45,9 +59,15 @@ import { ProviderModule } from '@libs/core/infrastructure/services/providers/pro
         FindByKeyOrganizationParametersUseCase,
         DeleteByokConfigUseCase,
         GetLLMConfigStatusUseCase,
+        GetByokProvidersUseCase,
+        { provide: KODUS_PROVIDER_GATE_TOKEN, useClass: KodusProviderGate },
         IgnoreBotsUseCase,
         GetModelsByProviderUseCase,
+        GetModelCapabilitiesUseCase,
         TestByokConnectionUseCase,
+        TestByokModelUseCase,
+        ListModelOverridesUseCase,
+        ClearModelOverridesUseCase,
     ],
     exports: [
         ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
@@ -56,10 +76,15 @@ import { ProviderModule } from '@libs/core/infrastructure/services/providers/pro
         FindByKeyOrganizationParametersUseCase,
         DeleteByokConfigUseCase,
         GetLLMConfigStatusUseCase,
+        GetByokProvidersUseCase,
         IgnoreBotsUseCase,
         GET_COCKPIT_METRICS_VISIBILITY_USE_CASE_TOKEN,
         GetModelsByProviderUseCase,
+        GetModelCapabilitiesUseCase,
         TestByokConnectionUseCase,
+        TestByokModelUseCase,
+        ListModelOverridesUseCase,
+        ClearModelOverridesUseCase,
         ProviderModule, // Added
     ],
 })

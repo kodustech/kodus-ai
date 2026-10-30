@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
     convertReviewToHunkContext,
+    extractMarkdownLinks,
+    wrapCodeBlock,
     countHunkAnnotations,
 } from '../hunk-context.js';
 import type { ReviewResult } from '../../../types/review.js';
@@ -207,12 +209,79 @@ describe('convertReviewToHunkContext', () => {
             '✖ The selectedResult is computed before the hunk viewer check, resulting in dead computation if applyFieldMask mutates the object.',
         );
 
-        // The rest of the message becomes the lead of the rationale, then a
-        // single trailing attribution tag with metadata.
+        // The body carries the *whole* message, not just the part the summary
+        // left over: the summary is a capped label, so anything it drops has to
+        // survive here.
         expect(annotation.rationale).toBe(
-            'Move the computation below the if (useHunkViewer) block to ensure the hunk viewer receives all required fields. — Kody · severity error · bug',
+            `${longMessage} — Kody · severity error · bug`,
         );
         expect(annotation.rationale).not.toContain('\n');
+    });
+
+    it('never loses message text to the summary cap', () => {
+        // Regression: a first sentence longer than the 140-char cap used to be
+        // truncated into the summary with its tail dropped everywhere else.
+        const tail = 'THE-TAIL-THAT-MUST-SURVIVE';
+        const message = `${'word '.repeat(40)}${tail}. Second sentence.`;
+        const context = convertReviewToHunkContext({
+            ...baseResult,
+            issues: [
+                {
+                    file: 'src/cmd.ts',
+                    line: 10,
+                    severity: 'critical',
+                    message,
+                },
+            ],
+        });
+
+        const annotation = context.files[0]!.annotations[0]!;
+        expect(annotation.summary).toContain('…');
+        expect(annotation.summary).not.toContain(tail);
+        expect(annotation.rationale).toContain(tail);
+        expect(annotation.markup).toContain(tail);
+    });
+
+    it('builds an STML body that separates prose from suggested code', () => {
+        const context = convertReviewToHunkContext({
+            ...baseResult,
+            issues: [
+                {
+                    file: 'src/cmd.ts',
+                    line: 10,
+                    severity: 'high' as never,
+                    category: 'bug',
+                    message: 'Resolve it against the cwd.',
+                    suggestion: 'const dir = resolve(cwd(), common);',
+                },
+            ],
+        });
+
+        const markup = context.files[0]!.annotations[0]!.markup!;
+        // `high` must be normalized before it reaches a severity lookup.
+        expect(markup).toContain('<badge color="danger">error</badge>');
+        expect(markup).toContain('<p>Resolve it against the cwd.</p>');
+        expect(markup).toContain('<h3>Fix</h3>');
+        expect(markup).toContain('<code>');
+        expect(markup).toContain('const dir = resolve(cwd(), common);');
+    });
+
+    it('escapes markup-significant characters in findings', () => {
+        const context = convertReviewToHunkContext({
+            ...baseResult,
+            issues: [
+                {
+                    file: 'src/cmd.ts',
+                    line: 10,
+                    severity: 'error',
+                    message: 'Use <T> & handle A<B> properly.',
+                },
+            ],
+        });
+
+        const markup = context.files[0]!.annotations[0]!.markup!;
+        expect(markup).toContain('&lt;T> &amp; handle A&lt;B>');
+        expect(markup).not.toContain('<T>');
     });
 
     it('does not split on abbreviations like "e.g." or "i.e."', () => {
@@ -289,5 +358,137 @@ describe('convertReviewToHunkContext', () => {
         expect(rationale).toContain('Suggested replace (lines 10-12):');
         expect(rationale).toContain('return [...arr, x];');
         expect(rationale).not.toContain('\n');
+    });
+});
+
+describe('wrapCodeBlock', () => {
+    // STML `code` blocks clip rather than wrap, so an over-long line would be
+    // silently truncated — the exact failure this rework exists to remove.
+    const long =
+        'hunkdiff@0.18.0-beta.0(@opentui/core@0.4.x(...))(@opentui/react@0.4.x(...))(...):';
+
+    it('never drops characters, at any width', () => {
+        for (const width of [20, 40, 52, 92]) {
+            const wrapped = wrapCodeBlock(long, width);
+            expect(wrapped.replace(/\n\s*/g, '')).toBe(long);
+        }
+    });
+
+    it('keeps every emitted line within the budget', () => {
+        for (const line of wrapCodeBlock(long, 40).split('\n')) {
+            expect(line.length).toBeLessThanOrEqual(40);
+        }
+    });
+
+    it('leaves lines that already fit untouched', () => {
+        const code = 'const a = 1;\n  return a;';
+        expect(wrapCodeBlock(code, 80)).toBe(code);
+    });
+
+    it('terminates and stays lossless for every indent/width combination', () => {
+        // Regression: the previous implementation re-prepended the full hanging
+        // indent each pass. Once that indent was wide relative to the budget the
+        // remainder grew instead of shrinking, looping forever and eating memory
+        // — reachable from any deeply indented patch in a narrow pane. The old
+        // tests missed it because they only used a 4-space indent.
+        for (let width = 20; width <= 60; width += 4) {
+            for (let indent = 0; indent <= 40; indent += 4) {
+                const line = ' '.repeat(indent) + 'x'.repeat(200);
+                const wrapped = wrapCodeBlock(line, width);
+
+                // Continuation indentation is cosmetic; the payload is not.
+                expect(wrapped.replace(/\s/g, '')).toBe(
+                    line.replace(/\s/g, ''),
+                );
+                for (const emitted of wrapped.split('\n')) {
+                    expect(emitted.length).toBeLessThanOrEqual(width);
+                }
+            }
+        }
+    });
+
+    it('drops the hanging indent when it would leave no room to progress', () => {
+        // Indent (20) + 2 leaves under MIN_CONTINUATION of a 20-column budget,
+        // so prettiness yields to making progress.
+        const line = ' '.repeat(20) + 'x'.repeat(120);
+        const wrapped = wrapCodeBlock(line, 20).split('\n');
+
+        expect(wrapped.length).toBeGreaterThan(1);
+        expect(wrapped.slice(1).every((l) => !l.startsWith(' '))).toBe(true);
+        expect(wrapped.join('').replace(/\s/g, '')).toBe('x'.repeat(120));
+    });
+
+    it('indents continuations so a wrap still reads as one line', () => {
+        const wrapped = wrapCodeBlock('    ' + 'x'.repeat(60), 20);
+        expect(wrapped.split('\n').length).toBeGreaterThan(1);
+        expect(wrapped.split('\n')[1].startsWith('      ')).toBe(true);
+    });
+});
+
+describe('extractMarkdownLinks', () => {
+    // Kody-rule findings arrive as `... [rule name](https://app.kodus.io/...)`,
+    // which used to wrap a 100-char URL through the middle of a sentence.
+    const message =
+        'Kody rule violation: [Tratamento adequado de exce\u00e7\u00f5es\\.](https://app.kodus.io/settings/code-review/1/kody-rules/abc?teamId=xyz)';
+
+    it('replaces a link with its label and returns the url', () => {
+        const { text, links } = extractMarkdownLinks(message);
+        expect(text).toBe(
+            'Kody rule violation: Tratamento adequado de exce\u00e7\u00f5es.',
+        );
+        expect(links).toEqual([
+            {
+                label: 'Tratamento adequado de exce\u00e7\u00f5es.',
+                url: 'https://app.kodus.io/settings/code-review/1/kody-rules/abc?teamId=xyz',
+            },
+        ]);
+    });
+
+    it('undoes markdown escaping', () => {
+        expect(
+            extractMarkdownLinks('exce\u00e7\u00f5es\\. e \\*isto\\*').text,
+        ).toBe('exce\u00e7\u00f5es. e *isto*');
+    });
+
+    it('leaves text without links untouched', () => {
+        expect(extractMarkdownLinks('plain text').text).toBe('plain text');
+        expect(extractMarkdownLinks('plain text').links).toEqual([]);
+    });
+
+    it('collects every link in the message', () => {
+        const { links } = extractMarkdownLinks(
+            '[a](https://x.test/1) and [b](https://x.test/2)',
+        );
+        expect(links.map((l) => l.url)).toEqual([
+            'https://x.test/1',
+            'https://x.test/2',
+        ]);
+    });
+
+    it('keeps the url in the rendered note rather than dropping it', () => {
+        // STML's `<a>` renders the label and discards the href, so the url has
+        // to survive as text somewhere in the body.
+        const context = convertReviewToHunkContext({
+            ...baseResult,
+            issues: [
+                {
+                    file: 'src/cmd.ts',
+                    line: 10,
+                    severity: 'critical',
+                    ruleId: '43b72fcc-14b5-4917-8b5f-91708a808f88',
+                    message,
+                },
+            ],
+        });
+
+        const annotation = context.files[0]!.annotations[0]!;
+        expect(annotation.markup).toContain(
+            'https://app.kodus.io/settings/code-review/1/kody-rules/abc',
+        );
+        expect(annotation.markup).not.toContain('](');
+        // A raw UUID rule id is noise next to the link, so it is dropped.
+        expect(annotation.markup).not.toContain(
+            '43b72fcc-14b5-4917-8b5f-91708a808f88',
+        );
     });
 });

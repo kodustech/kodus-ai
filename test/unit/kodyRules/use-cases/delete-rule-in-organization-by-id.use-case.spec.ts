@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
 
@@ -20,6 +20,21 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TEAM_SERVICE_TOKEN } from '@libs/organization/domain/team/contracts/team.service.contract';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
+
+const teamOrganizations: Record<string, string> = {
+    'team-1': 'org-1',
+    'foreign-team': 'victim-org',
+};
+const teamServiceProvider = {
+    provide: TEAM_SERVICE_TOKEN,
+    useValue: {
+        findOneOrganizationIdByTeamId: jest.fn(
+            async (teamId: string) => teamOrganizations[teamId],
+        ),
+    },
+};
 
 describe('DeleteRuleInOrganizationByIdKodyRulesUseCase', () => {
     let useCase: DeleteRuleInOrganizationByIdKodyRulesUseCase;
@@ -60,18 +75,28 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase', () => {
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                {
+                    provide: TelemetryService,
+                    useValue: {
+                        kodyRuleChanged: jest.fn(),
+                        kodyRulesImported: jest.fn(),
+                    },
+                },
                 DeleteRuleInOrganizationByIdKodyRulesUseCase,
                 {
                     provide: KODY_RULES_SERVICE_TOKEN,
                     useValue: kodyRulesServiceMock,
                 },
+                teamServiceProvider,
                 {
                     provide: CentralizedConfigPrService,
                     useValue: centralizedConfigPrServiceMock,
                 },
                 {
                     provide: AuthorizationService,
-                    useValue: { ensure: jest.fn().mockResolvedValue(undefined) },
+                    useValue: {
+                        ensure: jest.fn().mockResolvedValue(undefined),
+                    },
                 },
                 {
                     provide: REQUEST,
@@ -88,6 +113,122 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase', () => {
 
         useCase = module.get(DeleteRuleInOrganizationByIdKodyRulesUseCase);
     });
+
+    it('rejects a foreign rule before creating a centralized delete PR', async () => {
+        kodyRulesServiceMock.findById.mockImplementation(
+            async (...args: unknown[]) =>
+                args[1] === 'org-1'
+                    ? null
+                    : ({
+                          uuid: 'foreign-rule',
+                          title: 'Private rule',
+                          repositoryId: 'global',
+                          type: KodyRulesType.STANDARD,
+                      } as any),
+        );
+        centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled.mockResolvedValue(
+            { mode: 'centralized-pr' },
+        );
+
+        await expect(
+            useCase.execute(
+                'foreign-rule',
+                {
+                    source: 'web',
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                { uuid: 'owner-1', organization: { uuid: 'org-1' } } as any,
+            ),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(
+            centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled,
+        ).not.toHaveBeenCalled();
+        expect(
+            kodyRulesServiceMock.deleteRuleWithLogging,
+        ).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        undefined,
+        { source: 'cli' },
+        { source: 'sync', organizationId: '' },
+    ])(
+        'rejects missing organization before any lookup or mutation (%j)',
+        async (actor) => {
+            await expect(
+                useCase.execute('rule-1', actor as any),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            expect(kodyRulesServiceMock.findById).not.toHaveBeenCalled();
+            expect(
+                kodyRulesServiceMock.deleteRuleWithLogging,
+            ).not.toHaveBeenCalled();
+            expect(
+                centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['cli', 'sync', 'web'] as const)(
+        'rejects a missing or foreign rule for a %s actor without a request user',
+        async (source) => {
+            kodyRulesServiceMock.findById.mockResolvedValue(null);
+            await expect(
+                useCase.execute('foreign-rule', {
+                    source,
+                    organizationId: 'org-1',
+                }),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            expect(kodyRulesServiceMock.findById).toHaveBeenCalledWith(
+                'foreign-rule',
+                'org-1',
+            );
+            expect(
+                kodyRulesServiceMock.deleteRuleWithLogging,
+            ).not.toHaveBeenCalled();
+            expect(
+                centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
+    it('uses the authenticated organization when an actor claims another organization', async () => {
+        kodyRulesServiceMock.findById.mockResolvedValue(null);
+        await expect(
+            useCase.execute('foreign-rule', { organizationId: 'victim-org' }, {
+                organization: { uuid: 'org-1' },
+            } as any),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(kodyRulesServiceMock.findById).toHaveBeenCalledWith(
+            'foreign-rule',
+            'org-1',
+        );
+        expect(
+            kodyRulesServiceMock.deleteRuleWithLogging,
+        ).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['a foreign team', 'foreign-team'],
+        ['an unknown team', 'missing-team'],
+    ])(
+        'rejects %s before reading the rule or touching centralized config',
+        async (_label, teamId) => {
+            await expect(
+                useCase.execute('rule-1', { source: 'web', teamId }, {
+                    uuid: 'owner-1',
+                    organization: { uuid: 'org-1' },
+                } as any),
+            ).rejects.toBeInstanceOf(NotFoundException);
+            expect(kodyRulesServiceMock.findById).not.toHaveBeenCalled();
+            expect(
+                centralizedConfigPrServiceMock.resolveDirectoryGroupFolderName,
+            ).not.toHaveBeenCalled();
+            expect(
+                kodyRulesServiceMock.deleteRuleWithLogging,
+            ).not.toHaveBeenCalled();
+        },
+    );
 
     it('routes delete through centralized PR when actor provides teamId', async () => {
         kodyRulesServiceMock.findById.mockResolvedValue({
@@ -212,6 +353,13 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase — repo scope', () => {
     const buildUseCase = async (user: Record<string, unknown> | null) => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                {
+                    provide: TelemetryService,
+                    useValue: {
+                        kodyRuleChanged: jest.fn(),
+                        kodyRulesImported: jest.fn(),
+                    },
+                },
                 DeleteRuleInOrganizationByIdKodyRulesUseCase,
                 AuthorizationService,
                 PermissionsAbilityFactory,
@@ -223,6 +371,7 @@ describe('DeleteRuleInOrganizationByIdKodyRulesUseCase — repo scope', () => {
                     provide: KODY_RULES_SERVICE_TOKEN,
                     useValue: kodyRulesServiceMock,
                 },
+                teamServiceProvider,
                 {
                     provide: CentralizedConfigPrService,
                     useValue: centralizedConfigPrServiceMock,

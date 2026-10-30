@@ -24,6 +24,7 @@ describe('ClassifyOrphanedSessionsCronProvider', () => {
     let cron: ClassifyOrphanedSessionsCronProvider;
     let repo: jest.Mocked<SessionEventRepository>;
     let classifyUseCase: jest.Mocked<ClassifySessionUseCase>;
+    let distributedLockService: { acquire: jest.Mock };
 
     beforeEach(() => {
         repo = {
@@ -36,7 +37,20 @@ describe('ClassifyOrphanedSessionsCronProvider', () => {
             execute: jest.fn().mockResolvedValue(undefined),
         } as any;
 
-        cron = new ClassifyOrphanedSessionsCronProvider(repo, classifyUseCase);
+        // Default: lock acquired so the cron body runs. Individual tests
+        // can override with `distributedLockService.acquire.mockResolvedValueOnce(null)`
+        // to exercise the "another replica already running" skip path.
+        distributedLockService = {
+            acquire: jest.fn().mockResolvedValue({
+                release: jest.fn().mockResolvedValue(undefined),
+            }),
+        };
+
+        cron = new ClassifyOrphanedSessionsCronProvider(
+            repo,
+            classifyUseCase,
+            distributedLockService as any,
+        );
     });
 
     it('does nothing when no orphaned sessions found', async () => {

@@ -1,6 +1,7 @@
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
 import {
     BadRequestException,
+    ConflictException,
     ForbiddenException,
     Inject,
     Injectable,
@@ -8,6 +9,7 @@ import {
 
 import { produce } from 'immer';
 import { v4 as uuidv4 } from 'uuid';
+import { DeepPartial } from 'typeorm';
 
 import { createLogger } from '@libs/core/log/logger';
 import {
@@ -30,10 +32,30 @@ import {
     ContextReferenceDetectionService,
 } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 import { deepDifference, deepMerge } from '@libs/common/utils/deep';
+import { encryptCliSecret } from '@libs/code-review/domain/custom-agents/cli-secret-cipher';
+import {
+    CliSecretMissingError,
+    effectiveStoredCustomAgents,
+    maskCliSecrets,
+    sealCustomAgentSecrets,
+    storedCustomAgentsAtLevel,
+} from '@libs/code-review/domain/custom-agents/cli-secrets';
+import { withDirectoryAgentLists } from '@libs/code-review/domain/custom-agents/directory-cascade';
+import {
+    assertCustomAgentsRevisions,
+    StaleCustomAgentsError,
+} from '@libs/code-review/domain/custom-agents/revision';
 import { convertTiptapJSONToText } from '@libs/common/utils/tiptap-json';
+import { alignPromptOverridesWithParent } from './align-prompt-overrides';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { IntegrationConfigKey, ParametersKey } from '@libs/core/domain/enums';
-import { CodeReviewVersion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    CodeReviewConfigWithoutLLMProvider,
+    CodeReviewVersion,
+    CustomAgentConfig,
+    customAgentSlugClashMessage,
+    knowledgeLinkProblems,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     CodeReviewParameter,
     DirectoryCodeReviewConfig,
@@ -45,6 +67,14 @@ import {
     ConfigLevel,
 } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+
+/**
+ * A partial code-review config, i.e. the delta shape that `deepDifference` and
+ * `deepMerge` produce and that the mutation pipeline threads around. Distinct
+ * from the request DTO (`CreateOrUpdateCodeReviewParameterDto['configValue']`),
+ * which is the full, validated payload.
+ */
+type ConfigDelta = DeepPartial<CodeReviewConfigWithoutLLMProvider>;
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import { RequestUserContext } from '@libs/identity/domain/user/types/request-user-context.type';
 import {
@@ -53,6 +83,7 @@ import {
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -67,19 +98,23 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { buildKodusConfigCentralizedMutationRequest } from '@libs/centralized-config/utils/kodus-config-centralized-pr.builder';
 import { formatRuleToYaml } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
 import {
-    IDE_RULES_SYNC_DISABLED_EVENT,
-    IdeRulesSyncDisabledEvent,
-    IdeSyncDisableAction,
-} from '@libs/kodyRules/domain/events/ide-rules-sync.events';
-import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { KodyRulesType } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
+import { GenerateInitialKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/generate-initial-kody-rules.use-case';
 import {
     InvalidGroupPathError,
     validateGroupPaths,
 } from '@libs/centralized-config/utils/path-encoder';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
+import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
+import { isCustomAgentsPlanAllowed } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class UpdateOrCreateCodeReviewParameterUseCase {
@@ -102,6 +137,10 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         @Inject(KODY_RULES_SERVICE_TOKEN)
         private readonly kodyRulesService: IKodyRulesService,
         private readonly permissionValidationService: PermissionValidationService,
+        private readonly generateInitialKodyRulesUseCase: GenerateInitialKodyRulesUseCase,
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService: ILicenseService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(
@@ -124,9 +163,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             const { organizationAndTeamData, configValue, repositoryId } = body;
             let directoryPath = body.directoryPath;
             let directoryId = body.directoryId;
-            let previousFolders:
-                | Array<{ path: string }>
-                | undefined;
+            let previousFolders: Array<{ path: string }> | undefined;
             let previousRulesFileNames:
                 | {
                       review?: Array<{ fileName: string; content: string }>;
@@ -169,6 +206,23 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     body.requestUser?.organization?.uuid;
             }
 
+            // Linked repositories (cross-repo context) is Teams/Enterprise only.
+            // Strip non-empty links on free so other settings can still save,
+            // and free orgs never accumulate a paid-only config payload.
+            await this.stripLinkedRepositoriesIfPlanNotAllowed(
+                organizationAndTeamData,
+                configValue,
+            );
+
+            // Custom agents and their skills and docs are Teams/Enterprise
+            // too, but a plan change must not lose them: on another plan the
+            // save leaves both lists out, so the stored ones stay as they are
+            // and the other settings still save.
+            await this.keepCustomAgentsIfPlanNotAllowed(
+                organizationAndTeamData,
+                configValue,
+            );
+
             if (!body.skipAuthorization) {
                 await this.authorizationService.ensure({
                     user: body.requestUser,
@@ -181,20 +235,119 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             const codeReviewConfigs = await this.getCodeReviewConfigs(
                 organizationAndTeamData,
             );
+
             const codeRepositories = await this.getFormattedRepositories(
                 organizationAndTeamData,
             );
+
+            if (Array.isArray(configValue?.customAgents)) {
+                const atDirectory =
+                    !!repositoryId && (!!directoryId || !!resolvedPaths);
+                // At a directory, the repository's agents it adds its own to.
+                const inheritedAgents = atDirectory
+                    ? effectiveStoredCustomAgents(codeReviewConfigs, {
+                          repositoryId,
+                      })
+                    : [];
+
+                // A directory agent with an inherited id replaces that agent
+                // (an override); one with another id runs next to it, so its
+                // name must not give the same slug.
+                if (atDirectory) {
+                    // Stored agents, read whole: they carry their names.
+                    const inherited = {
+                        customAgents: inheritedAgents as CustomAgentConfig[],
+                    };
+                    const slugClash = customAgentSlugClashMessage(
+                        withDirectoryAgentLists(inherited, inherited, {
+                            customAgents: configValue.customAgents,
+                        }).customAgents,
+                    );
+                    if (slugClash) {
+                        throw new BadRequestException(slugClash);
+                    }
+                }
+
+                // A knowledge link must name an agent the saved level runs:
+                // one this save configures or, at a directory, one of the
+                // repository's agents the directory adds to. A dangling link
+                // would never load, and would start loading if an agent with
+                // that id were created. The screen saves agents and knowledge
+                // together; a payload without agents is not checked.
+                if (Array.isArray(configValue?.knowledge)) {
+                    const problems = knowledgeLinkProblems(
+                        configValue.knowledge,
+                        [...inheritedAgents, ...configValue.customAgents],
+                    );
+                    if (problems.length > 0) {
+                        throw new BadRequestException(problems.join('; '));
+                    }
+                }
+            }
+
+            // The custom agents and knowledge are written as whole lists: a
+            // save made from a copy someone else replaced since would drop
+            // their changes, so it is refused and the screen asks to reload.
+            try {
+                assertCustomAgentsRevisions(
+                    codeReviewConfigs,
+                    {
+                        repositoryId,
+                        directoryId,
+                        directoryPaths: resolvedPaths,
+                    },
+                    configValue as Record<string, unknown>,
+                    body.expectedRevisions,
+                );
+            } catch (error) {
+                if (error instanceof StaleCustomAgentsError) {
+                    throw new ConflictException(error.message);
+                }
+                throw error;
+            }
+
+            // CLI secrets are write-only: encrypt what was typed and keep
+            // what the screen echoed back masked, before anything is stored.
+            // Only the level being saved can supply a kept secret, so a
+            // secret never moves to another repository or level.
+            if (Array.isArray(configValue?.customAgents)) {
+                try {
+                    configValue.customAgents = sealCustomAgentSecrets(
+                        configValue.customAgents,
+                        storedCustomAgentsAtLevel(codeReviewConfigs, {
+                            repositoryId,
+                            directoryId,
+                            directoryPaths: resolvedPaths,
+                        }),
+                        encryptCliSecret,
+                    );
+                } catch (error) {
+                    if (error instanceof CliSecretMissingError) {
+                        throw new BadRequestException(error.message);
+                    }
+                    throw error;
+                }
+            }
 
             const filteredRepositoryInfo =
                 this.filterRepositoryInfo(codeRepositories);
 
             if (!codeReviewConfigs || !codeReviewConfigs.configs) {
-                return await this.createNewGlobalConfig(
+                const createdGlobalConfig = await this.createNewGlobalConfig(
                     organizationAndTeamData,
                     configValue,
                     filteredRepositoryInfo,
                     body.actor,
                 );
+
+                void this.telemetry.codeReviewSettingsUpdated({
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    actorUserId: body.actor?.userId ?? body.requestUser?.uuid,
+                    configLevel: ConfigLevel.GLOBAL,
+                });
+
+                return createdGlobalConfig;
             }
 
             this.mergeRepositories(codeReviewConfigs, filteredRepositoryInfo);
@@ -251,9 +404,11 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
 
                     // Snapshot the pre-edit folder set so the PR builder can
                     // delete the old encoded folder when the path list changes.
-                    previousFolders = (existingGroup.folders || []).map((f) => ({
-                        path: f.path,
-                    }));
+                    previousFolders = (existingGroup.folders || []).map(
+                        (f) => ({
+                            path: f.path,
+                        }),
+                    );
 
                     // Keep existing folder IDs for paths that haven't changed
                     const existingFoldersByPath = new Map(
@@ -309,15 +464,14 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     } else {
                         // Find groups that partially overlap with the
                         // requested path set (any shared path).
-                        const overlappingGroups =
-                            targetRepo.directories.filter((group) =>
+                        const overlappingGroups = targetRepo.directories.filter(
+                            (group) =>
                                 (group.folders || []).some((f) =>
                                     resolvedPaths.includes(f.path),
                                 ),
-                            );
+                        );
 
-                        const isSyncActor =
-                            body.actor?.source === 'sync';
+                        const isSyncActor = body.actor?.source === 'sync';
 
                         if (overlappingGroups.length > 0) {
                             // Repo-first sync: when the centralized repo
@@ -327,10 +481,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                             // Anything beyond one overlap is ambiguous (merging
                             // configs/rules across many groups isn't safe), so
                             // fall back to the original conflict error.
-                            if (
-                                isSyncActor &&
-                                overlappingGroups.length === 1
-                            ) {
+                            if (isSyncActor && overlappingGroups.length === 1) {
                                 const absorbed = overlappingGroups[0];
                                 const existingFoldersByPath = new Map(
                                     (absorbed.folders || []).map((f) => [
@@ -349,8 +500,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                                         }
                                     );
                                 });
-                                absorbed.name =
-                                    absorbed.folders[0]?.name ?? '';
+                                absorbed.name = absorbed.folders[0]?.name ?? '';
                                 directoryId = absorbed.id;
                             } else {
                                 throw new Error(
@@ -435,13 +585,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 }
             }
 
-            const previousIdeSyncEnabled =
-                !!repositoryId &&
-                codeReviewConfigs?.repositories?.find(
-                    (r) => r.id === repositoryId,
-                )?.configs?.ideRulesSyncEnabled === true;
-
-            const result = await this.handleConfigUpdate(
+            const { result, updatedConfig } = await this.handleConfigUpdate(
                 organizationAndTeamData,
                 codeReviewConfigs,
                 configValue,
@@ -453,27 +597,55 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 previousRulesFileNames,
             );
 
-            if (
-                previousIdeSyncEnabled &&
-                (configValue as any)?.ideRulesSyncEnabled === false
-            ) {
-                // The action picked in the toggle-off modal in the web UI.
-                // Defaulting to 'keep' here is deliberate: any caller that
-                // doesn't pass an explicit action gets the least destructive
-                // option, which avoids the silent-deletion regression.
-                const action: IdeSyncDisableAction =
-                    (configValue as any)?.ideSyncDisableAction ?? 'keep';
-
-                const event: IdeRulesSyncDisabledEvent = {
+            if (!directoryId) {
+                this.applyKodyLearningTransitions({
                     organizationAndTeamData,
-                    repositoryId: repositoryId!,
-                    action,
-                };
-                this.eventEmitter.emit(IDE_RULES_SYNC_DISABLED_EVENT, event);
+                    previousConfig: codeReviewConfigs,
+                    updatedConfig,
+                    repositoryId,
+                    generatorEnabledInPayload:
+                        configValue?.kodyRulesGeneratorEnabled === true,
+                });
             }
+
+            void this.telemetry.codeReviewSettingsUpdated({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                actorUserId: body.actor?.userId ?? body.requestUser?.uuid,
+                configLevel:
+                    directoryId && repositoryId
+                        ? ConfigLevel.DIRECTORY
+                        : repositoryId
+                          ? ConfigLevel.REPOSITORY
+                          : ConfigLevel.GLOBAL,
+                repositoryId,
+            });
 
             return result;
         } catch (error) {
+            if (
+                error instanceof BadRequestException ||
+                error instanceof ConflictException
+            ) {
+                // A refused save (validation, stale revision): the reason
+                // names agents, paths or secret names, never values.
+                this.logger.warn({
+                    message: `Code review settings save refused (${error.getStatus()}): ${error.message}`,
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationId:
+                            body.organizationAndTeamData?.organizationId,
+                        teamId: body.organizationAndTeamData?.teamId,
+                        repositoryId: body.repositoryId,
+                        directoryId: body.directoryId,
+                        directoryPath: body.directoryPath,
+                        status: error.getStatus(),
+                        reason: error.message,
+                        source: body.actor?.source,
+                    },
+                });
+                throw error;
+            }
             if (error instanceof ForbiddenException) {
                 throw error;
             }
@@ -504,14 +676,102 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         >(IntegrationConfigKey.REPOSITORIES, organizationAndTeamData);
     }
 
-    private filterRepositoryInfo(codeRepositories: ICodeRepository[]) {
-        return codeRepositories.map((repository) => ({
+    private filterRepositoryInfo(
+        codeRepositories: ICodeRepository[] | null | undefined,
+    ) {
+        return (codeRepositories ?? []).map((repository) => ({
             id: repository.id,
             name: repository.name,
             isSelected: false,
             directories: repository.directories ?? [],
             configs: {},
         }));
+    }
+
+    /**
+     * Linked repositories are Teams/Enterprise only. Free (and other
+     * non-allowed) plans get non-empty values stripped so a paid-only field
+     * cannot be persisted via API/CLI/yml sync.
+     */
+    private async stripLinkedRepositoriesIfPlanNotAllowed(
+        organizationAndTeamData: OrganizationAndTeamData,
+        configValue:
+            CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
+    ): Promise<void> {
+        if (!configValue) return;
+        const links = (configValue as { linkedRepositories?: unknown })
+            .linkedRepositories;
+        if (!Array.isArray(links) || links.length === 0) {
+            return;
+        }
+
+        let allowed = false;
+        try {
+            const license =
+                await this.licenseService.validateOrganizationLicense(
+                    organizationAndTeamData,
+                );
+            allowed = isTeamsOrEnterpriseTierAllowed(license);
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'linkedRepositories plan check failed on save — stripping links',
+                context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+            });
+            allowed = false;
+        }
+
+        if (allowed) return;
+
+        (configValue as { linkedRepositories?: unknown }).linkedRepositories =
+            [];
+        this.logger.log({
+            message:
+                'Stripped linkedRepositories — plan is not Teams/Enterprise',
+            context: UpdateOrCreateCodeReviewParameterUseCase.name,
+            metadata: {
+                organizationId: organizationAndTeamData?.organizationId,
+                attemptedCount: links.length,
+            },
+        });
+    }
+
+    private async keepCustomAgentsIfPlanNotAllowed(
+        organizationAndTeamData: OrganizationAndTeamData,
+        configValue:
+            CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
+    ): Promise<void> {
+        if (
+            configValue?.customAgents === undefined &&
+            configValue?.knowledge === undefined
+        ) {
+            return;
+        }
+        if (
+            await isCustomAgentsPlanAllowed(
+                this.licenseService,
+                organizationAndTeamData,
+                UpdateOrCreateCodeReviewParameterUseCase.name,
+            )
+        ) {
+            return;
+        }
+
+        delete configValue.customAgents;
+        delete configValue.knowledge;
+        this.logger.log({
+            message:
+                'Left customAgents and knowledge out of the save — plan is not Teams/Enterprise',
+            context: UpdateOrCreateCodeReviewParameterUseCase.name,
+            metadata: {
+                organizationId: organizationAndTeamData?.organizationId,
+            },
+        });
     }
 
     private async createNewGlobalConfig(
@@ -525,10 +785,18 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             userEmail?: string;
         },
     ) {
-        const defaultConfig = getDefaultKodusConfigFile();
+        const defaultConfig: ConfigDelta = getDefaultKodusConfigFile();
 
-        const sanitizedConfigValue =
-            this.stripCustomMessagesFromConfig(configValue);
+        const { config: sanitizedConfigValue, alignedPaths } =
+            alignPromptOverridesWithParent(
+                this.stripCustomMessagesFromConfig(configValue),
+                defaultConfig,
+            );
+        this.logAlignedPromptOverrides(
+            alignedPaths,
+            organizationAndTeamData,
+            'global',
+        );
 
         const updatedConfigValue = this.stripCustomMessagesFromConfig(
             deepDifference(defaultConfig, sanitizedConfigValue),
@@ -558,12 +826,11 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             repositories: filteredRepositoryInfo,
         } as CodeReviewParameter;
 
-        const persisted =
-            await this.createOrUpdateParametersUseCase.execute(
-                ParametersKey.CODE_REVIEW_CONFIG,
-                updatedConfig,
-                organizationAndTeamData,
-            );
+        const persisted = await this.createOrUpdateParametersUseCase.execute(
+            ParametersKey.CODE_REVIEW_CONFIG,
+            updatedConfig,
+            organizationAndTeamData,
+        );
 
         // Surface the PR metadata when one was opened so the UI can link to it.
         return centralizedPr ?? persisted;
@@ -585,6 +852,26 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         ];
 
         codeReviewConfigs.repositories = updatedRepositories;
+    }
+
+    /** A prompt sent back unchanged is not stored as the team's own text; record when that happens. */
+    private logAlignedPromptOverrides(
+        alignedPaths: string[],
+        organizationAndTeamData: OrganizationAndTeamData,
+        level: 'global' | 'repository' | 'directory',
+        repositoryId?: string,
+    ) {
+        if (!alignedPaths.length) return;
+        this.logger.log({
+            message: `Not storing ${alignedPaths.length} prompt override(s) identical to the inherited text`,
+            context: UpdateOrCreateCodeReviewParameterUseCase.name,
+            metadata: {
+                organizationAndTeamData,
+                level,
+                repositoryId,
+                alignedPaths,
+            },
+        });
     }
 
     private async handleConfigUpdate(
@@ -612,10 +899,19 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             await resolver.getResolvedParentConfig(repositoryId, directoryId),
         );
 
-        const sanitizedIncomingConfig =
-            this.stripCustomMessagesFromConfig(newConfigValue);
+        const { config: sanitizedIncomingConfig, alignedPaths } =
+            alignPromptOverridesWithParent(
+                this.stripCustomMessagesFromConfig(newConfigValue),
+                parentConfig,
+            );
+        this.logAlignedPromptOverrides(
+            alignedPaths,
+            organizationAndTeamData,
+            directoryId ? 'directory' : repositoryId ? 'repository' : 'global',
+            repositoryId,
+        );
 
-        let oldConfig: CreateOrUpdateCodeReviewParameterDto['configValue'];
+        let oldConfig: ConfigDelta;
         let level: ConfigLevel;
         let repository: RepositoryCodeReviewConfig | undefined;
         let directory: DirectoryCodeReviewConfig | undefined;
@@ -657,8 +953,18 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             deepDifference(parentConfig, newResolvedConfig),
         );
 
-        const pathsChanged =
-            !!previousFolders && previousFolders.length > 0;
+        // An empty byok model override means "inherit" — it must never be stored
+        // as a scope-level key. deepDifference keeps it (parent has no key, so
+        // "" !== undefined), which would persist a phantom override: the value
+        // correctly inherits, but the settings badge reads the leftover repo/dir
+        // key as "Overridden". Drop the empty leaves so clearing truly inherits.
+        for (const key of ['byokModelId', 'byokModel'] as const) {
+            if ((newDelta as Record<string, unknown>)[key] === '') {
+                delete (newDelta as Record<string, unknown>)[key];
+            }
+        }
+
+        const pathsChanged = !!previousFolders && previousFolders.length > 0;
         const isSelectionOnlyPayload =
             this.isSelectionOnlyConfigPayload(sanitizedIncomingConfig) &&
             level !== ConfigLevel.GLOBAL &&
@@ -724,7 +1030,111 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             requestUser,
         });
 
-        return centralizedPr ?? true;
+        return {
+            result: centralizedPr ?? true,
+            updatedConfig: updatedCodeReviewConfigValue,
+        };
+    }
+
+    /**
+     * Learning settings resolve default → global → repository, so one save can
+     * change the effective value of many repositories (a global save) or of
+     * one that only inherited it (a repository save). Each repository whose
+     * coding-agent instructions setting changes is logged; the setting imports
+     * no rules, so there is nothing to clean up. Turning the generator on in a repository save seeds that
+     * repository right away. After a global save, the weekly cron backfills.
+     */
+    private applyKodyLearningTransitions(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        previousConfig: CodeReviewParameter;
+        updatedConfig: CodeReviewParameter;
+        repositoryId?: string;
+        generatorEnabledInPayload: boolean;
+    }) {
+        const {
+            organizationAndTeamData,
+            previousConfig,
+            updatedConfig,
+            repositoryId,
+        } = params;
+        const level = repositoryId
+            ? ConfigLevel.REPOSITORY
+            : ConfigLevel.GLOBAL;
+        const repositoryIds = repositoryId
+            ? [repositoryId]
+            : (updatedConfig?.repositories ?? []).map((repo) =>
+                  String(repo.id),
+              );
+
+        const resolveBefore =
+            createKodyLearningSettingsResolver(previousConfig);
+        const resolveAfter = createKodyLearningSettingsResolver(updatedConfig);
+
+        for (const id of repositoryIds) {
+            const before = resolveBefore(id);
+            const after = resolveAfter(id);
+
+            if (before.repoInstructionsEnabled !== after.repoInstructionsEnabled) {
+                this.logger.log({
+                    message: `Coding-agent instructions in review turned ${after.repoInstructionsEnabled ? 'on' : 'off'} for repository`,
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: id,
+                        level,
+                    },
+                });
+            }
+
+            if (
+                before.kodyRulesGeneratorEnabled !==
+                after.kodyRulesGeneratorEnabled
+            ) {
+                this.logger.log({
+                    message: `Kody Rules generator turned ${after.kodyRulesGeneratorEnabled ? 'on' : 'off'} for repository`,
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repositoryId: id,
+                        level,
+                        seedsNow:
+                            level === ConfigLevel.REPOSITORY &&
+                            after.kodyRulesGeneratorEnabled &&
+                            params.generatorEnabledInPayload,
+                    },
+                });
+            }
+
+            // Seeding is idempotent (it skips when past-review rules already
+            // exist), so re-saving an already-enabled repo is a no-op. Fired
+            // detached so it never blocks the settings save (issue #1506).
+            if (
+                level === ConfigLevel.REPOSITORY &&
+                after.kodyRulesGeneratorEnabled &&
+                params.generatorEnabledInPayload
+            ) {
+                this.seedInitialKodyRules(organizationAndTeamData, id);
+            }
+        }
+    }
+
+    private seedInitialKodyRules(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string,
+    ) {
+        void this.generateInitialKodyRulesUseCase
+            .execute({ organizationAndTeamData, repositoryId })
+            .catch((error) => {
+                this.logger.error({
+                    message: 'Failed to start initial Kody Rules generation',
+                    context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                    error:
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error)),
+                    metadata: { organizationAndTeamData, repositoryId },
+                });
+            });
     }
 
     private async createCentralizedMutationIfEnabled(params: {
@@ -736,8 +1146,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             userEmail?: string;
         };
         level: ConfigLevel;
-        oldDelta?: CreateOrUpdateCodeReviewParameterDto['configValue'];
-        newDelta: CreateOrUpdateCodeReviewParameterDto['configValue'];
+        oldDelta?: ConfigDelta;
+        newDelta: ConfigDelta;
         repository?: RepositoryCodeReviewConfig;
         directory?: DirectoryCodeReviewConfig;
         previousFolders?: Array<{ path: string }>;
@@ -834,8 +1244,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         }
 
         const repositoryLabel = params.repository?.name || 'global';
-        const directoryLabel =
-            params.directory?.folders?.[0]?.path || 'root';
+        const directoryLabel = params.directory?.folders?.[0]?.path || 'root';
 
         const isDirectoryGroup =
             params.level === ConfigLevel.DIRECTORY &&
@@ -951,7 +1360,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
     }
 
     private async processExternalReferencesInline(
-        configValue: CreateOrUpdateCodeReviewParameterDto['configValue'],
+        configValue: ConfigDelta,
         organizationAndTeamData: OrganizationAndTeamData,
         repositoryId?: string,
         directoryId?: string,
@@ -1121,9 +1530,11 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             directoryId,
         );
 
+        // native slot for the reference-detection chain (codeReview task).
         const [byokConfig, subscriptionStatus] = await Promise.all([
-            this.permissionValidationService.getBYOKConfig(
+            this.permissionValidationService.resolveTaskSlot(
                 organizationAndTeamData,
+                LLM_TASK.codeReview,
             ),
             this.permissionValidationService.getSubscriptionStatus(
                 organizationAndTeamData,
@@ -1162,9 +1573,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         }
     }
 
-    private resolveOverridesForContext(
-        config: CreateOrUpdateCodeReviewParameterDto['configValue'],
-    ): {
+    private resolveOverridesForContext(config: ConfigDelta): {
         summaryText?: string;
         overrides: PromptOverrides | undefined;
         contextTarget: Record<string, any>;
@@ -1221,9 +1630,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         };
     }
 
-    private resolveBaseConsumerId(
-        config: CreateOrUpdateCodeReviewParameterDto['configValue'],
-    ): string {
+    private resolveBaseConsumerId(config: ConfigDelta): string {
         if (config?.codeReviewVersion === CodeReviewVersion.v2) {
             return 'code-review-v2';
         }
@@ -1243,8 +1650,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             userEmail?: string;
         };
         organizationAndTeamData: OrganizationAndTeamData;
-        oldConfig: CreateOrUpdateCodeReviewParameterDto['configValue'];
-        newConfig: CreateOrUpdateCodeReviewParameterDto['configValue'];
+        oldConfig: ConfigDelta;
+        newConfig: ConfigDelta;
         level: ConfigLevel;
         repository?: RepositoryCodeReviewConfig;
         directory?: DirectoryCodeReviewConfig;
@@ -1282,12 +1689,14 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     userId: actor.userId,
                     userEmail: actor.userEmail,
                 },
-                oldConfig,
-                newConfig,
+                // The audit log is readable from the settings history: CLI
+                // secrets go in masked, like on every other read path.
+                oldConfig: maskCliSecrets(oldConfig),
+                newConfig: maskCliSecrets(newConfig),
                 actionType: ActionType.EDIT,
                 configLevel: level,
-                repository,
-                directory,
+                repository: maskCliSecrets(repository),
+                directory: maskCliSecrets(directory),
                 isCreation,
             });
         } catch (error) {
@@ -1313,7 +1722,9 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             error: error,
             metadata: {
                 parametersKey: ParametersKey.CODE_REVIEW_CONFIG,
-                configValue: body.configValue,
+                // Only which settings were sent: their values carry prompts,
+                // instructions and other content written by the customer.
+                configKeys: Object.keys(body.configValue ?? {}),
                 organizationAndTeamData: body.organizationAndTeamData,
             },
         });
@@ -1335,9 +1746,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         );
     }
 
-    private stripCustomMessagesFromConfig(
-        config: CreateOrUpdateCodeReviewParameterDto['configValue'],
-    ): CreateOrUpdateCodeReviewParameterDto['configValue'] {
+    private stripCustomMessagesFromConfig<T>(config: T): T {
         if (!config || typeof config !== 'object' || Array.isArray(config)) {
             return config;
         }
@@ -1347,7 +1756,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             unknown
         >;
 
-        return rest as CreateOrUpdateCodeReviewParameterDto['configValue'];
+        return rest as T;
     }
 
     private isSelectionOnlyConfigPayload(
@@ -1513,7 +1922,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
 }
 
 class ConfigResolver {
-    private readonly defaultConfig = getDefaultKodusConfigFile();
+    private readonly defaultConfig: ConfigDelta = getDefaultKodusConfigFile();
 
     constructor(private readonly codeReviewConfigs: CodeReviewParameter) {}
 
@@ -1541,7 +1950,7 @@ class ConfigResolver {
     public async getResolvedParentConfig(
         repositoryId?: string,
         directoryId?: string,
-    ): Promise<CreateOrUpdateCodeReviewParameterDto['configValue']> {
+    ): Promise<ConfigDelta> {
         if (directoryId && repositoryId) {
             return this.getResolvedRepositoryConfig(repositoryId);
         }
@@ -1549,12 +1958,11 @@ class ConfigResolver {
             return this.getResolvedGlobalConfig();
         }
 
-        return this
-            .defaultConfig as CreateOrUpdateCodeReviewParameterDto['configValue'];
+        return this.defaultConfig;
     }
 
     public createUpdater(
-        newDelta: CreateOrUpdateCodeReviewParameterDto['configValue'],
+        newDelta: ConfigDelta,
         repositoryId?: string,
         directoryId?: string,
     ): (draft: CodeReviewParameter) => void {
@@ -1589,21 +1997,20 @@ class ConfigResolver {
         };
     }
 
-    private getResolvedGlobalConfig(): CreateOrUpdateCodeReviewParameterDto['configValue'] {
-        return deepMerge(
-            this
-                .defaultConfig as CreateOrUpdateCodeReviewParameterDto['configValue'],
+    private getResolvedGlobalConfig(): ConfigDelta {
+        return deepMerge<ConfigDelta>(
+            this.defaultConfig,
             this.codeReviewConfigs.configs ?? {},
         );
     }
 
     private async getResolvedRepositoryConfig(
         repositoryId: string,
-    ): Promise<CreateOrUpdateCodeReviewParameterDto['configValue']> {
+    ): Promise<ConfigDelta> {
         const repository = this.findRepository(repositoryId);
         const resolvedGlobal = this.getResolvedGlobalConfig();
 
-        return deepMerge(resolvedGlobal, repository.configs ?? {});
+        return deepMerge<ConfigDelta>(resolvedGlobal, repository.configs ?? {});
     }
 }
 

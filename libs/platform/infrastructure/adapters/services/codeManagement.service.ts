@@ -2,13 +2,13 @@ import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
-import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { extractOrganizationAndTeamData } from '@libs/common/utils/helpers';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import {
     CommentResult,
+    FileChange,
     Repository,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
@@ -23,6 +23,11 @@ import {
     ICodeManagementService,
     PullRequestFileChange,
 } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
+import {
+    CheckEvidence,
+    CheckEvidenceSupport,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import {
     CodeManagementIssue,
@@ -38,6 +43,10 @@ import {
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
+import {
+    RepositoryAccessDiagnosis,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PlatformIntegrationFactory } from './platformIntegration.factory';
 
@@ -156,10 +165,139 @@ export class CodeManagementService implements ICodeManagementService {
         }
 
         if (typeof codeManagementService.supportsIssues === 'function') {
-            return codeManagementService.supportsIssues(organizationAndTeamData);
+            return codeManagementService.supportsIssues(
+                organizationAndTeamData,
+            );
         }
 
         return true;
+    }
+
+    /**
+     * CI results the customer's own pipeline produced for a commit.
+     *
+     * Unlike `listIssues`, this never throws: nobody asked for this evidence,
+     * it only enriches a review, and a host that cannot supply it — or an API
+     * that is briefly unavailable — must not take the review down with it.
+     */
+    async getFilePatches(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: { id?: string; name: string; owner?: string };
+            prNumber: number;
+            paths: string[];
+        },
+        type?: PlatformType,
+    ): Promise<Array<{ path: string; patch: string }>> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                params.organizationAndTeamData,
+            );
+        }
+
+        if (!type) {
+            return [];
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (typeof codeManagementService.getFilePatches !== 'function') {
+            return [];
+        }
+
+        try {
+            return await codeManagementService.getFilePatches(params);
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read file patches',
+                context: CodeManagementService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData?.organizationId,
+                    platform: type,
+                    prNumber: params.prNumber,
+                    repository: params.repository?.name,
+                },
+            });
+            return [];
+        }
+    }
+
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+        type?: PlatformType,
+    ): Promise<CheckEvidence[]> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                params.organizationAndTeamData,
+            );
+        }
+
+        if (!type) {
+            return [];
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (typeof codeManagementService.getCheckEvidence !== 'function') {
+            return [];
+        }
+
+        try {
+            return await codeManagementService.getCheckEvidence(params);
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read CI check evidence',
+                context: CodeManagementService.name,
+                error,
+                metadata: {
+                    platform: type,
+                    commitSha: params.commitSha,
+                },
+            });
+            return [];
+        }
+    }
+
+    /**
+     * What the team's host can report. Absent probe with a reader present is
+     * read as status-only — claiming annotation support we cannot deliver
+     * would make callers treat an empty result as "clean".
+     */
+    async supportsCheckEvidence(
+        organizationAndTeamData: OrganizationAndTeamData,
+        type?: PlatformType,
+    ): Promise<CheckEvidenceSupport> {
+        const none: CheckEvidenceSupport = {
+            statuses: false,
+            annotations: false,
+        };
+
+        if (!type) {
+            type = await this.getTypeIntegration(organizationAndTeamData);
+        }
+
+        if (!type) {
+            return none;
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (typeof codeManagementService.getCheckEvidence !== 'function') {
+            return none;
+        }
+
+        if (typeof codeManagementService.supportsCheckEvidence === 'function') {
+            return codeManagementService.supportsCheckEvidence(
+                organizationAndTeamData,
+            );
+        }
+
+        return { statuses: true, annotations: false };
     }
 
     async findRepositoryByName(
@@ -538,6 +676,24 @@ export class CodeManagementService implements ICodeManagementService {
         return codeManagementService.getChangedFilesSinceLastCommit(params);
     }
 
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+        type?: PlatformType,
+    ): Promise<FileChange[] | null> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                extractOrganizationAndTeamData(params),
+            );
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        return codeManagementService.getPullRequestFilesAtCommit(params);
+    }
+
     async createCommentInPullRequest(
         params: {
             organizationAndTeamData: OrganizationAndTeamData;
@@ -566,6 +722,7 @@ export class CodeManagementService implements ICodeManagementService {
             repository: { name: string; id: string };
             file: any;
             pullRequest: any;
+            suppressNotFoundLogs?: boolean;
         },
         type?: PlatformType,
     ) {
@@ -649,7 +806,6 @@ export class CodeManagementService implements ICodeManagementService {
             lineComment: any;
             commit: any;
             language: string;
-            dryRun?: CodeReviewPipelineContext['dryRun'];
             suggestionCopyPrompt?: boolean;
         },
         type?: PlatformType,
@@ -696,7 +852,6 @@ export class CodeManagementService implements ICodeManagementService {
             repository: { name: string; id: string };
             prNumber: number;
             body: string;
-            dryRun?: CodeReviewPipelineContext['dryRun'];
             suggestion?: ISuggestionByPR;
         },
         type?: PlatformType,
@@ -746,7 +901,6 @@ export class CodeManagementService implements ICodeManagementService {
             commentId: number;
             noteId?: number;
             threadId?: number;
-            dryRun?: CodeReviewPipelineContext['dryRun'];
         },
         type?: PlatformType,
     ) {
@@ -810,6 +964,32 @@ export class CodeManagementService implements ICodeManagementService {
         return codeManagementService.getPullRequestReviewComment(params);
     }
 
+    /**
+     * Repository-level comment sample. Returns null when the active platform
+     * has no such endpoint, which is the caller's signal to fall back to the
+     * per-PR walk rather than treat it as "no comments".
+     */
+    async getRecentRepositoryComments(params: any, type?: PlatformType) {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                extractOrganizationAndTeamData(params),
+            );
+        }
+
+        if (!type) {
+            return null;
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (!codeManagementService.getRecentRepositoryComments) {
+            return null;
+        }
+
+        return codeManagementService.getRecentRepositoryComments(params);
+    }
+
     async createResponseToComment(params: any, type?: PlatformType) {
         if (!type) {
             type = await this.getTypeIntegration(
@@ -828,6 +1008,7 @@ export class CodeManagementService implements ICodeManagementService {
             organizationAndTeamData: OrganizationAndTeamData;
             repository: Partial<Repository>;
             prNumber: number;
+            includeLabels?: boolean;
         },
         type?: PlatformType,
     ): Promise<PullRequest | null> {
@@ -849,7 +1030,6 @@ export class CodeManagementService implements ICodeManagementService {
             repository: { name: string; id: string };
             prNumber: number;
             summary: string;
-            dryRun?: CodeReviewPipelineContext['dryRun'];
         },
         type?: PlatformType,
     ) {
@@ -946,6 +1126,12 @@ export class CodeManagementService implements ICodeManagementService {
                 excludePatterns?: string[];
                 maxFiles?: number;
             };
+            /**
+             * Throw a `RepositoryListingError` instead of returning `[]` when the
+             * repository cannot be listed, so a failure is not read as a
+             * repository without the files.
+             */
+            throwOnError?: boolean;
         },
         type?: PlatformType,
     ): Promise<RepositoryFile[]> {
@@ -1016,6 +1202,15 @@ export class CodeManagementService implements ICodeManagementService {
             );
         }
 
+        // Same guard the list-returning methods here already apply: with no
+        // integration, getTypeIntegration answers null and the factory would
+        // throw "Repository service for type 'null' not found". Callers already
+        // treat a null result as "no clone params" — the adapters return null
+        // on failure too.
+        if (!type) {
+            return null;
+        }
+
         const codeManagementService =
             this.platformIntegrationFactory.getCodeManagementService(type);
 
@@ -1068,6 +1263,7 @@ export class CodeManagementService implements ICodeManagementService {
             organizationAndTeamData: OrganizationAndTeamData;
             repository: { name: string; id: string };
             prNumber: number;
+            failOnError?: boolean;
         },
         type?: PlatformType,
     ) {
@@ -1230,6 +1426,8 @@ export class CodeManagementService implements ICodeManagementService {
                 endDate: string;
                 number?: number;
                 branch?: string;
+                dateField?: 'created' | 'updated';
+                maxResults?: number;
             };
         },
         type?: PlatformType,
@@ -1360,6 +1558,46 @@ export class CodeManagementService implements ICodeManagementService {
             this.platformIntegrationFactory.getCodeManagementService(type);
 
         return codeManagementService.isWebhookActive(params);
+    }
+
+    async userCanWrite(
+        params: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            repository: { id: string; name?: string; owner?: string };
+            userId?: string | number;
+            login?: string;
+        },
+        type?: PlatformType,
+    ): Promise<boolean | undefined> {
+        type ??= await this.getTypeIntegration(params.organizationAndTeamData);
+        if (!type) {
+            return undefined;
+        }
+        return this.platformIntegrationFactory
+            .getCodeManagementService(type)
+            .userCanWrite?.(params);
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const type = await this.getTypeIntegration(
+            params.organizationAndTeamData,
+        );
+
+        if (!type) {
+            return { ...UNKNOWN_REPOSITORY_ACCESS };
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (!codeManagementService.diagnoseRepositoryAccess) {
+            return { ...UNKNOWN_REPOSITORY_ACCESS };
+        }
+
+        return codeManagementService.diagnoseRepositoryAccess(params);
     }
 
     async formatReviewCommentBody(
@@ -1499,6 +1737,25 @@ export class CodeManagementService implements ICodeManagementService {
             this.platformIntegrationFactory.getCodeManagementService(type);
 
         return codeManagementService.getReviewStatusByPullRequest(params);
+    }
+
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const type = await this.getTypeIntegration(
+            params.organizationAndTeamData,
+        );
+        const provider =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+        // Every host implements it; one that does not must fail the step
+        // rather than leave Kody's approval in place under a hold.
+        if (!provider?.dismissOwnPullRequestApprovals) {
+            throw new Error(`Approval dismissal is unavailable on ${type}`);
+        }
+        return provider.dismissOwnPullRequestApprovals(params);
     }
 
     async addReactionToPR(params: {

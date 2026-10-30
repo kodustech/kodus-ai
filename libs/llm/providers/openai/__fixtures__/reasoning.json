@@ -1,0 +1,13 @@
+{
+    "_note": "Recorded generate result for a Kimi/Moonshot (openai_compatible) reasoning call. Usage is stored in the high-level ai@7 LanguageModelUsage shape — exactly what runStructuredReviewCall's generateText result carries and what module.normalize/normalizeUsage consume in prod (observability.service.ts:469-480 reads outputTokenDetails.reasoningTokens). outputTokens is the FULL completion count; reasoningTokens is a detail-OF it (Phase 0 measured ~5,857 reasoning tokens/call).",
+    "text": "{\"decisions\":[{\"type\":\"tooling\",\"origin\":\"human\",\"decision\":\"Adopt the Vercel AI SDK path\",\"confidence\":0.9}]}",
+    "finishReason": "stop",
+    "usage": {
+        "inputTokens": 1203,
+        "outputTokens": 6420,
+        "totalTokens": 7623,
+        "outputTokenDetails": {
+            "reasoningTokens": 5857
+        }
+    }
+}

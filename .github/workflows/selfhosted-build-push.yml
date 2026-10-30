@@ -30,7 +30,11 @@ on:
     # minor/major/custom releases, hotfixes, or out-of-band runs,
     # dispatch manually via workflow_dispatch.
     schedule:
-        - cron: "0 6 * * 5"
+        # Friday 03:00 UTC = 00:00 BRT. The release train starts with the
+        # cloud-gate job (full cloud matrix against QA, ~2h); the RC is
+        # only built if that gate is green, so a broken product never
+        # burns the droplet build + self-hosted matrix cost.
+        - cron: "0 3 * * 5"
     workflow_dispatch:
         inputs:
             version_type:
@@ -61,6 +65,34 @@ concurrency:
 
 jobs:
     # ----------------------------------------------------------------
+    # Cloud gate (scheduled Friday train only): run the FULL cloud matrix
+    # against QA before spending anything on the self-hosted release.
+    # The cloud matrix exercises the same product review paths with no
+    # droplets and no image build — historically most release-breaking
+    # regressions (LLM key, webhook delivery, review pipeline) trip here
+    # first. Red gate -> the whole train stops at ~zero cost and the
+    # failure IS the to-fix list. Manual dispatches skip the gate: a
+    # human asking for a release is deliberate (and may be iterating on
+    # a fix the gate would re-block for 2h).
+    # ----------------------------------------------------------------
+    cloud-gate:
+        name: Cloud gate (full matrix vs QA)
+        if: ${{ github.event_name == 'schedule' }}
+        # The reusable workflow's `history` job appends results to the
+        # e2e-history branch and therefore requests `contents: write`.
+        # GitHub validates reusable-workflow permissions even when this job is
+        # skipped on a manual dispatch; without this ceiling the entire release
+        # workflow fails at startup before creating any jobs. The called
+        # `cloud-matrix` job remains explicitly pinned to `contents: read`.
+        permissions:
+            contents: write
+            id-token: write # called workflow reports a quality signal (WIF)
+        uses: ./.github/workflows/e2e-cloud.yml
+        with:
+            matrix_file: matrix/fast.yml
+        secrets: inherit
+
+    # ----------------------------------------------------------------
     # Freeze main while the release is in flight. The repo ruleset
     # `release-freeze` lives in this repo's settings (id 17004627);
     # default state is enforcement=disabled. We flip it to active here
@@ -79,7 +111,11 @@ jobs:
         # Freeze on every release path EXCEPT hotfix. Schedule (Friday
         # cron) has no inputs, so `inputs.hotfix != true` resolves to
         # "freeze" — exactly what we want for the weekly train.
-        if: ${{ inputs.hotfix != true }}
+        # needs+if: on the scheduled train the freeze (and the whole
+        # release behind it) only starts when the cloud gate is green;
+        # on manual dispatch the gate is skipped and we proceed.
+        needs: [cloud-gate]
+        if: ${{ !cancelled() && inputs.hotfix != true && (needs.cloud-gate.result == 'success' || needs.cloud-gate.result == 'skipped') }}
         runs-on: ubuntu-latest
         environment: ci
         permissions:
@@ -159,11 +195,16 @@ jobs:
 
     plan-release:
         name: Plan release (compute version and RC version)
-        needs: freeze-main
+        needs: [freeze-main, cloud-gate]
         # Run on freeze success (normal release) OR skip (hotfix path).
         # Don't run if freeze failed — that indicates an admin / token /
         # ruleset bug and we shouldn't ship with main potentially open.
-        if: ${{ needs.freeze-main.result == 'success' || needs.freeze-main.result == 'skipped' }}
+        #
+        # The cloud-gate condition must be checked HERE too, not only on
+        # freeze-main: a red gate leaves freeze-main `skipped`, which is
+        # indistinguishable from the legitimate hotfix skip — without this
+        # guard the release would sail on through a failed gate.
+        if: ${{ !cancelled() && (needs.freeze-main.result == 'success' || needs.freeze-main.result == 'skipped') && (needs.cloud-gate.result == 'success' || needs.cloud-gate.result == 'skipped') }}
         runs-on: ubuntu-latest
         outputs:
             release_version: ${{ steps.bump.outputs.release_version }}
@@ -245,6 +286,18 @@ jobs:
     create-rc-tag:
         name: Create RC git tag at current SHA
         needs: plan-release
+        # Explicit `if` required, NOT decoration. `cloud-gate` is skipped on
+        # every non-schedule run (manual dispatch, hotfix), and GitHub's
+        # implicit `success()` walks the TRANSITIVE needs graph — so a skip
+        # upstream skips this job even though `plan-release` succeeded, and
+        # every job below it cascades. `freeze-main` / `plan-release` already
+        # tolerate the skipped gate; the rest of the chain did not, which
+        # silently no-op'd every manual release from 2026-07-29 (79b3d401c)
+        # onward: run green, nothing built, nothing shipped, no alert (a skip
+        # is not a failure, so notify-discord-failure never fires).
+        # Depend on the DIRECT predecessor's result so a genuine failure still
+        # stops the train.
+        if: ${{ !cancelled() && needs.plan-release.result == 'success' }}
         runs-on: ubuntu-latest
         permissions:
             contents: write
@@ -275,6 +328,9 @@ jobs:
         needs:
             - plan-release
             - create-rc-tag
+        # See create-rc-tag: explicit condition so the skipped cloud-gate does
+        # not cascade down the chain.
+        if: ${{ !cancelled() && needs.create-rc-tag.result == 'success' }}
         runs-on: ubuntu-latest
         # No environment: production here on purpose. The gate is at PROMOTE,
         # not at build — the Friday-morning flow dispatches at 9h and lets
@@ -411,8 +467,16 @@ jobs:
         needs:
             - plan-release
             - build-and-push
+        # See create-rc-tag: without this the matrix is skipped on every
+        # manual dispatch — the exact symptom that surfaced this bug.
+        if: ${{ !cancelled() && needs.build-and-push.result == 'success' }}
+        # The reusable workflow's `history` job appends results to the
+        # e2e-history branch and requests `contents: write`. GitHub validates
+        # that permission against this caller before creating any jobs. The
+        # matrix job inside the reusable workflow remains pinned to read-only.
         permissions:
-            contents: read
+            contents: write
+            id-token: write # called workflow reports a quality signal (WIF)
             packages: read
         uses: ./.github/workflows/e2e-self-hosted-matrix.yml
         with:
@@ -434,6 +498,10 @@ jobs:
         needs:
             - plan-release
             - e2e-matrix
+        # See create-rc-tag. Note this keeps promote strictly gated on a GREEN
+        # matrix — the point of the chain — while letting a skipped cloud-gate
+        # through.
+        if: ${{ !cancelled() && needs.e2e-matrix.result == 'success' }}
         permissions:
             contents: write
             packages: write
@@ -697,7 +765,7 @@ jobs:
               id: discord-webhook
               run: |
                   # Same fallback chain as the failure notifier.
-                  if [ -n "${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}" ]; then
+                  if [ -n "${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}" ]; then
                     echo "configured=true" >> "$GITHUB_OUTPUT"
                   else
                     echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -707,21 +775,33 @@ jobs:
               if: steps.discord-webhook.outputs.configured == 'true'
               uses: sarisia/actions-status-discord@v1.16.0
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}
-                  content: ":white_check_mark: RC validated — **waiting promote approval**"
-                  title: "Self-Hosted RC validated (matrix green)"
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}
+                  # "matrix green" alone hid real signal: advisory failures and
+                  # setup skips don't gate, so a green run can still carry
+                  # failed scenarios and coverage gaps. Say the numbers, wear
+                  # amber when there are caveats, and attach the LLM read when
+                  # one was produced.
+                  content: "${{ needs.e2e-matrix.outputs.status == 'yellow' && ':warning: RC validated **with caveats** — waiting promote approval' || ':white_check_mark: RC validated — **waiting promote approval**' }}"
+                  title: "Self-Hosted RC validated (${{ needs.e2e-matrix.outputs.digest || 'matrix green' }})"
                   description: |
                       RC tag:      `${{ needs.plan-release.outputs.rc_tag }}`
                       Will become: `${{ needs.plan-release.outputs.release_tag }}` + `:latest`
-
+                      ${{ needs.e2e-matrix.outputs.advisory_count != '' && needs.e2e-matrix.outputs.advisory_count != '0' && format('⚠️ {0} advisory (non-gating) failure(s) — check the run summary before approving.', needs.e2e-matrix.outputs.advisory_count) || '' }}
+                      ${{ needs.e2e-matrix.outputs.setup_skipped != '' && needs.e2e-matrix.outputs.setup_skipped != '0' && format('⏭️ {0} planned scenario(s) skipped on setup — coverage gap, not a pass.', needs.e2e-matrix.outputs.setup_skipped) || '' }}
+                      ${{ needs.e2e-matrix.outputs.llm_note || '' }}
                       Full e2e matrix passed against this RC. Approve (or ignore to let it expire) at:
                       https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
                   username: "GitHub Actions"
-                  color: 0x00cc66
+                  color: ${{ needs.e2e-matrix.outputs.discord_color || '0x00cc66' }}
 
     notify-discord-failure:
         name: Notify Discord (failure only)
         needs:
+            # cloud-gate included because a red gate leaves every job below
+            # `skipped`, so without it a stopped Friday train never reached
+            # this channel — the matrix's own alert (when it fires at all)
+            # goes to the tests channel.
+            - cloud-gate
             # freeze-main included so a pre-release freeze failure (the
             # 2026-06-05 403) triggers the alert DIRECTLY and names its
             # phase — without it the alert only fired by accident and
@@ -750,7 +830,7 @@ jobs:
         # human promote gate) — binding the FAILURE ALERT to it left the
         # 2026-06-05 release failure sitting in "waiting for approval" and
         # Discord silent. Webhooks resolve from repo-level secrets
-        # (DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK), which need no
+        # (DISCORD_WEBHOOK_TESTS / _INTERNAL / DISCORD_WEBHOOK), which need no
         # approval to read.
         permissions: {}
         steps:
@@ -762,7 +842,8 @@ jobs:
                   # something downstream broke" — those are urgent in a
                   # different way (customer pulled :latest but the CLI /
                   # changelog / installer never updated).
-                  if   [ "${{ needs.freeze-main.result }}"         = "failure" ]; then echo "phase=Freeze main (pre-release)" >> $GITHUB_OUTPUT; echo "color=0xff0000" >> $GITHUB_OUTPUT
+                  if   [ "${{ needs.cloud-gate.result }}"          = "failure" ]; then echo "phase=Cloud gate (pre-release — train stopped; see the cloud-gate job in this run)" >> $GITHUB_OUTPUT; echo "color=0xff8800" >> $GITHUB_OUTPUT
+                  elif [ "${{ needs.freeze-main.result }}"         = "failure" ]; then echo "phase=Freeze main (pre-release)" >> $GITHUB_OUTPUT; echo "color=0xff0000" >> $GITHUB_OUTPUT
                   elif [ "${{ needs.plan-release.result }}"        = "failure" ]; then echo "phase=Plan release"        >> $GITHUB_OUTPUT; echo "color=0xff0000" >> $GITHUB_OUTPUT
                   elif [ "${{ needs.create-rc-tag.result }}"       = "failure" ]; then echo "phase=Create RC tag"       >> $GITHUB_OUTPUT; echo "color=0xff0000" >> $GITHUB_OUTPUT
                   elif [ "${{ needs.build-and-push.result }}"      = "failure" ]; then echo "phase=Build"               >> $GITHUB_OUTPUT; echo "color=0xff0000" >> $GITHUB_OUTPUT
@@ -784,7 +865,7 @@ jobs:
                   # gating only on DISCORD_WEBHOOK_SELFHOSTED (an
                   # environment-scoped secret) silently skips the alert when
                   # the job runs without that environment.
-                  if [ -n "${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}" ]; then
+                  if [ -n "${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}" ]; then
                     echo "configured=true" >> "$GITHUB_OUTPUT"
                   else
                     echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -794,7 +875,7 @@ jobs:
               if: steps.discord-webhook.outputs.configured == 'true'
               uses: sarisia/actions-status-discord@v1.16.0
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}
                   content: ":x: Self-hosted release failed at: **${{ steps.ctx.outputs.phase }}**"
                   title: "Self-Hosted Release Failed (${{ steps.ctx.outputs.phase }})"
                   description: |

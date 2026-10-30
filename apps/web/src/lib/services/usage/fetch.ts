@@ -9,6 +9,7 @@ import {
     TokenUsageQueryContract,
     UsageByDeveloperResultContract,
     UsageByPrResultContract,
+    UsageByReviewResultContract,
     UsageOverviewReportContract,
     UsageSummaryContract,
 } from "./types";
@@ -31,11 +32,13 @@ export const getTokenUsageOverview = async (
 
 export const getSummaryTokenUsage = async (
     filters: TokenUsageQueryContract,
+    init?: { signal?: AbortSignal },
 ) => {
     return await authorizedFetch<UsageSummaryContract>(
         TOKEN_USAGE_PATHS.GET_SUMMARY,
         {
             params: { ...filters },
+            signal: init?.signal,
         },
     );
 };
@@ -63,6 +66,17 @@ export const getDailyTokenUsageByPR = async (
 ) => {
     return await authorizedFetch<DailyUsageByPrResultContract[]>(
         TOKEN_USAGE_PATHS.GET_DAILY_BY_PR,
+        {
+            params: { ...filters },
+        },
+    );
+};
+
+export const getTokenUsageByReview = async (
+    filters: TokenUsageQueryContract,
+) => {
+    return await authorizedFetch<UsageByReviewResultContract[]>(
+        TOKEN_USAGE_PATHS.GET_BY_REVIEW,
         {
             params: { ...filters },
         },

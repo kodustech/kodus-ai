@@ -1,0 +1,112 @@
+---
+title: "Security reviewer from a repository skill"
+description: "Turn your team's security skill into a custom agent that follows it on every pull request."
+icon: "shield-halved"
+---
+
+## Why a skill
+
+Your team may already keep its security rules as an agent skill, for coding assistants. A custom agent can follow the same skill in code review: it opens the skill when the change needs it, reads its reference files, and quotes the rule each finding applies. When the skill changes on the main branch, the agent follows the new version with no settings change.
+
+The example is a multi-tenant scheduling API where every query must be scoped to the caller's workspace.
+
+## Step 1 — The skill in the repository
+
+```markdown .claude/skills/tenant-isolation/SKILL.md
+---
+name: tenant-isolation
+description: Rules that keep one workspace's data out of another's. Use when changing endpoints, queries or background jobs.
+---
+
+# Tenant isolation
+
+- Every query on a tenant table filters by `workspaceId` taken from the authenticated session, never from the request body or query string.
+- Every new endpoint declares `@RequireWorkspaceRole(...)`; an endpoint without it is public.
+- Background jobs receive `workspaceId` in their payload and pass it to every repository call.
+- Logs never include tokens, passwords or full email addresses.
+
+For the list of tenant tables, see references/tenant-tables.md.
+```
+
+```markdown .claude/skills/tenant-isolation/references/tenant-tables.md
+# Tenant tables
+
+bookings, calendars, invoices, members, resources
+```
+
+The folder name and `name` must match, and `description` is required.
+
+## Step 2 — Import it as an agent
+
+<Steps>
+  <Step title="Open the repository's settings">
+    Pick the repository in the scope picker, then **What to review → Custom agents → New agent**.
+  </Step>
+  <Step title="Import from repository">
+    The tab lists the skills found on the default branch. Click **tenant-isolation**.
+  </Step>
+  <Step title="Check the result">
+    The agent is created off, named **Tenant isolation reviewer**, with the skill linked and these instructions:
+
+    ```text
+    Review the change against the team's "tenant-isolation" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.
+    ```
+  </Step>
+</Steps>
+
+## Step 3 — Sharpen the instructions
+
+Keep the skill reference and add what proof a finding needs:
+
+```text Instructions
+Review the change against the team's "tenant-isolation" skill: load it, follow its rules and references, and report where the change departs from them. Cite the rule you apply.
+
+Trace where workspaceId comes from in every query or repository call the change adds or edits. A finding must show the line where the value enters (session, body, query string, job payload) and the line where it is used.
+
+Ignore tests and seed scripts. Do not report general security issues the skill does not cover; Kody's own review handles those.
+```
+
+| Field | Value |
+| --- | --- |
+| **Files** | `src/api/**`, `src/jobs/**`, `src/repositories/**` |
+| **Except** | `**/*.test.ts`, `src/db/seeds/**` |
+
+## Step 4 — Optional: a plugin
+
+If your issue tracker is installed as a plugin, turn it on under **Tools → Plugins**. Only read tools are offered. When a pull request description links a ticket, the agent can read it and check the change against what it asks.
+
+## Step 5 — Comments
+
+| Field | Value | Why |
+| --- | --- | --- |
+| **Format** | Inline comments | |
+| **Minimum severity** | High | Only tenant leaks and missing auth, not hardening ideas. |
+| **Suggested fix** | When confident | |
+
+Click **Save**.
+
+## Step 6 — Try it
+
+Run **Try it** on a pull request that adds an endpoint. Check:
+
+- **Skills opened** lists `.claude/skills/tenant-isolation`, and `references/tenant-tables.md` when the agent needed it.
+- Kept findings quote a rule from the skill:
+
+```markdown
+**Rule** (`.claude/skills/tenant-isolation/SKILL.md`):
+> Every new endpoint declares `@RequireWorkspaceRole(...)`; an endpoint without it is public.
+```
+
+- Dropped findings show their reason. A general security remark the skill doesn't cover is dropped as outside the agent's focus, which is what you want here.
+
+Turn the agent on. To get a second opinion on an open pull request later, comment `@kody -v tenant-isolation-reviewer`.
+
+## Checklist
+
+- [ ] `SKILL.md` has `name` matching its folder and a `description`
+- [ ] Reference files sit one folder below the skill at most
+- [ ] Instructions say what proof a finding needs
+- [ ] Minimum severity matches how loud the agent should be
+- [ ] Tried on a pull request with a known gap
+
+See [Skills & docs](/en/how_to_use/code_review/custom_agents_knowledge_and_tools#skills--docs) for detection and budgets.

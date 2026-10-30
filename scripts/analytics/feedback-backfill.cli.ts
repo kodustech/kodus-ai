@@ -4,7 +4,6 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Logger, Module } from '@nestjs/common';
 
-import { LLMModule } from '@kodus/kodus-common/llm';
 
 import {
     AnalyticsWarehouseModule,
@@ -33,7 +32,6 @@ import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
         SharedMongoModule.forRoot(),
         // Required transitively by AnalyticsWarehouseModule's classifier
         // provider — same note as backfill.cli.ts.
-        LLMModule.forRoot({ logger: LoggerWrapperService }),
         AnalyticsWarehouseModule.forRoot(),
     ],
 })

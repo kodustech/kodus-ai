@@ -1,0 +1,67 @@
+{
+    "eval-repo": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    },
+    "astropy/astropy": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    },
+    "django/django": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    },
+    "matplotlib/matplotlib": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    },
+    "mwaskom/seaborn": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    },
+    "pallets/flask": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    },
+    "psf/requests": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    },
+    "pydata/xarray": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    },
+    "pylint-dev/pylint": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    },
+    "pytest-dev/pytest": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    },
+    "scikit-learn/scikit-learn": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    },
+    "sphinx-doc/sphinx": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    },
+    "sympy/sympy": {
+        "platform": "GITHUB",
+        "integrationCategory": "CODE_MANAGEMENT",
+        "status": true
+    }
+}

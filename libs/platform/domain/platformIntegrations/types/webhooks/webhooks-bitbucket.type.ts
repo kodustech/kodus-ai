@@ -204,6 +204,12 @@ export interface IWebhookBitbucketDataCenterPullRequestEvent {
     eventKey: string;
     date: string;
     actor: IWebhookBitbucketDataCenterActor;
+    /**
+     * Bitbucket Data Center sends this as `pullRequest` (capital R).
+     * `BitbucketController` normalizes it to `pullrequest` before enqueueing,
+     * so every consumer downstream sees the lowercase key.
+     * @see https://confluence.atlassian.com/bitbucketserver/event-payload-938025882.html
+     */
     pullrequest: IWebhookBitbucketDataCenterPullRequest;
     comment?: IWebhookBitbucketDataCenterComment;
     commentParentId?: number;

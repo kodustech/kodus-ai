@@ -1,0 +1,2537 @@
+{
+ "pool": "sonnet-5.5",
+ "source": {
+  "ref": "origin/feat/improve-harness-to-big-models",
+  "commit": "e4f0e769fb5f3c943812d18921f0c5621acbc9bb",
+  "inputs": "evals/dedup/gold-v2/09.10.26_sonnet-5.5.json",
+  "groups": "evals/dedup/gold-v2/09.10.26_sonnet-5.5.final.json",
+  "rule": "cobertura (10/10/26)"
+ },
+ "cases": [
+  {
+   "id": "sonnet-5.5/fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+   "pr": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "packages/core/EventManager.ts",
+     "relevantLinesStart": 118,
+     "relevantLinesEnd": 119,
+     "suggestionContent": "`mainHostDestinationCalendar` is undefined when `evt.destinationCalendar` is null or empty, so `mainHostDestinationCalendar.integration` throws a TypeError. Every booking with no destination calendar (the existing `[]` or null fallbacks) crashes in `create`. Use `mainHostDestinationCalendar?.integration`."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 254,
+     "relevantLinesEnd": 256,
+     "suggestionContent": "In the fallback branch, `externalCalendarId` is already falsy, so `find((cal) => cal.externalId === externalCalendarId)` can never match and `selectedCalendar` is always undefined. The same defect is in `deleteEvent` at lines 315-317. The previous fallback to the destination calendar's externalId is lost. Fall back to `event.destinationCalendar?.[0]?.externalId`, or to the entry matching the credential."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "packages/core/EventManager.ts",
+     "relevantLinesStart": 118,
+     "relevantLinesEnd": 119,
+     "suggestionContent": "mainHostDestinationCalendar is undefined when destinationCalendar is empty or null (many callers now pass []), so `mainHostDestinationCalendar.integration` throws a TypeError for Google Meet locations. Use `mainHostDestinationCalendar?.integration`."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 254,
+     "relevantLinesEnd": 256,
+     "suggestionContent": "The fallback runs only when externalCalendarId is falsy, yet it looks for a destination calendar with externalId === externalCalendarId. That can never match the intended calendar, so the fallback is dead. Use the first destination calendar's externalId (e.g. mainHostDestinationCalendar?.externalId). The same bug is in deleteEvent."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 315,
+     "relevantLinesEnd": 317,
+     "suggestionContent": "In deleteEvent the fallback `find(cal => cal.externalId === externalCalendarId)` is only evaluated when externalCalendarId is falsy, so it never yields a usable id and the event is deleted from 'primary' instead of the destination calendar. Fall back to the first destination calendar's externalId."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "packages/core/EventManager.ts",
+     "relevantLinesStart": 118,
+     "relevantLinesEnd": 119,
+     "suggestionContent": "`const [mainHostDestinationCalendar] = evt.destinationCalendar ?? []` yields undefined when the array is empty or null. `mainHostDestinationCalendar.integration` then throws a TypeError for any Google Meet booking with no destination calendar, because the optional chaining was dropped. Use `mainHostDestinationCalendar?.integration`."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 253,
+     "relevantLinesEnd": 256,
+     "suggestionContent": "In the fallback branch `externalCalendarId` is already falsy, so `find((cal) => cal.externalId === externalCalendarId)` can only match a calendar whose externalId is also falsy. The destination calendar's externalId is never selected, so updateEvent falls back to the default calendar. Use the first destination calendar's externalId (`event.destinationCalendar?.[0]?.externalId`) instead. The same flawed lookup is in deleteEvent at lines 315-317."
+    },
+    {
+     "id": "S8",
+     "label": "bug",
+     "relevantFile": "packages/core/EventManager.ts",
+     "relevantLinesStart": 118,
+     "relevantLinesEnd": 119,
+     "suggestionContent": "`mainHostDestinationCalendar` is undefined when `evt.destinationCalendar` is null or empty, so `mainHostDestinationCalendar.integration` throws a TypeError. This breaks booking creation for Google Meet locations with no destination calendar. Use `mainHostDestinationCalendar?.integration`."
+    },
+    {
+     "id": "S9",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 253,
+     "relevantLinesEnd": 256,
+     "suggestionContent": "The fallback runs only when externalCalendarId is falsy, but it then looks for a destination calendar whose externalId equals that falsy value. This always yields undefined, so the destination calendar is never used on update. The same pattern is in deleteEvent (lines 315-317). Fall back to the first destination calendar's externalId instead, e.g. `event.destinationCalendar?.[0]?.externalId`."
+    },
+    {
+     "id": "S10",
+     "label": "bug",
+     "relevantFile": "packages/core/EventManager.ts",
+     "relevantLinesStart": 118,
+     "relevantLinesEnd": 119,
+     "suggestionContent": "destinationCalendar is now an array that can be null/empty (the diff itself produces [] and null), so `mainHostDestinationCalendar` is undefined and `.integration` throws a TypeError for Google Meet bookings without a destination calendar. The old code used `?.`; use `mainHostDestinationCalendar?.integration` so the fallback to Cal Video still applies."
+    },
+    {
+     "id": "S11",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 254,
+     "relevantLinesEnd": 256,
+     "suggestionContent": "In the fallback branch externalCalendarId is falsy, so `find(cal => cal.externalId === externalCalendarId)` can never match a real calendar and always yields undefined. The previous fallback to the event's destination calendar externalId is lost; use the first destinationCalendar's externalId instead. The same pattern in deleteEvent has the same problem."
+    },
+    {
+     "id": "S12",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 145,
+     "relevantLinesEnd": 154,
+     "suggestionContent": "createEvent now picks the target calendar only by matching credentialId. Destination calendars without a credentialId (handled by EventManager's integration-based branch) never match, so events are inserted into \"primary\" instead of the configured destination externalId as before."
+    },
+    {
+     "id": "S13",
+     "label": "bug",
+     "relevantFile": "packages/core/EventManager.ts",
+     "relevantLinesStart": 376,
+     "relevantLinesEnd": 381,
+     "suggestionContent": "In the no-credentialId branch createEvent(c, event) is called without externalId, so EventResult.externalId is undefined. The booking reference's externalCalendarId, which used to come from evt.destinationCalendar.externalId, is now not stored, which breaks later update/delete targeting. Pass destination.externalId."
+    },
+    {
+     "id": "S14",
+     "label": "bug",
+     "relevantFile": "packages/core/EventManager.ts",
+     "relevantLinesStart": 375,
+     "relevantLinesEnd": 381,
+     "suggestionContent": "In the branch for destinations without a credentialId, `createEvent(c, event)` is called without the externalId argument. CalendarManager.createEvent only returns `externalId` when it is passed in, and EventManager now stores `result.externalId` as externalCalendarId, so these booking references are saved with an undefined externalCalendarId. Pass `destination.externalId` as the third argument, so the producer returns what the consumer stores."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S10",
+     "S3",
+     "S6",
+     "S8"
+    ],
+    [
+     "S11",
+     "S2",
+     "S4",
+     "S5",
+     "S7",
+     "S9"
+    ],
+    [
+     "S13",
+     "S14"
+    ],
+    [
+     "S12"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/add-guest-management-functionality-to-existing-bookings-cal-com",
+   "pr": "add-guest-management-functionality-to-existing-bookings-cal-com",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 48,
+     "suggestionContent": "The team permission check combines isTeamAdmin and isTeamOwner with `&&`, so only users who are both admin and owner pass. Team admins who are not owners are therefore denied. Use `||` instead."
+    },
+    {
+     "id": "S2",
+     "label": "security",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 52,
+     "relevantLinesEnd": 56,
+     "suggestionContent": "Any attendee, matched only by email, is allowed to add arbitrary guests to a booking, and the handler then sends emails and calendar invites on the organizer's behalf. Any attendee can use this to send invites to arbitrary addresses. Restrict the action to the organizer and team admins, or verify that the attendee's email is confirmed."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 74,
+     "relevantLinesEnd": 78,
+     "suggestionContent": "Duplicate and blacklist checks compare guest emails case-sensitively against attendee emails, and the blacklist is lowercased while the guest is not. Case variants such as `Foo@x.com` bypass both checks. Lowercase the guest before comparing, and also lowercase the attendee email."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 158,
+     "relevantLinesEnd": 168,
+     "suggestionContent": "The calendar update uses the credentials of the acting user (ctx.user), not the booking organizer's, so an admin or attendee acting on someone else's booking updates the wrong calendar or none. Also, sendAddGuestsEmails receives the raw `guests` list, including filtered duplicates and blacklisted emails. Use the organizer's credentials and pass `uniqueGuests`."
+    },
+    {
+     "id": "S5",
+     "label": "security",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 74,
+     "relevantLinesEnd": 78,
+     "suggestionContent": "The blacklist is lowercased but the guest email is compared without normalisation, so a blacklisted address can be added by changing its case (e.g. Blocked@x.com). Compare guest.toLowerCase() against the blacklist. Compare existing attendee emails case-insensitively too, so the same address in a different case is not added as a new attendee."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 168,
+     "relevantLinesEnd": 168,
+     "suggestionContent": "sendAddGuestsEmails treats its `newGuests` argument as the set of newly added attendees. The handler passes the raw `guests` input, which still contains existing attendees and blacklisted addresses that were filtered out into `uniqueGuests`. Those existing attendees get a full 'scheduled' email instead of the 'guests added' notice. Pass `uniqueGuests` instead."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 168,
+     "relevantLinesEnd": 168,
+     "suggestionContent": "sendAddGuestsEmails is called with the raw `guests` input instead of the filtered `uniqueGuests`. A guest who was already an attendee (and was filtered out) is still treated as new, so they get the 'scheduled' email instead of the 'guests added' notification. Pass `uniqueGuests`."
+    },
+    {
+     "id": "S8",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 48,
+     "suggestionContent": "isTeamAdminOrOwner combines isTeamAdmin and isTeamOwner with &&, so it is true only if the user is both. Team admins who are not owners are denied. Use || (or a single admin-or-owner check) to match the variable name's intent."
+    },
+    {
+     "id": "S9",
+     "label": "bug",
+     "relevantFile": "packages/ui/form/MultiEmail.tsx",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 46,
+     "suggestionContent": "The tooltip text \"Remove email\" is hard-coded English and bypasses the translation mechanism. The component already calls useLocale (t), and the neighbouring label uses t(\"add_another\"). Add a locale key and use t(...) here."
+    },
+    {
+     "id": "S10",
+     "label": "bug",
+     "relevantFile": "apps/web/components/dialog/AddGuestsDialog.tsx",
+     "relevantLinesStart": 43,
+     "relevantLinesEnd": 44,
+     "suggestionContent": "The error message is built as a template string, so it is always truthy. The `|| t(\"unable_to_add_guests\")` fallback is therefore dead code, and the user can see \"undefined: ...\" or an untranslated raw message. Use `err.message ? t(err.message) : t(\"unable_to_add_guests\")`."
+    },
+    {
+     "id": "S11",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 46,
+     "relevantLinesEnd": 48,
+     "suggestionContent": "The variable is named isTeamAdminOrOwner, but the code joins the two checks with `&&`, so it only passes if the user is both admin and owner. The name states OR and the code does AND. Change it to `||`, or rename the variable."
+    },
+    {
+     "id": "S12",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 74,
+     "relevantLinesEnd": 78,
+     "suggestionContent": "The server does not enforce that guest emails are unique. It dedupes only against existing attendees, and it does so case-sensitively. Duplicates inside the `guests` input, or the same address in different case, pass the filter and createMany inserts duplicate attendee rows. The blacklist check is also case-sensitive against a lowercased list. Normalise guests to lowercase and dedupe them with a Set before filtering, and compare against existing attendees in lowercase."
+    },
+    {
+     "id": "S13",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 165,
+     "relevantLinesEnd": 171,
+     "suggestionContent": "The attendees are written to the database at line 92, but `eventManager.updateCalendarAttendees` at line 165 runs outside the try/catch. If it throws, the mutation returns an error even though the guests are already persisted, so the DB and the calendar are out of sync. No emails are sent, and a retry then fails with 'emails_must_be_unique_valid'. Catch and handle the calendar update failure after the DB write."
+    },
+    {
+     "id": "S14",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 168,
+     "relevantLinesEnd": 168,
+     "suggestionContent": "sendAddGuestsEmails treats its second argument as the list of newly added guests, but the handler passes the raw `guests` input. Guests that were filtered out (already attendees or blacklisted) are still in that list, so existing attendees get the 'scheduled' email again and blacklisted addresses may be emailed. Pass `uniqueGuests` instead."
+    },
+    {
+     "id": "S15",
+     "label": "bug",
+     "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+     "relevantLinesStart": 165,
+     "relevantLinesEnd": 165,
+     "suggestionContent": "The attendees are already committed to the DB when `eventManager.updateCalendarAttendees` is awaited without a try/catch. If the calendar sync throws, the mutation returns an error and skips the emails, although the guests were added. The caller sees a failure for a partly applied change and may retry. Handle calendar sync failure as best-effort, as the email send is, or run it before the DB write."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S11",
+     "S8"
+    ],
+    [
+     "S12",
+     "S3",
+     "S5"
+    ],
+    [
+     "S14",
+     "S4",
+     "S6",
+     "S7"
+    ],
+    [
+     "S13",
+     "S15"
+    ],
+    [
+     "S2"
+    ],
+    [
+     "S9"
+    ],
+    [
+     "S10"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/oauth-credential-sync-and-app-integration-enhancements-cal-com",
+   "pr": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+     "relevantLinesStart": 85,
+     "relevantLinesEnd": 94,
+     "suggestionContent": "refreshOAuthTokens is called with credentialId as its third argument, but that argument is `userId`. With credential sync enabled, the sync endpoint receives the credential id as `calcomUserId`, so it looks up the wrong user. Pass the credential's userId instead, which means threading it into refreshAccessToken."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 97,
+     "relevantLinesEnd": 97,
+     "suggestionContent": "parseRefreshTokenResponse returns a zod SafeParseReturnType (`{success, data}`), not the parsed key, and the code assigns it straight to `key`. The credential is therefore saved as `{success: true, data: ...}` and the token fields are lost. Use `.data` from the parse result."
+    },
+    {
+     "id": "S3",
+     "label": "security",
+     "relevantFile": "apps/web/pages/api/webhook/app-credential.ts",
+     "relevantLinesStart": 24,
+     "relevantLinesEnd": 29,
+     "suggestionContent": "The webhook secret is compared with `!==`, which is not constant-time, and the comparison is not guarded against a missing or array-valued header. This allows timing attacks on the secret, which would let an attacker overwrite any user's app credentials. Use crypto.timingSafeEqual on equal-length buffers."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+     "relevantLinesStart": 5,
+     "relevantLinesEnd": 11,
+     "suggestionContent": "`[z.string().toString()]` evaluates to a fixed string key such as \"ZodString\", so minimumTokenResponseSchema requires a literal numeric property with that name. Every synced token response fails validation and throws \"Invalid refreshed tokens were returned\". Use `z.object({access_token: z.string()}).passthrough()` instead."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "packages/app-store/office365calendar/lib/CalendarService.ts",
+     "relevantLinesStart": 263,
+     "relevantLinesEnd": 264,
+     "suggestionContent": "parseRefreshTokenResponse now throws when parsing fails, so the `tokenResponse.success` check on the next line is dead code and the previous error logging was removed. A failed refresh now throws out of refreshAccessToken instead of keeping the old credentials. Catch the error or restore the previous handling."
+    },
+    {
+     "id": "S6",
+     "label": "security",
+     "relevantFile": "apps/web/pages/api/webhook/app-credential.ts",
+     "relevantLinesStart": 24,
+     "relevantLinesEnd": 29,
+     "suggestionContent": "The webhook secret is checked with a plain !== comparison, which leaks timing information and lets an attacker recover the secret byte by byte. Compare the header value and the secret with crypto.timingSafeEqual, after checking that both are strings of equal length, so the comparison runs in constant time."
+    },
+    {
+     "id": "S7",
+     "label": "security",
+     "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+     "relevantLinesStart": 85,
+     "relevantLinesEnd": 94,
+     "suggestionContent": "refreshOAuthTokens expects the Cal.com user id as its third argument, but `credentialId` is passed. With credential sync enabled, that id is sent as `calcomUserId` to the sync endpoint. The endpoint can then return another user's tokens, which get stored on this credential. Pass `credential.userId` instead."
+    },
+    {
+     "id": "S8",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 97,
+     "relevantLinesEnd": 100,
+     "suggestionContent": "parseRefreshTokenResponse now returns a zod SafeParseReturnType ({success, data}), but this caller assigns it directly to `key` and saves it as the credential key. The old code saved the parsed credentials. The stored credential is now wrapped as {success, data}, which breaks later token reads. Use `.data` after checking `.success`."
+    },
+    {
+     "id": "S9",
+     "label": "bug",
+     "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+     "relevantLinesStart": 85,
+     "relevantLinesEnd": 94,
+     "suggestionContent": "refreshOAuthTokens' third parameter is the Cal.com userId, but this call passes `credentialId`. In sync mode the credential id is sent to the sync endpoint as calcomUserId, so the wrong user's tokens may be fetched. Pass the credential's userId instead."
+    },
+    {
+     "id": "S10",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 86,
+     "relevantLinesEnd": 95,
+     "suggestionContent": "When credential sync is enabled, refreshOAuthTokens returns a raw fetch Response. The refresh callback otherwise returns a gaxios response with `.data`. This caller still reads `res?.data`, which is undefined on a fetch Response, so `token.access_token` throws. The Response body must be parsed with `.json()` and normalised to the old shape."
+    },
+    {
+     "id": "S11",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 97,
+     "relevantLinesEnd": 100,
+     "suggestionContent": "parseRefreshTokenResponse returns a zod SafeParse result ({success, data}), not the parsed key. Assigning it to `key` and saving it with prisma.credential.update stores {success:true,data:{...}} as the credential key. Google tokens then can't be read afterwards. Use `.data` from the result as the key."
+    },
+    {
+     "id": "S12",
+     "label": "bug",
+     "relevantFile": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+     "relevantLinesStart": 5,
+     "relevantLinesEnd": 11,
+     "suggestionContent": "The computed keys `[z.string().toString()]` evaluate to the literal string \"[object Object]\", not a wildcard. The schema therefore requires a numeric property named \"[object Object]\", so safeParse always fails in credential-sync mode and the function throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` on an object with access_token and optional numeric expiry fields instead."
+    },
+    {
+     "id": "S13",
+     "label": "bug",
+     "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+     "relevantLinesStart": 85,
+     "relevantLinesEnd": 94,
+     "suggestionContent": "refreshOAuthTokens expects the Cal.com userId as its third argument, but `credentialId` is passed. In sync mode the credential id is sent as `calcomUserId`, so the endpoint returns tokens for the wrong user, or none. Pass the credential's userId instead."
+    },
+    {
+     "id": "S14",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 97,
+     "relevantLinesEnd": 100,
+     "suggestionContent": "parseRefreshTokenResponse returns a zod SafeParse result ({success, data}), not the parsed key. It is stored as `key` in the credential update, so the DB gets {success:true,data:{...}} and the Google credential is corrupted. Use `.data` (e.g. `parseRefreshTokenResponse(...).data`) as the key."
+    },
+    {
+     "id": "S15",
+     "label": "bug",
+     "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+     "relevantLinesStart": 85,
+     "relevantLinesEnd": 94,
+     "suggestionContent": "The third argument of refreshOAuthTokens is `userId`, but `credentialId` is passed here. With credential sync enabled, the sync endpoint receives a credential id as calcomUserId, so the wrong user's tokens are fetched. It also wrongly activates the sync path. Pass the credential's userId."
+    },
+    {
+     "id": "S16",
+     "label": "bug",
+     "relevantFile": "packages/app-store/office365video/lib/VideoApiAdapter.ts",
+     "relevantLinesStart": 73,
+     "relevantLinesEnd": 73,
+     "suggestionContent": "The app slug passed to refreshOAuthTokens is \"msteams\", but this adapter is the office365-video app. The sync endpoint is asked for the wrong app's credentials. Use the correct slug \"office365-video\"."
+    },
+    {
+     "id": "S17",
+     "label": "bug",
+     "relevantFile": "packages/app-store/_utils/oauth/parseRefreshTokenResponse.ts",
+     "relevantLinesStart": 5,
+     "relevantLinesEnd": 11,
+     "suggestionContent": "The computed keys `[z.string().toString()]` evaluate to a literal string like \"ZodString\" and not to a wildcard. The schema therefore requires a numeric property with that nonsense name and never matches real token responses. In sync mode every refresh throws \"Invalid refreshed tokens were returned\". Use `.passthrough()` and a real expiry check instead."
+    },
+    {
+     "id": "S18",
+     "label": "bug",
+     "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+     "relevantLinesStart": 85,
+     "relevantLinesEnd": 94,
+     "suggestionContent": "The third argument of refreshOAuthTokens is documented and named as the Cal.com user id (it is sent as `calcomUserId`), but this call passes `credentialId`. With credential sync enabled, the sync endpoint gets a credential id labelled as a user id. Pass the credential's userId instead."
+    },
+    {
+     "id": "S19",
+     "label": "bug",
+     "relevantFile": "packages/app-store/googlecalendar/lib/CalendarService.ts",
+     "relevantLinesStart": 97,
+     "relevantLinesEnd": 97,
+     "suggestionContent": "parseRefreshTokenResponse returns a safeParse result ({success, data}), not the parsed credential. The result is saved as `key`, so the stored Google credential becomes {success:true,data:{...}} and later reads of refresh_token and access_token fail. Use `.data` of the result as the key."
+    },
+    {
+     "id": "S20",
+     "label": "bug",
+     "relevantFile": "packages/app-store/zoho-bigin/lib/CalendarService.ts",
+     "relevantLinesStart": 85,
+     "relevantLinesEnd": 94,
+     "suggestionContent": "refreshOAuthTokens expects the Cal.com userId as its third argument, but `credentialId` (credential.id) is passed. When credential sync is enabled, the sync endpoint is called with the credential id as calcomUserId, so it refreshes the wrong user's tokens or fails. Pass the credential's userId."
+    },
+    {
+     "id": "S21",
+     "label": "bug",
+     "relevantFile": "packages/app-store/_utils/oauth/refreshOAuthTokens.ts",
+     "relevantLinesStart": 8,
+     "relevantLinesEnd": 15,
+     "suggestionContent": "In sync mode this returns a raw fetch Response. Callers such as Google (`res?.data`), zohocrm and zoho-bigin (`.data.error`) and hubspot (a token object) expect the shape their refreshFunction returns (axios response, Gaxios response or token). With credential sync on, those callers break because the Response has no `.data` and the body is not parsed. Return the same shape as the refresh function, or have each caller handle the sync response."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S13",
+     "S15",
+     "S18",
+     "S20",
+     "S7",
+     "S9"
+    ],
+    [
+     "S11",
+     "S14",
+     "S19",
+     "S2",
+     "S8"
+    ],
+    [
+     "S3",
+     "S6"
+    ],
+    [
+     "S12",
+     "S17",
+     "S4"
+    ],
+    [
+     "S10",
+     "S21"
+    ],
+    [
+     "S5"
+    ],
+    [
+     "S16"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/sms-workflow-reminder-retry-count-tracking-cal-com",
+   "pr": "sms-workflow-reminder-retry-count-tracking-cal-com",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+     "relevantLinesStart": 189,
+     "relevantLinesEnd": 198,
+     "suggestionContent": "The prisma.workflowReminder.update inside the catch block is unguarded. If it throws (e.g. the record was deleted concurrently or the DB errors), the exception escapes the for-loop and the handler. The remaining reminders are then skipped and the cron returns a 500. Wrap the update in its own try/catch, or log the error first and then update inside a nested try/catch."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+     "relevantLinesStart": 158,
+     "relevantLinesEnd": 188,
+     "suggestionContent": "retryCount is only incremented when message and sendTo are both present and scheduleSMS returns a falsy value. When sendTo is missing (e.g. a missing or invalid phone number), or the message is empty, the if-block is skipped. retryCount is never incremented, so the reminder is retried on every cron run until its date, which is the behavior this PR is meant to stop. Add an else branch that increments retryCount when the message or sendTo check fails."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+     "relevantLinesStart": 28,
+     "relevantLinesEnd": 43,
+     "suggestionContent": "The comment says this deletes scheduled SMS reminders past their date, but the new OR branch `retryCount > 1` has no `method: WorkflowMethods.SMS` filter. It therefore also deletes email and WhatsApp reminders in this SMS cron job. Add the SMS method filter to that branch and update the comment to mention the retry-count deletion."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+     "relevantLinesStart": 38,
+     "relevantLinesEnd": 42,
+     "suggestionContent": "The retry-count delete branch has no method filter, so this SMS cron handler can delete non-SMS WorkflowReminder rows (email, WhatsApp) that have retryCount > 1. Add `method: WorkflowMethods.SMS` to that OR branch so it matches the original SMS-only scope."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+     "relevantLinesStart": 31,
+     "relevantLinesEnd": 43,
+     "suggestionContent": "The `retryCount > 1` branch of the deleteMany OR is not restricted to `method: WorkflowMethods.SMS`. This SMS cron can therefore delete non-SMS reminders (email, WhatsApp) that have retryCount > 1. Add `method: WorkflowMethods.SMS` to that branch."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+     "relevantLinesStart": 189,
+     "relevantLinesEnd": 197,
+     "suggestionContent": "The retryCount update inside the catch block is unguarded. If it throws, the error escapes the catch and aborts the whole loop, so the remaining reminders are never processed. Wrap the update in its own try/catch."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "packages/features/ee/workflows/api/scheduleSMSReminders.ts",
+     "relevantLinesStart": 31,
+     "relevantLinesEnd": 43,
+     "suggestionContent": "The SMS cron's deleteMany was previously scoped to method SMS, but the new OR branch `retryCount > 1` has no method filter. It can delete email or WhatsApp reminders that reach that retry count. Add `method: WorkflowMethods.SMS` to the retryCount branch."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S6"
+    ],
+    [
+     "S3",
+     "S4",
+     "S5",
+     "S7"
+    ],
+    [
+     "S2"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/feat-2fa-backup-codes-cal-com",
+   "pr": "feat-2fa-backup-codes-cal-com",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "security",
+     "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+     "relevantLinesStart": 139,
+     "relevantLinesEnd": 156,
+     "suggestionContent": "Backup-code consumption is a non-atomic read-modify-write: the codes are decrypted, checked, and then re-encrypted and saved with no guard. Two concurrent logins using the same backup code can both pass the check, so the single-use guarantee is broken, and one request's write can overwrite the other's. Fix it with an optimistic check, for example update with a `where` clause that matches the previously read `backupCodes` value and fail if no row is updated, or run the read and write in a transaction with a row lock."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+     "relevantLinesStart": 132,
+     "relevantLinesEnd": 136,
+     "suggestionContent": "After a successful enable, `onEnable()` is no longer called and is only called from the backup-codes Close button. If the user dismisses the dialog by Escape or overlay click (`onOpenChange`) while the codes are displayed, the parent is never notified that 2FA is enabled. The modal also keeps its step state and the plaintext backup codes. Call `onEnable` when 2FA is enabled, or make the dialog's `onOpenChange(false)` on the DisplayBackupCodes step run the same handler as Close, which resets state and clears `backupCodes`."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "apps/web/components/auth/BackupCode.tsx",
+     "relevantLinesStart": 7,
+     "relevantLinesEnd": 7,
+     "suggestionContent": "The default export in BackupCode.tsx is named `TwoFactor`, which is the name of the separate TOTP component. It is a copy-paste leftover and misleads readers and stack traces. Rename it to `BackupCode`."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "apps/web/pages/api/auth/two-factor/totp/disable.ts",
+     "relevantLinesStart": 50,
+     "relevantLinesEnd": 50,
+     "suggestionContent": "The error log says \"cannot proceed with backup code login\", but this endpoint disables two-factor authentication and does not log in. Change the message to describe disabling 2FA with a backup code."
+    },
+    {
+     "id": "S5",
+     "label": "security",
+     "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+     "relevantLinesStart": 143,
+     "relevantLinesEnd": 145,
+     "suggestionContent": "The user-supplied backup code is checked against the decrypted codes with Array.indexOf, which compares strings in non-constant time. Compare each stored code with crypto.timingSafeEqual on equal-length buffers, without short-circuiting across entries. The same comparison in apps/web/pages/api/auth/two-factor/totp/disable.ts should be changed too."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "packages/features/auth/lib/next-auth-options.ts",
+     "relevantLinesStart": 143,
+     "relevantLinesEnd": 156,
+     "suggestionContent": "Backup-code consumption is a non-atomic read-modify-write. Two concurrent logins with the same code can both read the list before either write lands, so both pass the check and authenticate. This breaks the 'each code can be used exactly once' guarantee. Make the consume step atomic, for example with a conditional update that matches the previously read encrypted backupCodes value and fails if zero rows were updated, or a transaction with a row lock."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "apps/web/components/settings/EnableTwoFactorModal.tsx",
+     "relevantLinesStart": 132,
+     "relevantLinesEnd": 136,
+     "suggestionContent": "`onEnable()` used to run right after the TOTP code was verified. It now runs only from the backup-codes \"close\" button. If the user dismisses the dialog another way (escape, an outside click or the X, all via `onOpenChange`), 2FA is already enabled server-side but `onEnable` never fires. The parent's state and UI then stay stale and the switch still shows 2FA as off. Call `onEnable` when verification succeeds, or call it from the dialog's `onOpenChange` close path while on the DisplayBackupCodes step."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S6"
+    ],
+    [
+     "S2",
+     "S7"
+    ],
+    [
+     "S3"
+    ],
+    [
+     "S4"
+    ],
+    [
+     "S5"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+   "pr": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "packages/lib/server/service/insightsBooking.ts",
+     "relevantLinesStart": 72,
+     "relevantLinesEnd": 80,
+     "suggestionContent": "getAuthorizationConditions() always returns a non-null Prisma.Sql, so the `else if (filterConditions)` and final `else` branches (returning NOTHING_CONDITION) in getBaseConditions can never execute. Simplify to: if filterConditions, combine it with authConditions; otherwise return authConditions."
+    }
+   ],
+   "groups": [
+    [
+     "S1"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+   "pr": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "security",
+     "relevantFile": "app/views/layouts/embed.html.erb",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 11,
+     "suggestionContent": "`request.referer` is interpolated unescaped into an inline script string. A referer on the allowed host with a single quote in its path can break out of the string and run script (XSS). Build the target origin from the validated URI (scheme://host[:port]) and output it with `to_json`/`j`."
+    },
+    {
+     "id": "S2",
+     "label": "security",
+     "relevantFile": "app/models/topic_embed.rb",
+     "relevantLinesStart": 48,
+     "relevantLinesEnd": 48,
+     "suggestionContent": "`open(url)` is called with a URL that comes from the embed_url request parameter and from RSS item links, and the scheme is never validated. With open-uri, Kernel#open can run commands for strings starting with `|` and can read local files. Validate that the scheme is http/https and use `URI.parse(url).open` or Net::HTTP."
+    },
+    {
+     "id": "S3",
+     "label": "security",
+     "relevantFile": "app/models/topic_embed.rb",
+     "relevantLinesStart": 13,
+     "relevantLinesEnd": 22,
+     "suggestionContent": "Imported content is stored with cook_method raw_html, which skips the sanitizer, and best.html.erb outputs it with `raw post.cooked`. HTML from a feed or remote page is therefore served unsanitized (stored XSS). The `url` is also placed into an href unescaped. Sanitize the contents before saving."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "app/models/topic_embed.rb",
+     "relevantLinesStart": 13,
+     "relevantLinesEnd": 13,
+     "suggestionContent": "`contents <<` mutates the caller's string in place. This raises FrozenError for frozen strings and appends the footer twice if the same string is imported again. Use `contents = contents + ...` instead."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "app/assets/javascripts/embed.js",
+     "relevantLinesStart": 17,
+     "relevantLinesEnd": 17,
+     "suggestionContent": "`discourseUrl.indexOf(e.origin) === -1` is a substring check, so any origin that appears inside the URL string, or an empty origin, passes. Compare `e.origin` for exact equality with the origin of discourseUrl."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "app/models/topic_embed.rb",
+     "relevantLinesStart": 62,
+     "relevantLinesEnd": 73,
+     "suggestionContent": "absolutize_urls treats any href or src starting with '/' as site-relative and strips all leading slashes. Protocol-relative URLs like '//cdn.example.com/a.png' are rewritten to 'http://site/cdn.example.com/a.png', which is broken. Skip values starting with '//' (or prefix them with the scheme) and only rewrite single-slash paths."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "lib/tasks/disqus.thor",
+     "relevantLinesStart": 148,
+     "relevantLinesEnd": 148,
+     "suggestionContent": "The Disqus import now calls TopicEmbed.import_remote instead of PostCreator. This silently drops the `--category` option and the `created_at` from the Disqus thread, and the `--category` method_option was removed from the CLI. It also now makes a live HTTP fetch of every thread link, and `open(url)` raises on a failure that previously could not happen, aborting the whole import. Keep the category and date handling, and rescue fetch errors per thread."
+    },
+    {
+     "id": "S8",
+     "label": "security",
+     "relevantFile": "app/models/topic_embed.rb",
+     "relevantLinesStart": 13,
+     "relevantLinesEnd": 13,
+     "suggestionContent": "The url is interpolated unescaped into `<a href='#{url}'>#{url}</a>`. The post is stored with cook_method raw_html and rendered with `raw post.cooked`, so a url containing a quote or markup is output as live HTML. Escape it with ERB::Util.html_escape (or CGI.escapeHTML) for both the href and the link text."
+    },
+    {
+     "id": "S9",
+     "label": "bug",
+     "relevantFile": "app/models/topic_embed.rb",
+     "relevantLinesStart": 64,
+     "relevantLinesEnd": 71,
+     "suggestionContent": "absolutize_urls treats any href or src starting with '/' as root-relative. A protocol-relative URL like '//cdn.example.com/x.png' matches, has its leading slashes stripped, and becomes 'http://host/cdn.example.com/x.png', which is broken. Skip values starting with '//' (or resolve them against the scheme) before applying the prefix."
+    },
+    {
+     "id": "S10",
+     "label": "bug",
+     "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+     "relevantLinesStart": 31,
+     "relevantLinesEnd": 37,
+     "suggestionContent": "`i.content.scrub` raises NoMethodError when a feed item has no content (only a description). The exception aborts the whole poll, so every item after it is never imported. Fall back to `i.content || i.description`, skip items with blank content, and rescue per item."
+    },
+    {
+     "id": "S11",
+     "label": "bug",
+     "relevantFile": "app/models/topic_embed.rb",
+     "relevantLinesStart": 31,
+     "relevantLinesEnd": 39,
+     "suggestionContent": "On the update path `embed.post` can be nil if the post was deleted. `PostRevisor.new(nil)` then raises NoMethodError, and every later import of that URL fails the same way. Guard against a nil post, for example by skipping the revision or recreating the topic."
+    },
+    {
+     "id": "S12",
+     "label": "bug",
+     "relevantFile": "spec/jobs/poll_feed_spec.rb",
+     "relevantLinesStart": 18,
+     "relevantLinesEnd": 28,
+     "suggestionContent": "The 'requires feed_polling_url' and 'requires embed_by_username' tests do not stub feed_polling_enabled? to true. It defaults to false, so poll_feed is never called whatever the other setting returns, and the tests pass even if those conditions are removed. Stub feed_polling_enabled? true and the other two settings valid, varying only the one under test."
+    },
+    {
+     "id": "S13",
+     "label": "bug",
+     "relevantFile": "spec/controllers/embed_controller_spec.rb",
+     "relevantLinesStart": 8,
+     "relevantLinesEnd": 11,
+     "suggestionContent": "The 'is 404 without an embed_url' test never sets embeddable_host, so ensure_embeddable rejects the request before params.require(:embed_url) runs. It passes without the embed_url check. Stub embeddable_host and the referer so the missing param is the only failure cause."
+    },
+    {
+     "id": "S14",
+     "label": "bug",
+     "relevantFile": "spec/components/topic_retriever_spec.rb",
+     "relevantLinesStart": 21,
+     "relevantLinesEnd": 25,
+     "suggestionContent": "The 'not a url' test does not stub embeddable_host. The blank default never matches any host, so invalid_host? is true whether or not the InvalidURIError rescue works. Stub embeddable_host to a real host so only the malformed URL can cause the rejection."
+    },
+    {
+     "id": "S15",
+     "label": "bug",
+     "relevantFile": "embed_controller.rb",
+     "relevantLinesStart": null,
+     "relevantLinesEnd": null,
+     "suggestionContent": "The referer/host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. The reviewer notes this fails closed and is not a bypass. Normalize case on both sides of the host comparison (e.g. downcase both) to avoid false rejections. The same issue applies to topic_retriever.rb."
+    },
+    {
+     "id": "S16",
+     "label": "bug",
+     "relevantFile": "topic_retriever.rb",
+     "relevantLinesStart": null,
+     "relevantLinesEnd": null,
+     "suggestionContent": "The host comparison does not lowercase either side, so a mixed-case host is wrongly rejected. This fails closed and is not a bypass. Normalize case on both sides of the comparison (e.g. downcase both) to avoid false rejections."
+    }
+   ],
+   "groups": [
+    [
+     "S6",
+     "S9"
+    ],
+    [
+     "S15",
+     "S16"
+    ],
+    [
+     "S1"
+    ],
+    [
+     "S2"
+    ],
+    [
+     "S3"
+    ],
+    [
+     "S4"
+    ],
+    [
+     "S5"
+    ],
+    [
+     "S7"
+    ],
+    [
+     "S8"
+    ],
+    [
+     "S10"
+    ],
+    [
+     "S11"
+    ],
+    [
+     "S12"
+    ],
+    [
+     "S13"
+    ],
+    [
+     "S14"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+   "pr": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "app/models/embeddable_host.rb",
+     "relevantLinesStart": 17,
+     "relevantLinesEnd": 17,
+     "suggestionContent": "The query compares lower(host) to the un-downcased uri.host. A referer such as http://EvilTrout.com never matches the stored lowercase host, so embedding is wrongly denied. Fix: use where(\"lower(host) = ?\", host.downcase)."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "app/models/embeddable_host.rb",
+     "relevantLinesStart": 5,
+     "relevantLinesEnd": 8,
+     "suggestionContent": "before_validation calls sub! on self.host, which raises NoMethodError when host is nil. A request with a missing host therefore returns a 500. Fix: guard for nil, e.g. self.host = host.sub(...) if host."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "app/controllers/admin/embeddable_hosts_controller.rb",
+     "relevantLinesStart": 9,
+     "relevantLinesEnd": 18,
+     "suggestionContent": "update and destroy use .first without a nil check. An unknown id gives nil, and the following host.destroy or save_host(nil) raises NoMethodError and returns a 500. Fix: use EmbeddableHost.find(params[:id]), which returns 404."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "app/controllers/admin/embedding_controller.rb",
+     "relevantLinesStart": 9,
+     "relevantLinesEnd": 11,
+     "suggestionContent": "The update action does not change or persist anything and only re-renders the embedding. The client's saveChanges therefore appears to succeed while doing nothing."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+     "relevantLinesStart": 9,
+     "relevantLinesEnd": 25,
+     "suggestionContent": "The execute(...)[0]['id'] lookup raises NoMethodError when no embed_category setting row exists, which is the default, because [0] is nil. The INSERT also interpolates the raw host string into SQL and does not strip the scheme or path. Fix: guard the nil lookups, and use quoted values or ActiveRecord to insert."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "spec/fabricators/embeddable_host_fabricator.rb",
+     "relevantLinesStart": 1,
+     "relevantLinesEnd": 27,
+     "suggestionContent": "The file names and contents are swapped. embeddable_host_fabricator.rb defines the category fabricators (:category, :diff_category, :happy_category, :private_category), and category_fabricator.rb defines :embeddable_host. Restore category_fabricator.rb to the original category fabricators and put the :embeddable_host fabricator in embeddable_host_fabricator.rb."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "app/models/embeddable_host.rb",
+     "relevantLinesStart": 14,
+     "relevantLinesEnd": 17,
+     "suggestionContent": "The query compares lower(host) in the database with uri.host, which is not lowercased, so the comparison normalizes only one side. A referer or URL with uppercase letters (e.g. http://EvilTrout.com) will not match the stored host. Compare against host.downcase, i.e. where('lower(host) = ?', host.downcase)."
+    },
+    {
+     "id": "S8",
+     "label": "bug",
+     "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+     "relevantLinesStart": 9,
+     "relevantLinesEnd": 16,
+     "suggestionContent": "The migration reads `execute(...)[0]['id']` and `[0]['value']` assuming the first row exists. When embed_category is unset (the default) or no category matches, the result is empty and `[0]` is nil, so the migration raises NoMethodError. Fetch the row first (e.g. `row = execute(...).first`) and fall back to the uncategorized id when it is nil."
+    },
+    {
+     "id": "S9",
+     "label": "bug",
+     "relevantFile": "spec/models/topic_spec.rb",
+     "relevantLinesStart": 1403,
+     "relevantLinesEnd": 1405,
+     "suggestionContent": "The test 'is false if embeddable_host is blank' passes only because has_topic_embed? is unstubbed and false on a built topic, so it never exercises the embeddable-host condition. Its name disagrees with its body. Stub has_topic_embed? to true and set embed_truncate to true with no host, and assert the intended result, or remove the test now that expandable_first_post? no longer checks hosts."
+    },
+    {
+     "id": "S10",
+     "label": "bug",
+     "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+     "relevantLinesStart": 9,
+     "relevantLinesEnd": 16,
+     "suggestionContent": "`execute(...)[0]['id']` raises NoMethodError (nil[]) when no row matches, which is the normal case when `embed_category` is not stored in site_settings. The `uncategorized_category_id` lookup on line 15 has the same problem when that setting is not stored. Fetch the row first and fall back safely when it is nil, so the migration does not abort."
+    },
+    {
+     "id": "S11",
+     "label": "bug",
+     "relevantFile": "app/models/embeddable_host.rb",
+     "relevantLinesStart": 5,
+     "relevantLinesEnd": 8,
+     "suggestionContent": "The before_validation block calls `self.host.sub!` with no nil check. A create request without `host`, or `EmbeddableHost.new`, raises NoMethodError and returns a 500 instead of a validation error. It also mutates the string in place. Guard on `host.present?` and use non-destructive assignment."
+    },
+    {
+     "id": "S12",
+     "label": "bug",
+     "relevantFile": "app/controllers/admin/embeddable_hosts_controller.rb",
+     "relevantLinesStart": 9,
+     "relevantLinesEnd": 18,
+     "suggestionContent": "`EmbeddableHost.where(id: params[:id]).first` returns nil for an unknown id, and `save_host(nil)` and `host.destroy` then raise NoMethodError. Use `find` so a missing record gives a 404."
+    },
+    {
+     "id": "S13",
+     "label": "bug",
+     "relevantFile": "db/migrate/20150818190757_create_embeddable_hosts.rb",
+     "relevantLinesStart": 9,
+     "relevantLinesEnd": 16,
+     "suggestionContent": "The migration reads `execute(...)[0]['id']` and `[0]['value']` without checking for an empty result. On sites where the `embed_category` setting was never saved, or where `uncategorized_category_id` is not stored, `[0]` is nil and the migration raises NoMethodError. Use `.first` with a nil check and fall back to a default category id."
+    },
+    {
+     "id": "S14",
+     "label": "bug",
+     "relevantFile": "app/models/embeddable_host.rb",
+     "relevantLinesStart": 10,
+     "relevantLinesEnd": 18,
+     "suggestionContent": "The query compares `lower(host)` with `uri.host`, which is not downcased. A referer such as `http://EvilTrout.com/` never matches the stored host, so the embed is wrongly rejected. Downcase `host` before the comparison."
+    },
+    {
+     "id": "S15",
+     "label": "bug",
+     "relevantFile": "app/models/topic.rb",
+     "relevantLinesStart": 868,
+     "relevantLinesEnd": 869,
+     "suggestionContent": "expandable_first_post? used to return false when no embeddable hosts were configured. The new version drops that guard (`SiteSetting.embeddable_hosts.present?`) and does not replace it with `EmbeddableHost.exists?`. A forum with no embeddable hosts but with embed_truncate on and a topic embed now gets an expandable first post. Restore the guard by checking `EmbeddableHost.exists?`."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S14",
+     "S7"
+    ],
+    [
+     "S11",
+     "S2"
+    ],
+    [
+     "S12",
+     "S3"
+    ],
+    [
+     "S10",
+     "S13",
+     "S5",
+     "S8"
+    ],
+    [
+     "S4"
+    ],
+    [
+     "S6"
+    ],
+    [
+     "S9"
+    ],
+    [
+     "S15"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+   "pr": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+   "suggestions": [],
+   "groups": []
+  },
+  {
+   "id": "sonnet-5.5/feature-automatically-downsize-large-images-discourse-cursor",
+   "pr": "feature-automatically-downsize-large-images-discourse-cursor",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "app/models/optimized_image.rb",
+     "relevantLinesStart": 145,
+     "relevantLinesEnd": 151,
+     "suggestionContent": "`self.downsize` is defined twice, and the second definition (from, to, dimensions, opts) overrides the first (from, to, max_width, max_height, opts). The existing caller app/jobs/regular/resize_emoji.rb:14 calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 arguments, so it now raises ArgumentError and emoji resizing breaks. Keep a single signature, for example `downsize(from, to, dimensions, opts={})`, and update resize_emoji to pass \"100x100\"."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "app/models/optimized_image.rb",
+     "relevantLinesStart": 145,
+     "relevantLinesEnd": 151,
+     "suggestionContent": "`self.downsize` is defined twice, and Ruby has no overloading, so the second definition (from, to, dimensions, opts) replaces the first (from, to, max_width, max_height, opts). The existing caller resize_emoji.rb:14 `downsize(path, path, 100, 100, opts)` passes 5 arguments to a method that now takes at most 4, so it raises ArgumentError and emoji resizing breaks. Keep a single `downsize` that handles both forms, or update the emoji caller to pass \"100x100\".."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "app/models/optimized_image.rb",
+     "relevantLinesStart": 145,
+     "relevantLinesEnd": 151,
+     "suggestionContent": "`downsize` is defined twice, and the second definition (from, to, dimensions, opts) replaces the first (from, to, max_width, max_height, opts). The existing caller resize_emoji.rb:14, `OptimizedImage.downsize(path, path, 100, 100, opts)`, now passes 5 arguments to a method that takes at most 4, so it raises ArgumentError. Update that caller to pass \"100x100\" as the dimensions string, or keep a single `downsize` that supports both call forms."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "app/models/optimized_image.rb",
+     "relevantLinesStart": 145,
+     "relevantLinesEnd": 151,
+     "suggestionContent": "The new `downsize(from, to, dimensions, opts={})` overrides the earlier `downsize(from, to, max_width, max_height, opts={})`, because Ruby keeps only the last definition of a method name. The existing caller `resize_emoji.rb:14` calls `OptimizedImage.downsize(path, path, 100, 100, opts)` with 5 arguments, so it now raises ArgumentError and emoji resizing breaks. Either update that caller to `downsize(path, path, \"100x100\", opts)`, or remove the duplicate name and give the new variant a different name."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "app/models/optimized_image.rb",
+     "relevantLinesStart": 145,
+     "relevantLinesEnd": 151,
+     "suggestionContent": "`self.downsize` is defined twice, once with (from, to, max_width, max_height, opts) and once with (from, to, dimensions, opts). Ruby keeps only the second, so the existing caller app/jobs/regular/resize_emoji.rb:14, `downsize(path, path, 100, 100, opts)`, now raises ArgumentError. Make one definition accept both shapes, for example `downsize(from, to, *args)` that builds \"WxH\" from two numeric arguments or uses a single dimensions string. Alternatively, update resize_emoji.rb to pass \"100x100\"."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S2",
+     "S3",
+     "S4",
+     "S5"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/fix-proper-handling-of-group-memberships-discourse-cursor",
+   "pr": "fix-proper-handling-of-group-memberships-discourse-cursor",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 14,
+     "suggestionContent": "totalPages is computed as floor(user_count/limit)+1, which overcounts by one when user_count is an exact multiple of limit (50 users with limit 50 gives 2 pages). The pager then shows a phantom last page, and 'next' fetches an empty page at offset = user_count. Use Math.ceil(user_count / limit) instead."
+    },
+    {
+     "id": "S2",
+     "label": "performance",
+     "relevantFile": "app/controllers/groups_controller.rb",
+     "relevantLinesStart": 22,
+     "relevantLinesEnd": 26,
+     "suggestionContent": "The client-supplied limit is used with no upper bound, and a negative or zero value is not handled. A caller can request an arbitrarily large limit and force loading and serializing of every member of a large group in one request. Clamp it, for example limit = [[(params[:limit] || 50).to_i, 1].max, 200].min, and make offset non-negative."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 14,
+     "suggestionContent": "totalPages uses Math.floor(user_count / limit) + 1, which is off by one when user_count is an exact multiple of limit (e.g. 50 members with limit 50 gives 2 pages). The \"next\" button stays enabled on the real last page and navigates to an empty page. Use Math.ceil(user_count / limit)."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 14,
+     "suggestionContent": "totalPages uses Math.floor(user_count / limit) + 1, which overcounts by one when user_count is an exact multiple of limit (50 users with limit 50 gives 2 pages). showingLast is then false on the real last page, so 'next' loads an empty page. Use Math.ceil(user_count / limit) instead."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "app/assets/javascripts/admin/controllers/admin-group.js.es6",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 14,
+     "suggestionContent": "totalPages uses Math.floor(user_count / limit) + 1, which overcounts by one when user_count is an exact multiple of limit (e.g. 50 members gives 2 pages). The user can then navigate to an empty trailing page. Use Math.ceil(user_count / limit) instead."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "spec/controllers/admin/groups_controller_spec.rb",
+     "relevantLinesStart": 114,
+     "relevantLinesEnd": 117,
+     "suggestionContent": "The test 'cannot remove members from automatic groups' sends `xhr :put, :remove_member`, but the route is `delete \"members\" => \"groups#remove_member\"`. It exercises the action with a verb that is never routed in production. Use `xhr :delete, :remove_member, group_id: 1, user_id: 42` so the test matches the real request."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "app/controllers/groups_controller.rb",
+     "relevantLinesStart": 22,
+     "relevantLinesEnd": 35,
+     "suggestionContent": "The `members` endpoint now always caps results at 50 and returns `{members, meta}`. Previously non-automatic groups returned every member. The public group page (`group/members.hbs` via `group-members.js.es6`) only reads `members` and has no paging UI, so groups with more than 50 members are silently truncated for regular users. Add pagination to the public page, or keep the old unlimited behaviour for it."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S3",
+     "S4",
+     "S5"
+    ],
+    [
+     "S2"
+    ],
+    [
+     "S6"
+    ],
+    [
+     "S7"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/feature-localization-fallbacks-server-side-discourse-cursor",
+   "pr": "feature-localization-fallbacks-server-side-discourse-cursor",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "lib/freedom_patches/translate_accelerator.rb",
+     "relevantLinesStart": 67,
+     "relevantLinesEnd": 68,
+     "suggestionContent": "translate loads only config.locale, but the new fallback chain (default_locale, :en) is loaded only by the controller's I18n.fallbacks.ensure_loaded!. Outside controllers (jobs, mailers, rake), a key missing in the current locale falls back to a locale that is not loaded, so it returns 'translation missing', and the LRU cache then stores that result. Fix: in translate, call I18n.fallbacks.ensure_loaded! (or load each locale in fallbacks[config.locale]) before the lookup."
+    }
+   ],
+   "groups": [
+    [
+     "S1"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/anonymous-add-configurable-device-limit-grafana-codex",
+   "pr": "anonymous-add-configurable-device-limit-grafana-codex",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+     "relevantLinesStart": 52,
+     "relevantLinesEnd": 54,
+     "suggestionContent": "ProvideAnonDBStore now takes an extra `deviceLimit int64` parameter, but pkg/server/wire.go:374-375 still lists it as a wire provider with a Bind to AnonStore. wire cannot supply an int64, so wire generation and the build fail. Remove the provider and Bind from wire.go, since impl.go now constructs the store directly."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+     "relevantLinesStart": 108,
+     "relevantLinesEnd": 118,
+     "suggestionContent": "The limit check counts devices and then inserts in separate steps with no lock or transaction. Concurrent requests from new devices can all see count < limit and all insert, so the limit is exceeded. Make the count-and-insert atomic, for example with a conditional INSERT ... SELECT ... WHERE (SELECT COUNT(*)) < limit."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "pkg/services/anonymous/anonimpl/impl.go",
+     "relevantLinesStart": 144,
+     "relevantLinesEnd": 148,
+     "suggestionContent": "tagDeviceUI errors are now all returned, not only ErrDeviceLimitReached. TagDevice is called from places that previously ignored these failures, so any DB error from tagging now propagates to callers. Return the error only when it is ErrDeviceLimitReached, and keep logging other errors as before."
+    },
+    {
+     "id": "S4",
+     "label": "performance",
+     "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
+     "relevantLinesStart": 44,
+     "relevantLinesEnd": 50,
+     "suggestionContent": "TagDevice is now called synchronously in Authenticate with the request ctx instead of in a goroutine with its own timeout. Every anonymous request that misses the local cache now waits on the DB writes and, when a limit is set, the COUNT query. If the client cancels the request, tagging is cancelled with it. Keep the async path for non-limit cases, or cache the count result."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database_test.go",
+     "relevantLinesStart": 51,
+     "relevantLinesEnd": 70,
+     "suggestionContent": "TestIntegrationBeyondDeviceLimit only checks that a new device is rejected at the limit. It would still pass if updateDevice always returned ErrDeviceLimitReached, because it never re-submits the existing device (DeviceID \"32mdo31deeqwes\") at the limit. Add a call that updates the existing device with a new UserAgent or UpdatedAt, require NoError, and check the stored row changed."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+     "relevantLinesStart": 52,
+     "relevantLinesEnd": 54,
+     "suggestionContent": "ProvideAnonDBStore now needs a bare int64 deviceLimit, but pkg/server/wire.go (lines 374-375) still registers it as a wire provider and binds AnonStore to it. Wire has no provider for int64, so dependency injection breaks. Remove those two wire.go entries, since ProvideAnonymousDeviceService now builds the store itself, or keep the provider signature wire-compatible, for example by taking *setting.Cfg."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
+     "relevantLinesStart": 44,
+     "relevantLinesEnd": 50,
+     "suggestionContent": "Device tagging used to be a best-effort goroutine with its own background context and a 2-minute timeout. It now runs synchronously on the request ctx inside Authenticate, so DB latency (a COUNT query plus an upsert on every uncached request) blocks every anonymous request. The request ctx cancelling also aborts the tagging. ErrDeviceLimitReached now makes Authenticate return an error, so anonymous access is refused once the limit is hit. Decide this deliberately: either keep the tagging async where the limit is not enforced, or map the limit error to a clear client-facing response instead of a generic auth failure."
+    },
+    {
+     "id": "S8",
+     "label": "bug",
+     "relevantFile": "pkg/services/anonymous/anonimpl/impl.go",
+     "relevantLinesStart": 144,
+     "relevantLinesEnd": 147,
+     "suggestionContent": "The local cache key is set (line 87) before tagDeviceUI runs. When tagDeviceUI now returns ErrDeviceLimitReached, the failed device stays cached. For the next 29 minutes TagDevice returns nil early, so the rejected device gets anonymous access and the limit is bypassed. Delete the cache key when tagging fails, or set it only after tagging succeeds."
+    },
+    {
+     "id": "S9",
+     "label": "bug",
+     "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+     "relevantLinesStart": 108,
+     "relevantLinesEnd": 118,
+     "suggestionContent": "The device limit check is a non-atomic count followed by an insert. Concurrent requests from different new devices can all see count < limit and all insert, so the number of devices exceeds deviceLimit. Make the check and insert atomic, for example with a conditional INSERT ... SELECT WHERE (SELECT COUNT(*)) < limit, or serialize the check and insert under a lock."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S6"
+    ],
+    [
+     "S2",
+     "S9"
+    ],
+    [
+     "S4",
+     "S7"
+    ],
+    [
+     "S3"
+    ],
+    [
+     "S5"
+    ],
+    [
+     "S8"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/frontend-asset-optimization-grafana-codex",
+   "pr": "frontend-asset-optimization-grafana-codex",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "performance",
+     "relevantFile": "pkg/api/webassets/webassets.go",
+     "relevantLinesStart": 48,
+     "relevantLinesEnd": 49,
+     "suggestionContent": "The cache is not re-checked after taking the write lock (no double-checked locking). Concurrent callers that saw a nil cache each re-read and re-parse the manifest serially while holding the exclusive lock, which blocks all readers. Fix: after Lock(), re-check `if cfg.Env != setting.Dev && entryPointAssetsCache != nil { return entryPointAssetsCache, nil }`."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "pkg/api/webassets/webassets.go",
+     "relevantLinesStart": 69,
+     "relevantLinesEnd": 70,
+     "suggestionContent": "The cache is assigned unconditionally, so when readWebAssetsFromFile fails, a nil result overwrites a previously valid cached value, and every caller then gets (nil, err). Only assign entryPointAssetsCache when err == nil and result != nil. On error, return the error and leave the existing cache untouched."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "pkg/api/webassets/webassets.go",
+     "relevantLinesStart": 48,
+     "relevantLinesEnd": 49,
+     "suggestionContent": "After taking the write lock, the cache is not re-checked. Concurrent callers that all saw a nil cache each re-read and rebuild the manifest one after another, instead of reusing the first result. Re-check `cfg.Env != setting.Dev && entryPointAssetsCache != nil` right after Lock() and return early if it holds."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S3"
+    ],
+    [
+     "S2"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+   "pr": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/metrics_middleware_test.go",
+     "relevantLinesStart": 101,
+     "relevantLinesEnd": 109,
+     "suggestionContent": "The shouldInstrumentRequestSize=false cases (CheckHealth, CollectMetrics) never assert that the request size metric is absent. If size instrumentation were wrongly added to those endpoints, the test would still pass. Add an else branch that requires testutil.CollectAndCount(promRegistry, metricRequestSize) to equal 0."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "pkg/services/pluginsintegration/clientmiddleware/contextual_logger_middleware.go",
+     "relevantLinesStart": 27,
+     "relevantLinesEnd": 37,
+     "suggestionContent": "The traceID attribute that LoggerMiddleware used to add to \"Plugin Request Completed\" logs was removed and not re-added here. instrumentContext should append \"traceID\", tracing.TraceIDFromContext(ctx, false) when it is non-empty, so these log lines keep their trace correlation."
+    }
+   ],
+   "groups": [
+    [
+     "S1"
+    ],
+    [
+     "S2"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/dual-storage-architecture-grafana-codex",
+   "pr": "dual-storage-architecture-grafana-codex",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 50,
+     "relevantLinesEnd": 57,
+     "suggestionContent": "The async legacy write derives its context from the request ctx, so the legacy write is cancelled when the request completes. The goroutine can then be aborted before it finishes, and the legacy store silently falls out of sync. Use context.WithoutCancel(ctx) as the parent of the timeout context. The same applies to the Delete, Update and DeleteCollection goroutines."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 134,
+     "relevantLinesEnd": 141,
+     "suggestionContent": "The async legacy Update passes the original objInfo, so the legacy store recomputes the update against its own (possibly stale or different) old object instead of the object that unified storage wrote. The two stores can then diverge. Wrap the result in an updateWrapper{upstream: objInfo, updated: res}, as the previous implementation did."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 97,
+     "relevantLinesEnd": 97,
+     "suggestionContent": "ctx is built with klog.NewContext(ctx, d.Log) instead of the enriched `log`. The delete logs then lose the name, kind and method values. Use `log`."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 106,
+     "relevantLinesEnd": 106,
+     "suggestionContent": "recordStorageDuration is called with `name` as the kind label, unlike every other call, which uses options.Kind. This creates one metric label series per object name, which is unbounded cardinality and breaks the kind aggregation. Pass options.Kind."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 166,
+     "relevantLinesEnd": 166,
+     "suggestionContent": "The legacy DeleteCollection duration is recorded with recordStorageDuration, so legacy latency and errors are attributed to storage. Use recordLegacyDuration."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 45,
+     "relevantLinesEnd": 45,
+     "suggestionContent": "A failed storage Create is recorded with recordLegacyDuration, so storage errors are attributed to the legacy metric. The same mistake is in the Update error path at line 129. Use recordStorageDuration."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 50,
+     "relevantLinesEnd": 57,
+     "suggestionContent": "The background legacy write uses a context derived from the request ctx. That ctx is cancelled once the handler returns, so the legacy Create, Update, Delete and DeleteCollection can be aborted mid-flight and leave legacy storage out of sync. Derive the timeout context from context.WithoutCancel(ctx) in each goroutine."
+    },
+    {
+     "id": "S8",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 134,
+     "relevantLinesEnd": 141,
+     "suggestionContent": "The legacy Update now receives the original objInfo instead of a wrapper around the object already written to storage. Legacy therefore recomputes the update from its own stored state and can end up with different content from unified storage. Pass an updateWrapper holding the updated object returned by Storage.Update, as the previous code did."
+    },
+    {
+     "id": "S9",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 161,
+     "relevantLinesEnd": 167,
+     "suggestionContent": "The legacy DeleteCollection goroutine calls recordStorageDuration with the legacy start time and legacy error. This pollutes storage metrics and leaves the legacy metric unrecorded. Use recordLegacyDuration."
+    },
+    {
+     "id": "S10",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 127,
+     "relevantLinesEnd": 131,
+     "suggestionContent": "When the storage Update fails, the code calls recordLegacyDuration, although this is a storage operation. Use recordStorageDuration."
+    },
+    {
+     "id": "S11",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 43,
+     "relevantLinesEnd": 47,
+     "suggestionContent": "When the storage Create fails, the code calls recordLegacyDuration, although this is a storage operation. Use recordStorageDuration."
+    },
+    {
+     "id": "S12",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 106,
+     "relevantLinesEnd": 106,
+     "suggestionContent": "The Delete success metric is recorded with `name` as the kind label instead of options.Kind. The label is inconsistent with the other call sites, which creates a high-cardinality label."
+    },
+    {
+     "id": "S13",
+     "label": "consistency",
+     "relevantFile": "dualwriter_mode3.go",
+     "relevantLinesStart": null,
+     "relevantLinesEnd": null,
+     "suggestionContent": "The Delete context uses d.Log rather than the per-call log. This is a logging-context inconsistency (not a data leak); use the per-call logger for consistency."
+    },
+    {
+     "id": "S14",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 134,
+     "relevantLinesEnd": 141,
+     "suggestionContent": "The legacy update now receives the raw objInfo instead of the updateWrapper that carried the object returned by Storage.Update. Legacy therefore recomputes the update from its own old object and can diverge from unified storage, which was the guarantee the removed wrapper provided. Wrap it again with &updateWrapper{upstream: objInfo, updated: res} before calling Legacy.Update."
+    },
+    {
+     "id": "S15",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 50,
+     "relevantLinesEnd": 57,
+     "suggestionContent": "The legacy writes were moved into fire-and-forget goroutines, but each derives its context from the request ctx. That context is cancelled when the handler returns, so the legacy Create, Update, Delete and DeleteCollection calls can be cancelled midway and silently dropped. Use context.WithoutCancel(ctx) as the parent of the timeout context."
+    },
+    {
+     "id": "S16",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 166,
+     "relevantLinesEnd": 166,
+     "suggestionContent": "The legacy DeleteCollection goroutine records its duration with recordStorageDuration, although it times the Legacy call. This attributes legacy latency and errors to the storage metric. Use recordLegacyDuration."
+    },
+    {
+     "id": "S17",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 45,
+     "relevantLinesEnd": 45,
+     "suggestionContent": "When Storage.Create fails, the code calls recordLegacyDuration, but the failure is in the unified store. The failure is therefore reported under the legacy metric. Use recordStorageDuration."
+    },
+    {
+     "id": "S18",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 129,
+     "relevantLinesEnd": 129,
+     "suggestionContent": "When Storage.Update fails, the code calls recordLegacyDuration, but the failure is in the unified store. The failure is therefore reported under the legacy metric. Use recordStorageDuration."
+    },
+    {
+     "id": "S19",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3.go",
+     "relevantLinesStart": 106,
+     "relevantLinesEnd": 106,
+     "suggestionContent": "On Delete success, recordStorageDuration receives `name` where every other call passes `options.Kind`. The value lands in the kind label, so the metric label does not match its name. Pass options.Kind."
+    },
+    {
+     "id": "S20",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+     "relevantLinesStart": 37,
+     "relevantLinesEnd": 44,
+     "suggestionContent": "The 'error when creating object in the unified store fails' case registers the failing Create expectation only through setupLegacyFn. It passes only because legacy and storage share one mock, so the storage Create gets that error by accident. Register the expectation in setupStorageFn and use separate mocks for legacy and storage, so the test really covers a storage failure."
+    },
+    {
+     "id": "S21",
+     "label": "bug",
+     "relevantFile": "pkg/apiserver/rest/dualwriter_mode3_test.go",
+     "relevantLinesStart": 47,
+     "relevantLinesEnd": 77,
+     "suggestionContent": "The Mode3 tests never verify the asynchronous legacy write. The legacy call runs in a goroutine that the tests neither wait for nor assert on, and legacy and storage share the same mock. Removing the legacy Create, Update, Delete or DeleteCollection calls would not fail these tests. Use separate mocks, wait on a channel or use `Eventually`, and assert that the legacy call happened."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S15",
+     "S7"
+    ],
+    [
+     "S14",
+     "S2",
+     "S8"
+    ],
+    [
+     "S13",
+     "S3"
+    ],
+    [
+     "S12",
+     "S19",
+     "S4"
+    ],
+    [
+     "S16",
+     "S5",
+     "S9"
+    ],
+    [
+     "S10",
+     "S11",
+     "S17",
+     "S18",
+     "S6"
+    ],
+    [
+     "S20"
+    ],
+    [
+     "S21"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/unified-storage-performance-optimizations-grafana-codex",
+   "pr": "unified-storage-performance-optimizations-grafana-codex",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "pkg/storage/unified/search/bleve.go",
+     "relevantLinesStart": 88,
+     "relevantLinesEnd": 98,
+     "suggestionContent": "Removing the function-wide cacheMu lock in BuildIndex lets concurrent builds of the same NamespacedResource run in parallel. For file-backed indexes, bleve.New(dir) on the same directory fails for the second caller, and for in-memory indexes the later build overwrites the cache entry and leaks the earlier index. Fix by serializing builds per key (a per-key mutex or singleflight), or by re-checking the cache under the lock before building."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "pkg/storage/unified/search/bleve.go",
+     "relevantLinesStart": 137,
+     "relevantLinesEnd": 139,
+     "suggestionContent": "BuildIndex now writes b.cache under Lock while TotalDocs (called from search.init after the watch goroutine starts) ranges over b.cache without any lock. This can cause a concurrent map read/write fatal error. Fix by taking cacheMu.RLock in TotalDocs."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "pkg/storage/unified/resource/server.go",
+     "relevantLinesStart": 303,
+     "relevantLinesEnd": 311,
+     "suggestionContent": "The watcher is now started after search.init, so events written after the index snapshot but before initWatcher runs are never delivered to the index. The index stays permanently stale for those writes. Start the watcher (buffering events) before building the index, or replay events from the index's build resource version after the watcher starts."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "pkg/storage/unified/search/bleve.go",
+     "relevantLinesStart": 88,
+     "relevantLinesEnd": 140,
+     "suggestionContent": "The cache mutex was removed from around the whole build and now guards only the final map write. Concurrent BuildIndex calls for the same key can both run bleve.New on the same directory, and one fails or corrupts the file index. In the memory-only case, the later cache write overwrites the earlier index and leaks it. Serialize builds per key, or check the cache under the lock and close the loser."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S4"
+    ],
+    [
+     "S2"
+    ],
+    [
+     "S3"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/notification-rule-processing-engine-grafana-codex",
+   "pr": "notification-rule-processing-engine-grafana-codex",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+     "relevantLinesStart": 308,
+     "relevantLinesEnd": 318,
+     "suggestionContent": "useAllGrafanaPromRuleAbilities treats an undefined rule (the skipToken case) as always supported, so Duplicate becomes [true, grafanaCreatePermission]. AlertRuleMenu ORs this with the ruler ability, so the Duplicate menu item can show for data-source (cloud) rules whenever the user has the Grafana rule-create permission, even if the ruler check denies it. Fix: when rule is undefined, return NotSupported for every ability, for example MaybeSupported = (loading || !rule) ? NotSupported : AlwaysSupported."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+     "relevantLinesStart": 301,
+     "relevantLinesEnd": 302,
+     "suggestionContent": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the variable it describes is `isAlertingRule`. That variable is true only for alerting rules and false for Grafana recording rules. Fix the comment, or rename the variable, so it says the check is for alerting rules. As written, readers will expect Pause, Export and Silence to be enabled for recording rules."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+     "relevantLinesStart": 308,
+     "relevantLinesEnd": 309,
+     "suggestionContent": "The comment says there is no loading state, but the next line is `loading ? NotSupported : AlwaysSupported`. `loading` comes from the folder fetch. Update the comment to say that support depends on the folder loading state."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "public/app/features/alerting/unified/rule-list/GrafanaGroupLoader.test.tsx",
+     "relevantLinesStart": 85,
+     "relevantLinesEnd": 101,
+     "suggestionContent": "The test 'should render More button with action menu options' only checks that the More button exists. It finds the button by name 'More', so the aria-label and text assertions are tautological. It would pass even if the menu had no actions or the abilities were broken. Click the button and assert the expected menu items, or rename the test to match what it checks."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+     "relevantLinesStart": 223,
+     "relevantLinesEnd": 228,
+     "suggestionContent": "useAllAlertRuleAbilities now delegates to useAllRulerRuleAbilities, which hardcodes isFederated = false. The previous isFederatedRuleGroup(rule.group) check is gone, so federated Mimir rules are no longer treated as immutable and can show edit and delete abilities. Keep the federation check in this wrapper, or pass the federation state into the shared hook."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "public/app/features/alerting/unified/hooks/useAbilities.ts",
+     "relevantLinesStart": 301,
+     "relevantLinesEnd": 328,
+     "suggestionContent": "The comment says all GrafanaPromRuleDTO rules are Grafana-managed, but the check used is alertingRule(rule), which is false for recording rules. Pause, Restore, ModifyExport and DeletePermanently are therefore wrongly disabled for Grafana recording rules, where the old isGrafanaManagedAlertRule check allowed them. Use prometheusRuleType.grafana.rule(rule) for these abilities, and keep alertingRule only for Silence."
+    }
+   ],
+   "groups": [
+    [
+     "S1"
+    ],
+    [
+     "S2"
+    ],
+    [
+     "S3"
+    ],
+    [
+     "S4"
+    ],
+    [
+     "S5"
+    ],
+    [
+     "S6"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/implement-access-token-context-encoding-framework-keycloak",
+   "pr": "implement-access-token-context-encoding-framework-keycloak",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+     "relevantLinesStart": 483,
+     "relevantLinesEnd": 483,
+     "suggestionContent": "The matcher isAccessTokenId has an inverted condition and a wrong substring range. It returns false when items[0].substring(3, 5) equals the expected shortcut, and that slice overlaps the token-type chars. The grant shortcut is at indices 4..6. Every valid token id is therefore rejected, or an invalid one is accepted. Use: if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;"
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+     "relevantLinesStart": 73,
+     "relevantLinesEnd": 73,
+     "suggestionContent": "The constructor calls Objects.requireNonNull(grantType, \"Null rawTokenId not allowed\"), so grantType is checked twice and rawTokenId is never checked. A null rawTokenId is accepted and later encodes as '...:null' in the token id. Change the argument to rawTokenId."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+     "relevantLinesStart": 483,
+     "relevantLinesEnd": 483,
+     "suggestionContent": "The matcher is inverted and reads the wrong characters. It returns false when the shortcut equals the expected one, and substring(3,5) misses the grant shortcut, which is at substring(4,6) in the id 'ssttgg:uuid'. Use `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+     "relevantLinesStart": 73,
+     "relevantLinesEnd": 73,
+     "suggestionContent": "The null check for rawTokenId actually tests grantType (copy-paste), so a null rawTokenId is accepted and the check for it never runs. Change it to Objects.requireNonNull(rawTokenId, \"Null rawTokenId not allowed\")."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+     "relevantLinesStart": 73,
+     "relevantLinesEnd": 73,
+     "suggestionContent": "The check with message \"Null rawTokenId not allowed\" tests grantType, not rawTokenId. A null rawTokenId passes validation and the message is wrong. Change it to Objects.requireNonNull(rawTokenId, ...)."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+     "relevantLinesStart": 482,
+     "relevantLinesEnd": 483,
+     "suggestionContent": "The comment says the grant shortcut starts at the 4th character, and substring(3,5) follows it. The token ID format is sessionType(2)+tokenType(2)+grant(2), so the shortcut is at indices 4-6, i.e. substring(4,6). Fix the offset and the comment so they match the encoded format."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+     "relevantLinesStart": 476,
+     "relevantLinesEnd": 485,
+     "suggestionContent": "isAccessTokenId never checks the grant type. It reads substring(3, 5) when the grant shortcut is at indices 4..6, and it returns false when the shortcut matches instead of when it differs. As written the check never rejects anything, so event assertions pass even with the wrong or an unknown grant shortcut. Use `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`."
+    },
+    {
+     "id": "S8",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+     "relevantLinesStart": 482,
+     "relevantLinesEnd": 483,
+     "suggestionContent": "The grant shortcut is extracted with substring(3,5), but the token id layout (2 chars session, 2 chars token type, 2 chars grant) puts it at indices 4-6. This compares the wrong characters, e.g. 'ta' instead of 'ac' for 'onrtac:...'. Use substring(4,6)."
+    },
+    {
+     "id": "S9",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+     "relevantLinesStart": 483,
+     "relevantLinesEnd": 483,
+     "suggestionContent": "The condition `if (items[0].substring(...).equals(expectedGrantShortcut)) return false;` is inverted. The matcher rejects ids whose grant matches and accepts ids with a different grant. Change it to `if (!...equals(expectedGrantShortcut)) return false;`."
+    },
+    {
+     "id": "S10",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+     "relevantLinesStart": 480,
+     "relevantLinesEnd": 484,
+     "suggestionContent": "The matcher isAccessTokenId is wrong in two ways. The condition is inverted: `equals(expectedGrantShortcut)` returns false when the shortcut matches, so correct IDs are rejected. The substring is also off: the grant shortcut sits at indices 4..6, so use `items[0].substring(4, 6)`, not `substring(3, 5)`. Change the check to `if (!items[0].substring(4, 6).equals(expectedGrantShortcut)) return false;`."
+    },
+    {
+     "id": "S11",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/protocol/oidc/encode/AccessTokenContext.java",
+     "relevantLinesStart": 72,
+     "relevantLinesEnd": 73,
+     "suggestionContent": "The second null check tests `grantType` again instead of `rawTokenId`, with the message 'Null rawTokenId not allowed'. A null rawTokenId is therefore accepted, and encodeTokenId would then produce IDs ending in ':null'. Change line 73 to `Objects.requireNonNull(rawTokenId, ...)`."
+    },
+    {
+     "id": "S12",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/AssertEvents.java",
+     "relevantLinesStart": 480,
+     "relevantLinesEnd": 484,
+     "suggestionContent": "isAccessTokenId does not match the ID format produced by DefaultTokenContextEncoderProvider.encodeTokenId. That format is 2 chars session type, 2 chars token type, then 2 chars grant shortcut, so the grant shortcut is at substring(4,6), not substring(3,5). The check is also inverted, because `equals(expected)` returns false on a match. Use `!items[0].substring(4,6).equals(expectedGrantShortcut)` to return false on a mismatch; as written, a correct token ID makes the matcher fail."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S10",
+     "S12",
+     "S3",
+     "S6",
+     "S7",
+     "S8"
+    ],
+    [
+     "S11",
+     "S2",
+     "S4",
+     "S5"
+    ],
+    [
+     "S9"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+   "pr": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "tests/base/src/test/java/org/keycloak/tests/admin/group/GroupTest.java",
+     "relevantLinesStart": 136,
+     "relevantLinesEnd": 157,
+     "suggestionContent": "The reader thread is started but never synchronized with: the test does not wait for it to complete a read before deleting, and does not join it before asserting caughtExceptions is empty. The deletes can finish before the reader reads at all, or a failing read can land after the assertion, so the test passes even with the bug present. Use a CountDownLatch counted down after the reader's first successful read, start deleting only after it fires, and join the thread (after setting deletedAll) before asserting."
+    }
+   ],
+   "groups": [
+    [
+     "S1"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/add-html-sanitizer-for-translated-message-resources-keycloak",
+   "pr": "add-html-sanitizer-for-translated-message-resources-keycloak",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+     "relevantLinesStart": 73,
+     "relevantLinesEnd": 80,
+     "suggestionContent": "The English reference file path is derived by regex replacement on the absolute path, and a missing file throws RuntimeException. A file with no '_' in its name, or a theme whose English file lives elsewhere, aborts the whole verification with a crash instead of adding a message to the result list. Fix: resolve the English file explicitly, and if it does not exist, treat the English value as empty or throw a proper MojoExecutionException."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+     "relevantLinesStart": 101,
+     "relevantLinesEnd": 111,
+     "suggestionContent": "The common prefix (start) and common suffix (end) are computed independently and can overlap, for example value \"aa\" vs sanitized \"a\". Then substring(start, length - end) gets begin > end and throws StringIndexOutOfBoundsException, so the verifier crashes instead of reporting the illegal HTML. Bound the suffix scan so that start + end <= min(value.length(), sanitized.length()), e.g. `while (end < min - start && ...)`."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "themes/src/main/resources-community/theme/base/login/messages/messages_lt.properties",
+     "relevantLinesStart": 71,
+     "relevantLinesEnd": 71,
+     "suggestionContent": "loginTotpStep1 in the Lithuanian file was replaced with Italian text (\"Installa una delle seguenti applicazioni sul tuo cellulare:\"). Lithuanian users will see Italian. Replace it with a proper Lithuanian translation, or fall back to the English source."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+     "relevantLinesStart": 101,
+     "relevantLinesEnd": 101,
+     "suggestionContent": "totpStep1 in the Lithuanian account file was replaced with Italian text. Replace it with a proper Lithuanian translation, or fall back to the English source."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+     "relevantLinesStart": 112,
+     "relevantLinesEnd": 112,
+     "suggestionContent": "totpStep1 in messages_zh_CN uses Traditional Chinese (手機, 安裝, 應用程式), not Simplified Chinese as the rest of the file does. Replace it with the Simplified form: 在您的手机上安装以下应用之一："
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+     "relevantLinesStart": 102,
+     "relevantLinesEnd": 111,
+     "suggestionContent": "The common prefix and common suffix are computed independently and can overlap, so `sanitized.substring(start, sanitized.length() - end)` can have start > end and throw StringIndexOutOfBoundsException. This crashes the verifier instead of reporting 'Illegal HTML'. Cap the suffix scan with `end < Math.min(value.length(), sanitized.length()) - start`."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+     "relevantLinesStart": 73,
+     "relevantLinesEnd": 80,
+     "suggestionContent": "The English counterpart file is opened unconditionally. If the derived path does not exist, a RuntimeException is thrown and the whole verification aborts instead of treating the English bundle as empty or reporting a message. Check that the file exists and handle its absence."
+    },
+    {
+     "id": "S8",
+     "label": "bug",
+     "relevantFile": "themes/src/main/resources-community/theme/base/account/messages/messages_lt.properties",
+     "relevantLinesStart": 101,
+     "relevantLinesEnd": 101,
+     "suggestionContent": "The Lithuanian totpStep1 now holds Italian text (\"Installa una delle seguenti applicazioni sul tuo cellulare:\"). Lithuanian users will see Italian. The same Italian string was put into login/messages_lt.properties loginTotpStep1. Replace both with a Lithuanian translation."
+    },
+    {
+     "id": "S9",
+     "label": "bug",
+     "relevantFile": "themes/src/main/resources-community/theme/base/account/messages/messages_zh_CN.properties",
+     "relevantLinesStart": 112,
+     "relevantLinesEnd": 112,
+     "suggestionContent": "The Simplified Chinese (zh_CN) totpStep1 was replaced with Traditional Chinese (\"在您的手機上安裝以下應用程式之一：\"). Use the Simplified form, \"在您的手机上安装以下应用程序之一：\"."
+    },
+    {
+     "id": "S10",
+     "label": "bug",
+     "relevantFile": "misc/theme-verifier/src/main/java/org/keycloak/themeverifier/VerifyMessageProperties.java",
+     "relevantLinesStart": 73,
+     "relevantLinesEnd": 80,
+     "suggestionContent": "verify() used to only check for duplicate keys, but verifySafeHtml() now requires a matching `_en.properties` file. It derives the path with a fragile regex rewrite and throws RuntimeException if the file can't be opened. A scanned messages file with no English counterpart, or one whose path doesn't match the rewrite, now fails the whole build. Fall back to an empty English bundle when the file is missing, or report it through `messages` or MojoExecutionException instead of crashing."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S10",
+     "S7"
+    ],
+    [
+     "S2",
+     "S6"
+    ],
+    [
+     "S3",
+     "S4",
+     "S8"
+    ],
+    [
+     "S5",
+     "S9"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+   "pr": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+     "relevantLinesStart": 244,
+     "relevantLinesEnd": 247,
+     "suggestionContent": "hasPermission(String scope) looks up the all-clients resource with findByName and returns false when it is null. That call is not guaranteed to find the resource, because it is created lazily through getResourceTypeResource, which the sibling hasPermission(client, scope) uses. As a result, canView(), canManage() and canManageClientScopes() can wrongly deny access when the all-clients resource has not been created yet. Fix: obtain the resource through AdminPermissionsSchema.SCHEMA.getResourceTypeResource(session, server, CLIENTS_RESOURCE_TYPE), as the per-client variant does."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+     "relevantLinesStart": 95,
+     "relevantLinesEnd": 98,
+     "suggestionContent": "The Javadoc on void requireView() says it \"Returns true if canView() returns true\", but the method returns nothing. Change it to \"Throws ForbiddenException if {@link #canView()} returns {@code false}.\""
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionEvaluator.java",
+     "relevantLinesStart": 100,
+     "relevantLinesEnd": 103,
+     "suggestionContent": "The Javadoc on void requireViewClientScopes() says it \"Returns true if canViewClientScopes() returns true\", but the method returns nothing. Change it to \"Throws ForbiddenException if {@link #canViewClientScopes()} returns {@code false}.\""
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/ClientPermissionsV2.java",
+     "relevantLinesStart": 187,
+     "relevantLinesEnd": 205,
+     "suggestionContent": "In V2, isPermissionsEnabled, resource and getPermissions now throw UnsupportedOperationException. ClientResource (around lines 710-720) calls these on permissions.clients() with no V2 guard, so the management-permissions endpoint would return a 500 instead of a clean response when V2 is active. Return a safe value (for example isPermissionsEnabled returning false) or guard the callers."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "services/src/main/java/org/keycloak/services/resources/admin/permissions/AdminPermissions.java",
+     "relevantLinesStart": 77,
+     "relevantLinesEnd": 91,
+     "suggestionContent": "The listener is guarded only by the V1 flag ADMIN_FINE_GRAINED_AUTHZ. When V2 is also enabled, management() returns MgmtPermissionsV2, so clients().setPermissionsEnabled(...) reaches ClientPermissionsV2 and throws UnsupportedOperationException. This aborts client deletion. Skip this cleanup when ADMIN_FINE_GRAINED_AUTHZ_V2 is enabled, or make the guard V1-only (enabled and V2 disabled)."
+    }
+   ],
+   "groups": [
+    [
+     "S2",
+     "S3"
+    ],
+    [
+     "S1"
+    ],
+    [
+     "S4"
+    ],
+    [
+     "S5"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/fixing-re-authentication-with-passkeys-keycloak",
+   "pr": "fixing-re-authentication-with-passkeys-keycloak",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java",
+     "relevantLinesStart": 281,
+     "relevantLinesEnd": 283,
+     "suggestionContent": "The comment 'set passwordless policy for discoverable keys' is stale. The updater now only calls setWebAuthnPolicyPasskeysEnabled(Boolean.FALSE), so it disables passkeys for the realm. Change the comment to say that passkeys are disabled for the realm."
+    },
+    {
+     "id": "S2",
+     "label": "security",
+     "relevantFile": "themes/src/main/resources/theme/base/login/passkeys.ftl",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 17,
+     "suggestionContent": "The password page now renders the selected user's passkey credential IDs (`authn_use_chk` hidden inputs) before the user has authenticated, since the user is only identified by a typed username. This tells an unauthenticated visitor whether the account has passkeys and discloses the credential IDs. Render the list only when the user is already authenticated, as in the re-authentication case. Otherwise leave it out and rely on discoverable credentials."
+    }
+   ],
+   "groups": [
+    [
+     "S1"
+    ],
+    [
+     "S2"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+   "pr": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/organization/cache/OrganizationCacheTest.java",
+     "relevantLinesStart": 381,
+     "relevantLinesEnd": 381,
+     "suggestionContent": "The cleanup is registered for the literal alias \"alias\" rather than the IDP just created (\"idp-alias-\" + i). The 20 created IDPs are never removed, and the same applies to the cleanup at line 425 for \"idp-alias-20\". Use the actual alias, e.g. get(\"idp-alias-\" + i)::remove, so the IDPs don't leak into other tests."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "testCacheIDPForLogin",
+     "relevantLinesStart": null,
+     "relevantLinesEnd": null,
+     "suggestionContent": "The cleanup registers `identityProviders().get(\"alias\")::remove` inside the loop, and also for idp-alias-20. \"alias\" is a literal string rather than the actual IDP alias, so none of the created IDPs is ever cleaned up. Use the real alias (e.g. the loop's alias variable / \"idp-alias-20\") when registering the cleanup. As written, the 21 leaked providers can skew later tests that count IDPs or login caches."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S2"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/replays-self-serve-bulk-delete-system-sentry",
+   "pr": "replays-self-serve-bulk-delete-system-sentry",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+     "relevantLinesStart": 107,
+     "relevantLinesEnd": 120,
+     "suggestionContent": "fetch_error_details pairs error_ids with events.values() via zip, but nodestore get_multi returns a dict keyed by node id that omits missing nodes. Any missing node shifts the pairing, so errors get wrong IDs and titles or are dropped from the AI summary logs. Fix: iterate error_ids, compute node_id = Event.generate_node_id(project_id, id), and look up events.get(node_id) for each."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "static/app/views/dashboards/widgetCard/chart.tsx",
+     "relevantLinesStart": 164,
+     "relevantLinesEnd": 174,
+     "suggestionContent": "With the 'use-table-widget-visualization' feature enabled, TableWidgetVisualization is rendered with columns=[] and empty data/meta instead of result.data and result.meta. Every table widget therefore renders empty for orgs with the flag. Fix: pass tableData={{data: result.data, meta: result.meta}} and build columns from the fields."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+     "relevantLinesStart": 107,
+     "relevantLinesEnd": 120,
+     "suggestionContent": "fetch_error_details zips error_ids with events.values(), but nodestore get_multi returns a dict keyed by node_id that omits missing nodes. The ids therefore misalign with the data whenever an event is missing or ordered differently. Iterate over zip(error_ids, node_ids) and look up events.get(node_id) so each id is paired with its own data."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+     "relevantLinesStart": 107,
+     "relevantLinesEnd": 120,
+     "suggestionContent": "zip(error_ids, events.values()) assumes nodestore.get_multi returns values in the order of error_ids with no gaps. It returns a dict keyed by node id that omits missing nodes, so event ids get paired with the wrong event data. Iterate error_ids, look up events.get(Event.generate_node_id(project_id, id)) for each, and skip None."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "src/sentry/issues/endpoints/browser_reporting_collector.py",
+     "relevantLinesStart": 50,
+     "relevantLinesEnd": 60,
+     "suggestionContent": "The mutual-exclusion checks use truthiness (`self.initial_data.get(\"age\")` and `.get(\"timestamp\")`), so a legitimate value of 0 is treated as absent. A report with age=0 plus a timestamp, or timestamp=0 plus an age, passes validation despite violating the either/or rule. Use `\"age\" in self.initial_data` and `\"timestamp\" in self.initial_data` instead."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "static/app/views/explore/hooks/useGetTraceItemAttributeValues.spec.tsx",
+     "relevantLinesStart": 114,
+     "relevantLinesEnd": 147,
+     "suggestionContent": "The number-type test's mock matcher checks `query.query === 'search-query'`, but the hook sends the search as `substringMatch`. The mock can never match, so `expect(searchQueryMock).not.toHaveBeenCalled()` passes even if the number short-circuit were removed. Match on `query.substringMatch` as the string-type test does, so the not-called assertion can actually fail."
+    },
+    {
+     "id": "S7",
+     "label": "security",
+     "relevantFile": "src/sentry/workflow_engine/processors/delayed_workflow.py",
+     "relevantLinesStart": 583,
+     "relevantLinesEnd": 583,
+     "suggestionContent": "The log extra 'event_data' now holds workflow_event_data, which wraps the full event object, instead of the ids-only EventRedisData. This writes event payloads that can contain user data (messages, tags, user and request context) to logs. Log only identifiers instead, such as event_id, group_id and workflow ids."
+    },
+    {
+     "id": "S8",
+     "label": "bug",
+     "relevantFile": "src/sentry/replays/endpoints/project_replay_summarize_breadcrumbs.py",
+     "relevantLinesStart": 107,
+     "relevantLinesEnd": 120,
+     "suggestionContent": "fetch_error_details zips error_ids with events.values(), but nodestore get_multi returns a dict keyed by node_id that omits missing nodes and does not follow input order. If any event is missing or the order differs, ErrorEvent ids get paired with the wrong event data. Iterate over (event_id, node_id) pairs and look each node up with events.get(node_id) instead of zipping."
+    },
+    {
+     "id": "S9",
+     "label": "possible_issue",
+     "relevantFile": "pageParamsContext/index.tsx",
+     "relevantLinesStart": null,
+     "relevantLinesEnd": null,
+     "suggestionContent": "It was not verified whether any caller passes Visualize instances (rather than BaseVisualize) to updateLocationWithAggregateFields. If one does, those instances would be stringified in a shape that the new isBaseVisualize reader rejects, so the values would be lost or ignored when read back. Check all callers of updateLocationWithAggregateFields and make sure they pass BaseVisualize objects, or convert Visualize instances via toJSON() first."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S3",
+     "S4",
+     "S8"
+    ],
+    [
+     "S2"
+    ],
+    [
+     "S5"
+    ],
+    [
+     "S6"
+    ],
+    [
+     "S7"
+    ],
+    [
+     "S9"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+   "pr": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+     "relevantLinesStart": 51,
+     "relevantLinesEnd": 51,
+     "suggestionContent": "`max_processes or len(buffer.assigned_shards)` uses a truthiness test, so an explicit 0 is treated as 'unset' and silently expands to one process per shard. Use `max_processes if max_processes is not None else len(buffer.assigned_shards)` and reject values below 1."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "tests/sentry/spans/consumers/process/test_consumer.py",
+     "relevantLinesStart": 60,
+     "relevantLinesEnd": 62,
+     "suggestionContent": "The added `time.sleep(0.1)` is a no-op because the test patches `time.sleep` to `lambda _: None`, so nothing waits for the flusher threads before `step.join()` and the `messages` assertion. Replace it with a condition-based wait, such as polling until `messages` is non-empty with a deadline. Use the real sleep saved before patching if a delay is needed."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+     "relevantLinesStart": 31,
+     "relevantLinesEnd": 32,
+     "suggestionContent": "The docstring says the flusher 'Creates one process per shard', but the number of processes is capped by max_processes (--flusher-processes), and shards are shared across processes via i % num_processes. Reword it to say that shards are distributed across at most max_processes processes."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+     "relevantLinesStart": 199,
+     "relevantLinesEnd": 199,
+     "suggestionContent": "The wait_produce timer tags with \"shards\", while the sibling metrics in the same loop use \"shard\" for the same value (shard_tag). Use one tag key, \"shard\", so queries and dashboards that group by it cover all of these metrics."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+     "relevantLinesStart": 253,
+     "relevantLinesEnd": 257,
+     "suggestionContent": "The kill is now gated by `isinstance(process, multiprocessing.Process)`. Processes are created via `mp_context.Process` (SpawnProcess), which does not subclass `multiprocessing.Process`, so the check is False and a hung process is never killed before a replacement is started. This leaves duplicate flushers running on the same shards. Check `not isinstance(process, threading.Thread)`, or call `kill()` unconditionally as before."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+     "relevantLinesStart": 199,
+     "relevantLinesEnd": 199,
+     "suggestionContent": "The wait_produce timer is tagged `shards`, while the other metrics in this function (produce timer, segment_size_bytes) use `shard`. Data for the same tag is therefore split across two names. Use `shard` consistently."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+     "relevantLinesStart": 253,
+     "relevantLinesEnd": 257,
+     "suggestionContent": "The kill guard `isinstance(process, multiprocessing.Process)` is likely False for spawn-context processes (`SpawnProcess` is not a subclass of `multiprocessing.Process`). A hung flusher is then never killed, and a new process is started for the same shards, so two flushers consume the same shards concurrently and may double-produce segments. Guard with `not isinstance(process, threading.Thread)`, or check `hasattr(process, 'kill')`, so the hung process is killed before it is replaced."
+    },
+    {
+     "id": "S8",
+     "label": "bug",
+     "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+     "relevantLinesStart": 253,
+     "relevantLinesEnd": 259,
+     "suggestionContent": "The kill is now guarded by isinstance(process, multiprocessing.Process), but spawn-context processes are SpawnProcess (a BaseProcess subclass), so the check is false and a hung process is never killed. Restart then creates a second process for the same shards while the old one keeps running. Check `not isinstance(process, threading.Thread)`, or `isinstance(process, multiprocessing.process.BaseProcess)`, before calling kill()."
+    }
+   ],
+   "groups": [
+    [
+     "S4",
+     "S6"
+    ],
+    [
+     "S5",
+     "S7",
+     "S8"
+    ],
+    [
+     "S1"
+    ],
+    [
+     "S2"
+    ],
+    [
+     "S3"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+   "pr": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "src/sentry/integrations/services/assignment_source.py",
+     "relevantLinesStart": 18,
+     "relevantLinesEnd": 18,
+     "suggestionContent": "`queued: datetime = timezone.now()` is evaluated once at class definition (import time), so every AssignmentSource gets the same stale timestamp. This makes the `queued` field meaningless and wrong for any consumer. Use `field(default_factory=timezone.now)`."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "src/sentry/integrations/services/assignment_source.py",
+     "relevantLinesStart": 18,
+     "relevantLinesEnd": 18,
+     "suggestionContent": "`queued: datetime = timezone.now()` is evaluated once at import time, so every AssignmentSource gets the same stale process-start timestamp instead of its creation time. Use `field(default_factory=timezone.now)` so each instance records when it was actually created."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "src/sentry/integrations/services/assignment_source.py",
+     "relevantLinesStart": 18,
+     "relevantLinesEnd": 18,
+     "suggestionContent": "The field `queued` reads as the time the assignment was queued, but `timezone.now()` as a plain default is evaluated once at import time. Every AssignmentSource therefore carries the same stale timestamp. Use `field(default_factory=timezone.now)` so the value matches the name."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "tests/sentry/integrations/services/test_assignment_source.py",
+     "relevantLinesStart": 35,
+     "relevantLinesEnd": 38,
+     "suggestionContent": "test_to_dict asserts `result.get(\"queued\") is not None`, but `queued` always has a default value, so the assertion cannot fail. Pass an explicit `queued` datetime and assert that to_dict returns exactly that value, or compare the whole dict."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "tests/sentry/integrations/services/test_assignment_source.py",
+     "relevantLinesStart": 8,
+     "relevantLinesEnd": 11,
+     "suggestionContent": "test_from_dict_empty_array passes an empty dict, not an array, so the name does not match the body. Rename it to test_from_dict_empty_dict."
+    },
+    {
+     "id": "S6",
+     "label": "default-value bug",
+     "relevantFile": "sync_assignee_outbound.py",
+     "relevantLinesStart": null,
+     "relevantLinesEnd": null,
+     "suggestionContent": "`queued: datetime = timezone.now()` is evaluated once at import time, so every instance gets the same timestamp. Use a default factory (e.g. `field(default_factory=timezone.now)` in a dataclass) so the timestamp is computed per instance."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "src/sentry/integrations/services/assignment_source.py",
+     "relevantLinesStart": 18,
+     "relevantLinesEnd": 18,
+     "suggestionContent": "`queued: datetime = timezone.now()` is evaluated once at import time, so every AssignmentSource shares the same stale timestamp instead of the time it was created. Use `field(default_factory=timezone.now)` instead."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S2",
+     "S3",
+     "S6",
+     "S7"
+    ],
+    [
+     "S4"
+    ],
+    [
+     "S5"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/github-oauth-security-enhancement-sentry",
+   "pr": "github-oauth-security-enhancement-sentry",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "security",
+     "relevantFile": "src/sentry/integrations/github/integration.py",
+     "relevantLinesStart": 481,
+     "relevantLinesEnd": 482,
+     "suggestionContent": "When no Integration row exists for the installation_id, the code calls next_step() without comparing the OAuth-authenticated GitHub user to the installer. An attacker can supply an installation_id they do not own before the installation webhook has created the row, and bypass the new verification. Do not skip the check in this branch. Either fail closed, or verify ownership another way, for example by confirming the user can access the installation through the GitHub API."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "src/sentry/integrations/github/integration.py",
+     "relevantLinesStart": 501,
+     "relevantLinesEnd": 504,
+     "suggestionContent": "integration.metadata['sender']['login'] is indexed without a guard, but build_integration only sets 'sender' when it is present in state. Existing integrations without sender metadata will raise KeyError and return a 500. Use .get() chains and show the error page when the sender is missing."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "src/sentry/integrations/github/integration.py",
+     "relevantLinesStart": 423,
+     "relevantLinesEnd": 438,
+     "suggestionContent": "safe_urlopen sits outside the try block, and get_user_info can raise on network or API errors, so transport failures during the token exchange or user lookup propagate as unhandled 500s. Wrap both calls in try/except and return error(request, self.active_organization)."
+    },
+    {
+     "id": "S4",
+     "label": "security",
+     "relevantFile": "src/sentry/integrations/github/integration.py",
+     "relevantLinesStart": 412,
+     "relevantLinesEnd": 413,
+     "suggestionContent": "The OAuth `state` value is compared to `pipeline.signature` with a plain `!=`, which is not a constant-time comparison of a secret token. Use `django.utils.crypto.constant_time_compare(request.GET.get(\"state\", \"\"), pipeline.signature)` instead."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "src/sentry/integrations/github/integration.py",
+     "relevantLinesStart": 129,
+     "relevantLinesEnd": 146,
+     "suggestionContent": "The helper calls `_(error_short)` on a variable, and callers pass plain string literals. The translation extractor cannot see these strings, so the short error messages sent to the user are no longer translatable; the old code wrapped the literals directly in `_()`. Mark the literals with gettext_lazy at the call sites and the default, and pass them through without wrapping again."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "src/sentry/integrations/github/integration.py",
+     "relevantLinesStart": 501,
+     "relevantLinesEnd": 505,
+     "suggestionContent": "`integration.metadata[\"sender\"][\"login\"]` raises KeyError/TypeError when the existing Integration has no `sender` metadata, for example integrations created before the webhook stored it. The installation flow then crashes with a 500 instead of rendering the error page. Read it defensively, e.g. `(integration.metadata.get(\"sender\") or {}).get(\"login\")`, and return `error(...)` when it is missing or does not match."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "tests/sentry/integrations/github/test_integration.py",
+     "relevantLinesStart": 448,
+     "relevantLinesEnd": 454,
+     "suggestionContent": "test_github_user_mismatch asserts only the generic 'Invalid installation request.' message, which every error() path in OAuthLoginView and GitHubInstallation returns. A wrong hardcoded state, a token failure or a missing integration would pass it just as well as a real sender/login mismatch. Make the mismatch the only possible failure: derive the state from the actual pipeline signature, and assert that the same flow succeeds when the webhook sender is 'octocat'."
+    },
+    {
+     "id": "S8",
+     "label": "bug",
+     "relevantFile": "src/sentry/integrations/github/integration.py",
+     "relevantLinesStart": 500,
+     "relevantLinesEnd": 505,
+     "suggestionContent": "The new check indexes `integration.metadata[\"sender\"][\"login\"]` directly. `installation.py` line 44 already treats \"sender\" as optional in metadata. An Integration without a stored sender raises KeyError and the request returns a 500 instead of the install flow's error page. Read it with `.get(\"sender\", {}).get(\"login\")` and return `error(...)` when it is missing or does not match."
+    }
+   ],
+   "groups": [
+    [
+     "S2",
+     "S6",
+     "S8"
+    ],
+    [
+     "S1"
+    ],
+    [
+     "S3"
+    ],
+    [
+     "S4"
+    ],
+    [
+     "S5"
+    ],
+    [
+     "S7"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+   "pr": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "src/sentry/incidents/grouptype.py",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 12,
+     "suggestionContent": "MetricAlertDetectorHandler now subclasses StatefulDetectorHandler with only `pass`, so the abstract members counter_names, get_dedupe_value, get_group_key_values and build_occurrence_and_event_data are left unimplemented. Instantiating it raises TypeError, so detector.detector_handler crashes for metric alert detectors where it previously returned an empty-result stub. Implement all the abstract methods, or keep the previous DetectorHandler subclass with an evaluate() that returns {}."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "src/sentry/workflow_engine/processors/detector.py",
+     "relevantLinesStart": 226,
+     "relevantLinesEnd": 233,
+     "suggestionContent": "The evaluate() docstring still says it returns a list of `DetectorEvaluationResult`. The method now returns a dict mapping group key to `DetectorEvaluationResult`. Update the docstring to describe the dict return shape."
+    },
+    {
+     "id": "S3",
+     "label": "bug",
+     "relevantFile": "src/sentry/incidents/grouptype.py",
+     "relevantLinesStart": 10,
+     "relevantLinesEnd": 12,
+     "suggestionContent": "The comment 'TODO: This will be a stateful detector when we build that abstraction' is now stale. MetricAlertDetectorHandler already subclasses StatefulDetectorHandler. Remove or reword the TODO."
+    },
+    {
+     "id": "S4",
+     "label": "bug",
+     "relevantFile": "src/sentry/incidents/grouptype.py",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 12,
+     "suggestionContent": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler but implements none of its abstract members (get_dedupe_value, get_group_key_values, counter_names, and the newly added build_occurrence_and_event_data). It cannot be instantiated, so Detector.detector_handler raises TypeError for metric alert detectors. Implement the abstract members, or keep a concrete evaluate that returns {} until they exist."
+    },
+    {
+     "id": "S5",
+     "label": "bug",
+     "relevantFile": "src/sentry/incidents/grouptype.py",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 12,
+     "suggestionContent": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler with only `pass`, so the abstract methods (get_dedupe_value, get_group_key_values, build_occurrence_and_event_data) stay unimplemented. Instantiating it raises TypeError, so Detector.detector_handler fails for metric alert detectors. The old stub returned []. Implement the abstract methods, or keep the stub handler until they exist."
+    },
+    {
+     "id": "S6",
+     "label": "bug",
+     "relevantFile": "src/sentry/incidents/grouptype.py",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 12,
+     "suggestionContent": "MetricAlertDetectorHandler subclasses StatefulDetectorHandler but only has `pass`. It does not implement the abstract methods get_dedupe_value, get_group_key_values and the new build_occurrence_and_event_data, and it does not define counter_names. Instantiating it through Detector.detector_handler for the metric alert group type raises TypeError. Implement these methods, or keep a non-abstract DetectorHandler that returns {}."
+    },
+    {
+     "id": "S7",
+     "label": "bug",
+     "relevantFile": "src/sentry/incidents/grouptype.py",
+     "relevantLinesStart": 11,
+     "relevantLinesEnd": 12,
+     "suggestionContent": "MetricAlertDetectorHandler is now an empty subclass of StatefulDetectorHandler, so the abstract methods get_dedupe_value, get_group_key_values and build_occurrence_and_event_data are unimplemented. Instantiating it, as Detector.detector_handler does, raises TypeError, and process_detectors fails for metric alert detectors. Implement these methods in the class (or keep the previous stub handler until they exist)."
+    }
+   ],
+   "groups": [
+    [
+     "S1",
+     "S4",
+     "S5",
+     "S6",
+     "S7"
+    ],
+    [
+     "S2"
+    ],
+    [
+     "S3"
+    ]
+   ]
+  },
+  {
+   "id": "sonnet-5.5/ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+   "pr": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+   "suggestions": [
+    {
+     "id": "S1",
+     "label": "bug",
+     "relevantFile": "src/sentry/monitors/logic/incident_occurrence.py",
+     "relevantLinesStart": 160,
+     "relevantLinesEnd": 168,
+     "suggestionContent": "The local `config` copy has schedule_type replaced with its display value, but the returned dict uses `monitor_environment.monitor.config`, so the transformed copy is dead. The event context therefore shows the raw numeric schedule_type. Return `\"config\": config` instead."
+    },
+    {
+     "id": "S2",
+     "label": "bug",
+     "relevantFile": "src/sentry/monitors/logic/incident_occurrence.py",
+     "relevantLinesStart": 131,
+     "relevantLinesEnd": 137,
+     "suggestionContent": "The get_failure_reason docstring examples don't match the output. It shows 'A failed check-in was detected' and '...were detected', but the code returns the per-status singular strings ('A missed check-in was detected') or '<list> check-ins detected'. Update the examples to the real output and fix the 'humam readible' typo."
+    }
+   ],
+   "groups": [
+    [
+     "S1"
+    ],
+    [
+     "S2"
+    ]
+   ]
+  }
+ ]
+}

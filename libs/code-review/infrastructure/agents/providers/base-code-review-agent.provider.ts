@@ -1,12 +1,20 @@
 import { createLogger } from '@libs/core/log/logger';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
+import {
+    attachClassification,
+    classifyLLMError,
+    getClassification,
+    isTerminalCategory,
+} from '@libs/llm/error-classifier';
 import { Injectable, Optional } from '@nestjs/common';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { assignFileTiers, computeFileScores } from '@libs/code-review/infrastructure/agents/engine/file-priority-scorer';
+import {
+    assignFileTiers,
+    computeFileScores,
+} from '@libs/code-review/infrastructure/agents/engine/file-priority-scorer';
 import {
     PROMPT_BUDGET_RATIO,
     assertContextWindowFitsOverhead,
@@ -18,10 +26,15 @@ import {
 import {
     buildSystemPrompt as buildSystemPromptFor,
     buildUserPrompt as buildUserPromptFor,
+    listsRepoInstructions,
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
-import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import {
+    buildPathMismatchWarning,
+    buildVerifyUnavailableWarning,
+    type ReviewWarning,
+} from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
 import {
@@ -30,16 +43,40 @@ import {
     type ReviewAgentInput,
     type ReviewAgentOutput,
     type AgentProgressEvent,
+    type ReviewFindingLabel,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
-import { mapAgentFindings } from '@libs/code-review/infrastructure/agents/collaborators/finding-mapper';
-import { resolveAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import {
-    recordAgentUsageSpans,
-    runAgentWithTrace,
-} from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
+    mapAgentFindings,
+    type MappableAgentResult,
+    type MappedFindings,
+} from '@libs/code-review/infrastructure/agents/collaborators/finding-mapper';
+import {
+    resolveReviewAgentModel,
+    type AgentModelParams,
+    type ResolvedAgentModel,
+} from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import { providerErrorFromResult } from '@libs/code-review/infrastructure/agents/collaborators/provider-error';
+import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
 import { AgentProgressReporter } from '@libs/code-review/infrastructure/agents/collaborators/agent-progress-reporter';
+import type { AgentTool } from '@libs/agent-harness/domain/contracts/tool.contract';
+import { renderKnowledgeSection } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-prompt';
+import { buildKnowledgeTools } from '@libs/code-review/infrastructure/agents/knowledge/knowledge-tools';
+import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
+
+/** Tools an agent adds to its run, and how to release them afterwards. */
+export interface AgentRunToolset {
+    tools: AgentTool[];
+    /** Which of `tools` read the team's own systems (MCP). */
+    teamSystemTools?: string[];
+    /** Tools the agent runs without, reported with the review's warnings. */
+    warnings?: ReviewWarning[];
+    close(): Promise<void>;
+}
+
+const NO_TOOLS: AgentRunToolset = { tools: [], close: async () => {} };
 
 /**
  * Hard cap on execute() → executeChunked() → execute() recursion. Set to
@@ -69,7 +106,6 @@ export abstract class BaseCodeReviewAgentProvider {
     private readonly agentLogger = createLogger('CodeReviewAgent');
 
     constructor(
-        protected readonly promptRunnerService: PromptRunnerService,
         protected readonly permissionValidationService: PermissionValidationService,
         protected readonly observabilityService: ObservabilityService,
         /** Optional: when injected, enables the `searchDocs` tool on the
@@ -84,6 +120,22 @@ export abstract class BaseCodeReviewAgentProvider {
     ) {}
 
     protected abstract getIdentity(): ReviewAgentIdentity;
+    /**
+     * Whether a run that ended without submitting a result and reported
+     * nothing counts as stopped early. Off for the built-in agents, whose
+     * prose answers prose recovery owns (#2171); a custom agent turns it on.
+     */
+    protected readsMissingResultAsIncomplete(): boolean {
+        return false;
+    }
+
+    /**
+     * How the review warnings name this agent: its run name, unless the
+     * agent has a name people gave it (a custom agent).
+     */
+    protected getWarningName(runName: string): string {
+        return runName;
+    }
     /**
      * Return the category-specific chunk that gets embedded in the system
      * prompt. Receives `input` so subclasses can include per-request data
@@ -100,7 +152,7 @@ export abstract class BaseCodeReviewAgentProvider {
 
     protected getAllowedSuggestionLabels(
         _input: ReviewAgentInput,
-    ): Array<'bug' | 'security' | 'performance'> {
+    ): ReviewFindingLabel[] {
         const category = this.getCategoryLabel();
         if (
             category === 'bug' ||
@@ -111,6 +163,68 @@ export abstract class BaseCodeReviewAgentProvider {
         }
 
         return ['bug'];
+    }
+
+    /** Cost-span run name of this agent's model calls (`code-review*` buckets
+     *  to the `review` area). */
+    protected getUsageRunName(): string {
+        return `code-review-${this.getCategoryLabel()}`;
+    }
+
+    /**
+     * The run's model and, when the agent checks its findings on a model of
+     * its own, the check slot (#2172). The built-in agents route `codeReview`
+     * and verify on the same model.
+     */
+    protected async resolveModels(
+        input: ReviewAgentInput,
+    ): Promise<ResolvedAgentModel & { checkByokConfig?: NormalizedModel }> {
+        return resolveReviewAgentModel(input, this.permissionValidationService);
+    }
+
+    /**
+     * Team guides whose findings take the convention second pass (#2172).
+     * Unset for every built-in agent; a custom agent returns its linked
+     * skills and docs (possibly none).
+     */
+    protected getConventionGuides(
+        _input: ReviewAgentInput,
+    ): string[] | undefined {
+        return undefined;
+    }
+
+    /** Unset for every built-in agent; a custom agent returns its
+     *  instructions, so a rule quoted from them can pass the quote check. */
+    protected getTeamInstructions(): string | undefined {
+        return undefined;
+    }
+
+    /**
+     * What this agent is allowed to report, as the verifier reads it: set
+     * only for a custom agent kept to its lane, whose findings outside it are
+     * dropped by the verification they already take. Unset → verification is
+     * exactly as before.
+     */
+    protected getLaneFocus(_input: ReviewAgentInput): string | undefined {
+        return undefined;
+    }
+
+    /**
+     * Where read-only tool results are kept for this review run. Unset by
+     * default, so a provider shared across reviews (every built-in agent)
+     * gets a fresh cache per execute; a provider built per review returns
+     * its own, so the batches of a chunked review share it.
+     */
+    protected getRunToolCache(): RunToolCache | undefined {
+        return undefined;
+    }
+
+    /** Tools of this agent beyond the repository and knowledge tools. Built
+     *  per run and closed when the run ends. */
+    protected async buildAgentTools(
+        _input: ReviewAgentInput,
+    ): Promise<AgentRunToolset> {
+        return NO_TOOLS;
     }
 
     /**
@@ -185,10 +299,16 @@ export abstract class BaseCodeReviewAgentProvider {
 
         // Resolve BYOK config + model (org config → per-repo override → trial
         // default). Scoped locally to prevent cross-review races. → ModelFactory.
-        const { byokConfig, model, modelName } = await resolveAgentModel(
-            input,
-            this.permissionValidationService,
-        );
+        const {
+            byokConfig,
+            main: mainModel,
+            checkByokConfig,
+        } = await this.resolveModels(input);
+        // Preflight (context window + warnings) runs against the resolved model.
+        // `effectiveModelName` tracks the model that actually ran (there is one
+        // model per run now — no fallback provider swap).
+        const modelName = mainModel.modelName;
+        let effectiveModelName = mainModel.modelName;
 
         this.agentLogger.log({
             message: `[AGENT] ${identity.name} using model: ${modelName}`,
@@ -200,7 +320,7 @@ export abstract class BaseCodeReviewAgentProvider {
         // + PR context + coverage list + static overhead (system prompt +
         // tool schemas) — not just the diff.
         const contextWindow = resolveContextWindow({
-            byokMaxInputTokens: byokConfig?.main?.maxInputTokens,
+            byokMaxInputTokens: mainModel.maxInputTokens,
             modelName,
         });
         // Resolve adaptive-fit profile from the same context window the
@@ -230,7 +350,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 contextWindowTokens: contextWindow,
                 modelName,
                 detail,
-                agentName: identity.name,
+                agentName: this.getWarningName(identity.name),
             });
         };
         // Fail fast when the configured model's context window cannot
@@ -337,6 +457,17 @@ export abstract class BaseCodeReviewAgentProvider {
                         'LOW_SIGNAL_FILES_DROPPED',
                         `${filesBefore - filteredFiles.length} files dropped (tests/md/css)`,
                     );
+                } else {
+                    // Full-size model, large PR: the same files are dropped, so
+                    // the run records it too, with its own cause.
+                    agentWarnings.push({
+                        kind: 'LOW_SIGNAL_FILES_DROPPED',
+                        reason: 'large_pr',
+                        contextWindowTokens: contextWindow,
+                        modelName,
+                        detail: `${filesBefore - filteredFiles.length} files dropped (tests/md/css) to fit a large pull request`,
+                        agentName: this.getWarningName(identity.name),
+                    });
                 }
             }
 
@@ -419,8 +550,7 @@ export abstract class BaseCodeReviewAgentProvider {
             // overflow is from the overhead, not the diffs. Falling
             // through to runAgentLoop on the same stack frame lets the
             // agent loop's mid-stream compressor handle marginal
-            // overflow, and the assertPromptFitsInContext preflight
-            // catches the genuine "won't fit at all" case. Without this
+            // overflow. Without this
             // check, executeChunked would recurse → execute() at depth 1
             // → same chunking decision → infinite recursion bounded by
             // MAX_RECURSION_DEPTH = an opaque user-facing failure.
@@ -448,8 +578,8 @@ export abstract class BaseCodeReviewAgentProvider {
                 // Fall through to the single-batch runAgentLoop path
                 // below by NOT entering executeChunked. The variables
                 // (estimatedPromptTokens, fileTiers, etc) are already
-                // set and runAgentLoop's own preflight + compressor
-                // will handle the rest.
+                // set and runAgentLoop's compressor will handle the
+                // rest.
             } else {
                 this.agentLogger.warn({
                     message: `[AGENT] ${identity.name} prompt exceeds context budget (${estimatedPromptTokens} tokens > ${promptBudget} budget), splitting into batches`,
@@ -492,12 +622,25 @@ export abstract class BaseCodeReviewAgentProvider {
         // Emit progress: agent started
         progress.send({ status: 'started' });
 
+        let agentTools: AgentRunToolset = NO_TOOLS;
         try {
-            // Accumulate tool calls for batch progress updates
-            const recentToolCalls: AgentProgressEvent['toolCalls'] = [];
-            let stepCount = 0;
-            const PROGRESS_BATCH_SIZE = 5;
-
+            agentTools = await this.buildAgentTools(input);
+            agentWarnings.push(...(agentTools.warnings ?? []));
+            const knowledgeTools =
+                input.knowledge && input.knowledgeReader
+                    ? buildKnowledgeTools(
+                          input.knowledge,
+                          input.knowledgeReader,
+                          this.getRunToolCache() ?? new RunToolCache(),
+                          input.customAgentTooling?.onSkillRead,
+                      )
+                    : [];
+            // Agent tools before the skill tools: astGrep is the same for
+            // every custom agent without rules, while loadSkill/readSkillFile
+            // enumerate this agent's skills. Tools shared by the custom agents
+            // of a review come first, so their tool blocks stay identical
+            // for as long as possible (the provider prompt cache is a prefix).
+            const extraTools = [...agentTools.tools, ...knowledgeTools];
             // Secrets are passed via closure (not as tracing arg) so that
             // Langfuse span I/O never serialises API keys, tokens, or
             // NestJS service instances (which carry ConfigService with all env vars).
@@ -505,7 +648,9 @@ export abstract class BaseCodeReviewAgentProvider {
             const loopSecrets: AgentLoopSecrets = {
                 remoteCommands: input.remoteCommands,
                 byokConfig,
+                verifyByokConfig: checkByokConfig,
                 gitHubToken: input.gitHubToken,
+                linkedRepoAccess: input.linkedRepoAccess,
                 documentationSearchService: this.documentationSearchService,
                 documentationSearchOptions: {
                     organizationAndTeamData: input.organizationAndTeamData,
@@ -520,147 +665,224 @@ export abstract class BaseCodeReviewAgentProvider {
                           void byokErrorCounter.record(entry);
                       }
                     : undefined,
+                ...(extraTools.length ? { extraTools } : {}),
             };
 
-            const loopParams = {
-                model,
-                systemPrompt,
-                userPrompt,
-                agentName: identity.name,
-                telemetryMetadata: {
-                    organizationId:
-                        input.organizationAndTeamData?.organizationId,
-                    teamId: input.organizationAndTeamData?.teamId,
-                    pullRequestId: input.prNumber,
-                    repositoryId: input.repositoryId,
-                    provider: modelName,
-                },
-                changedFiles: input.changedFiles,
-                prNumber: input.prNumber,
-                repositoryFullName: input.repositoryFullName,
-                baseBranch: input.baseBranch,
-                callGraph: input.callGraph,
-                fileTiers,
-                reviewMode: input.reviewMode,
-                maxSteps: input.maxSteps,
-                // Heavy-pass gating: forwarded explicitly because loopParams
-                // is built field-by-field. Without this line, callers like
-                // KodyRulesAgentProvider that opt out of synthesis-rescue
-                // would have their preference silently dropped here.
-                skipHeavyPasses: input.skipHeavyPasses,
-                skipSynthesisRescue: input.skipSynthesisRescue,
-                outlineFirst: input.outlineFirst,
-                contextWindowTokens: contextWindow,
-                reasoningEffort: byokConfig?.main?.reasoningEffort,
-                reasoningConfigOverride:
-                    byokConfig?.main?.reasoningConfigOverride,
-                byokProvider: byokConfig?.main?.provider,
-                openrouterProviderOrder: (byokConfig?.main as any)
-                    ?.openrouterProviderOrder,
-                openrouterAllowFallbacks: (byokConfig?.main as any)
-                    ?.openrouterAllowFallbacks,
-                parentSignal: input.parentSignal,
+            // The single agent-loop run against the one resolved model. There is
+            // no fallback provider swap (removed in 04b-05) — a provider failure
+            // fails the run. Progress counters live inside so it starts fresh.
+            const runAttempt = async (modelParams: AgentModelParams) => {
+                effectiveModelName = modelParams.modelName;
 
-                onStepFinish: (step: any) => {
-                    stepCount++;
-                    if (step.toolCalls) {
-                        for (const tc of step.toolCalls) {
-                            this.agentLogger.log({
-                                message: `[AGENT-TOOL] PR#${input.prNumber} ${identity.name} tool=${tc.toolName}`,
-                                context: identity.name,
-                            });
-                            recentToolCalls.push({
-                                tool: tc.toolName,
-                                args: JSON.stringify(
-                                    tc.args || tc.input || {},
-                                ).substring(0, 100),
-                            });
-                        }
-                    }
-                    // Batch progress update every N steps
-                    if (
-                        stepCount % PROGRESS_BATCH_SIZE === 0 &&
-                        recentToolCalls.length > 0
-                    ) {
-                        progress.send({
-                            status: 'investigating',
-                            step: stepCount,
-                            toolCalls: [...recentToolCalls],
-                        });
-                        recentToolCalls.length = 0; // Clear after sending
-                    }
-                },
-            };
+                // Accumulate tool calls for batch progress updates
+                const recentToolCalls: AgentProgressEvent['toolCalls'] = [];
+                let stepCount = 0;
+                const PROGRESS_BATCH_SIZE = 5;
 
-            // The agent harness is the only engine now (legacy loop retired).
-            const loopFn = runAgentLoopViaCore;
-
-            // Span input: strip the changedFiles patches (large) from loopParams
-            // so the trace records shape without dumping every diff.
-            const { changedFiles: _cf, ...restParams } = loopParams as any;
-            const safeInput = {
-                ...restParams,
-                ...(_cf && {
-                    changedFiles: _cf.map(
-                        ({ patch: _patch, ...rest }: Record<string, any>) =>
-                            rest,
-                    ),
-                }),
-            };
-
-            const agentResult = await runAgentWithTrace(
-                {
-                    traceName: identity.name,
-                    organizationId:
-                        input.organizationAndTeamData?.organizationId,
-                    teamId: input.organizationAndTeamData?.teamId,
+                const loopParams = {
+                    systemPrompt,
+                    userPrompt,
+                    agentName: identity.name,
+                    // Cost-span run name for THIS category's leaf model calls.
+                    // LLM.run records the ONE usage span per call under this name;
+                    // deriveArea buckets `code-review*` to the `review` area. No
+                    // separate aggregate span is emitted (that double-counted).
+                    usageRunName: this.getUsageRunName(),
+                    telemetryMetadata: {
+                        organizationId:
+                            input.organizationAndTeamData?.organizationId,
+                        teamId: input.organizationAndTeamData?.teamId,
+                        pullRequestId: input.prNumber,
+                        repositoryId: input.repositoryId,
+                        provider: modelParams.modelName,
+                    },
+                    changedFiles: input.changedFiles,
                     prNumber: input.prNumber,
-                    repositoryId: input.repositoryId,
-                },
-                safeInput,
-                () => loopFn(loopParams, loopSecrets),
-            );
+                    repositoryFullName: input.repositoryFullName,
+                    baseBranch: input.baseBranch,
+                    callGraph: input.callGraph,
+                    fileTiers,
+                    reviewMode: input.reviewMode,
+                    maxSteps: input.maxSteps,
+                    // Heavy-pass gating: forwarded explicitly because loopParams
+                    // is built field-by-field. Without this line, callers like
+                    // KodyRulesAgentProvider that opt out of synthesis-rescue
+                    // would have their preference silently dropped here.
+                    skipHeavyPasses: input.skipHeavyPasses,
+                    skipSynthesisRescue: input.skipSynthesisRescue,
+                    // Verifier evidence (issue #1313) — forwarded explicitly for
+                    // the same reason as the two fields above: loopParams is
+                    // built field-by-field, so without this line the verifier
+                    // never sees prior-round decisions.
+                    previousDecisions: input.previousDecisions,
+                    // Same reason: the verifier judges repo_instruction
+                    // findings against these.
+                    repoInstructions: input.repoInstructions,
+                    // The finder reads the listed files through
+                    // readRepoInstruction; only an agent whose prompt lists
+                    // them gets it.
+                    listsRepoInstructions: listsRepoInstructions(
+                        input.repoInstructions,
+                        this.getAllowedSuggestionLabels(input),
+                    ),
+                    allowedLabels: this.getAllowedSuggestionLabels(input),
+                    conventionGuides: this.getConventionGuides(input),
+                    teamInstructions: this.getTeamInstructions(),
+                    laneFocus: this.getLaneFocus(input),
+                    ...(agentTools.teamSystemTools?.length && {
+                        teamSystemTools: agentTools.teamSystemTools,
+                    }),
+                    outlineFirst: input.outlineFirst,
+                    // Context window is sized against the resolved model.
+                    contextWindowTokens: contextWindow,
+                    reasoningEffort: modelParams.reasoningEffort,
+                    reasoningConfigOverride:
+                        modelParams.reasoningConfigOverride,
+                    byokProvider: modelParams.byokProvider,
+                    // Without this the reasoning mapper can't tell an Opus 5
+                    // from a Sonnet 4.5 and has to guess the thinking shape —
+                    // and the wrong guess is a 400 that fails the review.
+                    modelName: modelParams.modelName,
+                    // Drives the BYOK concurrency limiter bucket + wrapper role.
+                    byokRole: modelParams.role,
+                    openrouterProviderOrder:
+                        modelParams.openrouterProviderOrder,
+                    openrouterAllowFallbacks:
+                        modelParams.openrouterAllowFallbacks,
+                    parentSignal: input.parentSignal,
+
+                    onStepFinish: (step: any) => {
+                        stepCount++;
+                        if (step.toolCalls) {
+                            for (const tc of step.toolCalls) {
+                                this.agentLogger.log({
+                                    message: `[AGENT-TOOL] PR#${input.prNumber} ${identity.name} tool=${tc.toolName}`,
+                                    context: identity.name,
+                                });
+                                recentToolCalls.push({
+                                    tool: tc.toolName,
+                                    args: JSON.stringify(
+                                        tc.args || tc.input || {},
+                                    ).substring(0, 100),
+                                });
+                            }
+                        }
+                        // Batch progress update every N steps
+                        if (
+                            stepCount % PROGRESS_BATCH_SIZE === 0 &&
+                            recentToolCalls.length > 0
+                        ) {
+                            progress.send({
+                                status: 'investigating',
+                                step: stepCount,
+                                toolCalls: [...recentToolCalls],
+                            });
+                            recentToolCalls.length = 0; // Clear after sending
+                        }
+                    },
+                };
+
+                // The agent harness is the only engine now (legacy loop retired).
+                const loopFn = runAgentLoopViaCore;
+
+                // Span input: strip the changedFiles patches (large) from
+                // loopParams so the trace records shape without every diff.
+                const { changedFiles: _cf, ...restParams } = loopParams as any;
+                const safeInput = {
+                    ...restParams,
+                    ...(_cf && {
+                        changedFiles: _cf.map(
+                            ({ patch: _patch, ...rest }: Record<string, any>) =>
+                                rest,
+                        ),
+                    }),
+                };
+
+                return runAgentWithTrace(
+                    {
+                        traceName: identity.name,
+                        organizationId:
+                            input.organizationAndTeamData?.organizationId,
+                        teamId: input.organizationAndTeamData?.teamId,
+                        prNumber: input.prNumber,
+                        repositoryId: input.repositoryId,
+                    },
+                    safeInput,
+                    () => loopFn(loopParams, loopSecrets),
+                );
+            };
+
+            // Single run against the one resolved model — no fallback provider
+            // swap (removed in 04b-05).
+            const agentResult = await runAttempt(mainModel);
+
+            // The provider run failed. Throw so the orchestrator records a real
+            // failure — otherwise the harness's swallowed error (a non-throwing
+            // error-status result, finishReason 'error') would surface as a
+            // silent "0 suggestions, 0 failures" SUCCESS, masking a provider
+            // outage. The thrown message is classified (classifyLLMError) into
+            // the end-review comment's failure reason.
+            const providerError = providerErrorFromResult(agentResult);
+            if (providerError) {
+                throw providerError;
+            }
 
             const durationMs = Date.now() - startTime;
 
-            // Per-agent usage spans (main + verify). Best-effort. → ReviewObservability.
-            await recordAgentUsageSpans({
-                agentResult,
-                modelName,
-                isByok: !!byokConfig,
-                categoryLabel: this.getCategoryLabel(),
-                identityName: identity.name,
-                organizationId: input.organizationAndTeamData?.organizationId,
-                teamId: input.organizationAndTeamData?.teamId,
-                prNumber: input.prNumber,
-                durationMs,
-                observability: this.observabilityService,
-            });
+            // Usage is recorded by LLM.run — ONE cost span per leaf model call
+            // (finder + verify + resample + prose-recovery), each carrying the
+            // `code-review-*` runName so `deriveArea` buckets it to `review`.
+            // The old aggregate span (recordAgentUsageSpans) is gone: it
+            // re-recorded the same tokens the leaf spans already record, which
+            // double-counted the review's cost on the Token Usage screen.
 
-            // Map raw agent findings → CodeSuggestion (path validation,
-            // kody-rule UUID recovery, label/severity). Extracted to FindingMapper.
-            const mapped = mapAgentFindings(agentResult, {
-                changedFiles: input.changedFiles,
-                kodyRules: input.kodyRules,
-                prNumber: input.prNumber,
-                isKodyRules: this.getCategoryLabel() === 'kody_rules',
-                identityName: this.getIdentity().name,
-                labelPolicy: {
-                    categoryLabel: this.getCategoryLabel(),
-                    allowedLabels: this.getAllowedSuggestionLabels(input),
-                    supportsMixed: this.supportsMixedLabels(),
-                },
-                logger: this.agentLogger,
-            });
+            const mapped = this.mapFindings(agentResult, input);
             const suggestions = mapped.suggestions;
+            if (mapped.droppedForPath > 0) {
+                agentWarnings.push(
+                    buildPathMismatchWarning({
+                        count: mapped.droppedForPath,
+                        modelName,
+                        agentName: this.getWarningName(this.getIdentity().name),
+                    }),
+                );
+            }
+
+            if (mapped.discardedByVerifyError.length > 0) {
+                agentWarnings.push(
+                    buildVerifyUnavailableWarning({
+                        count: mapped.discardedByVerifyError.length,
+                        modelName,
+                        agentName: this.getWarningName(this.getIdentity().name),
+                    }),
+                );
+            }
 
             // Emit progress: agent completed
-            // Only mark as error if the agent hit a hard limit (timeout or MAX_STEPS with tool-calls finish).
-            // source=empty with finishReason=stop is legitimate (agent investigated and found nothing).
+            // The agent hit a hard limit when its finder ended without
+            // submitting a result: out of steps, or its turn truncated by the
+            // provider. A run that finished with nothing to report is not one.
+            // A per-agent timeout aborts the run and fails the agent above.
+            // A custom agent that ended without submitting a result and
+            // reported nothing stopped early too: its silence is not a clean
+            // check. The generalist's prose answer stays with prose recovery.
+            const endedWithoutResult =
+                this.readsMissingResultAsIncomplete() &&
+                agentResult.incompleteReason === undefined &&
+                agentResult.submittedResult === false &&
+                agentResult.finishReason !== 'error' &&
+                suggestions.length === 0;
             const hitHardLimit =
-                agentResult.finishReason === 'timeout' ||
-                (agentResult.source === 'empty' &&
-                    agentResult.finishReason === 'tool-calls');
+                agentResult.incompleteReason !== undefined ||
+                endedWithoutResult;
+            const stopReason: ReviewAgentOutput['finishReason'] =
+                agentResult.incompleteReason === 'truncated'
+                    ? 'truncated'
+                    : endedWithoutResult
+                      ? 'no-result'
+                      : hitHardLimit
+                        ? 'max-steps'
+                        : 'stop';
 
             progress.send({
                 status: hitHardLimit ? 'error' : 'completed',
@@ -668,12 +890,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 durationMs,
                 totalTokens: agentResult.usage.totalTokens,
                 step: agentResult.steps,
-                finishReason:
-                    agentResult.finishReason === 'timeout'
-                        ? 'timeout'
-                        : hitHardLimit
-                          ? 'max-steps'
-                          : 'stop',
+                finishReason: stopReason,
                 source: agentResult.source,
                 coverage: agentResult.coverage,
                 verification: agentResult.verification,
@@ -723,7 +940,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     outputTokens: agentResult.usage.outputTokens,
                     totalTokens: agentResult.usage.totalTokens,
                     finishReason: agentResult.finishReason,
-                    model: modelName,
+                    model: effectiveModelName,
                     coverage: agentResult.coverage,
                     verification: agentResult.verification,
                     anomalies: agentResult.anomalies,
@@ -734,6 +951,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 suggestions,
                 discardedBySeverity: mapped.discardedBySeverity,
                 discardedByVerify: mapped.discardedByVerify,
+                discardedByVerifyError: mapped.discardedByVerifyError,
                 agentName: identity.name,
                 agentCategory,
                 agentReplicaIndex: input.agentReplicaIndex,
@@ -744,26 +962,54 @@ export abstract class BaseCodeReviewAgentProvider {
                 // loop's warnings: [] is the PR1 placeholder) with the
                 // strategy warnings emitted in this provider above.
                 warnings: [...agentWarnings, ...(agentResult.warnings ?? [])],
+                // Carry the cut-short signal out of the provider. It used to
+                // stop at `progress.send` (UI only), so the pipeline had no way
+                // to tell "found nothing" from "never finished looking".
+                hitHardLimit,
+                finishReason: stopReason,
             };
         } catch (error) {
             const durationMs = Date.now() - startTime;
             const errMsg =
                 error instanceof Error ? error.message : String(error);
             const errName = error instanceof Error ? error.name : undefined;
+
+            // Classify HERE, while the error still carries its status and
+            // response body, and attach the result so every downstream reader
+            // (orchestrator, stage, PR comment, UI label) shares one actionable
+            // sentence instead of re-deriving from a lossy copy.
+            const classification =
+                getClassification(error) ??
+                classifyLLMError(
+                    error,
+                    typeof byokConfig?.provider === 'string'
+                        ? byokConfig.provider
+                        : undefined,
+                );
+            if (error instanceof Error) {
+                attachClassification(error, classification);
+            }
+
             progress.send({
                 status: 'error',
                 durationMs,
                 errorMessage: errMsg.substring(0, 500),
                 errorName: errName,
+                errorFriendlyMessage: classification.friendlyMessage,
             });
-            this.agentLogger.error({
+            // Terminal BYOK (suspended key / no credit) → warn: user's provider
+            // config, not a Kodus fault. Reuses the classification computed
+            // above; a real fault stays error.
+            this.agentLogger[
+                isTerminalCategory(classification.category) ? 'warn' : 'error'
+            ]({
                 message: `[AGENT] ${identity.name} failed for PR#${input.prNumber} after ${durationMs}ms: ${errMsg}`,
                 context: identity.name,
                 error,
                 metadata: {
                     prNumber: input.prNumber,
                     durationMs,
-                    model: modelName,
+                    model: effectiveModelName,
                     errorName: errName,
                     errorStack:
                         error instanceof Error
@@ -777,7 +1023,34 @@ export abstract class BaseCodeReviewAgentProvider {
             // orchestrator treated as a fulfilled-with-no-findings result,
             // silently masking real crashes as legitimate "0 suggestions".
             throw error;
+        } finally {
+            await agentTools.close().catch(() => undefined);
         }
+    }
+
+    /**
+     * Map raw agent findings → CodeSuggestion (path validation, kody-rule UUID
+     * recovery, label/severity) under this agent's label policy. Extracted to
+     * FindingMapper; public so the parse eval (evals/parse) maps recorded run
+     * ends the way a review does.
+     */
+    mapFindings(
+        agentResult: MappableAgentResult,
+        input: ReviewAgentInput,
+    ): MappedFindings {
+        return mapAgentFindings(agentResult, {
+            changedFiles: input.changedFiles,
+            kodyRules: input.kodyRules,
+            prNumber: input.prNumber,
+            isKodyRules: this.getCategoryLabel() === 'kody_rules',
+            identityName: this.getIdentity().name,
+            labelPolicy: {
+                categoryLabel: this.getCategoryLabel(),
+                allowedLabels: this.getAllowedSuggestionLabels(input),
+                supportsMixed: this.supportsMixedLabels(),
+            },
+            logger: this.agentLogger,
+        });
     }
 
     /** Subclass-specific bits the (pure) prompt builders need. */
@@ -788,6 +1061,8 @@ export abstract class BaseCodeReviewAgentProvider {
             categoryLabel: this.getCategoryLabel(),
             allowedLabels: this.getAllowedSuggestionLabels(input),
             supportsMixed: this.supportsMixedLabels(),
+            conventionGuides: this.getConventionGuides(input),
+            knowledgeSection: renderKnowledgeSection(input.knowledge),
         };
     }
 

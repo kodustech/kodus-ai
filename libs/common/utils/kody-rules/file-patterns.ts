@@ -1,8 +1,17 @@
 import * as path from 'path';
 
-import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
+import {
+    isFileMatchingGlob,
+    isFileMatchingGlobCaseInsensitive,
+} from '@libs/common/utils/glob-utils';
 
-export const RULE_FILE_PATTERNS = [
+/**
+ * Files written to instruct coding agents (Cursor, Copilot, Claude, ...).
+ * They are NOT review policy: they are never converted into Kody Rules. When a
+ * repository opts in (`repoInstructionsEnabled`), the review reads the ones that
+ * govern the changed files as context (see `collectRepoInstructions`).
+ */
+export const AGENT_INSTRUCTION_FILE_PATTERNS = [
     // Cursor
     '.cursorrules',
     '.cursor/rules/**/*.mdc',
@@ -12,12 +21,15 @@ export const RULE_FILE_PATTERNS = [
     '.github/instructions/**/*.instructions.md',
 
     // Agentic
+    'AGENTS.md',
     '.agents.md',
     '.agent.md',
+    '.agents/rules/**',
 
     // Claude
     'CLAUDE.md',
     '.claude/settings.json',
+    '.claude/skills/**',
 
     // Windsurf
     '.windsurfrules',
@@ -31,40 +43,120 @@ export const RULE_FILE_PATTERNS = [
     // Aider
     '.aider.conf.yml',
     '.aiderignore',
+] as const;
 
-    // Generic / internal
-    '.rules/**/*',
+/**
+ * Agent files a review never reads: tool configuration, which carries no prose
+ * a reviewer could check a diff against, and Claude skills, which Claude loads
+ * only when a task calls for one.
+ */
+const AGENT_INSTRUCTION_UNREAD_FILE_PATTERNS = [
+    '.claude/settings.json',
+    '.claude/skills/**',
+    '.opencode.json',
+    '.aider.conf.yml',
+    '.aiderignore',
+] as const;
+
+/**
+ * Repository files that ARE Kody Rules: one file = one rule, parsed
+ * deterministically by `parseKodyRuleFile`. `.kody/rules/**` is unambiguous by
+ * name; files under the generic locations only count when they parse as the
+ * template, so an ESLint plugin's `docs/rules/*.md` stays out.
+ */
+export const KODY_RULE_FILE_PATTERNS = [
     '.kody/rules/**',
+    // Documented alongside `.kody/rules/**` on the "Repository Rules"
+    // page; `.md`-only to avoid sweeping arbitrary `rules/` code dirs.
+    'rules/**/*.md',
+    '.rules/**/*',
     'docs/coding-standards/**/*',
+] as const;
+
+/**
+ * Every location that has ever been synced into Kody Rules. Only for
+ * recognising rows created before agent files stopped converting (origin
+ * backfill, path scoping of legacy rows). New code picks one of the two lists.
+ */
+export const RULE_FILE_PATTERNS = [
+    ...AGENT_INSTRUCTION_FILE_PATTERNS,
+    ...KODY_RULE_FILE_PATTERNS,
 ] as const;
 
 export type RuleFilePattern = (typeof RULE_FILE_PATTERNS)[number];
 
 /**
- * Whether `sourcePath` came from an IDE rule file recognised by the auto-sync
- * importer (i.e. it matches one of `RULE_FILE_PATTERNS`, anywhere in the repo).
- *
- * Reason: rules persisted by ingestion all carry a `sourcePath`, but only a
- * subset of those came from the IDE-rule auto-sync flow. Other flows
- * (Onboard, etc.) also set `sourcePath`. Code paths that should only act on
- * IDE-synced rules — e.g. the toggle-off purge in `KodyRulesSyncService` —
- * must use this check, not just `sourcePath != null`, to avoid sweeping up
- * unrelated origins.
- *
- * Patterns are matched at the repo root AND under any subdirectory (e.g. a
- * sourcePath of `applications/sales/.cursorrules` matches the `.cursorrules`
- * pattern via the `**\/` prefix variant), so per-subdir IDE rule imports are
- * recognised the same way as repo-root ones.
+ * Every base pattern plus its `**\/`-prefixed variant, so root-level names
+ * like `CLAUDE.md` or `.kody/rules` are also found in subdirectories (the
+ * common monorepo convention of per-directory files). Nested sources are
+ * scoped to their subdirectory by `extractRepoSubdirFromIdeSource`.
+ */
+function withNestedVariants(patterns: ReadonlyArray<string>): string[] {
+    return [...patterns, ...patterns.map((p) => `**/${p}`)];
+}
+
+export const AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS: ReadonlyArray<string> =
+    withNestedVariants(AGENT_INSTRUCTION_FILE_PATTERNS);
+
+export const KODY_RULE_FILE_DISCOVERY_PATTERNS: ReadonlyArray<string> =
+    withNestedVariants(KODY_RULE_FILE_PATTERNS);
+
+export const RULE_FILE_DISCOVERY_PATTERNS: ReadonlyArray<string> =
+    withNestedVariants(RULE_FILE_PATTERNS);
+
+const AGENT_INSTRUCTION_UNREAD_DISCOVERY_PATTERNS: ReadonlyArray<string> =
+    withNestedVariants(AGENT_INSTRUCTION_UNREAD_FILE_PATTERNS);
+
+// Case-insensitive to stay consistent with discovery: a lowercase `claude.md`
+// found by the sync must be recognised the same way afterwards.
+function matchesAny(
+    sourcePath: string | null | undefined,
+    patterns: ReadonlyArray<string>,
+): boolean {
+    if (!sourcePath) return false;
+    return isFileMatchingGlobCaseInsensitive(sourcePath, [...patterns]);
+}
+
+/** Whether `sourcePath` is a coding-agent instruction file, at any depth. */
+export function isAgentInstructionSource(
+    sourcePath: string | null | undefined,
+): boolean {
+    return matchesAny(sourcePath, AGENT_INSTRUCTION_FILE_DISCOVERY_PATTERNS);
+}
+
+/** An agent instruction file a review reads (see the unread list above). */
+export function isAgentInstructionProseFile(
+    sourcePath: string | null | undefined,
+): boolean {
+    return (
+        isAgentInstructionSource(sourcePath) &&
+        !matchesAny(sourcePath, AGENT_INSTRUCTION_UNREAD_DISCOVERY_PATTERNS)
+    );
+}
+
+/**
+ * Whether `sourcePath` sits in a Kody rule file location, at any depth. The
+ * generic `rules/**\/*.md` also matches `.agents/rules/*.md`; an agent
+ * instruction location always wins.
+ */
+export function isKodyRuleFileSource(
+    sourcePath: string | null | undefined,
+): boolean {
+    return (
+        matchesAny(sourcePath, KODY_RULE_FILE_DISCOVERY_PATTERNS) &&
+        !isAgentInstructionSource(sourcePath)
+    );
+}
+
+/**
+ * Whether `sourcePath` came from any file the repo-file sync has ever imported
+ * (agent instruction files included). Used to classify legacy rows; code that
+ * acts on rules picks `isAgentInstructionSource` or `isKodyRuleFileSource`.
  */
 export function isIdeRuleSource(
     sourcePath: string | null | undefined,
 ): boolean {
-    if (!sourcePath) return false;
-    const patterns: string[] = [
-        ...RULE_FILE_PATTERNS,
-        ...RULE_FILE_PATTERNS.map((p) => `**/${p}`),
-    ];
-    return isFileMatchingGlob(sourcePath, patterns);
+    return matchesAny(sourcePath, RULE_FILE_DISCOVERY_PATTERNS);
 }
 
 /**
@@ -141,6 +233,72 @@ export function extractRepoSubdirFromIdeSource(
 }
 
 /**
+ * Splits a rule `path` value into its individual glob patterns.
+ *
+ * Kody Rules support OR-joined globs in a single `path` string (the
+ * importer comma-joins declared multi-glob frontmatter). Commas that are
+ * part of a single valid picomatch pattern are NOT separators: inside
+ * braces ("{app,lib}/**"), character classes ("src/[ab,cd]/**"),
+ * extglobs ("@(app,lib)/**"), or escaped ("path\\,with\\,comma/**").
+ * Delimiters inside a character class are literals ("[{]" must not
+ * bump the brace depth), hence the mutual-exclusion guards below.
+ *
+ * Single source of truth for every consumer that needs to iterate a
+ * rule path's globs (review-time matching, IDE-dir rejection, etc.) so
+ * the split semantics can't drift between call sites.
+ */
+export function splitRulePathGlobs(rulePath: string): string[] {
+    const globs: string[] = [];
+    let current = '';
+    let braceDepth = 0;
+    let bracketDepth = 0;
+    let parenDepth = 0;
+    let escaped = false;
+
+    for (const char of rulePath) {
+        if (escaped) {
+            escaped = false;
+            current += char;
+            continue;
+        }
+        if (char === '\\') {
+            escaped = true;
+            current += char;
+            continue;
+        }
+
+        if (char === '{' && bracketDepth === 0) braceDepth++;
+        else if (char === '}' && braceDepth > 0 && bracketDepth === 0) {
+            braceDepth--;
+        } else if (char === '[' && bracketDepth === 0) bracketDepth++;
+        else if (char === ']' && bracketDepth > 0) bracketDepth--;
+        else if (char === '(' && bracketDepth === 0) parenDepth++;
+        else if (char === ')' && parenDepth > 0 && bracketDepth === 0) {
+            parenDepth--;
+        }
+
+        if (
+            char === ',' &&
+            braceDepth === 0 &&
+            bracketDepth === 0 &&
+            parenDepth === 0
+        ) {
+            if (current.trim()) {
+                globs.push(current.trim());
+            }
+            current = '';
+            continue;
+        }
+        current += char;
+    }
+    if (current.trim()) {
+        globs.push(current.trim());
+    }
+
+    return globs;
+}
+
+/**
  * Whether `candidatePath` would match an IDE rule file path. Used to
  * reject LLM hallucinations that try to scope a rule against the
  * `.cursor/rules/**` (or similar) directory — i.e. lint the rule
@@ -149,22 +307,27 @@ export function extractRepoSubdirFromIdeSource(
 export function pathMatchesIdeRuleDir(
     candidatePath: string | null | undefined,
 ): boolean {
-    if (!candidatePath) return false;
+    if (!candidatePath) {
+        return false;
+    }
     // Comma-separated list (KodyRules supports OR-joined globs)
-    const globs = candidatePath
-        .split(',')
-        .map((g) => g.trim())
-        .filter(Boolean);
-    if (globs.length === 0) return false;
+    const globs = splitRulePathGlobs(candidatePath);
+    if (globs.length === 0) {
+        return false;
+    }
 
     return globs.some((glob) => {
         // The glob is "IDE-y" if its fixed prefix is one of the markers
         // (e.g. ".cursor/rules/**" → fixed prefix ".cursor/rules/").
-        const fixedPrefix = glob.split(/[*?[]/)[0];
+        // `{` and `(` count as wildcards here so ".cursor/rules/{a,b}/**"
+        // and ".cursor/rules/@(a,b)/**" still yield ".cursor/rules".
+        const fixedPrefix = glob.split(/[*?[{(]/)[0].replace(/[@!+]$/, '');
         const dir = fixedPrefix.endsWith('/')
             ? fixedPrefix.slice(0, -1)
             : path.posix.dirname(fixedPrefix);
-        if (!dir || dir === '.') return false;
+        if (!dir || dir === '.') {
+            return false;
+        }
         return IDE_RULE_DIR_MARKERS.some(
             (marker) => dir === marker || dir.endsWith('/' + marker),
         );
@@ -274,4 +437,76 @@ export function validateAndScopeIdeRulePath(params: {
         reason: 'accepted-as-is',
         originalLlmPath: llmPath,
     };
+}
+
+/**
+ * Whether a changed file falls under a rule's `path` as PERSISTED — i.e.
+ * possibly several globs comma-joined by the repo-file importer
+ * ("src/**,lib/**"). Matching the joined string as ONE glob makes the
+ * comma literal and the rule silently never fires (the customer's
+ * "multi-glob rules are never enforced" case). Trailing-slash globs are
+ * directories to picomatch, so the directory-prefix fallback runs PER
+ * split glob.
+ *
+ * Single source of truth for every enforcement path (agent provider
+ * selection, sharded judge, mechanical detector) — the bug regressed
+ * once precisely because a mirrored copy of this logic was fixed in one
+ * site and not the other.
+ */
+export function fileMatchesRulePath(
+    filePath: string,
+    pattern: string,
+): boolean {
+    if (filePath === pattern) {
+        return true;
+    }
+    return splitRulePathGlobs(pattern).some((glob) => {
+        if (filePath === glob) {
+            return true;
+        }
+        if (glob.endsWith('/') && filePath.startsWith(glob)) {
+            return true;
+        }
+        return isFileMatchingGlob(filePath, [glob]);
+    });
+}
+
+/**
+ * Does a rule scoped to a set of file extensions apply to this file?
+ *
+ * The extension list is the rule's own language scope — inferred once at save
+ * from the rule's text ("Ruby does not require semicolons" → `.rb/.rake/.erb`)
+ * or set by the author. Lives here, not next to either caller, because BOTH
+ * the mechanical router (`detectorAppliesToFile`) and the semantic judge
+ * (`rulesForFile`) narrow by it, and the last time this kind of predicate was
+ * mirrored in two places the fix landed in one and the bug survived in the
+ * other (see `fileMatchesRulePath` above).
+ *
+ * Two deliberate choices:
+ *
+ * 1. SUFFIX, not last segment. `foo.spec.ts` ends in `.ts`, so a `.ts` scope
+ *    covers it — and a `.spec.ts` scope covers ONLY spec files, which is how a
+ *    rule says "not in tests". The dot is part of the compared string, so
+ *    `.js` does not match `app.mjs`.
+ * 2. An EXTENSIONLESS file (Rakefile, Gemfile, Dockerfile, Makefile, LICENSE)
+ *    always passes. We cannot tell its language, and excluding it would be a
+ *    SILENT enforcement loss: the rule would simply never fire there and
+ *    nothing downstream would notice. The scope is a cost filter, so when it
+ *    cannot decide it abstains and lets the judge rule.
+ *
+ * Nothing here enumerates a language. The shape is all that is checked, so a
+ * technology nobody anticipated works the day a rule names it.
+ */
+export function extensionScopeAppliesToFile(
+    filePath: string,
+    extensions?: string[],
+): boolean {
+    if (!extensions?.length) {
+        return true;
+    }
+    const lower = String(filePath).toLowerCase();
+    if (!/\.[^./]+$/.test(lower)) {
+        return true;
+    }
+    return extensions.some((ext) => lower.endsWith(ext));
 }

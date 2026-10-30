@@ -4,10 +4,6 @@ jest.mock(
     () => ({ ExecuteCliReviewUseCase: class {} }),
 );
 jest.mock(
-    '@libs/cli-review/application/use-cases/submit-cli-session-capture.use-case',
-    () => ({ SubmitCliSessionCaptureUseCase: class {} }),
-);
-jest.mock(
     '@libs/cli-review/infrastructure/services/authenticated-rate-limiter.service',
     () => ({ AuthenticatedRateLimiterService: class {} }),
 );
@@ -66,7 +62,6 @@ describe('CliReviewController.ingestSessionEvent', () => {
             { execute: jest.fn() } as any, // getCliReviewJobStatusUseCase
             { execute: jest.fn() } as any, // waitForCliReviewJobUseCase
             ingestUseCase as any, // ingestSessionEventUseCase
-            {} as any, // submitCliSessionCaptureUseCase
             {} as any, // trialRateLimiter
             authenticatedRateLimiter as any, // authenticatedRateLimiter
             {} as any, // githubPublicPrService
@@ -119,33 +114,6 @@ describe('CliReviewController.ingestSessionEvent', () => {
                 gitRemote: 'git@github.com:org/repo.git',
             },
         });
-    });
-
-    it('passes extra payload fields through to event', async () => {
-        const body = {
-            sessionId: 'sess-1',
-            type: 'turn_start' as const,
-            branch: 'main',
-            timestamp: '2025-06-01T10:00:00.000Z',
-            prompt: 'Fix the bug',
-            customField: 42,
-        };
-
-        await controller.ingestSessionEvent(
-            { body },
-            'kodus_key',
-            undefined,
-            undefined,
-        );
-
-        expect(ingestUseCase.execute).toHaveBeenCalledWith(
-            expect.objectContaining({
-                event: expect.objectContaining({
-                    prompt: 'Fix the bug',
-                    customField: 42,
-                }),
-            }),
-        );
     });
 
     it('throws UnauthorizedException when team key is invalid', async () => {
@@ -205,27 +173,5 @@ describe('CliReviewController.ingestSessionEvent', () => {
             'kodus_my_key',
         );
         expect(ingestUseCase.execute).toHaveBeenCalled();
-    });
-
-    it('returns use case result as-is', async () => {
-        ingestUseCase.execute.mockResolvedValue({
-            accepted: true,
-            uuid: 'evt-1',
-        });
-
-        const body = {
-            sessionId: 'sess-1',
-            type: 'session_start' as const,
-            branch: 'main',
-            timestamp: '2025-06-01T10:00:00.000Z',
-        };
-
-        const result = await controller.ingestSessionEvent(
-            { body },
-            'kodus_key',
-            undefined,
-            undefined,
-        );
-        expect(result).toEqual({ accepted: true, uuid: 'evt-1' });
     });
 });

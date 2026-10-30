@@ -6,7 +6,10 @@ import {
     SpendLimitConfigError,
     SpendLimitPriceabilityError,
 } from '@libs/analytics/domain/spend-limit/spend-limit.errors';
-import { SpendLimitConfig } from '@libs/analytics/domain/spend-limit/spend-limit.types';
+import {
+    SpendLimitConfig,
+    SpendLimitScope,
+} from '@libs/analytics/domain/spend-limit/spend-limit.types';
 import { ManualPricingOverrides } from '@libs/analytics/domain/token-usage/types/pricing.types';
 
 import { SpendLimitConfigService } from './spend-limit-config.service';
@@ -15,6 +18,8 @@ export interface ConfigureSpendLimitInput {
     organizationAndTeamData: OrganizationAndTeamData;
     enabled: boolean;
     monthlyLimitUsd: number;
+    /** Preferred budget readout scope (readout only — never blocks). */
+    scope?: SpendLimitScope;
     /** Org-entered per-model price overrides (per-token US$). */
     modelPricing?: ManualPricingOverrides;
     /**
@@ -62,6 +67,9 @@ export class ConfigureSpendLimitUseCase {
         const config: SpendLimitConfig = {
             enabled: input.enabled,
             monthlyLimitUsd: input.monthlyLimitUsd,
+            // Readout-only preference — persisted so the UI remembers it; it
+            // never changes the alert-only behavior.
+            scope: input.scope ?? existing?.scope,
             modelPricing: input.modelPricing ?? existing?.modelPricing,
             thresholdsSent: existing?.thresholdsSent,
             finalNoticeSent: existing?.finalNoticeSent,

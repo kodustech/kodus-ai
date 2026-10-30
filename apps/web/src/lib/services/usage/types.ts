@@ -3,6 +3,8 @@ export type TokenUsageQueryContract = {
     endDate: string;
     prNumber?: number;
     timezone?: string; // for day bucketing
+    /** Scope to one repository (resolved to its PR numbers server-side). */
+    repositoryId?: string;
     byok: boolean;
 };
 
@@ -18,7 +20,7 @@ export interface TierUsage {
 
 export interface BaseUsageContract {
     model: string;
-    /** Flat totals across both tiers — sum of byTier.le + byTier.gt. */
+    /** Flat totals across every tier bucket — sum of `byTier`. */
     input: number;
     output: number;
     total: number;
@@ -28,13 +30,11 @@ export interface BaseUsageContract {
     /** Input tokens that created cache entries on this call (Anthropic). */
     cacheWrite?: number;
     /**
-     * Per-tier breakdown. Present only for tier-aware models (e.g. Gemini Pro
-     * with its >200K threshold). Flat-priced models omit this.
+     * Per-tier breakdown, indexed by bracket: `byTier[0]` = calls billed at
+     * the default rate, `byTier[k]` = calls above the k-th input threshold.
+     * Present only for tier-aware models; the UI collapses it to ≤/>threshold.
      */
-    byTier?: {
-        le: TierUsage;
-        gt: TierUsage;
-    };
+    byTier?: TierUsage[];
 }
 
 export interface DailyUsageResultContract extends BaseUsageContract {
@@ -51,6 +51,40 @@ export interface DailyUsageByPrResultContract extends UsageByPrResultContract {
 
 export interface UsageByDeveloperResultContract extends BaseUsageContract {
     developer: string;
+}
+
+/**
+ * One review run (correlationId). A PR reviewed more than once yields one row
+ * per run.
+ */
+export interface UsageByReviewResultContract extends BaseUsageContract {
+    review: string;
+    prNumber?: number;
+    startedAt?: string;
+}
+
+/** Token spend grouped by process area (review, kody_rules, cross_file, …). */
+export interface UsageByAreaResultContract extends BaseUsageContract {
+    area: string;
+}
+
+/** Token spend grouped by routing task × process area. Task (`codeReview`/… —
+ *  the model picked per task) is the top level; area is the drill-down (one task
+ *  fans out over review/suggestions/cross_file). `''` task = unattributable. */
+export interface UsageByTaskAreaResultContract extends BaseUsageContract {
+    task: string;
+    area: string;
+}
+
+/** The active window (first/last usage timestamp) of a MODEL within a routing
+ *  TASK — so a mid-period model/provider switch reads as two windows instead of
+ *  one misleading model label. Token counts come from byTaskArea; this carries
+ *  only the min/max timestamp. */
+export interface UsageByTaskModelSpanContract {
+    task: string;
+    model: string;
+    firstAt: string; // ISO
+    lastAt: string; // ISO
 }
 
 export interface DailyUsageByDeveloperResultContract
@@ -77,10 +111,8 @@ export type PricingSource = 'manual' | 'catalog' | 'missing';
 /** Per-model row enriched server-side with cost + pricing source. */
 export interface EnrichedModelUsage extends BaseUsageContract {
     cost: CostBreakdown;
-    costByTier?: {
-        le: CostBreakdown;
-        gt: CostBreakdown;
-    };
+    /** Cost per bracket, aligned index-for-index with `byTier`. */
+    costByTier?: CostBreakdown[];
     pricingSource: PricingSource;
 }
 
@@ -89,6 +121,9 @@ export interface UsageOverviewReportContract {
     summary: UsageSummaryContract;
     daily: DailyUsageResultContract[];
     byPr: UsageByPrResultContract[];
+    byArea?: UsageByAreaResultContract[];
+    byTaskArea?: UsageByTaskAreaResultContract[];
+    byTaskModelSpan?: UsageByTaskModelSpanContract[];
 }
 
 export interface UsageSummaryContract {
@@ -99,7 +134,8 @@ export interface UsageSummaryContract {
 
 export type TokenPrice = {
     default: number;
-    tier?: { threshold: number; rate: number };
+    /** Sorted ascending by threshold; bracket k above tiers[k-1] uses its rate. */
+    tiers?: Array<{ threshold: number; rate: number }>;
 };
 
 /**

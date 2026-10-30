@@ -1,0 +1,930 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:54:40.890Z",
+  "updatedAt": "2026-10-13T22:17:55.810Z",
+  "complete": true,
+  "selectedCases": [
+    "P41-raise-breaks-batch-caller",
+    "P41-raise-breaks-batch-caller-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 12,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P41-raise-breaks-batch-caller · renew-due-abort-linked [deliver_linked]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P41-raise-breaks-batch-caller-control · renew-due-abort-linked [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 144212,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, so renew_due's `next if sub.nil?` guard is unreachable and the raise propagates out of the `ids.each` loop. WHY: renew_due is documented to charge a batch of ids queued the night before and to tolerate subscriptions deleted since (lines 20-21); with the raise, the first deleted id aborts the whole loop, silently skipping every remaining due subscription for that run. HOW: make renew_due tolerate the missing row, e.g. rescue SubscriptionNotFound inside the loop (or add a non-raising lookup such as @repo.find_by for the batch path) and `next` on it, while charge_now keeps using the raising find_subscription.",
+          "keep": true,
+          "rationale": "Confirmed: find_subscription (line 12) raises SubscriptionNotFound instead of returning nil, so the `next if sub.nil?` guard at line 25 is dead code. renew_due loops over a batch of ids and is documented (lines 20-21) to tolerate subscriptions deleted since queuing; with the raise, the first missing id propagates out of `ids.each`, aborting the loop and skipping every remaining due subscription. grep shows no rescue for SubscriptionNotFound anywhere, so nothing catches it. This is a distinct problem from PreviousDecision index=1 (which only addressed charge_now's nil NoMethodError): it is a consequence of applying that suggestion in a different operation (the batch path), which the rules explicitly classify as a different problem, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "renew_due|SubscriptionNotFound|rescue",
+                "path": "."
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound when the repo has no row, but renew_due still guards with `next if sub.nil?` and is explicitly documented to receive ids of subscriptions that may have been deleted since they were queued. WHY: the first stale id now raises out of the `each` loop, aborting the entire batch renewal and skipping every remaining due subscription (charges silently lost), whereas the old nil-return let renew_due skip just that id. HOW: keep the raise for charge_now but make the batch caller tolerate the missing row — e.g. rescue SubscriptionNotFound and `next` inside the loop (or have renew_due use a non-raising lookup).",
+          "keep": true,
+          "rationale": "Confirmed against the code: find_subscription (line 12) raises SubscriptionNotFound and can no longer return nil, so the `next if sub.nil?` guard in renew_due (line 25) is dead and the raise propagates out of the `each` loop, aborting the entire batch. The doc comment (lines 20-21) states ids are queued the night before and may have been deleted, so a stale id is an expected input — the first one now skips all remaining due subscriptions and silently loses their charges. This is a real behavioral data-loss bug. It is not a repeat of the earlier decision, which concerned a different failure (NoMethodError on nil in charge_now) and proposed the raise; this finding is the consequence of applying that suggestion to a separate caller/operation, which the rules treat as a distinct reportable problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|SubscriptionNotFound|find_by",
+                "glob": "*.rb"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause `find_subscription` now raises `SubscriptionNotFound` instead of returning nil, `renew_due`'s `next if sub.nil?` guard is unreachable, so the first deleted id aborts the entire `ids.each` batch and silently skips every remaining due subscription documented at lines 20-21. Make `renew_due` tolerate the missing row by rescuing `SubscriptionNotFound` inside the loop and calling `next` (or by using a non-raising lookup such as `@repo.find_by` for the batch path) while `charge_now` continues to use the raising `find_subscription`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause `find_subscription` now raises `SubscriptionNotFound` when the repo has no row, `renew_due`'s documented batch path no longer benefits from the `next if sub.nil?` guard: the first stale id raises out of the `each` loop, aborting the entire batch renewal and silently losing charges for every remaining due subscription, whereas the old nil-return skipped just that id. Keep the raise for `charge_now`, but make the batch caller tolerate the missing row by rescuing `SubscriptionNotFound` and calling `next` inside the loop (or by having `renew_due` use a non-raising lookup)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 206329,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, so renew_due's `next if sub.nil?` guard (line 25) is dead code and renew_due raises on any subscription deleted since the ids were queued. WHY: renew_due's own comment says ids are queued the night before and some subscriptions may have been deleted since; the batch is meant to skip those, but the first stale id now aborts the entire run with an unhandled exception, so no subscriptions after it get charged. HOW: preserve the skip semantics in renew_due, e.g. use a non-raising lookup there or rescue SubscriptionNotFound and `next`.",
+          "keep": true,
+          "rationale": "Confirmed by reading app/services/renewal_service.rb. Line 12 (`@repo.find_by(id: id) || raise(SubscriptionNotFound, ...)`) means find_subscription never returns nil, so renew_due's `next if sub.nil?` (line 25) is dead code. renew_due's own comment (lines 20-21) states ids are queued the night before and some subscriptions may have been deleted since — the batch is explicitly meant to skip those, as the now-dead guard shows. With the raise, the first stale id aborts the entire run via an unhandled exception, so later subscriptions never get charged. This is a real behavioral regression, not style. It is a DIFFERENT problem from PreviousDecision index 1: that entry's failure was charge_now calling customer_id on nil (NoMethodError in billing), and its fix (raise) is exactly what broke renew_due. This finding is a consequence of applying that earlier suggestion in a separate operation, which the rules explicitly treat as a non-repeat; revisesSuggestionId should point to round-a-P41-raise-breaks-batch-caller since the applied change is concretely wrong for renew_due.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|find_by\\(id",
+                "glob": "*.rb"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause `find_subscription` raises `SubscriptionNotFound` instead of returning nil, the `next if sub.nil?` guard at line 25 is dead code and `renew_due` aborts the entire run on the first id deleted since the batch was queued the night before, leaving every later subscription uncharged. Preserve the skip semantics in `renew_due` by rescuing `SubscriptionNotFound` and calling `next`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 254480,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound on a missing row, but renew_due (lines 24-25) still expects a nil return and guards with `next if sub.nil?`, so the raise fires before that guard and the batch aborts on the first deleted subscription id. WHY: renew_due is documented to run over ids queued the night before where some subscriptions may have been deleted since; the first such id now raises out of the `ids.each` loop, so the whole renewal run stops and every remaining due subscription is silently left uncharged. HOW: catch the error in the batch path and keep skipping, e.g. `begin; sub = find_subscription(id); rescue SubscriptionNotFound; next; end`, then charge the returned sub. This revises the earlier suggestion to make find_subscription raise: the raise is right for charge_now but breaks this nil-tolerant batch caller.",
+          "keep": true,
+          "rationale": "Code confirms the claim: find_subscription raises SubscriptionNotFound (line 12), and renew_due's `next if sub.nil?` (line 25) is now unreachable — the raise unwinds ids.each before the guard, aborting the whole batch on the first deleted id. The doc comment (lines 20-21) states ids are queued the night before and some subscriptions may have been deleted, so the trigger is real, not hypothetical. This is a DIFFERENT failure than PreviousDecision #1 (which was NoMethodError on nil inside charge_now); it is a consequence of applying that raise suggestion, which the rules explicitly allow reporting as a revision rather than a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|SubscriptionNotFound",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause `find_subscription` now raises `SubscriptionNotFound` on a missing row, the `next if sub.nil?` guard in `renew_due` (lines 24-25) is bypassed and the first deleted id aborts the `ids.each` loop, leaving every remaining due subscription uncharged even though `renew_due` is documented to run over ids queued the night before. Catch `SubscriptionNotFound` in the batch path and skip those ids, then charge the returned sub, while keeping the raise for `charge_now`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 262236,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, but renew_due still relies on a nil return (`next if sub.nil?`) to skip subscriptions deleted since they were queued, so that guard is now dead code and any missing id aborts the whole batch. WHY: renew_due processes a queued list where some subscriptions may have been deleted (per its own comment); a single deleted id now raises out of the loop, so every remaining due subscription is never charged — a silent revenue/data-loss regression and an unhandled exception in the batch path. HOW: keep find_subscription raising for charge_now, but make renew_due tolerate a missing row, e.g. `sub = @repo.find_by(id: id); next if sub.nil?` or wrap the call in `begin ... rescue SubscriptionNotFound; next; end`.",
+          "keep": true,
+          "rationale": "Confirmed by reading app/services/renewal_service.rb: find_subscription (line 12) does `@repo.find_by(id: id) || raise(SubscriptionNotFound, ...)`, so it never returns nil. renew_due (lines 22-28) still has `next if sub.nil?`, which is dead code; a deleted/queued id now raises out of the each loop and aborts the batch, leaving remaining due subscriptions uncharged. The comment at lines 20-21 explicitly states some subscriptions may have been deleted since queuing, so this path is real. This is a different failure from PreviousDecision index 1, which concerned charge_now crashing with NoMethodError on nil; here the batch operation in renew_due aborts as a consequence of applying that earlier fix, so it is a legitimate revision rather than a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|SubscriptionNotFound|renew_due|charge_now"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause `find_subscription` now raises `SubscriptionNotFound` while `renew_due` still checks `next if sub.nil?`, that guard is dead code and a single missing id in the queued list—where subscriptions may have been deleted—aborts the whole batch, so every remaining due subscription is never charged and the batch path raises an unhandled exception. Keep `find_subscription` raising for `charge_now`, but make `renew_due` tolerate a missing row via `@repo.find_by(id: id)` with `next if sub.nil?` or by rescuing `SubscriptionNotFound` and calling `next`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 151276,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, but renew_due still calls it inside its `ids.each` loop and relies on `next if sub.nil?` to skip deleted subscriptions. WHY: when any queued subscription has been deleted since it was enqueued, the raise propagates out of the loop and aborts the whole batch, leaving every remaining due subscription uncharged (and the `next if sub.nil?` guard is now dead code). HOW: make renew_due tolerate a missing subscription, e.g. `sub = @repo.find_by(id: id); next if sub.nil?` or `begin; sub = find_subscription(id); rescue SubscriptionNotFound; next; end`, so a deleted id is skipped while charge_now keeps the strict raise.",
+          "keep": true,
+          "rationale": "Code confirms: find_subscription (line 12) raises SubscriptionNotFound, while renew_due (lines 22-29) calls it inside ids.each and still guards with `next if sub.nil?`. The raise aborts the entire batch on the first deleted id, and the nil guard is dead code — contradicting the method's own comment that ids may have been deleted. This is a distinct failure from PreviousDecision #1, which was about charge_now getting NoMethodError on nil; this finding is the batch-abort consequence of applying that earlier raise suggestion to a different caller, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|charge_now",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound for a missing id, so renew_due's `next if sub.nil?` guard (line 25) is dead code and the first deleted subscription aborts the entire renewal batch. WHY: renew_due exists precisely to tolerate ids whose subscriptions were removed since they were queued (see its comment), but the uncaught raise now propagates out of the `ids.each` loop, so every remaining due subscription in the batch is left uncharged. HOW: handle the missing row per-id inside the loop instead of letting it abort the batch, e.g. `ids.each do |id| sub = @repo.find_by(id: id); next if sub.nil?; @gateway.charge(customer: sub.customer_id, amount_cents: sub.plan.price_cents); end` (or `rescue SubscriptionNotFound` and `next`).",
+          "keep": true,
+          "rationale": "Verified against app/services/renewal_service.rb: line 12 makes find_subscription raise SubscriptionNotFound instead of returning nil, so the `next if sub.nil?` guard at line 25 is dead code and the raise propagates out of `ids.each`, aborting the whole batch. The method's own comment (lines 20-21) states ids are queued the night before and some subscriptions may have been deleted, so tolerating a missing row is the documented intent — the raise breaks it. This is a distinct failure from the previous review entry (which concerned a NoMethodError crash in charge_now when find_subscription returned nil); this bug is a consequence of applying that earlier suggestion in a different operation (renew_due batch), so it is a revision, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|charge_now|SubscriptionNotFound"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nSince `find_subscription` now raises `SubscriptionNotFound` instead of returning nil, a queued subscription that was deleted causes `renew_due`'s `ids.each` loop to abort, leaving every remaining due subscription uncharged while the `next if sub.nil?` guard is dead code. Make `renew_due` tolerate a missing subscription, for example `sub = @repo.find_by(id: id); next if sub.nil?` or rescue `SubscriptionNotFound` and `next`, so deleted ids are skipped while `charge_now` keeps the strict raise."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause `find_subscription` now raises `SubscriptionNotFound` for a missing id, `renew_due`'s `next if sub.nil?` guard (line 25) is dead code and the first deleted subscription aborts the entire renewal batch, leaving every remaining due subscription uncharged even though `renew_due` is meant to tolerate removed ids. Handle the missing row per id inside the loop instead of letting it abort the batch, for example `ids.each do |id| sub = @repo.find_by(id: id); next if sub.nil?; @gateway.charge(customer: sub.customer_id, amount_cents: sub.plan.price_cents); end` or rescue `SubscriptionNotFound` and `next`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P41-raise-breaks-batch-caller-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 52161,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound on a missing id, but renew_due still expects a nil return and skips with `next if sub.nil?` (line 25), so that guard is now dead code. WHY: renew_due is documented to tolerate subscriptions deleted since the ids were queued; the raised exception aborts the entire each-loop, so one deleted id prevents every remaining due subscription in the batch from being charged. HOW: rescue the missing case inside renew_due (or use a non-raising lookup) so deleted subscriptions are still skipped.",
+          "keep": true,
+          "rationale": "Confirmed: find_subscription raises SubscriptionNotFound rather than returning nil, so `next if sub.nil?` in renew_due is unreachable. renew_due's own comment documents that ids may reference deleted subscriptions, so a single missing id now raises and aborts the each-loop, skipping all remaining due charges. No rescue exists in this file or in any caller (grep found no other references). Previous review decisions target an unrelated export.ts file. The failure path is real and the root cause is accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "renew_due|find_subscription|SubscriptionNotFound",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `find_subscription` now raises `SubscriptionNotFound` for a missing id, the `next if sub.nil?` guard at line 25 is dead code, and a single deleted id aborts the entire `each` loop in `renew_due` so every remaining due subscription in the batch goes uncharged. Rescue `SubscriptionNotFound` inside `renew_due` (or use a non-raising lookup) so deleted subscriptions are still skipped."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P41-raise-breaks-batch-caller-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 102206,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, but renew_due still expects nil to skip subscriptions deleted since the queue was built (`next if sub.nil?` is now dead code). WHY: when an id points to a deleted subscription, the raise propagates out of the `ids.each` loop and aborts renew_due, so every remaining due subscription in the batch is silently not charged — a regression versus the prior nil-returning behavior. HOW: give renew_due a non-raising lookup, e.g. use `@repo.find_by(id: id)` directly and `next if sub.nil?`, or rescue SubscriptionNotFound inside the loop and `next`.",
+          "keep": true,
+          "rationale": "Confirmed: find_subscription (line 12) raises SubscriptionNotFound rather than returning nil, making `next if sub.nil?` in renew_due (line 25) dead code. The doc comment at lines 20-21 explicitly anticipates deleted subscriptions, and no caller rescues SubscriptionNotFound, so a deleted id aborts the ids.each loop and skips charging remaining due subscriptions. Root cause and failure path are accurate; the previous decisions target an unrelated file.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|SubscriptionNotFound",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When an id points to a deleted subscription, `find_subscription` raises `SubscriptionNotFound`, which propagates out of the `ids.each` loop and aborts `renew_due`, so every remaining due subscription in the batch is silently not charged and the `next if sub.nil?` check becomes dead code. Give `renew_due` a non-raising lookup, such as `@repo.find_by(id: id)` with `next if sub.nil?`, or rescue `SubscriptionNotFound` inside the loop and `next`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P41-raise-breaks-batch-caller-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 57167,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, but renew_due still relies on a nil return to skip subscriptions that were deleted after being queued (`next if sub.nil?`). WHY: the nil branch is now dead and the first deleted id raises an unhandled SubscriptionNotFound that aborts the whole batch, so one deleted subscription silently stops every remaining charge (the comment at line 20-21 explicitly says ids may reference deleted subscriptions). HOW: keep a non-raising lookup for the batch path, e.g. `sub = @repo.find_by(id: id); next unless sub` inside renew_due, or rescue SubscriptionNotFound around the renew_due lookup and `next`.",
+          "keep": true,
+          "rationale": "Confirmed by reading the file: find_subscription (line 12) now does `@repo.find_by(id: id) || raise(SubscriptionNotFound, ...)`, so it never returns nil. renew_due (lines 22-29) still calls `sub = find_subscription(id)` then `next if sub.nil?` — the nil guard is dead code, and the first id for a deleted subscription raises an unhandled SubscriptionNotFound that aborts the entire `ids.each` loop, skipping all remaining charges. The comment at lines 20-21 explicitly states ids may reference deleted subscriptions. No `rescue` for SubscriptionNotFound exists anywhere in the app, so nothing catches it upstream. This is not a repeat of any PreviousReviewDecision (those concern src/reports/export.ts, a different file/operation).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|find_by\\(id",
+                "path": "app"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "SubscriptionNotFound|renew_due|rescue",
+                "path": "app"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `renew_due` still relies on a nil return (`next if sub.nil?`), a subscription deleted after being queued now raises `SubscriptionNotFound` and aborts the whole batch, so one deleted subscription silently stops every remaining charge even though the comment at line 20-21 notes ids may reference deleted subscriptions. Use a non-raising lookup for the batch path, such as `sub = @repo.find_by(id: id); next unless sub` inside `renew_due`, or rescue `SubscriptionNotFound` around the `renew_due` lookup and `next`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P41-raise-breaks-batch-caller-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 75988,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, but renew_due still relies on a nil return via `next if sub.nil?` to skip subscriptions that were deleted after being queued. WHY: the `next if sub.nil?` guard is now dead code and the raised SubscriptionNotFound propagates out of the `each` loop, aborting the entire renewal batch so every remaining due subscription is silently skipped — exactly the deleted-subscription case the method's own comment (lines 20-21) says must be tolerated. HOW: make renew_due rescue the missing-subscription case so the batch continues, e.g. wrap the lookup/charge in `rescue SubscriptionNotFound; next`, or add a non-raising lookup (e.g. find_subscription_optional) for batch callers.",
+          "keep": true,
+          "rationale": "Confirmed by code: find_subscription (line 12) raises SubscriptionNotFound instead of returning nil, so the `next if sub.nil?` guard at line 25 is dead code. Since renew_due calls find_subscription inside the each loop with no rescue, the raise propagates out of the batch, aborting renewal for all remaining ids — contradicting the method's own comment (lines 20-21) that deleted subscriptions must be tolerated. Grep found no upstream rescue/caller that handles SubscriptionNotFound. PreviousReviewDecisions reference src/reports/export.ts and are unrelated to this file, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|SubscriptionNotFound",
+                "path": "app"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "renew_due|rescue SubscriptionNotFound|SubscriptionNotFound",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `find_subscription` now raises `SubscriptionNotFound` instead of returning `nil`, the `next if sub.nil?` guard in `renew_due` is dead code and the exception propagates out of the `each` loop, silently skipping every remaining due subscription—including the deleted-subscription case the method comment at lines 20-21 says must be tolerated. Make `renew_due` rescue `SubscriptionNotFound` and continue the batch, for example by wrapping the lookup/charge in `rescue SubscriptionNotFound; next`, or add a non-raising lookup such as `find_subscription_optional` for batch callers."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P41-raise-breaks-batch-caller-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 87727,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound for a missing subscription, but its caller renew_due still relies on a nil return via `next if sub.nil?`, which is now dead code. WHY: renew_due's own comment states subscriptions may have been deleted since being queued; with the new behavior the first deleted id raises out of the `each` loop, aborting the batch and leaving every remaining due subscription uncharged (lost charges). HOW: make renew_due tolerant of the missing case, e.g. rescue SubscriptionNotFound and `next`, or keep a nil-returning lookup for the batch path (e.g. `sub = @repo.find_by(id: id); next if sub.nil?`).",
+          "keep": true,
+          "rationale": "Confirmed. find_subscription (line 12) raises SubscriptionNotFound and never returns nil, making renew_due's `next if sub.nil?` (line 25) dead code. The method's own comment (lines 20-21) says queued subscriptions may have been deleted, so the intended skip behavior is broken: the first missing id raises out of the each loop and aborts the batch, leaving remaining due subscriptions uncharged. No rescue of SubscriptionNotFound exists in the repo. Not a duplicate of the prior decisions (unrelated export.ts).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|SubscriptionNotFound|find_by"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "renew_due|RenewalService|rescue SubscriptionNotFound",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Since `renew_due`'s comment notes subscriptions may have been deleted since being queued, the new `find_subscription` behavior makes `next if sub.nil?` dead code: the first missing id raises `SubscriptionNotFound` out of the `each` loop and leaves every remaining due subscription uncharged. Make `renew_due` tolerant of that case by rescuing `SubscriptionNotFound` and calling `next`, or keep a nil-returning lookup for the batch path such as `sub = @repo.find_by(id: id); next if sub.nil?`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

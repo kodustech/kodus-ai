@@ -24,12 +24,38 @@ const COLLECTION = 'observability_telemetry';
 // Kept in sync with SYSTEM_RUN_NAMES in libs/core/log/token-usage-tu.ts — the
 // internal analysis run-names excluded from the byok=false ("would-be billable")
 // view.
-const SYSTEM_RUN_NAMES = [
+export const BACKFILL_SYSTEM_RUN_NAMES = [
     'selectReviewMode',
     'validateImplementedSuggestions',
     'generateCodeSuggestions',
-    'analyzeASTWithAI',
 ];
+
+// Kept in sync with SUGGESTION_RUN_NAMES in libs/core/log/token-usage-tu.ts
+// (asserted equal by token-usage-tu.spec.ts).
+export const BACKFILL_SUGGESTION_RUN_NAMES = [
+    'severity-classifier',
+    'suggestion-formatter',
+    'severityAnalysis',
+    'validateWithLLM',
+    'checkSuggestionSimplicity',
+    'repeatedCodeReviewSuggestionClustering',
+];
+
+// Valid routing tasks — mirror of ROUTING_TASKS in token-usage-tu.ts (LlmTask).
+// Guards `tu.route`: a value outside this set is not trusted (→ area de-para).
+export const BACKFILL_ROUTING_TASKS = [
+    'codeReview',
+    'kodyRulesReview',
+    'ruleGeneration',
+    'businessValidation',
+    'prSummary',
+    'conversation',
+    'customAgent',
+];
+
+// Mirror of CUSTOM_AGENT_RUN_PREFIX in token-usage-tu.ts (asserted equal by
+// token-usage-tu.spec.ts).
+export const BACKFILL_CUSTOM_AGENT_RUN_PREFIX = 'code-review-custom-';
 
 const gf = (f: string) => ({ $getField: { field: f, input: '$attributes' } });
 
@@ -41,6 +67,77 @@ const modelExpr = {
     ],
 };
 
+// Aggregation mirror of deriveArea() in libs/core/log/token-usage-tu.ts —
+// keep the rule order identical (system → kody_rules → review →
+// suggestions → summary → conversation → other).
+const rn = { $ifNull: [gf('gen_ai.run.name'), ''] };
+const areaExpr = {
+    $switch: {
+        branches: [
+            { case: { $in: [rn, BACKFILL_SYSTEM_RUN_NAMES] }, then: 'system' },
+            {
+                case: {
+                    $or: [
+                        {
+                            $regexMatch: {
+                                input: rn,
+                                regex: 'kod(?:y|us).?rules?',
+                                options: 'i',
+                            },
+                        },
+                        {
+                            $regexMatch: {
+                                input: rn,
+                                regex: '^kodyMemory',
+                            },
+                        },
+                    ],
+                },
+                then: 'kody_rules',
+            },
+            {
+                case: {
+                    $regexMatch: {
+                        input: rn,
+                        regex: '^(code-review|analyzeCodeWithAI)',
+                    },
+                },
+                then: 'review',
+            },
+            {
+                case: {
+                    $or: [
+                        { $in: [rn, BACKFILL_SUGGESTION_RUN_NAMES] },
+                        {
+                            $regexMatch: {
+                                input: rn,
+                                regex: '^safeguard',
+                            },
+                        },
+                    ],
+                },
+                then: 'suggestions',
+            },
+            {
+                case: {
+                    $regexMatch: { input: rn, regex: '^generateSummaryPR' },
+                },
+                then: 'summary',
+            },
+            {
+                case: {
+                    $or: [
+                        { $eq: [rn, 'conversationAgent'] },
+                        { $eq: [gf('agent.phase'), 'conversation'] },
+                    ],
+                },
+                then: 'conversation',
+            },
+        ],
+        default: 'other',
+    },
+};
+
 // Aggregation-pipeline $set that derives `tu` from the flat dotted-key attrs —
 // the exact same fields deriveTu reads on the write path. No `tier` (derived at
 // read from the catalog).
@@ -48,8 +145,11 @@ const SET_TU = {
     $set: {
         'attributes.tu': {
             isByok: { $eq: [gf('type'), 'byok'] },
-            sys: { $in: [gf('gen_ai.run.name'), SYSTEM_RUN_NAMES] },
+            sys: { $in: [gf('gen_ai.run.name'), BACKFILL_SYSTEM_RUN_NAMES] },
             model: modelExpr,
+            // Mirror of deriveTu's credentialId ('' when absent) — the per-key
+            // spend attribution dimension (backfilled from the span attribute).
+            credentialId: { $ifNull: [gf('credentialId'), ''] },
             input: { $ifNull: [gf('gen_ai.usage.input_tokens'), 0] },
             output: { $ifNull: [gf('gen_ai.usage.output_tokens'), 0] },
             total: { $ifNull: [gf('gen_ai.usage.total_tokens'), 0] },
@@ -59,6 +159,79 @@ const SET_TU = {
             },
             cacheWrite: {
                 $ifNull: [gf('gen_ai.usage.cache_creation_input_tokens'), 0],
+            },
+            area: areaExpr,
+            // Routing TASK the call served (mirror of deriveTu.route). A VALID
+            // stamped `route` (post-launch) wins; otherwise (absent, or a stale
+            // tier string from a pre-realignment span) the SAME area→task de-para
+            // as deriveTu.routeFromArea, so old rows attribute to a task and a
+            // non-task value never leaks in. Keep in sync with token-usage-tu.ts.
+            route: {
+                $cond: [
+                    // A custom agent's run name decides first (mirror of
+                    // routeFromCustomAgentRun).
+                    {
+                        $regexMatch: {
+                            input: rn,
+                            regex: `^${BACKFILL_CUSTOM_AGENT_RUN_PREFIX}`,
+                        },
+                    },
+                    'customAgent',
+                    {
+                        $cond: [
+                            { $in: [gf('route'), BACKFILL_ROUTING_TASKS] },
+                            gf('route'),
+                            {
+                                $let: {
+                                    vars: { a: areaExpr },
+                                    in: {
+                                        $switch: {
+                                            branches: [
+                                                {
+                                                    case: {
+                                                        $in: [
+                                                            '$$a',
+                                                            [
+                                                                'review',
+                                                                'suggestions',
+                                                            ],
+                                                        ],
+                                                    },
+                                                    then: 'codeReview',
+                                                },
+                                                {
+                                                    case: {
+                                                        $eq: [
+                                                            '$$a',
+                                                            'kody_rules',
+                                                        ],
+                                                    },
+                                                    then: 'kodyRulesReview',
+                                                },
+                                                {
+                                                    case: {
+                                                        $eq: ['$$a', 'summary'],
+                                                    },
+                                                    then: 'prSummary',
+                                                },
+                                                {
+                                                    case: {
+                                                        $eq: [
+                                                            '$$a',
+                                                            'conversation',
+                                                        ],
+                                                    },
+                                                    then: 'conversation',
+                                                },
+                                            ],
+                                            default: '',
+                                        },
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                ],
             },
         },
     },
@@ -87,10 +260,23 @@ export type BackfillTuResult = {
 const sleep = (ms: number) =>
     new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/** Only stamp docs that (a) have token usage, (b) lack `tu`, (c) are in window. */
+/**
+ * Only stamp docs that (a) have token usage, (b) lack `tu` OR lack a `tu`
+ * dimension added by a later launch (`tu.area`, then `tu.route`), (c) are in
+ * window. Re-stamping recomputes the WHOLE `tu` — a pure function of the raw
+ * attributes — so this stays idempotent and each new dimension backfills
+ * without a bespoke migration: adding the dimension's `$exists:false` here is
+ * the de-para that adapts every pre-launch row to the new format.
+ */
 function stampPredicate(since: Date | null): Record<string, unknown> {
     const p: Record<string, unknown> = {
-        'attributes.tu': { $exists: false },
+        $or: [
+            { 'attributes.tu': { $exists: false } },
+            { 'attributes.tu.area': { $exists: false } },
+            // The per-task dimension: rows stamped before `route` existed →
+            // re-stamp so they get it (stamped attr, else the area→task de-para).
+            { 'attributes.tu.route': { $exists: false } },
+        ],
         $expr: { $gt: [{ $ifNull: [gf('gen_ai.usage.total_tokens'), 0] }, 0] },
     };
     if (since) p.timestamp = { $gte: since };

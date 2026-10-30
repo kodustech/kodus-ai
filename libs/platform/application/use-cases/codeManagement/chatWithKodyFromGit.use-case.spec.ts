@@ -9,18 +9,39 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 import { ChatWithKodyFromGitUseCase } from './chatWithKodyFromGit.use-case';
 
+const skippedWith = (reason: string, message: string) => ({
+    outcome: { kind: 'skipped', reason, message },
+    references: [],
+    attempts: [],
+});
+
 describe('ChatWithKodyFromGitUseCase', () => {
     let useCase: ChatWithKodyFromGitUseCase;
     let codeManagementService: {
         findTeamAndOrganizationIdByConfigKey: jest.Mock;
         addReactionToComment: jest.Mock;
+        getPullRequestReviewComment: jest.Mock;
+        createResponseToComment: jest.Mock;
+        createIssueComment: jest.Mock;
+        updateIssueComment: jest.Mock;
+        updateResponseToComment: jest.Mock;
+        removeReactionsFromComment: jest.Mock;
+        getCloneParams: jest.Mock;
     };
     let conversationAgentUseCase: {
         execute: jest.Mock;
     };
-    let businessRulesValidationAgentUseCase: {
-        execute: jest.Mock;
+    let businessValidationService: {
+        validate: jest.Mock;
     };
+    let permissionValidationService: {
+        validateExecutionPermissions: jest.Mock;
+    };
+    let leaseManager: {
+        acquire: jest.Mock;
+        release: jest.Mock;
+    };
+    let pullRequestsService: { findByNumberAndRepositoryId: jest.Mock };
 
     beforeEach(() => {
         codeManagementService = {
@@ -35,15 +56,31 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 },
             }),
             addReactionToComment: jest.fn().mockResolvedValue(undefined),
+            getPullRequestReviewComment: jest.fn().mockResolvedValue([]),
+            createResponseToComment: jest.fn().mockResolvedValue({ id: 999 }),
+            createIssueComment: jest.fn().mockResolvedValue({ id: 998 }),
+            updateIssueComment: jest.fn().mockResolvedValue(undefined),
+            updateResponseToComment: jest.fn().mockResolvedValue(undefined),
+            removeReactionsFromComment: jest.fn().mockResolvedValue(undefined),
+            getCloneParams: jest.fn().mockResolvedValue(undefined),
         };
         conversationAgentUseCase = {
-            execute: jest.fn(),
+            execute: jest.fn().mockResolvedValue('an answer'),
         };
-        businessRulesValidationAgentUseCase = {
-            execute: jest.fn().mockResolvedValue(undefined),
+        businessValidationService = {
+            validate: jest
+                .fn()
+                .mockResolvedValue(
+                    skippedWith('no_reference', 'No task found'),
+                ),
+        };
+        permissionValidationService = {
+            validateExecutionPermissions: jest
+                .fn()
+                .mockResolvedValue({ allowed: true }),
         };
 
-        const leaseManager = {
+        leaseManager = {
             acquire: jest.fn().mockResolvedValue({
                 sandbox: { type: 'null', remoteCommands: undefined },
                 leaseId: 'lease-test',
@@ -53,11 +90,17 @@ describe('ChatWithKodyFromGitUseCase', () => {
             release: jest.fn().mockResolvedValue(undefined),
         };
 
+        pullRequestsService = {
+            findByNumberAndRepositoryId: jest.fn().mockResolvedValue(null),
+        };
+
         useCase = new ChatWithKodyFromGitUseCase(
             codeManagementService as any,
             conversationAgentUseCase as any,
-            businessRulesValidationAgentUseCase as any,
+            businessValidationService as any,
+            permissionValidationService as any,
             leaseManager as any,
+            pullRequestsService as any,
         );
     });
 
@@ -97,30 +140,114 @@ describe('ChatWithKodyFromGitUseCase', () => {
             },
         } as any);
 
-        expect(
-            businessRulesValidationAgentUseCase.execute,
-        ).toHaveBeenCalledWith(
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
             expect.objectContaining({
+                door: 'command',
                 organizationAndTeamData: {
                     organizationId: 'org-1',
                     teamId: 'team-1',
                 },
-                prepareContext: expect.objectContaining({
-                    userQuestion:
-                        '@kody -v business-logic validate this change',
-                    pullRequestDescription: 'PR description body',
-                    platformType: PlatformType.GITHUB,
-                    repository: expect.objectContaining({
-                        id: 'repo-1',
-                        name: 'kodus-extension',
-                        owner: 'kodus',
-                    }),
-                    pullRequest: {
-                        pullRequestNumber: 132,
-                        headRef: 'feature/improve-refs',
-                        baseRef: 'main',
-                    },
+                taskInput: 'validate this change',
+                platformType: PlatformType.GITHUB,
+                repository: expect.objectContaining({
+                    id: 'repo-1',
+                    name: 'kodus-extension',
                 }),
+                pullRequest: expect.objectContaining({
+                    number: 132,
+                    body: 'PR description body',
+                    headRef: 'feature/improve-refs',
+                    baseRef: 'main',
+                }),
+            }),
+        );
+    });
+
+    it('reads the branch from the PR when the GitHub comment webhook leaves it out', async () => {
+        (codeManagementService as any).getPullRequest = jest
+            .fn()
+            .mockResolvedValue({
+                head: { ref: 'feature/CU-86a1b2c3d-archive' },
+            });
+
+        await useCase.execute({
+            event: 'issue_comment',
+            platformType: PlatformType.GITHUB,
+            payload: {
+                action: 'created',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                issue: {
+                    id: 456,
+                    body: 'PR description body',
+                    pull_request: {
+                        url: 'https://api.github.com/repos/kodus/kodus-extension/pulls/132',
+                    },
+                },
+                comment: { id: 123, body: '@kody -v business-logic' },
+                sender: { id: 'user-1', login: 'alice' },
+            },
+        } as any);
+
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                pullRequest: expect.objectContaining({
+                    headRef: 'feature/CU-86a1b2c3d-archive',
+                }),
+            }),
+        );
+    });
+
+    it('answers as the team whose review runs on the repository when it is connected in two organizations', async () => {
+        const webhookContextService = {
+            getContext: jest.fn().mockResolvedValue({
+                organizationAndTeamData: {
+                    organizationId: 'org-2',
+                    teamId: 'team-2',
+                },
+                teamAutomationId: 'automation-2',
+            }),
+        };
+        const twoOrgs = new ChatWithKodyFromGitUseCase(
+            codeManagementService as any,
+            conversationAgentUseCase as any,
+            businessValidationService as any,
+            permissionValidationService as any,
+            leaseManager as any,
+            pullRequestsService as any,
+            undefined,
+            undefined,
+            undefined,
+            webhookContextService as any,
+        );
+
+        await twoOrgs.execute({
+            event: 'issue_comment',
+            platformType: PlatformType.GITHUB,
+            payload: {
+                action: 'created',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                issue: {
+                    id: 456,
+                    body: 'PR description body',
+                    pull_request: {
+                        url: 'https://api.github.com/repos/kodus/kodus-extension/pulls/132',
+                    },
+                },
+                comment: { id: 123, body: '@kody -v business-logic' },
+                sender: { id: 'user-1', login: 'alice' },
+            },
+        } as any);
+
+        expect(webhookContextService.getContext).toHaveBeenCalledWith(
+            PlatformType.GITHUB,
+            'repo-1',
+        );
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationAndTeamData: {
+                    organizationId: 'org-2',
+                    teamId: 'team-2',
+                },
             }),
         );
     });
@@ -164,19 +291,896 @@ describe('ChatWithKodyFromGitUseCase', () => {
             },
         } as any);
 
-        expect(
-            businessRulesValidationAgentUseCase.execute,
-        ).toHaveBeenCalledWith(
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                taskInput: jiraUrl,
+                pullRequest: expect.objectContaining({
+                    number: 132,
+                    body: 'PR description body',
+                }),
+            }),
+        );
+    });
+
+    // An explicit ask always gets an answer: when nothing was validated the
+    // reply says why, in place of the old internal __NO_TASK_MCP__ marker.
+    it('replies with the reason when nothing was validated', async () => {
+        businessValidationService.validate.mockResolvedValueOnce(
+            skippedWith('no_tracker', 'No task-management MCP is connected.'),
+        );
+
+        const response = await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: { userQuestion: '@kody -v business-logic' },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            thread: undefined,
+        });
+
+        expect(response).toMatch(/no task-management mcp/i);
+    });
+
+    it('lets only people with write access waive a requirement on GitHub', async () => {
+        // GitHub sends COLLABORATOR for a read-only collaborator and MEMBER
+        // for any organization member, so the association can only rule out.
+        const permission: Record<string, boolean | undefined> = {
+            writer: true,
+            reader: false,
+        };
+        const userCanWrite = jest.fn(
+            async ({ login }: { login: string }) => permission[login],
+        );
+        (useCase as any).codeManagementService = { userCanWrite };
+        const access = (association: string | undefined, login = 'reader') =>
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.GITHUB,
+                    payload: {
+                        sender: { login },
+                        issue: { user: { login: 'rafa' } },
+                        comment: { author_association: association },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1', name: 'notes', owner: 'acme' },
+            );
+
+        await expect(access('COLLABORATOR', 'reader')).resolves.toEqual({
+            canWrite: false,
+            isAuthor: false,
+        });
+        await expect(access('MEMBER', 'reader')).resolves.toMatchObject({
+            canWrite: false,
+        });
+        await expect(access('MEMBER', 'writer')).resolves.toEqual({
+            canWrite: true,
+            isAuthor: false,
+        });
+        expect(userCanWrite).toHaveBeenCalledWith(
+            {
+                organizationAndTeamData: { organizationId: 'org-1' },
+                repository: { id: 'repo-1', name: 'notes', owner: 'acme' },
+                login: 'writer',
+            },
+            PlatformType.GITHUB,
+        );
+
+        userCanWrite.mockClear();
+        await expect(access('CONTRIBUTOR', 'writer')).resolves.toMatchObject({
+            canWrite: false,
+        });
+        await expect(access('NONE', 'writer')).resolves.toMatchObject({
+            canWrite: false,
+        });
+        expect(userCanWrite).not.toHaveBeenCalled();
+
+        // Without a login there is no one to ask: never the member list.
+        await expect(access('MEMBER', '')).resolves.toMatchObject({
+            canWrite: false,
+        });
+
+        // A lookup that fails or can't say throws: the reply says access
+        // couldn't be checked and accepts nothing, instead of "no write
+        // access" to someone who has it.
+        jest.spyOn((useCase as any).logger, 'error').mockImplementation(
+            () => undefined,
+        );
+        userCanWrite.mockRejectedValueOnce(new Error('502'));
+        await expect(access('OWNER', 'writer')).rejects.toThrow('502');
+        await expect(access('OWNER', 'unknown')).rejects.toThrow(
+            /could not say/,
+        );
+    });
+
+    it("asks the other platforms for the organization's members, and knows the PR's author", async () => {
+        const getListMembers = jest.fn(async () => [{ id: 7, name: 'Nina' }]);
+        (useCase as any).codeManagementService = { getListMembers };
+        const access = (userId: number, authorId = 9) =>
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.BITBUCKET,
+                    payload: {
+                        actor: { account_id: userId, display_name: 'someone' },
+                        pullrequest: { author: { account_id: authorId } },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            );
+        await expect(access(7)).resolves.toEqual({
+            canWrite: true,
+            isAuthor: false,
+        });
+        await expect(access(8)).resolves.toMatchObject({ canWrite: false });
+        await expect(access(7, 7)).resolves.toMatchObject({ isAuthor: true });
+        jest.spyOn((useCase as any).logger, 'error').mockImplementation(
+            () => undefined,
+        );
+        getListMembers.mockRejectedValueOnce(new Error('403'));
+        await expect(access(7)).rejects.toThrow('403');
+    });
+
+    it("asks GitLab for the commenter's level, never the member list, and knows Forgejo's author", async () => {
+        const getListMembers = jest.fn();
+        const userCanWrite = jest.fn(async () => false);
+        (useCase as any).codeManagementService = {
+            getListMembers,
+            userCanWrite,
+        };
+        await expect(
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.GITLAB,
+                    payload: {
+                        user: { id: 7, name: 'guest' },
+                        merge_request: { author_id: 9 },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).resolves.toEqual({ canWrite: false, isAuthor: false });
+        expect(userCanWrite).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: 7,
+                repository: { id: 'repo-1' },
+            }),
+            PlatformType.GITLAB,
+        );
+        expect(getListMembers).not.toHaveBeenCalled();
+
+        // A failed or empty level lookup throws, so nothing is accepted and
+        // the reply says access couldn't be checked.
+        const gitlab = {
+            platformType: PlatformType.GITLAB,
+            payload: {
+                user: { id: 7, name: 'guest' },
+                merge_request: { author_id: 9 },
+            },
+        };
+        const logged = jest
+            .spyOn((useCase as any).logger, 'error')
+            .mockImplementation(() => undefined);
+        userCanWrite.mockRejectedValueOnce(new Error('502'));
+        await expect(
+            (useCase as any).senderAccess(
+                gitlab,
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).rejects.toThrow('502');
+        expect(logged).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    repositoryId: 'repo-1',
+                    senderId: 7,
+                }),
+            }),
+        );
+        userCanWrite.mockResolvedValueOnce(undefined as any);
+        await expect(
+            (useCase as any).senderAccess(
+                gitlab,
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).rejects.toThrow(/could not say/);
+
+        getListMembers.mockResolvedValueOnce([]);
+        await expect(
+            (useCase as any).senderAccess(
+                {
+                    platformType: PlatformType.FORGEJO,
+                    payload: {
+                        sender: { id: 5, login: 'ana' },
+                        comment: { user: { id: 5, login: 'ana' } },
+                        pull_request: { user: { id: 5, login: 'ana' } },
+                    },
+                },
+                { organizationId: 'org-1' },
+                { id: 'repo-1' },
+            ),
+        ).resolves.toMatchObject({ isAuthor: true });
+    });
+
+    // A bare `#12` is read from the PR's repository, which needs its owner.
+    it('passes the repository owner to the validation', async () => {
+        businessValidationService.validate.mockResolvedValueOnce(
+            skippedWith('no_tracker', 'No task-management MCP is connected.'),
+        );
+
+        await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: {
+                userQuestion: '@kody -v business-logic #12',
+                repository: { id: 'repo-1', name: 'web', owner: 'acme' },
+                pullRequestNumber: 7,
+            },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            thread: undefined,
+        });
+
+        expect(businessValidationService.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                repository: expect.objectContaining({ owner: 'acme' }),
+            }),
+        );
+    });
+
+    it('publishes a verdict through the publisher and points to the edited comment', async () => {
+        const outcome = {
+            kind: 'validated',
+            checks: [
+                {
+                    task: { tracker: 'Linear', id: 'PLAT-41' },
+                    verdict: { needsMoreInfo: false, summary: 'x' },
+                    passed: false,
+                    readAt: '2026-10-05T00:00:00.000Z',
+                },
+            ],
+            thinTasks: [],
+            passed: false,
+            unseenFiles: [],
+        };
+        businessValidationService.validate.mockResolvedValueOnce({
+            outcome,
+            references: [],
+            attempts: [],
+            trackers: ['Linear'],
+        });
+        const publisher = {
+            configFor: jest
+                .fn()
+                .mockResolvedValue({ settings: {}, enabled: true }),
+            withRepository: jest.fn((r: unknown) => r),
+            headShaOf: jest.fn().mockResolvedValue('abc1234'),
+            publish: jest
+                .fn()
+                .mockResolvedValue({ outcome, comment: 'updated' }),
+        };
+        (useCase as any).businessLogicPublisher = publisher;
+
+        const response = await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: {
+                userQuestion: '@kody -v business-logic',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                pullRequest: { pullRequestNumber: 132 },
+            },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            thread: undefined,
+        });
+
+        expect(publisher.publish).toHaveBeenCalledWith(
+            expect.objectContaining({
+                trigger: 'command',
+                headSha: 'abc1234',
+                request: expect.objectContaining({ door: 'command' }),
+            }),
+        );
+        expect(response).toContain('comment on this pull request is updated');
+    });
+
+    it('does not say the comment was updated when the command posts the first one', async () => {
+        const outcome = {
+            kind: 'validated',
+            checks: [
+                {
+                    task: { tracker: 'Linear', id: 'PLAT-41' },
+                    verdict: { needsMoreInfo: false, summary: 'x' },
+                    passed: true,
+                    readAt: '2026-10-05T00:00:00.000Z',
+                },
+            ],
+            thinTasks: [],
+            passed: true,
+            unseenFiles: [],
+        };
+        businessValidationService.validate.mockResolvedValueOnce({
+            outcome,
+            references: [],
+            attempts: [],
+            trackers: ['Linear'],
+        });
+        (useCase as any).businessLogicPublisher = {
+            configFor: jest
+                .fn()
+                .mockResolvedValue({ settings: {}, enabled: true }),
+            withRepository: jest.fn((r: unknown) => r),
+            headShaOf: jest.fn().mockResolvedValue('abc1234'),
+            publish: jest
+                .fn()
+                .mockResolvedValue({ outcome, comment: 'created' }),
+        };
+
+        const response = await (useCase as any).handleBusinessLogicValidation({
+            prepareContext: {
+                userQuestion: '@kody -v business-logic',
+                repository: { id: 'repo-1', name: 'kodus-extension' },
+                pullRequest: { pullRequestNumber: 132 },
+            },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            thread: undefined,
+        });
+
+        expect(response).not.toContain('updated');
+        expect(response).toContain('Kody · Business Logic comment');
+    });
+
+    describe('conversation plan gate', () => {
+        const conversationPayload = () =>
+            ({
+                event: 'issue_comment',
+                platformType: PlatformType.GITHUB,
+                payload: {
+                    action: 'created',
+                    repository: {
+                        id: 'repo-1',
+                        name: 'kodus-extension',
+                    },
+                    issue: {
+                        id: 456,
+                        body: 'PR description body',
+                        pull_request: {
+                            url: 'https://api.github.com/repos/kodus/kodus-extension/pulls/132',
+                        },
+                    },
+                    pull_request: {
+                        head: { ref: 'feature/improve-refs' },
+                        base: { ref: 'main' },
+                    },
+                    comment: {
+                        id: 123,
+                        body: '@kody can we use optional chaining here?',
+                    },
+                    sender: {
+                        id: 'user-1',
+                        login: 'alice',
+                    },
+                },
+            }) as any;
+
+        // buildPrKey (used once the gate allows the run) requires a real UUID
+        // organizationId, so the gate tests use valid UUIDs rather than the
+        // 'org-1' placeholder the business-logic tests get away with.
+        const ORG_UUID = '11111111-1111-4111-8111-111111111111';
+        const TEAM_UUID = '22222222-2222-4222-8222-222222222222';
+
+        beforeEach(() => {
+            codeManagementService.findTeamAndOrganizationIdByConfigKey.mockResolvedValue(
+                {
+                    integration: { organization: { uuid: ORG_UUID } },
+                    team: { uuid: TEAM_UUID },
+                },
+            );
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [
+                    {
+                        id: 123,
+                        body: '@kody can we use optional chaining here?',
+                        user: { login: 'alice' },
+                    },
+                ],
+            );
+            codeManagementService.getCloneParams = jest
+                .fn()
+                .mockResolvedValue(undefined);
+        });
+
+        it('runs the agent when the org has BYOK (any plan)', async () => {
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: true,
+                    byokConfig: { main: { provider: 'anthropic' } },
+                },
+            );
+
+            await useCase.execute(conversationPayload());
+
+            expect(
+                permissionValidationService.validateExecutionPermissions,
+            ).toHaveBeenCalledWith(
+                { organizationId: ORG_UUID, teamId: TEAM_UUID },
+                undefined,
+                'ChatWithKodyFromGitUseCase',
+            );
+            expect(conversationAgentUseCase.execute).toHaveBeenCalled();
+        });
+
+        it('runs the agent on the default model for a trial org without BYOK', async () => {
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: true,
+                    byokConfig: null,
+                    subscriptionStatus: 'trial',
+                },
+            );
+
+            await useCase.execute(conversationPayload());
+
+            expect(conversationAgentUseCase.execute).toHaveBeenCalled();
+        });
+
+        it('replies with BYOK guidance and skips the agent for a cloud org past the trial without BYOK', async () => {
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: 'byok_required',
+                },
+            );
+
+            await useCase.execute(conversationPayload());
+
+            expect(conversationAgentUseCase.execute).not.toHaveBeenCalled();
+            expect(
+                codeManagementService.createResponseToComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining('trial has ended'),
+                    prNumber: 132,
+                }),
+            );
+        });
+
+        it('runs the agent for a managed/BYOK plan that returns NOT_ERROR (no per-seat block)', async () => {
+            // A paid managed (or BYOK) org validated without a userGitId comes
+            // back allowed:false + errorType NOT_ERROR — the "we skipped the
+            // per-user check" signal, which the code-review pipeline treats as
+            // a pass. The gate must NOT block it (it's not trial-ended).
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: 'NOT_ERROR',
+                },
+            );
+
+            await useCase.execute(conversationPayload());
+
+            expect(conversationAgentUseCase.execute).toHaveBeenCalled();
+            expect(
+                codeManagementService.createResponseToComment,
+            ).not.toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining('trial has ended'),
+                }),
+            );
+        });
+
+        it('continues with a null sandbox when sandbox creation fails', async () => {
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: true,
+                    byokConfig: { main: { provider: 'anthropic' } },
+                },
+            );
+            leaseManager.acquire.mockRejectedValue(
+                new Error('git clone failed with 403'),
+            );
+
+            await useCase.execute(conversationPayload());
+
+            expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    sandbox: expect.objectContaining({ type: 'null' }),
+                }),
+            );
+            expect(leaseManager.release).not.toHaveBeenCalled();
+            expect(
+                codeManagementService.createResponseToComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: expect.stringContaining('an answer'),
+                }),
+            );
+        });
+    });
+
+    it('handles Bitbucket description as a structured content object', async () => {
+        const ORG_UUID = '11111111-1111-4111-8111-111111111111';
+        const TEAM_UUID = '22222222-2222-4222-8222-222222222222';
+        codeManagementService.findTeamAndOrganizationIdByConfigKey.mockResolvedValue(
+            {
+                integration: { organization: { uuid: ORG_UUID } },
+                team: { uuid: TEAM_UUID },
+            },
+        );
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            {
+                id: 123,
+                body: '@kody what changed?',
+                author: { username: 'alice' },
+            },
+        ]);
+        codeManagementService.createResponseToComment.mockResolvedValue({
+            id: 999,
+            parent: { id: 123 },
+        });
+        permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+            { allowed: true },
+        );
+
+        await useCase.execute({
+            event: 'pullrequest:comment_created',
+            platformType: PlatformType.BITBUCKET,
+            payload: {
+                pullrequest: {
+                    id: 42,
+                    title: 'Add feature',
+                    description: {
+                        raw: 'Bitbucket description raw text',
+                        html: '<p>Bitbucket description raw text</p>',
+                        markup: 'markdown',
+                    },
+                    source: {
+                        branch: { name: 'feature' },
+                        repository: { full_name: 'acme/repo' },
+                    },
+                    destination: {
+                        branch: { name: 'main' },
+                        repository: { full_name: 'acme/repo' },
+                    },
+                },
+                comment: {
+                    id: 123,
+                    content: { raw: '@kody what changed?' },
+                    user: { nickname: 'alice' },
+                },
+                actor: { id: 'user-1', nickname: 'alice' },
+            },
+        } as any);
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
             expect.objectContaining({
                 prepareContext: expect.objectContaining({
-                    userQuestion: `@kody -v business-logic ${jiraUrl}`,
-                    pullRequestDescription: 'PR description body',
-                    repository: expect.objectContaining({
-                        name: 'kodus-extension',
-                        owner: 'kodus',
+                    pullRequestDescription: 'Bitbucket description raw text',
+                }),
+            }),
+        );
+    });
+
+    it('uses GitLab path_with_namespace for sandbox clone params', async () => {
+        const ORG_UUID = '11111111-1111-4111-8111-111111111111';
+        const TEAM_UUID = '22222222-2222-4222-8222-222222222222';
+        codeManagementService.findTeamAndOrganizationIdByConfigKey.mockResolvedValue(
+            {
+                integration: { organization: { uuid: ORG_UUID } },
+                team: { uuid: TEAM_UUID },
+            },
+        );
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            {
+                id: 123,
+                body: '@kody what changed?',
+                discussionId: 'discussion-1',
+                author: { username: 'alice' },
+            },
+        ]);
+        codeManagementService.getCloneParams.mockResolvedValue({
+            url: 'https://gitlab.com/juniorsartori/kodex',
+            auth: { token: 'token' },
+        });
+        permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+            { allowed: true },
+        );
+
+        await useCase.execute({
+            event: 'Note Hook',
+            platformType: PlatformType.GITLAB,
+            payload: {
+                object_attributes: {
+                    id: 123,
+                    note: '@kody what changed?',
+                    discussion_id: 'discussion-1',
+                    action: 'create',
+                },
+                project: {
+                    id: 77,
+                    name: 'kodex',
+                    namespace: 'Junior Sartori',
+                    path_with_namespace: 'juniorsartori/kodex',
+                    default_branch: 'main',
+                },
+                merge_request: {
+                    iid: 33,
+                    source_branch: 'feat/goals',
+                    target_branch: 'main',
+                    description: 'Description',
+                },
+                user: { id: 1, username: 'alice' },
+            },
+        } as any);
+
+        expect(codeManagementService.getCloneParams).toHaveBeenCalledWith(
+            expect.objectContaining({
+                repository: expect.objectContaining({
+                    fullName: 'juniorsartori/kodex',
+                }),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
+    it('answers an @kody mention that starts a brand-new Azure DevOps thread (not a reply)', async () => {
+        // Regression test: getPullRequestReviewComment groups Azure comments
+        // by thread and puts everything AFTER the first comment into
+        // `.replies` — the thread's root comment lives on the thread object
+        // itself. getReviewThreadByCommentId used to only search `.replies`,
+        // so a brand-new `@kody <question>` (the root comment of a fresh
+        // thread, not a reply to an existing one) was never found and Kody
+        // silently never answered. Confirmed live against a real Azure
+        // DevOps PR: a single-comment thread's lone comment never got a
+        // reply.
+        const ORG_UUID = '11111111-1111-4111-8111-111111111111';
+        const TEAM_UUID = '22222222-2222-4222-8222-222222222222';
+        codeManagementService.findTeamAndOrganizationIdByConfigKey.mockResolvedValue(
+            {
+                integration: { organization: { uuid: ORG_UUID } },
+                team: { uuid: TEAM_UUID },
+            },
+        );
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            {
+                id: 1,
+                threadId: 3239,
+                replies: [],
+                body: '@kody what does this pull request change?',
+                createdAt: '2026-08-18T18:19:00.000Z',
+                author: { id: 'author-1', name: 'alice' },
+            },
+        ]);
+        codeManagementService.updateResponseToComment = jest
+            .fn()
+            .mockResolvedValue({});
+        permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+            { allowed: true },
+        );
+
+        await useCase.execute({
+            event: 'ms.vss-code.git-pullrequest-comment-event',
+            platformType: PlatformType.AZURE_REPOS,
+            payload: {
+                resource: {
+                    comment: {
+                        id: 1,
+                        content: '@kody what does this pull request change?',
+                        parentCommentId: 0,
+                        author: { displayName: 'alice', id: 'author-1' },
+                        _links: {
+                            threads: {
+                                href: 'https://dev.azure.com/org/proj/_apis/git/repositories/repo/pullRequests/55/threads/3239',
+                            },
+                        },
+                    },
+                    pullRequest: {
+                        pullRequestId: 55,
+                        repository: { id: 'repo-1', name: 'kodus-e2e' },
+                        sourceRefName: 'refs/heads/feature',
+                        targetRefName: 'refs/heads/main',
+                        description: 'PR description',
+                    },
+                    repository: { project: { name: 'kodus-e2e-project' } },
+                },
+                resourceContainers: { project: { id: 'project-1' } },
+            },
+        } as any);
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prepareContext: expect.objectContaining({
+                    userQuestion: '@kody what does this pull request change?',
+                }),
+            }),
+        );
+    });
+});
+
+describe('ChatWithKodyFromGitUseCase — rule behind the finding', () => {
+    const KODY_COMMENT_ID = 555;
+    // buildPrKey rejects a non-UUID organization id.
+    const ORGANIZATION_ID = '11111111-1111-1111-1111-111111111111';
+
+    function buildParams() {
+        return {
+            event: 'pull_request_review_comment',
+            platformType: PlatformType.GITHUB,
+            payload: {
+                action: 'created',
+                repository: { id: 'repo-1', name: 'billing-api' },
+                issue: {
+                    id: 1,
+                    body: 'body',
+                    pull_request: {
+                        url: 'https://api.github.com/repos/acme/billing-api/pulls/812',
+                    },
+                },
+                comment: {
+                    id: 900,
+                    in_reply_to_id: KODY_COMMENT_ID,
+                    body: '@kody this is a false positive',
+                    path: 'src/worker/invoice.ts',
+                },
+                pull_request: {
+                    number: 812,
+                    head: { ref: 'feat/invoice-retry' },
+                    base: { ref: 'main' },
+                },
+                sender: { id: 'user-1', login: 'dev-one' },
+            },
+        } as any;
+    }
+
+    function build(pullRequest: unknown) {
+        const conversationAgentUseCase = {
+            execute: jest.fn().mockResolvedValue('an answer'),
+        };
+        const pullRequestsService = {
+            findByNumberAndRepositoryId: jest
+                .fn()
+                .mockResolvedValue(pullRequest),
+        };
+        const useCase = new ChatWithKodyFromGitUseCase(
+            {
+                findTeamAndOrganizationIdByConfigKey: jest
+                    .fn()
+                    .mockResolvedValue({
+                        integration: {
+                            organization: { uuid: ORGANIZATION_ID },
+                        },
+                        team: { uuid: 'team-1' },
                     }),
-                    pullRequest: expect.objectContaining({
-                        pullRequestNumber: 132,
+                addReactionToComment: jest.fn().mockResolvedValue(undefined),
+                getPullRequestReviewComment: jest.fn().mockResolvedValue([
+                    {
+                        id: KODY_COMMENT_ID,
+                        body: 'Wrap the call in a try/catch. <!-- kody-codereview -->',
+                        user: { login: 'kody-codereview' },
+                        diff_hunk: '@@ -1 +1 @@',
+                    },
+                    {
+                        id: 900,
+                        in_reply_to_id: KODY_COMMENT_ID,
+                        body: '@kody this is a false positive',
+                        path: 'src/worker/invoice.ts',
+                        user: { login: 'dev-one' },
+                    },
+                ]),
+                createResponseToComment: jest
+                    .fn()
+                    .mockResolvedValue({ id: 999 }),
+                removeReactionsFromComment: jest
+                    .fn()
+                    .mockResolvedValue(undefined),
+                getCloneParams: jest.fn().mockResolvedValue(undefined),
+            } as any,
+            conversationAgentUseCase as any,
+            { execute: jest.fn() } as any,
+            {
+                validateExecutionPermissions: jest
+                    .fn()
+                    .mockResolvedValue({ allowed: true }),
+            } as any,
+            {
+                acquire: jest.fn().mockResolvedValue({
+                    sandbox: { type: 'null' },
+                    leaseId: 'lease',
+                    wasCreated: true,
+                    sandboxId: 'sb',
+                }),
+                release: jest.fn().mockResolvedValue(undefined),
+            } as any,
+            pullRequestsService as any,
+        );
+
+        return { useCase, conversationAgentUseCase, pullRequestsService };
+    }
+
+    it('attaches the rule ids of the suggestion the thread started from', async () => {
+        const { useCase, conversationAgentUseCase } = build({
+            files: [
+                {
+                    suggestions: [
+                        {
+                            id: 'sug-9',
+                            label: 'kody_rules',
+                            brokenKodyRulesIds: ['rule-abc'],
+                            comment: { id: KODY_COMMENT_ID },
+                        },
+                        {
+                            id: 'sug-other',
+                            comment: { id: 111 },
+                        },
+                    ],
+                },
+            ],
+        });
+
+        await useCase.execute(buildParams());
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prepareContext: expect.objectContaining({
+                    codeManagementContext: expect.objectContaining({
+                        originalComment: expect.objectContaining({
+                            suggestionId: 'sug-9',
+                            label: 'kody_rules',
+                            brokenKodyRulesIds: ['rule-abc'],
+                        }),
+                    }),
+                }),
+            }),
+        );
+    });
+
+    it('finds the rule ids of a PR-level finding too', async () => {
+        const { useCase, conversationAgentUseCase } = build({
+            files: [],
+            prLevelSuggestions: [
+                {
+                    id: 'sug-pr-1',
+                    label: 'kody_rules',
+                    brokenKodyRulesIds: ['rule-pr'],
+                    comment: { id: KODY_COMMENT_ID },
+                },
+            ],
+        });
+
+        await useCase.execute(buildParams());
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prepareContext: expect.objectContaining({
+                    codeManagementContext: expect.objectContaining({
+                        originalComment: expect.objectContaining({
+                            suggestionId: 'sug-pr-1',
+                            brokenKodyRulesIds: ['rule-pr'],
+                        }),
+                    }),
+                }),
+            }),
+        );
+    });
+
+    it('still answers when the suggestion cannot be resolved', async () => {
+        const { useCase, conversationAgentUseCase } = build(null);
+
+        await useCase.execute(buildParams());
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prepareContext: expect.objectContaining({
+                    codeManagementContext: expect.objectContaining({
+                        originalComment: expect.objectContaining({
+                            suggestionId: undefined,
+                        }),
                     }),
                 }),
             }),

@@ -42,8 +42,7 @@ const LazyTreeFolder = ({
         (group: any) =>
             group.id !== excludeGroupId &&
             safeArray(group.folders).some(
-                (f: any) =>
-                    path.startsWith(`${f.path}/`) || path === f.path,
+                (f: any) => path.startsWith(`${f.path}/`) || path === f.path,
             ),
     );
 
@@ -109,10 +108,7 @@ export const GitDirectorySelector = ({
 
     return (
         <Tree.Root {...props}>
-            <Tree.Folder
-                value="/"
-                name={repositoryName}
-                disabled={repository?.isSelected}>
+            <Tree.Folder value="/" name={repositoryName} disabled>
                 {safeArray(rootDirectories).map((dir) => {
                     return (
                         <LazyTreeFolder

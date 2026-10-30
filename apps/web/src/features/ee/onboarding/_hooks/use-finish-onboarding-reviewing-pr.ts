@@ -1,6 +1,7 @@
 import { useAsyncAction } from "@hooks/use-async-action";
 import { finishOnboarding } from "@services/codeManagement/fetch";
 import { useSuspenseGetBYOK } from "@services/organizationParameters/hooks";
+import { hasVisibleModels } from "src/features/ee/byok/_utils";
 import { waitFor } from "src/core/utils/helpers";
 import { revalidateServerSideTag } from "src/core/utils/revalidate-server-side";
 import { isSelfHosted } from "src/core/utils/self-hosted";
@@ -28,7 +29,7 @@ export const useFinishOnboardingReviewingPR = ({
     onSuccess: () => void;
 }) => {
     const byokConfig = useSuspenseGetBYOK();
-    const choseBYOK = !!byokConfig?.configValue?.main;
+    const choseBYOK = hasVisibleModels(byokConfig?.configValue);
 
     const [
         finishOnboardingReviewingPR,

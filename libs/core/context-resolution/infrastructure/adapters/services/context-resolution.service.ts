@@ -8,10 +8,6 @@ import {
     INTEGRATION_CONFIG_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import {
-    IIntegrationService,
-    INTEGRATION_SERVICE_TOKEN,
-} from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
-import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
@@ -21,8 +17,6 @@ export class ContextResolutionService implements IContextResolutionService {
     constructor(
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
-        @Inject(INTEGRATION_SERVICE_TOKEN)
-        private readonly integrationService: IIntegrationService,
         @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
         private readonly integrationConfigService: IIntegrationConfigService,
     ) {}
@@ -31,44 +25,33 @@ export class ContextResolutionService implements IContextResolutionService {
         organizationId: string,
         repositoryId: string,
     ): Promise<string> {
-        // 1. Fetch all active integrations for the organization
-        const integrations = await this.integrationService.find({
-            organization: { uuid: organizationId },
-            status: true,
-        });
+        // Prior version fetched active integrations first, then issued
+        // one `find({ integration: { uuid } })` per integration inside a
+        // sequential loop — a textbook 1+N on the code-review hot path.
+        // The repository method below collapses it to a single JOIN
+        // query over integration_configs → integrations → organization.
+        const integrationConfigs =
+            await this.integrationConfigService.findByOrganizationAndConfigKey(
+                organizationId,
+                IntegrationConfigKey.REPOSITORIES,
+            );
 
-        if (!integrations || integrations.length === 0) {
+        if (!integrationConfigs || integrationConfigs.length === 0) {
             throw new Error('No active integrations found for organization');
         }
 
-        // 2. For each integration, fetch integration configs with REPOSITORIES key
-        for (const integration of integrations) {
-            const integrationConfigs = await this.integrationConfigService.find(
-                {
-                    integration: { uuid: integration.uuid },
-                    configKey: IntegrationConfigKey.REPOSITORIES,
-                },
-            );
+        for (const config of integrationConfigs) {
+            const repositories = config.configValue;
 
-            if (!integrationConfigs || integrationConfigs.length === 0) {
-                continue;
-            }
+            if (Array.isArray(repositories)) {
+                const foundRepository = repositories.find(
+                    (repo: any) =>
+                        repo.id === repositoryId ||
+                        repo.id === repositoryId.toString(),
+                );
 
-            // 3. Search the repository list for one with the same id
-            for (const config of integrationConfigs) {
-                const repositories = config.configValue;
-
-                if (Array.isArray(repositories)) {
-                    const foundRepository = repositories.find(
-                        (repo: any) =>
-                            repo.id === repositoryId ||
-                            repo.id === repositoryId.toString(),
-                    );
-
-                    if (foundRepository) {
-                        // 4. Return the teamId from this integration config
-                        return config?.team?.uuid;
-                    }
+                if (foundRepository) {
+                    return config?.team?.uuid;
                 }
             }
         }

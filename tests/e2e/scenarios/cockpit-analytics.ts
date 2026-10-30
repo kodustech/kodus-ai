@@ -47,7 +47,7 @@ export const cockpitAnalytics: Scenario = {
     priority: "P0",
     appliesTo: {
         target: ["cloud", "self-hosted"],
-        provider: ["github"],
+        provider: ["github", "github-app"],
         // license-paid = the self-hosted Enterprise customer case (the
         // regression). paid/trial cover cloud. Tiers that legitimately can't
         // reach cockpit (free, community-byok, license-free) are excluded —
@@ -72,11 +72,14 @@ export const cockpitAnalytics: Scenario = {
         await ensureLicenseSeat(ctx.target, session, ctx.provider);
 
         // ---- Layer 1: cockpit eligibility + warehouse reachability ----
-        // Routed through the web's generic API proxy (/api/proxy/api/* →
-        // apps/api). The cockpit endpoint's own tier guard tells us whether the
-        // org is eligible — no separate (cloud-only) billing call.
+        // Call apps/api directly. The web proxy deliberately discards a
+        // caller-supplied Authorization header and derives its Bearer from a
+        // NextAuth cookie. This non-browser probe has an API JWT but no
+        // NextAuth cookie, so routing it through the proxy deterministically
+        // turns an authenticated request into a 401. The browser layer below
+        // still exercises the real same-origin proxy and page rendering.
         const validateUrl =
-            `${ctx.target.webBaseUrl}/api/proxy/api/cockpit/validate` +
+            `${ctx.target.apiBaseUrl}/cockpit/validate` +
             `?organizationId=${encodeURIComponent(session.organizationId)}`;
         // apps/api wraps controller returns in the global TransformInterceptor
         // envelope `{ data, statusCode, type }`, so the cockpit payload lives

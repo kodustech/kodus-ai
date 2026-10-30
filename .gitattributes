@@ -1,0 +1,5 @@
+evals/approval-risk/candidates.json linguist-generated=true
+evals/approval-risk/history-prs.json linguist-generated=true
+evals/approval-risk/snapshots.json.gz binary
+evals/area-risk-map/cases*.json linguist-generated=true
+evals/area-risk-map/results/*.json linguist-generated=true

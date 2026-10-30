@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { PERMISSIONS_REPOSITORY_TOKEN } from '../domain/permissions/contracts/permissions.repository.contract';
 import { PERMISSIONS_SERVICE_TOKEN } from '../domain/permissions/contracts/permissions.service.contract';
+import { AUTHORIZATION_SERVICE_TOKEN } from '../domain/permissions/contracts/authorization.service.contract';
 import { PermissionsRepository } from '../infrastructure/adapters/repositories/permissions.repository';
 import { PermissionsModel } from '../infrastructure/adapters/repositories/schemas/permissions.model';
 import { AuthorizationService } from '../infrastructure/adapters/services/permissions/authorization.service';
@@ -29,6 +30,10 @@ import { IntegrationConfigModule } from '@libs/integrations/modules/config.modul
         },
         PermissionsAbilityFactory,
         AuthorizationService,
+        {
+            provide: AUTHORIZATION_SERVICE_TOKEN,
+            useExisting: AuthorizationService,
+        },
         ...UseCases,
     ],
     exports: [
@@ -36,6 +41,7 @@ import { IntegrationConfigModule } from '@libs/integrations/modules/config.modul
         PERMISSIONS_SERVICE_TOKEN,
         PermissionsAbilityFactory,
         AuthorizationService,
+        AUTHORIZATION_SERVICE_TOKEN,
         ...UseCases,
     ],
 })

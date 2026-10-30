@@ -1,0 +1,1495 @@
+{
+ "model": "kimi-k2.7-code",
+ "judge": "claude-opus-5-inline (same JUDGE_PROMPT, verdicts supplied externally)",
+ "ranAt": "2026-07-31T18:23:18.018Z",
+ "cases": 50,
+ "infraFailures": 0,
+ "metrics": {
+  "recall_mean": 0.368,
+  "precision_mean": 0.47014518814518813,
+  "f1_mean": 0.37951111111111113,
+  "fair_recall_mean": 0.4159999999999999,
+  "fidelity_mean": 0.8652919323759963
+ },
+ "rows": [
+  {
+   "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+   "status": "pass",
+   "score": 0.6666666666666666,
+   "reason": "recall 2/3 (67%) · precision 2/2 (100%) · F1 0.80 · fair-recall 67% · loop-fidelity 86% (38/44 served) · missed[real=1 artifact=0 untestable=0]: In hasPermission(ClientModel client, String scope), the",
+   "metadata": {
+    "recall": 0.6666666666666666,
+    "precision": 1,
+    "f1": 0.8,
+    "fairRecall": 0.6666666666666666,
+    "hitRate": 0.8636363636363636,
+    "totalCalls": 44,
+    "unserved": 6,
+    "matched": 2,
+    "goldens": 3,
+    "tpFindings": 2,
+    "fpFindings": 0,
+    "findings": 2,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 605723,
+    "completion": 18518,
+    "total": 624241
+   },
+   "elapsedMs": 404315
+  },
+  {
+   "caseId": "add-guest-management-functionality-to-existing-bookings-cal-com",
+   "status": "pass",
+   "score": 0.8,
+   "reason": "recall 4/5 (80%) · precision 3/5 (60%) · F1 0.69 · fair-recall 80% · loop-fidelity 75% (41/55 served) · missed[real=1 artifact=0 untestable=0]: Starting with an array containing an empty string may c",
+   "metadata": {
+    "recall": 0.8,
+    "precision": 0.6,
+    "f1": 0.6857142857142857,
+    "fairRecall": 0.8,
+    "hitRate": 0.7454545454545455,
+    "totalCalls": 55,
+    "unserved": 14,
+    "matched": 4,
+    "goldens": 5,
+    "tpFindings": 3,
+    "fpFindings": 2,
+    "findings": 5,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 464527,
+    "completion": 12926,
+    "total": 477453
+   },
+   "elapsedMs": 316805
+  },
+  {
+   "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/4 (0%) · precision 0/6 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 82% (40/49 served) · missed[real=2 artifact=1 untestable=1]: The translation is in Italian instead of Lithuanian. Th «not-in-corpus» | The totpStep1 value uses Traditional Chinese terms in t | The anchor sanitization logic has a potential issue whe «no-tokens» | The method name 'santizeAnchors' should be 'sanitizeAnc",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 0.8163265306122449,
+    "totalCalls": 49,
+    "unserved": 9,
+    "matched": 0,
+    "goldens": 4,
+    "tpFindings": 0,
+    "fpFindings": 6,
+    "findings": 6,
+    "realMiss": 2,
+    "artifact": 1,
+    "untestable": 1
+   },
+   "tokenUsage": {
+    "prompt": 775951,
+    "completion": 37120,
+    "total": 813071
+   },
+   "elapsedMs": 787884
+  },
+  {
+   "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/5 (0%) · precision 0/1 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 95% (35/37 served) · missed[real=4 artifact=0 untestable=1]: Race condition: Multiple concurrent requests could pass «no-tokens» | Anonymous authentication now fails entirely if anonDevi | This call won’t compile: dbSession.Exec(args...) is giv | Returning ErrDeviceLimitReached when no rows were updat | Time window calculation inconsistency: Using device.Upd",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 0.9459459459459459,
+    "totalCalls": 37,
+    "unserved": 2,
+    "matched": 0,
+    "goldens": 5,
+    "tpFindings": 0,
+    "fpFindings": 1,
+    "findings": 1,
+    "realMiss": 4,
+    "artifact": 0,
+    "untestable": 1
+   },
+   "tokenUsage": {
+    "prompt": 532764,
+    "completion": 23791,
+    "total": 556555
+   },
+   "elapsedMs": 519419
+  },
+  {
+   "caseId": "dual-storage-architecture-grafana-codex",
+   "status": "pass",
+   "score": 1,
+   "reason": "recall 3/3 (100%) · precision 10/11 (91%) · F1 0.95 · fair-recall 100% · loop-fidelity 88% (50/57 served)",
+   "metadata": {
+    "recall": 1,
+    "precision": 0.9090909090909091,
+    "f1": 0.9523809523809523,
+    "fairRecall": 1,
+    "hitRate": 0.8771929824561403,
+    "totalCalls": 57,
+    "unserved": 7,
+    "matched": 3,
+    "goldens": 3,
+    "tpFindings": 10,
+    "fpFindings": 1,
+    "findings": 11,
+    "realMiss": 0,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 742463,
+    "completion": 23522,
+    "total": 765985
+   },
+   "elapsedMs": 473166
+  },
+  {
+   "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+   "status": "pass",
+   "score": 0.3333333333333333,
+   "reason": "recall 2/6 (33%) · precision 4/13 (31%) · F1 0.32 · fair-recall 40% · loop-fidelity 77% (57/74 served) · missed[real=2 artifact=1 untestable=1]: The current origin validation using indexOf is insuffic | postMessage targetOrigin should be the origin (scheme+h | The code sets X-Frame-Options: ALLOWALL which completel «not-in-corpus» | The ERB block closes with end if, which is invalid Ruby «no-tokens»",
+   "metadata": {
+    "recall": 0.3333333333333333,
+    "precision": 0.3076923076923077,
+    "f1": 0.32,
+    "fairRecall": 0.4,
+    "hitRate": 0.7702702702702703,
+    "totalCalls": 74,
+    "unserved": 17,
+    "matched": 2,
+    "goldens": 6,
+    "tpFindings": 4,
+    "fpFindings": 9,
+    "findings": 13,
+    "realMiss": 2,
+    "artifact": 1,
+    "untestable": 1
+   },
+   "tokenUsage": {
+    "prompt": 309641,
+    "completion": 44817,
+    "total": 354458
+   },
+   "elapsedMs": 661359
+  },
+  {
+   "caseId": "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+   "status": "pass",
+   "score": 0.6666666666666666,
+   "reason": "recall 2/3 (67%) · precision 2/3 (67%) · F1 0.67 · fair-recall 67% · loop-fidelity 100% (45/45 served) · missed[real=1 artifact=0 untestable=0]: When requests are authenticated with API keys or org au",
+   "metadata": {
+    "recall": 0.6666666666666666,
+    "precision": 0.6666666666666666,
+    "f1": 0.6666666666666666,
+    "fairRecall": 0.6666666666666666,
+    "hitRate": 1,
+    "totalCalls": 45,
+    "unserved": 0,
+    "matched": 2,
+    "goldens": 3,
+    "tpFindings": 2,
+    "fpFindings": 1,
+    "findings": 3,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 631114,
+    "completion": 19721,
+    "total": 650835
+   },
+   "elapsedMs": 793181
+  },
+  {
+   "caseId": "feat-2fa-backup-codes-cal-com",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/4 (0%) · precision 0/2 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 74% (32/43 served) · missed[real=3 artifact=0 untestable=1]: The exported function TwoFactor handles backup codes an | Error message mentions 'backup code login' but this is  «no-tokens» | Backup code validation is case-sensitive due to the use | Because backupCodes are decrypted and mutated in memory",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 0.7441860465116279,
+    "totalCalls": 43,
+    "unserved": 11,
+    "matched": 0,
+    "goldens": 4,
+    "tpFindings": 0,
+    "fpFindings": 2,
+    "findings": 2,
+    "realMiss": 3,
+    "artifact": 0,
+    "untestable": 1
+   },
+   "tokenUsage": {
+    "prompt": 513662,
+    "completion": 21441,
+    "total": 535103
+   },
+   "elapsedMs": 507338
+  },
+  {
+   "caseId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 2/4 (50%) · precision 3/3 (100%) · F1 0.67 · fair-recall 50% · loop-fidelity 67% (39/58 served) · missed[real=2 artifact=0 untestable=0]: The method name has a typo: test_from_dict_inalid_data  | Method name says 'empty_array' but tests empty dict - c",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 1,
+    "f1": 0.6666666666666666,
+    "fairRecall": 0.5,
+    "hitRate": 0.6724137931034483,
+    "totalCalls": 58,
+    "unserved": 19,
+    "matched": 2,
+    "goldens": 4,
+    "tpFindings": 3,
+    "fpFindings": 0,
+    "findings": 3,
+    "realMiss": 2,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 422415,
+    "completion": 17284,
+    "total": 439699
+   },
+   "elapsedMs": 346120
+  },
+  {
+   "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+   "status": "pass",
+   "score": 0.3333333333333333,
+   "reason": "recall 1/3 (33%) · precision 1/6 (17%) · F1 0.22 · fair-recall 33% · loop-fidelity 78% (58/74 served) · missed[real=2 artifact=0 untestable=0]: Using Python’s built-in hash() to build cache keys is n | The upsampling eligibility check passes the outer datas",
+   "metadata": {
+    "recall": 0.3333333333333333,
+    "precision": 0.16666666666666666,
+    "f1": 0.2222222222222222,
+    "fairRecall": 0.3333333333333333,
+    "hitRate": 0.7837837837837838,
+    "totalCalls": 74,
+    "unserved": 16,
+    "matched": 1,
+    "goldens": 3,
+    "tpFindings": 1,
+    "fpFindings": 5,
+    "findings": 6,
+    "realMiss": 2,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 677125,
+    "completion": 14171,
+    "total": 691296
+   },
+   "elapsedMs": 346333
+  },
+  {
+   "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+   "status": "pass",
+   "score": 0.3333333333333333,
+   "reason": "recall 1/3 (33%) · precision 2/2 (100%) · F1 0.50 · fair-recall 100% · loop-fidelity 88% (35/40 served) · missed[real=0 artifact=2 untestable=0]: The magic number 50 for max_wait is used repeatedly thr «not-in-corpus» | The test test_thread_queue_parallel_error_handling has  «not-in-corpus»",
+   "metadata": {
+    "recall": 0.3333333333333333,
+    "precision": 1,
+    "f1": 0.5,
+    "fairRecall": 1,
+    "hitRate": 0.875,
+    "totalCalls": 40,
+    "unserved": 5,
+    "matched": 1,
+    "goldens": 3,
+    "tpFindings": 2,
+    "fpFindings": 0,
+    "findings": 2,
+    "realMiss": 0,
+    "artifact": 2,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 504662,
+    "completion": 18026,
+    "total": 522688
+   },
+   "elapsedMs": 428141
+  },
+  {
+   "caseId": "feature-automatically-downsize-large-images-discourse-cursor",
+   "status": "pass",
+   "score": 0.6666666666666666,
+   "reason": "recall 2/3 (67%) · precision 4/4 (100%) · F1 0.80 · fair-recall 67% · loop-fidelity 90% (38/42 served) · missed[real=1 artifact=0 untestable=0]: Passing 80% as the dimensions can fail for animated GIF",
+   "metadata": {
+    "recall": 0.6666666666666666,
+    "precision": 1,
+    "f1": 0.8,
+    "fairRecall": 0.6666666666666666,
+    "hitRate": 0.9047619047619048,
+    "totalCalls": 42,
+    "unserved": 4,
+    "matched": 2,
+    "goldens": 3,
+    "tpFindings": 4,
+    "fpFindings": 0,
+    "findings": 4,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 420014,
+    "completion": 22008,
+    "total": 442022
+   },
+   "elapsedMs": 468177
+  },
+  {
+   "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+   "status": "pass",
+   "score": 0.75,
+   "reason": "recall 3/4 (75%) · precision 3/6 (50%) · F1 0.60 · fair-recall 75% · loop-fidelity 85% (41/48 served) · missed[real=1 artifact=0 untestable=0]: Because this migration inserts embeddable_hosts rows wi",
+   "metadata": {
+    "recall": 0.75,
+    "precision": 0.5,
+    "f1": 0.6,
+    "fairRecall": 0.75,
+    "hitRate": 0.8541666666666666,
+    "totalCalls": 48,
+    "unserved": 7,
+    "matched": 3,
+    "goldens": 4,
+    "tpFindings": 3,
+    "fpFindings": 3,
+    "findings": 6,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 245157,
+    "completion": 18876,
+    "total": 264033
+   },
+   "elapsedMs": 421523
+  },
+  {
+   "caseId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com",
+   "status": "pass",
+   "score": 0.2,
+   "reason": "recall 1/5 (20%) · precision 1/1 (100%) · F1 0.33 · fair-recall 20% · loop-fidelity 92% (23/25 served) · missed[real=4 artifact=0 untestable=0]: Potential null reference if mainHostDestinationCalendar | The optional chaining on mainHostDestinationCalendar?.i | Logic error: when externalCalendarId is provided, you'r | The Calendar interface now requires createEvent(event, ",
+   "metadata": {
+    "recall": 0.2,
+    "precision": 1,
+    "f1": 0.33333333333333337,
+    "fairRecall": 0.2,
+    "hitRate": 0.92,
+    "totalCalls": 25,
+    "unserved": 2,
+    "matched": 1,
+    "goldens": 5,
+    "tpFindings": 1,
+    "fpFindings": 0,
+    "findings": 1,
+    "realMiss": 4,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 158573,
+    "completion": 15300,
+    "total": 173873
+   },
+   "elapsedMs": 342179
+  },
+  {
+   "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+   "status": "pass",
+   "score": 0.3333333333333333,
+   "reason": "recall 1/3 (33%) · precision 1/2 (50%) · F1 0.40 · fair-recall 33% · loop-fidelity 92% (34/37 served) · missed[real=2 artifact=0 untestable=0]:  The findMembers() call is now asynchronous and unhandl | HTTP method mismatch in .remove_member - test uses PUT ",
+   "metadata": {
+    "recall": 0.3333333333333333,
+    "precision": 0.5,
+    "f1": 0.4,
+    "fairRecall": 0.3333333333333333,
+    "hitRate": 0.918918918918919,
+    "totalCalls": 37,
+    "unserved": 3,
+    "matched": 1,
+    "goldens": 3,
+    "tpFindings": 1,
+    "fpFindings": 1,
+    "findings": 2,
+    "realMiss": 2,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 439232,
+    "completion": 17564,
+    "total": 456796
+   },
+   "elapsedMs": 387402
+  },
+  {
+   "caseId": "github-oauth-security-enhancement-sentry",
+   "status": "pass",
+   "score": 0.3333333333333333,
+   "reason": "recall 1/3 (33%) · precision 1/2 (50%) · F1 0.40 · fair-recall 33% · loop-fidelity 65% (22/34 served) · missed[real=2 artifact=0 untestable=0]: Null reference if github_authenticated_user state is mi | OAuth state uses pipeline.signature (static) instead of",
+   "metadata": {
+    "recall": 0.3333333333333333,
+    "precision": 0.5,
+    "f1": 0.4,
+    "fairRecall": 0.3333333333333333,
+    "hitRate": 0.6470588235294118,
+    "totalCalls": 34,
+    "unserved": 12,
+    "matched": 1,
+    "goldens": 3,
+    "tpFindings": 1,
+    "fpFindings": 1,
+    "findings": 2,
+    "realMiss": 2,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 387204,
+    "completion": 21038,
+    "total": 408242
+   },
+   "elapsedMs": 459559
+  },
+  {
+   "caseId": "implement-access-token-context-encoding-framework-keycloak",
+   "status": "pass",
+   "score": 0.25,
+   "reason": "recall 1/4 (25%) · precision 2/2 (100%) · F1 0.40 · fair-recall 25% · loop-fidelity 91% (30/33 served) · missed[real=3 artifact=0 untestable=0]: In isAccessTokenId, the substring for the grant shortcu | Javadoc mentions \"usually like 3-letters shortcut\" but  |  Catching generic RuntimeException is too broad. The im",
+   "metadata": {
+    "recall": 0.25,
+    "precision": 1,
+    "f1": 0.4,
+    "fairRecall": 0.25,
+    "hitRate": 0.9090909090909091,
+    "totalCalls": 33,
+    "unserved": 3,
+    "matched": 1,
+    "goldens": 4,
+    "tpFindings": 2,
+    "fpFindings": 0,
+    "findings": 2,
+    "realMiss": 3,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 423375,
+    "completion": 8920,
+    "total": 432295
+   },
+   "elapsedMs": 203542
+  },
+  {
+   "caseId": "oauth-credential-sync-and-app-integration-enhancements-cal-com",
+   "status": "pass",
+   "score": 0.4,
+   "reason": "recall 2/5 (40%) · precision 2/7 (29%) · F1 0.33 · fair-recall 40% · loop-fidelity 96% (45/47 served) · missed[real=3 artifact=0 untestable=0]: parseRefreshTokenResponse returns a Zod safeParse resul | When APP_CREDENTIAL_SHARING_ENABLED and CALCOM_CREDENTI | When the sync endpoint path is used, res is a fetch Res",
+   "metadata": {
+    "recall": 0.4,
+    "precision": 0.2857142857142857,
+    "f1": 0.3333333333333333,
+    "fairRecall": 0.4,
+    "hitRate": 0.9574468085106383,
+    "totalCalls": 47,
+    "unserved": 2,
+    "matched": 2,
+    "goldens": 5,
+    "tpFindings": 2,
+    "fpFindings": 5,
+    "findings": 7,
+    "realMiss": 3,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 535479,
+    "completion": 28409,
+    "total": 563888
+   },
+   "elapsedMs": 606870
+  },
+  {
+   "caseId": "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+   "status": "pass",
+   "score": 0.3333333333333333,
+   "reason": "recall 1/3 (33%) · precision 2/4 (50%) · F1 0.40 · fair-recall 100% · loop-fidelity 81% (51/63 served) · missed[real=0 artifact=2 untestable=0]: This change for desktop/user.css changes $primary from  «not-in-corpus» | In topic-post.css the original code used $lightness: 70 «not-in-corpus»",
+   "metadata": {
+    "recall": 0.3333333333333333,
+    "precision": 0.5,
+    "f1": 0.4,
+    "fairRecall": 1,
+    "hitRate": 0.8095238095238095,
+    "totalCalls": 63,
+    "unserved": 12,
+    "matched": 1,
+    "goldens": 3,
+    "tpFindings": 2,
+    "fpFindings": 2,
+    "findings": 4,
+    "realMiss": 0,
+    "artifact": 2,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 796309,
+    "completion": 32287,
+    "total": 828596
+   },
+   "elapsedMs": 582695
+  },
+  {
+   "caseId": "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/5 (0%) · precision 0/2 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 97% (29/30 served) · missed[real=2 artifact=0 untestable=3]: Inconsistent metric tagging with 'shard' and 'shards' «no-tokens» | Fixed sleep in tests can be flaky; wait on condition in «no-tokens» | Because flusher processes are created via multiprocessi | Sleep in test_consumer.py won’t actually wait because t | Breaking out of the loop when the deadline has elapsed  «no-tokens»",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 0.9666666666666667,
+    "totalCalls": 30,
+    "unserved": 1,
+    "matched": 0,
+    "goldens": 5,
+    "tpFindings": 0,
+    "fpFindings": 2,
+    "findings": 2,
+    "realMiss": 2,
+    "artifact": 0,
+    "untestable": 3
+   },
+   "tokenUsage": {
+    "prompt": 482565,
+    "completion": 18602,
+    "total": 501167
+   },
+   "elapsedMs": 419196
+  },
+  {
+   "caseId": "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/2 (0%) · precision 0/2 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 100% (40/40 served) · missed[real=0 artifact=0 untestable=2]: Recursive caching call using session instead of delegat «no-tokens» | Cleanup reference uses incorrect alias - should be 'idp «no-tokens»",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 1,
+    "totalCalls": 40,
+    "unserved": 0,
+    "matched": 0,
+    "goldens": 2,
+    "tpFindings": 0,
+    "fpFindings": 2,
+    "findings": 2,
+    "realMiss": 0,
+    "artifact": 0,
+    "untestable": 2
+   },
+   "tokenUsage": {
+    "prompt": 533484,
+    "completion": 15846,
+    "total": 549330
+   },
+   "elapsedMs": 356288
+  },
+  {
+   "caseId": "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 2/3 (67%) · F1 0.57 · fair-recall 100% · loop-fidelity 94% (44/47 served) · missed[real=0 artifact=1 untestable=0]: Regex pattern @(#{domains}) only matches domain suffixe «not-in-corpus»",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 0.6666666666666666,
+    "f1": 0.5714285714285715,
+    "fairRecall": 1,
+    "hitRate": 0.9361702127659575,
+    "totalCalls": 47,
+    "unserved": 3,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 2,
+    "fpFindings": 1,
+    "findings": 3,
+    "realMiss": 0,
+    "artifact": 1,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 587544,
+    "completion": 17195,
+    "total": 604739
+   },
+   "elapsedMs": 384137
+  },
+  {
+   "caseId": "async-import-of-the-appstore-packages-cal-com",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 5/5 (100%) · F1 0.67 · fair-recall 50% · loop-fidelity 98% (45/46 served) · missed[real=0 artifact=0 untestable=1]: Consider adding try-catch around the await to handle im «no-tokens»",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 1,
+    "f1": 0.6666666666666666,
+    "fairRecall": 0.5,
+    "hitRate": 0.9782608695652174,
+    "totalCalls": 46,
+    "unserved": 1,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 5,
+    "fpFindings": 0,
+    "findings": 5,
+    "realMiss": 0,
+    "artifact": 0,
+    "untestable": 1
+   },
+   "tokenUsage": {
+    "prompt": 568100,
+    "completion": 19801,
+    "total": 587901
+   },
+   "elapsedMs": 411249
+  },
+  {
+   "caseId": "authzservice-improve-authz-caching-grafana-codex",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/2 (0%) · precision 0/3 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 88% (56/64 served) · missed[real=1 artifact=0 untestable=1]: The Check operation exhibits asymmetric cache trust log «no-tokens» | The test comment says the cached permissions 'allow acc",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 0.875,
+    "totalCalls": 64,
+    "unserved": 8,
+    "matched": 0,
+    "goldens": 2,
+    "tpFindings": 0,
+    "fpFindings": 3,
+    "findings": 3,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 1
+   },
+   "tokenUsage": {
+    "prompt": 948533,
+    "completion": 19350,
+    "total": 967883
+   },
+   "elapsedMs": 345305
+  },
+  {
+   "caseId": "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/2 (0%) · precision 0/1 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 86% (19/22 served) · missed[real=2 artifact=0 untestable=0]: In getBaseConditions(), the else if (filterConditions)  | Fetching userIdsFromOrg only when teamsFromOrg.length >",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 0.8636363636363636,
+    "totalCalls": 22,
+    "unserved": 3,
+    "matched": 0,
+    "goldens": 2,
+    "tpFindings": 0,
+    "fpFindings": 1,
+    "findings": 1,
+    "realMiss": 2,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 304586,
+    "completion": 20769,
+    "total": 325355
+   },
+   "elapsedMs": 487592
+  },
+  {
+   "caseId": "feature-localization-fallbacks-server-side-discourse-cursor",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/2 (0%) · precision 0/2 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 67% (33/49 served) · missed[real=2 artifact=0 untestable=0]: Thread-safety issue with lazy @loaded_locales | Consider normalizing the input locale (e.g., to a symbo",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 0.673469387755102,
+    "totalCalls": 49,
+    "unserved": 16,
+    "matched": 0,
+    "goldens": 2,
+    "tpFindings": 0,
+    "fpFindings": 2,
+    "findings": 2,
+    "realMiss": 2,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 330280,
+    "completion": 24994,
+    "total": 355274
+   },
+   "elapsedMs": 487443
+  },
+  {
+   "caseId": "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/2 (0%) · precision 0/2 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 100% (25/25 served) · missed[real=1 artifact=1 untestable=0]: Returning null from getSubGroupsCount() violates the Gr | The reader thread isn’t waited for; flipping deletedAll «not-in-corpus»",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 1,
+    "totalCalls": 25,
+    "unserved": 0,
+    "matched": 0,
+    "goldens": 2,
+    "tpFindings": 0,
+    "fpFindings": 2,
+    "findings": 2,
+    "realMiss": 1,
+    "artifact": 1,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 316208,
+    "completion": 12460,
+    "total": 328668
+   },
+   "elapsedMs": 260350
+  },
+  {
+   "caseId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/3 (0%) · precision 0/2 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 100% (38/38 served) · missed[real=3 artifact=0 untestable=0]: OptimizedCursorPaginator negative-offset branch slices  | BasePaginator negative-offset branch slices QuerySet wi | OptimizedCursorPaginator.get_item_key uses floor/ceil o",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 1,
+    "totalCalls": 38,
+    "unserved": 0,
+    "matched": 0,
+    "goldens": 3,
+    "tpFindings": 0,
+    "fpFindings": 2,
+    "findings": 2,
+    "realMiss": 3,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 556463,
+    "completion": 14801,
+    "total": 571264
+   },
+   "elapsedMs": 293931
+  },
+  {
+   "caseId": "replays-self-serve-bulk-delete-system-sentry",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/3 (0%) · precision 0/4 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 54% (15/28 served) · missed[real=1 artifact=0 untestable=2]: Breaking changes in error response format «no-tokens» | Detector validator uses wrong key when updating type «no-tokens» | Using zip(error_ids, events.values()) assumes the get_m",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 0.5357142857142857,
+    "totalCalls": 28,
+    "unserved": 13,
+    "matched": 0,
+    "goldens": 3,
+    "tpFindings": 0,
+    "fpFindings": 4,
+    "findings": 4,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 2
+   },
+   "tokenUsage": {
+    "prompt": 223989,
+    "completion": 20114,
+    "total": 244103
+   },
+   "elapsedMs": 423005
+  },
+  {
+   "caseId": "unified-storage-performance-optimizations-grafana-codex",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 1/1 (100%) · F1 0.67 · fair-recall 50% · loop-fidelity 100% (30/30 served) · missed[real=1 artifact=0 untestable=0]: Calling s.search.TotalDocs() here may race with concurr",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 1,
+    "f1": 0.6666666666666666,
+    "fairRecall": 0.5,
+    "hitRate": 1,
+    "totalCalls": 30,
+    "unserved": 0,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 1,
+    "fpFindings": 0,
+    "findings": 1,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 517718,
+    "completion": 8577,
+    "total": 526295
+   },
+   "elapsedMs": 194927
+  },
+  {
+   "caseId": "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 1/3 (33%) · F1 0.40 · fair-recall 50% · loop-fidelity 89% (40/45 served) · missed[real=0 artifact=0 untestable=1]: Dead code exists where ASN1Encoder instances are create «no-tokens»",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 0.3333333333333333,
+    "f1": 0.4,
+    "fairRecall": 0.5,
+    "hitRate": 0.8888888888888888,
+    "totalCalls": 45,
+    "unserved": 5,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 1,
+    "fpFindings": 2,
+    "findings": 3,
+    "realMiss": 0,
+    "artifact": 0,
+    "untestable": 1
+   },
+   "tokenUsage": {
+    "prompt": 636954,
+    "completion": 25944,
+    "total": 662898
+   },
+   "elapsedMs": 478642
+  },
+  {
+   "caseId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 1/3 (33%) · F1 0.40 · fair-recall 50% · loop-fidelity 89% (34/38 served) · missed[real=1 artifact=0 untestable=0]: In getGroupIdsWithViewPermission, hasPermission is call",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 0.3333333333333333,
+    "f1": 0.4,
+    "fairRecall": 0.5,
+    "hitRate": 0.8947368421052632,
+    "totalCalls": 38,
+    "unserved": 4,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 1,
+    "fpFindings": 2,
+    "findings": 3,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 670822,
+    "completion": 20129,
+    "total": 690951
+   },
+   "elapsedMs": 379846
+  },
+  {
+   "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/1 (0%) · precision 0/3 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 92% (47/51 served) · missed[real=1 artifact=0 untestable=0]: Incorrect method call for exit codes. The picocli.exit(",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 0.9215686274509803,
+    "totalCalls": 51,
+    "unserved": 4,
+    "matched": 0,
+    "goldens": 1,
+    "tpFindings": 0,
+    "fpFindings": 3,
+    "findings": 3,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 378982,
+    "completion": 16460,
+    "total": 395442
+   },
+   "elapsedMs": 274478
+  },
+  {
+   "caseId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+   "status": "pass",
+   "score": 1,
+   "reason": "recall 2/2 (100%) · precision 2/4 (50%) · F1 0.67 · fair-recall 100% · loop-fidelity 96% (43/45 served)",
+   "metadata": {
+    "recall": 1,
+    "precision": 0.5,
+    "f1": 0.6666666666666666,
+    "fairRecall": 1,
+    "hitRate": 0.9555555555555556,
+    "totalCalls": 45,
+    "unserved": 2,
+    "matched": 2,
+    "goldens": 2,
+    "tpFindings": 2,
+    "fpFindings": 2,
+    "findings": 4,
+    "realMiss": 0,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 670673,
+    "completion": 17560,
+    "total": 688233
+   },
+   "elapsedMs": 268591
+  },
+  {
+   "caseId": "advanced-query-processing-architecture-grafana-codex",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/1 (0%) · precision 0/3 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 100% (34/34 served) · missed[real=1 artifact=0 untestable=0]: The applyTemplateVariables method is called with reques",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 1,
+    "totalCalls": 34,
+    "unserved": 0,
+    "matched": 0,
+    "goldens": 1,
+    "tpFindings": 0,
+    "fpFindings": 3,
+    "findings": 3,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 462629,
+    "completion": 18038,
+    "total": 480667
+   },
+   "elapsedMs": 302940
+  },
+  {
+   "caseId": "advanced-sql-analytics-framework-grafana-codex",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 2/2 (100%) · F1 0.67 · fair-recall 50% · loop-fidelity 98% (39/40 served) · missed[real=1 artifact=0 untestable=0]: Several methods such as NewInMemoryDB().RunCommands and",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 1,
+    "f1": 0.6666666666666666,
+    "fairRecall": 0.5,
+    "hitRate": 0.975,
+    "totalCalls": 40,
+    "unserved": 1,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 2,
+    "fpFindings": 0,
+    "findings": 2,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 606245,
+    "completion": 8347,
+    "total": 614592
+   },
+   "elapsedMs": 167669
+  },
+  {
+   "caseId": "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 4/7 (57%) · F1 0.53 · fair-recall 50% · loop-fidelity 79% (54/68 served) · missed[real=1 artifact=0 untestable=0]: When immediateDelete is true, the deleteScheduledEmailR",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 0.5714285714285714,
+    "f1": 0.5333333333333333,
+    "fairRecall": 0.5,
+    "hitRate": 0.7941176470588235,
+    "totalCalls": 68,
+    "unserved": 14,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 4,
+    "fpFindings": 3,
+    "findings": 7,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 765137,
+    "completion": 22377,
+    "total": 787514
+   },
+   "elapsedMs": 384832
+  },
+  {
+   "caseId": "database-performance-optimizations-grafana-codex",
+   "status": "pass",
+   "score": 1,
+   "reason": "recall 1/1 (100%) · precision 3/4 (75%) · F1 0.86 · fair-recall 100% · loop-fidelity 86% (37/43 served)",
+   "metadata": {
+    "recall": 1,
+    "precision": 0.75,
+    "f1": 0.8571428571428571,
+    "fairRecall": 1,
+    "hitRate": 0.8604651162790697,
+    "totalCalls": 43,
+    "unserved": 6,
+    "matched": 1,
+    "goldens": 1,
+    "tpFindings": 3,
+    "fpFindings": 1,
+    "findings": 4,
+    "realMiss": 0,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 623847,
+    "completion": 25459,
+    "total": 649306
+   },
+   "elapsedMs": 435139
+  },
+  {
+   "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 1/4 (25%) · F1 0.33 · fair-recall 50% · loop-fidelity 78% (42/54 served) · missed[real=1 artifact=0 untestable=0]: The updateManyByCredentialId call uses an empty data ob",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 0.25,
+    "f1": 0.3333333333333333,
+    "fairRecall": 0.5,
+    "hitRate": 0.7777777777777778,
+    "totalCalls": 54,
+    "unserved": 12,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 1,
+    "fpFindings": 3,
+    "findings": 4,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 421867,
+    "completion": 17373,
+    "total": 439240
+   },
+   "elapsedMs": 340085
+  },
+  {
+   "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 1/1 (100%) · F1 0.67 · fair-recall 50% · loop-fidelity 100% (23/23 served) · missed[real=1 artifact=0 untestable=0]: Docstring says this returns a list of DetectorEvaluatio",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 1,
+    "f1": 0.6666666666666666,
+    "fairRecall": 0.5,
+    "hitRate": 1,
+    "totalCalls": 23,
+    "unserved": 0,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 1,
+    "fpFindings": 0,
+    "findings": 1,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 272663,
+    "completion": 10741,
+    "total": 283404
+   },
+   "elapsedMs": 227931
+  },
+  {
+   "caseId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 1/1 (100%) · F1 0.67 · fair-recall 100% · loop-fidelity 97% (30/31 served) · missed[real=0 artifact=1 untestable=0]: Typo in property name: 'stopNotificiationsText' should  «not-in-corpus»",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 1,
+    "f1": 0.6666666666666666,
+    "fairRecall": 1,
+    "hitRate": 0.967741935483871,
+    "totalCalls": 31,
+    "unserved": 1,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 1,
+    "fpFindings": 0,
+    "findings": 1,
+    "realMiss": 0,
+    "artifact": 1,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 587133,
+    "completion": 15752,
+    "total": 602885
+   },
+   "elapsedMs": 332363
+  },
+  {
+   "caseId": "fixing-re-authentication-with-passkeys-keycloak",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/2 (0%) · precision 0/1 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 70% (23/33 served) · missed[real=2 artifact=0 untestable=0]: ConditionalPasskeysEnabled() called without UserModel p | With isConditionalPasskeysEnabled(UserModel user) requi",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 0.696969696969697,
+    "totalCalls": 33,
+    "unserved": 10,
+    "matched": 0,
+    "goldens": 2,
+    "tpFindings": 0,
+    "fpFindings": 1,
+    "findings": 1,
+    "realMiss": 2,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 490242,
+    "completion": 26008,
+    "total": 516250
+   },
+   "elapsedMs": 462131
+  },
+  {
+   "caseId": "frontend-asset-optimization-grafana-codex",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/2 (0%) · precision 0/1 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 100% (15/15 served) · missed[real=2 artifact=0 untestable=0]: The GetWebAssets function implements an incomplete doub | In addition to the missing double-check, the function h",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 1,
+    "totalCalls": 15,
+    "unserved": 0,
+    "matched": 0,
+    "goldens": 2,
+    "tpFindings": 0,
+    "fpFindings": 1,
+    "findings": 1,
+    "realMiss": 2,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 236982,
+    "completion": 16598,
+    "total": 253580
+   },
+   "elapsedMs": 351829
+  },
+  {
+   "caseId": "implement-recovery-key-support-for-user-storage-providers-keycloak",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 2/4 (50%) · F1 0.50 · fair-recall 50% · loop-fidelity 94% (66/70 served) · missed[real=1 artifact=0 untestable=0]: After creating the RecoveryAuthnCodesCredentialModel, c",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 0.5,
+    "f1": 0.5,
+    "fairRecall": 0.5,
+    "hitRate": 0.9428571428571428,
+    "totalCalls": 70,
+    "unserved": 4,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 2,
+    "fpFindings": 2,
+    "findings": 4,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 692801,
+    "completion": 20361,
+    "total": 713162
+   },
+   "elapsedMs": 371719
+  },
+  {
+   "caseId": "notification-rule-processing-engine-grafana-codex",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 2/6 (33%) · F1 0.40 · fair-recall 50% · loop-fidelity 73% (45/62 served) · missed[real=1 artifact=0 untestable=0]: The rendered GrafanaRuleListItem is missing the require",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 0.3333333333333333,
+    "f1": 0.4,
+    "fairRecall": 0.5,
+    "hitRate": 0.7258064516129032,
+    "totalCalls": 62,
+    "unserved": 17,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 2,
+    "fpFindings": 4,
+    "findings": 6,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 531306,
+    "completion": 21303,
+    "total": 552609
+   },
+   "elapsedMs": 336814
+  },
+  {
+   "caseId": "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 2/2 (100%) · F1 0.67 · fair-recall 50% · loop-fidelity 75% (15/20 served) · missed[real=1 artifact=0 untestable=0]: Mixing float: left with flexbox causes layout issues. F",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 1,
+    "f1": 0.6666666666666666,
+    "fairRecall": 0.5,
+    "hitRate": 0.75,
+    "totalCalls": 20,
+    "unserved": 5,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 2,
+    "fpFindings": 0,
+    "findings": 2,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 187863,
+    "completion": 20328,
+    "total": 208191
+   },
+   "elapsedMs": 352548
+  },
+  {
+   "caseId": "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex",
+   "status": "pass",
+   "score": 0,
+   "reason": "recall 0/2 (0%) · precision 0/2 (0%) · F1 0.00 · fair-recall 0% · loop-fidelity 88% (38/43 served) · missed[real=2 artifact=0 untestable=0]: The ContextualLoggerMiddleware methods (QueryData, Call | The traceID is no longer logged for plugin requests. Du",
+   "metadata": {
+    "recall": 0,
+    "precision": 0,
+    "f1": 0,
+    "fairRecall": 0,
+    "hitRate": 0.8837209302325582,
+    "totalCalls": 43,
+    "unserved": 5,
+    "matched": 0,
+    "goldens": 2,
+    "tpFindings": 0,
+    "fpFindings": 2,
+    "findings": 2,
+    "realMiss": 2,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 481352,
+    "completion": 8702,
+    "total": 490054
+   },
+   "elapsedMs": 182569
+  },
+  {
+   "caseId": "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 1/1 (100%) · F1 0.67 · fair-recall 50% · loop-fidelity 75% (18/24 served) · missed[real=1 artifact=0 untestable=0]: The code fetches MonitorCheckIn objects by ID when the ",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 1,
+    "f1": 0.6666666666666666,
+    "fairRecall": 0.5,
+    "hitRate": 0.75,
+    "totalCalls": 24,
+    "unserved": 6,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 1,
+    "fpFindings": 0,
+    "findings": 1,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 284012,
+    "completion": 16067,
+    "total": 300079
+   },
+   "elapsedMs": 367046
+  },
+  {
+   "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+   "status": "pass",
+   "score": 0.5,
+   "reason": "recall 1/2 (50%) · precision 1/1 (100%) · F1 0.67 · fair-recall 50% · loop-fidelity 90% (18/20 served) · missed[real=1 artifact=0 untestable=0]: Using retryCount: reminder.retryCount + 1 reads a possi",
+   "metadata": {
+    "recall": 0.5,
+    "precision": 1,
+    "f1": 0.6666666666666666,
+    "fairRecall": 0.5,
+    "hitRate": 0.9,
+    "totalCalls": 20,
+    "unserved": 2,
+    "matched": 1,
+    "goldens": 2,
+    "tpFindings": 1,
+    "fpFindings": 0,
+    "findings": 1,
+    "realMiss": 1,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 221491,
+    "completion": 11387,
+    "total": 232878
+   },
+   "elapsedMs": 202065
+  },
+  {
+   "caseId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+   "status": "pass",
+   "score": 1,
+   "reason": "recall 1/1 (100%) · precision 1/3 (33%) · F1 0.50 · fair-recall 100% · loop-fidelity 74% (25/34 served)",
+   "metadata": {
+    "recall": 1,
+    "precision": 0.3333333333333333,
+    "f1": 0.5,
+    "fairRecall": 1,
+    "hitRate": 0.7352941176470589,
+    "totalCalls": 34,
+    "unserved": 9,
+    "matched": 1,
+    "goldens": 1,
+    "tpFindings": 1,
+    "fpFindings": 2,
+    "findings": 3,
+    "realMiss": 0,
+    "artifact": 0,
+    "untestable": 0
+   },
+   "tokenUsage": {
+    "prompt": 376834,
+    "completion": 31047,
+    "total": 407881
+   },
+   "elapsedMs": 611179
+  }
+ ],
+ "meta": {
+  "set": "all (50 per-PR cases / 136 goldens)",
+  "judge": "claude-opus-5 inline (Claude Code session), same JUDGE_PROMPT as recall-judge.js — NOT the automated haiku/sonnet judge",
+  "judgeCaveat": "Verdicts were supplied by hand because the Anthropic API key in .env / ~/.kodus-dev/config was invalid (HTTP 401) on 2026-07-31. Both models were judged by the same rater in the same session, so the head-to-head is comparable; absolute values are NOT directly comparable to artifacts judged by the automated judge.",
+  "scoring": "metrics produced by the repo recall-assertion.js with only matchComment swapped for the verdict table",
+  "verdictsFile": "finder-recall-<model>-all50.verdicts.json",
+  "datasetIssue": "optimize-spans-buffer-insertion-...-sentry and replays-self-serve-bulk-delete-system-sentry carry goldens belonging to OTHER PRs (paginator goldens). Both models score 0 there for no fault of their own; ~6 goldens deflate both denominators equally.",
+  "ranBy": "manual comparison run, DeepSeek V4 Flash (public beta, released 2026-07-31) vs Kimi K2.7 Code"
+ },
+ "micro": {
+  "tp": 48,
+  "goldens": 136,
+  "findings": 165,
+  "recall": 0.35294117647058826,
+  "precision": 0.46060606060606063,
+  "f1": 0.399649430324277
+ },
+ "cost": {
+  "promptTokens": 24554695,
+  "completionTokens": 978229,
+  "listPriceUsdPer1M": {
+   "in": 0.95,
+   "out": 4
+  },
+  "totalUsdCacheMiss": 27.23987625,
+  "perPrUsdCacheMiss": 0.544797525,
+  "perBugUsdCacheMiss": 0.567497421875,
+  "note": "cache-miss upper bound; provider tokenUsage does not expose cached-prompt tokens"
+ }
+}

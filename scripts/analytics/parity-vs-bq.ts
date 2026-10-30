@@ -31,7 +31,7 @@ import { writeFileSync } from 'fs';
  * Smoke test (compares the new endpoint against itself — should be 100% MATCH):
  *   pnpm run analytics:parity-vs-bq \
  *     --new http://localhost:3001 --legacy http://localhost:3001 \
- *     --orgs <org-uuid> --jwt-new $(yarn -s analytics:mint-dev-jwt --email ...)
+ *     --orgs <org-uuid> --jwt-new $(pnpm -s analytics:mint-dev-jwt --email ...)
  */
 
 interface OrgPair {

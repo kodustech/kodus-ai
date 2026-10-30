@@ -145,6 +145,49 @@ describe('KodyRulesValidationService', () => {
             expect(result.standardRules).toHaveLength(1);
             expect(result.standardRules[0].uuid).toBe('first');
         });
+
+        // The review-time guarantee for #1626: a rule PAUSED only by the free
+        // plan's quota must run once the org is paid, even when the plan-change
+        // write never reached Mongo.
+        describe('plan-locked rules', () => {
+            const rules = (): Partial<IKodyRule>[] => [
+                createRule({ uuid: 'active', rule: 'active rule' }),
+                {
+                    ...createRule({
+                        uuid: 'plan-locked',
+                        rule: 'plan-locked rule',
+                        status: KodyRulesStatus.PAUSED,
+                    }),
+                    lockedByPlan: true,
+                },
+                {
+                    ...createRule({
+                        uuid: 'user-paused',
+                        rule: 'user-paused rule',
+                        status: KodyRulesStatus.PAUSED,
+                    }),
+                    lockedByPlan: false,
+                },
+            ];
+
+            const uuids = (limited: boolean) =>
+                service
+                    .filterKodyRules(rules(), 'repo-1', undefined, limited)
+                    .standardRules.map((rule) => rule.uuid);
+
+            it('runs plan-locked rules on a paid plan', () => {
+                expect(uuids(false)).toEqual(['active', 'plan-locked']);
+            });
+
+            it('skips plan-locked rules on a free plan', () => {
+                expect(uuids(true)).toEqual(['active']);
+            });
+
+            it('never runs a rule the user paused, on any plan', () => {
+                expect(uuids(false)).not.toContain('user-paused');
+                expect(uuids(true)).not.toContain('user-paused');
+            });
+        });
     });
 
     describe('Inheritance behavior — proving the "INHERITED: DIRECTORY" leak', () => {
@@ -155,7 +198,7 @@ describe('KodyRulesValidationService', () => {
             createRule({
                 uuid: 'b207a89c-924b-4a0a-8070-2e860293b537',
                 title: 'Logging Best Practices',
-                repositoryId: '769144833',
+                repositoryId: '900000001',
                 directoryId: 'cf5284b4-2510-464a-9eca-98efbf121d04',
                 path: '**/*',
                 inheritance: {
@@ -170,7 +213,7 @@ describe('KodyRulesValidationService', () => {
                 'qantilever/src/foo.kt',
                 [b207a89c()],
                 {
-                    repositoryId: '769144833',
+                    repositoryId: '900000001',
                     directoryId: 'cf5284b4-2510-464a-9eca-98efbf121d04',
                 },
             );
@@ -181,7 +224,7 @@ describe('KodyRulesValidationService', () => {
 
         it('FIX: rule scoped to one directoryId no longer leaks to a sibling directoryId', () => {
             // Reproduces the "INHERITED: DIRECTORY" complaint from
-            // quintoandar's David B. Before the fix, a rule attached to
+            // a customer. Before the fix, a rule attached to
             // cf5284b4 with the default `inheritance.include: []` was
             // matched by ANY other directoryId in the same repo because
             // the matcher reads "include is empty" as
@@ -192,7 +235,7 @@ describe('KodyRulesValidationService', () => {
                 'applications/backoffice-bff/src/foo.java',
                 [b207a89c()],
                 {
-                    repositoryId: '769144833',
+                    repositoryId: '900000001',
                     directoryId: '314f34ff-2d1e-47e0-8765-2bb3f1a8564d',
                 },
             );
@@ -208,7 +251,7 @@ describe('KodyRulesValidationService', () => {
                 'qantilever/src/foo.kt',
                 [b207a89c()],
                 {
-                    repositoryId: '769144833',
+                    repositoryId: '900000001',
                     directoryId: 'cf5284b4-2510-464a-9eca-98efbf121d04',
                 },
             );
@@ -224,7 +267,7 @@ describe('KodyRulesValidationService', () => {
             const repoLevel = createRule({
                 uuid: 'repo-level-rule',
                 title: 'Repo-level Lint',
-                repositoryId: '769144833',
+                repositoryId: '900000001',
                 directoryId: undefined, // repo-level
                 path: '**/*.ts',
                 inheritance: { inheritable: true, include: [], exclude: [] },
@@ -234,7 +277,7 @@ describe('KodyRulesValidationService', () => {
                 'applications/backoffice-bff/src/foo.ts',
                 [repoLevel],
                 {
-                    repositoryId: '769144833',
+                    repositoryId: '900000001',
                     directoryId: '314f34ff-2d1e-47e0-8765-2bb3f1a8564d',
                 },
             );
@@ -258,7 +301,7 @@ describe('KodyRulesValidationService', () => {
                 'qantilever/src/foo.kt',
                 [pinned],
                 {
-                    repositoryId: '769144833',
+                    repositoryId: '900000001',
                     directoryId: 'cf5284b4-2510-464a-9eca-98efbf121d04',
                 },
             );
@@ -266,7 +309,7 @@ describe('KodyRulesValidationService', () => {
                 'applications/backoffice-bff/src/foo.java',
                 [pinned],
                 {
-                    repositoryId: '769144833',
+                    repositoryId: '900000001',
                     directoryId: '314f34ff-2d1e-47e0-8765-2bb3f1a8564d',
                 },
             );
@@ -280,7 +323,7 @@ describe('KodyRulesValidationService', () => {
     // combination so a future change to the matcher can't silently break
     // any of them. Each test asserts ONE behavior and is self-contained.
     describe('inheritance matrix — global / repo / dir × inheritable / include / exclude', () => {
-        const REPO = '769144833';
+        const REPO = '900000001';
         const DIR_A = 'cf5284b4-2510-464a-9eca-98efbf121d04';
         const DIR_B = '314f34ff-2d1e-47e0-8765-2bb3f1a8564d';
 
@@ -463,7 +506,7 @@ describe('KodyRulesValidationService', () => {
     });
 
     describe('Bug 1 regression — rule from .cursorrules in subdirectory does not leak to unrelated paths', () => {
-        // Reproduces quintoandar PR #24870 (backend-services repo 769144833):
+        // Reproduces a customer PR (backend-services repo 900000001):
         // rule 32dfa554-6238-4b19-84f8-17330f6abe94 was imported from
         // applications/backoffice-bff/.cursorrules and incorrectly applied to
         // applications/sales-flow/api/src/main/java/.../TaskRepository.java.
@@ -473,7 +516,7 @@ describe('KodyRulesValidationService', () => {
                 uuid: '32dfa554-6238-4b19-84f8-17330f6abe94',
                 title: 'Java/Spring Architectural, Naming, and Dependency Conventions',
                 rule: 'Enforce hexagonal architecture conventions from .cursorrules',
-                repositoryId: '769144833',
+                repositoryId: '900000001',
                 path: pathValue,
                 // sourcePath tracks where the rule came from; today it is informational-only
                 // see libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service.ts
@@ -481,7 +524,7 @@ describe('KodyRulesValidationService', () => {
             });
 
         const salesFlowFile =
-            'applications/sales-flow/api/src/main/java/br/com/quintoandar/salesflow/api/task/facade/TaskFacade.java';
+            'applications/sales-flow/api/src/main/java/com/example/salesflow/api/task/facade/TaskFacade.java';
         const backofficeBffFile =
             'applications/backoffice-bff/src/main/java/com/example/service/UserServiceImpl.java';
 
@@ -491,7 +534,7 @@ describe('KodyRulesValidationService', () => {
             const rules = [javaSpringArchRule('**/*')];
 
             const result = service.getKodyRulesForFile(salesFlowFile, rules, {
-                repositoryId: '769144833',
+                repositoryId: '900000001',
             });
 
             expect(result.map((r) => r.uuid)).toContain(
@@ -507,7 +550,7 @@ describe('KodyRulesValidationService', () => {
             ];
 
             const result = service.getKodyRulesForFile(salesFlowFile, rules, {
-                repositoryId: '769144833',
+                repositoryId: '900000001',
             });
 
             expect(result.map((r) => r.uuid)).not.toContain(
@@ -521,7 +564,7 @@ describe('KodyRulesValidationService', () => {
             ];
 
             const result = service.getKodyRulesForFile(backofficeBffFile, rules, {
-                repositoryId: '769144833',
+                repositoryId: '900000001',
             });
 
             expect(result.map((r) => r.uuid)).toContain(
@@ -627,6 +670,454 @@ describe('KodyRulesValidationService', () => {
             });
 
             expect(result.map((rule) => rule.uuid)).toEqual(['included']);
+        });
+    });
+
+    describe('comma-joined multi-glob rule paths (#1483)', () => {
+        // The IDE-rule importer persists multi-glob paths comma-joined
+        // (e.g. frontmatter `path: ["app/**/*.rb", "lib/**/*.rb"]` becomes
+        // "app/**/*.rb,lib/**/*.rb"). picomatch treats a comma as a literal
+        // character, so before the split these rules matched ZERO files and
+        // were silently never enforced.
+        const filters = { repositoryId: 'repo-1' };
+
+        it('matches a file against ANY of the comma-joined globs', () => {
+            const rule = createRule({
+                uuid: 'multi',
+                path: 'app/**/*.rb,lib/**/*.rb',
+            });
+
+            for (const file of ['app/models/user.rb', 'lib/tasks/foo.rb']) {
+                const result = service.getKodyRulesForFile(
+                    file,
+                    [rule],
+                    filters,
+                );
+                expect(result.map((r) => r.uuid)).toEqual(['multi']);
+            }
+        });
+
+        it('does not match files outside every glob', () => {
+            const rule = createRule({
+                uuid: 'multi',
+                path: 'app/services/**/*.rb,app/interactors/**/*.rb',
+            });
+
+            const result = service.getKodyRulesForFile(
+                'app/models/user.rb',
+                [rule],
+                filters,
+            );
+
+            expect(result).toEqual([]);
+        });
+
+        it('tolerates whitespace around the commas', () => {
+            const rule = createRule({
+                uuid: 'spaced',
+                path: 'app/**/*.rb, lib/**/*.rb',
+            });
+
+            const result = service.getKodyRulesForFile(
+                'lib/foo.rb',
+                [rule],
+                filters,
+            );
+
+            expect(result.map((r) => r.uuid)).toEqual(['spaced']);
+        });
+
+        it('keeps brace alternations intact (comma inside {} is not a separator)', () => {
+            const rule = createRule({
+                uuid: 'braced',
+                path: '{app,lib}/**/*.rb,config/**/*.yml',
+            });
+
+            for (const file of [
+                'app/models/user.rb',
+                'lib/foo.rb',
+                'config/settings.yml',
+            ]) {
+                const result = service.getKodyRulesForFile(
+                    file,
+                    [rule],
+                    filters,
+                );
+                expect(result.map((r) => r.uuid)).toEqual(['braced']);
+            }
+        });
+
+        it('keeps character classes intact (comma inside [] is not a separator)', () => {
+            const rule = createRule({
+                uuid: 'bracketed',
+                path: 'src/[ab,cd]/**/*.ts,docs/**/*.md',
+            });
+
+            // picomatch treats "[ab,cd]" as a character class: any single
+            // char of a, b, comma, c, d. A naive comma-split would produce
+            // the invalid fragments "src/[ab" and "cd]/**/*.ts".
+            expect(
+                service
+                    .getKodyRulesForFile('src/a/main.ts', [rule], filters)
+                    .map((r) => r.uuid),
+            ).toEqual(['bracketed']);
+            expect(
+                service
+                    .getKodyRulesForFile('docs/readme.md', [rule], filters)
+                    .map((r) => r.uuid),
+            ).toEqual(['bracketed']);
+        });
+
+        it('still matches single-glob paths as before', () => {
+            const rule = createRule({
+                uuid: 'single',
+                path: 'app/jobs/**/*.rb',
+            });
+
+            expect(
+                service
+                    .getKodyRulesForFile('app/jobs/sync_job.rb', [rule], filters)
+                    .map((r) => r.uuid),
+            ).toEqual(['single']);
+            expect(
+                service.getKodyRulesForFile('app/models/user.rb', [rule], filters),
+            ).toEqual([]);
+        });
+
+        it('matches folders against ANY of the comma-joined globs', () => {
+            const rule = createRule({
+                uuid: 'folder-multi',
+                path: 'app/services/**,lib/tasks/**',
+            });
+
+            for (const folder of ['app/services', 'lib/tasks']) {
+                const result = service.getKodyRulesForFolder(
+                    folder,
+                    [rule],
+                    filters,
+                );
+                expect(result.map((r) => r.uuid)).toEqual(['folder-multi']);
+            }
+
+            expect(
+                service.getKodyRulesForFolder('app/models', [rule], filters),
+            ).toEqual([]);
+        });
+    });
+});
+
+/**
+ * Deterministic pure-logic units of KodyRulesValidationService: ordering,
+ * de-duplication, glob/path matching and context/rule level resolution.
+ *
+ * These are the primitives the review pipeline uses to decide which rules
+ * apply to a file/folder. The permission dependency is inert ({} as any) —
+ * none of the methods under test touch it. Private/protected members are
+ * reached via `(service as any)`.
+ */
+describe('KodyRulesValidationService — deterministic logic', () => {
+    let service: KodyRulesValidationService;
+
+    beforeEach(() => {
+        service = new KodyRulesValidationService({} as any);
+    });
+
+    const call = (method: string, ...args: any[]) =>
+        (service as any)[method](...args);
+
+    describe('orderByCreatedAtAndLimit', () => {
+        it('orders ascending by createdAt (oldest first)', () => {
+            const items = [
+                { id: 'b', createdAt: '2021-01-01T00:00:00Z' },
+                { id: 'a', createdAt: '2020-01-01T00:00:00Z' },
+                { id: 'c', createdAt: '2022-01-01T00:00:00Z' },
+            ];
+            const result = call('orderByCreatedAtAndLimit', items, 0, 'asc');
+            expect(result.map((r: any) => r.id)).toEqual(['a', 'b', 'c']);
+        });
+
+        it('orders descending by createdAt (newest first)', () => {
+            const items = [
+                { id: 'b', createdAt: '2021-01-01T00:00:00Z' },
+                { id: 'a', createdAt: '2020-01-01T00:00:00Z' },
+                { id: 'c', createdAt: '2022-01-01T00:00:00Z' },
+            ];
+            const result = call('orderByCreatedAtAndLimit', items, 0, 'desc');
+            expect(result.map((r: any) => r.id)).toEqual(['c', 'b', 'a']);
+        });
+
+        it('defaults to ascending order when order arg is omitted', () => {
+            const items = [
+                { id: 'late', createdAt: '2023-01-01T00:00:00Z' },
+                { id: 'early', createdAt: '2020-01-01T00:00:00Z' },
+            ];
+            // limit omitted too -> default 0 (no limit)
+            const result = call('orderByCreatedAtAndLimit', items);
+            expect(result.map((r: any) => r.id)).toEqual(['early', 'late']);
+        });
+
+        it('treats missing createdAt as timestamp 0 (sorts first ascending)', () => {
+            const items = [
+                { id: 'dated', createdAt: '2020-01-01T00:00:00Z' },
+                { id: 'undated' }, // no createdAt -> 0
+            ];
+            const result = call('orderByCreatedAtAndLimit', items, 0, 'asc');
+            expect(result.map((r: any) => r.id)).toEqual(['undated', 'dated']);
+        });
+
+        it('treats an invalid date string as timestamp 0 (sorts first ascending)', () => {
+            const items = [
+                { id: 'dated', createdAt: '2020-01-01T00:00:00Z' },
+                { id: 'garbage', createdAt: 'not-a-real-date' }, // NaN -> 0
+            ];
+            const result = call('orderByCreatedAtAndLimit', items, 0, 'asc');
+            expect(result.map((r: any) => r.id)).toEqual(['garbage', 'dated']);
+        });
+
+        it('applies the limit slice when limit > 0', () => {
+            const items = [
+                { id: 'a', createdAt: '2020-01-01T00:00:00Z' },
+                { id: 'b', createdAt: '2021-01-01T00:00:00Z' },
+                { id: 'c', createdAt: '2022-01-01T00:00:00Z' },
+            ];
+            const result = call('orderByCreatedAtAndLimit', items, 2, 'asc');
+            expect(result.map((r: any) => r.id)).toEqual(['a', 'b']);
+        });
+
+        it('does NOT limit when limit is 0 (boundary: > 0, not >= 0)', () => {
+            const items = [
+                { id: 'a', createdAt: '2020-01-01T00:00:00Z' },
+                { id: 'b', createdAt: '2021-01-01T00:00:00Z' },
+            ];
+            const result = call('orderByCreatedAtAndLimit', items, 0, 'asc');
+            // A `>=` mutant would slice(0,0) -> [] here.
+            expect(result.map((r: any) => r.id)).toEqual(['a', 'b']);
+        });
+
+        it('limit of 1 returns exactly one item (boundary n=1)', () => {
+            const items = [
+                { id: 'a', createdAt: '2020-01-01T00:00:00Z' },
+                { id: 'b', createdAt: '2021-01-01T00:00:00Z' },
+            ];
+            const result = call('orderByCreatedAtAndLimit', items, 1, 'asc');
+            expect(result.map((r: any) => r.id)).toEqual(['a']);
+        });
+    });
+
+    describe('extractUniqueKodyRules', () => {
+        it('skips entries without a truthy `rule` property', () => {
+            const rules = [
+                { uuid: '1', rule: 'keep-me' },
+                { uuid: '2' }, // no rule
+                { uuid: '3', rule: '' }, // empty rule -> falsy, skipped
+                { uuid: '4', rule: 'also-keep' },
+            ];
+            const result = call('extractUniqueKodyRules', rules);
+            expect(result).toEqual([
+                { uuid: '1', rule: 'keep-me' },
+                { uuid: '4', rule: 'also-keep' },
+            ]);
+        });
+
+        it('returns an empty array when given an empty array', () => {
+            expect(call('extractUniqueKodyRules', [])).toEqual([]);
+        });
+    });
+
+    describe('isFilePathMatch', () => {
+        it('returns true when the filename is null (no specific file)', () => {
+            expect(call('isFilePathMatch', { path: 'src/*.ts' }, null)).toBe(
+                true,
+            );
+        });
+
+        it('returns true for a directory-scoped rule regardless of path glob', () => {
+            // directoryId set -> path glob is ignored, always matches.
+            expect(
+                call(
+                    'isFilePathMatch',
+                    { directoryId: 'dir-1', path: 'docs/*.md' },
+                    'src/index.ts',
+                ),
+            ).toBe(true);
+        });
+
+        it('returns true when the rule path is empty/whitespace', () => {
+            expect(
+                call('isFilePathMatch', { path: '   ' }, 'src/index.ts'),
+            ).toBe(true);
+        });
+
+        it('returns true when the rule path is missing entirely', () => {
+            expect(call('isFilePathMatch', {}, 'src/index.ts')).toBe(true);
+        });
+
+        it('returns true when the filename matches the rule glob', () => {
+            expect(
+                call('isFilePathMatch', { path: 'src/*.ts' }, 'src/index.ts'),
+            ).toBe(true);
+        });
+
+        it('returns false when the filename does NOT match the rule glob', () => {
+            expect(
+                call('isFilePathMatch', { path: 'docs/*.md' }, 'src/index.ts'),
+            ).toBe(false);
+        });
+
+    });
+
+    describe('isFolderPathMatch', () => {
+        it('returns true when the folder is null', () => {
+            expect(call('isFolderPathMatch', { path: 'src/*.ts' }, null)).toBe(
+                true,
+            );
+        });
+
+        it('returns true for a directory-scoped rule regardless of path', () => {
+            expect(
+                call(
+                    'isFolderPathMatch',
+                    { directoryId: 'dir-1', path: 'other/**' },
+                    'src',
+                ),
+            ).toBe(true);
+        });
+
+        it('returns true when the rule path is empty/whitespace', () => {
+            expect(call('isFolderPathMatch', { path: '  ' }, 'src')).toBe(true);
+        });
+
+        it('returns true when a glob applies to the folder', () => {
+            // 'src/app/*.ts' -> base path 'src/app' equals the folder.
+            expect(
+                call('isFolderPathMatch', { path: 'src/app/*.ts' }, 'src/app'),
+            ).toBe(true);
+        });
+
+        it('returns false when no glob applies to the folder', () => {
+            expect(
+                call('isFolderPathMatch', { path: 'docs/app/*.ts' }, 'src'),
+            ).toBe(false);
+        });
+    });
+
+    describe('isFolderGlobMatch', () => {
+        it('matches directly via glob (branch A)', () => {
+            // '**' matches any folder as a file glob.
+            expect(call('isFolderGlobMatch', '**', 'src/app')).toBe(true);
+        });
+
+        it('matches when the glob base path is empty (branch B)', () => {
+            // getGlobBasePath('**/*.ts') === '' -> true for any folder.
+            expect(call('isFolderGlobMatch', '**/*.ts', 'src')).toBe(true);
+        });
+
+        it('matches when the base path equals the folder (branch C)', () => {
+            // 'src/app/*.ts' does not match 'src/app' as a file, but base
+            // path 'src/app' === folder.
+            expect(call('isFolderGlobMatch', 'src/app/*.ts', 'src/app')).toBe(
+                true,
+            );
+        });
+
+        it('matches when the folder is an ancestor of the base path (branch D)', () => {
+            // base path 'src/app/sub' startsWith 'src/'.
+            expect(call('isFolderGlobMatch', 'src/app/sub/*.ts', 'src')).toBe(
+                true,
+            );
+        });
+
+        it('returns false when nothing matches', () => {
+            // base path 'docs/app' -> not '', not 'src', not startsWith 'src/'.
+            expect(call('isFolderGlobMatch', 'docs/app/*.ts', 'src')).toBe(
+                false,
+            );
+        });
+    });
+
+    describe('getGlobBasePath', () => {
+        it('returns the non-glob prefix up to the first wildcard segment', () => {
+            expect(call('getGlobBasePath', 'src/app/*.ts')).toBe('src/app');
+        });
+
+        it('returns empty string when the first segment is a wildcard', () => {
+            expect(call('getGlobBasePath', '**/*.ts')).toBe('');
+        });
+
+        it('returns the whole path when there is no wildcard', () => {
+            expect(call('getGlobBasePath', 'src/app')).toBe('src/app');
+        });
+
+        it('strips leading and trailing slashes', () => {
+            expect(call('getGlobBasePath', '/src/app/')).toBe('src/app');
+        });
+
+        it('breaks at a `?` wildcard character', () => {
+            expect(call('getGlobBasePath', 'a/b?c/d')).toBe('a');
+        });
+
+        it('breaks at a `[` character class', () => {
+            expect(call('getGlobBasePath', 'src/[abc]/x')).toBe('src');
+        });
+
+        it('breaks at a `{` brace-expansion character', () => {
+            expect(call('getGlobBasePath', 'src/{a,b}/x')).toBe('src');
+        });
+
+        it('breaks at a `!` negation character in the first segment', () => {
+            expect(call('getGlobBasePath', 'foo!/bar')).toBe('');
+        });
+    });
+
+    describe('resolveContextLevel', () => {
+        it('returns "directory" when directoryId is present', () => {
+            expect(
+                call('resolveContextLevel', {
+                    directoryId: 'dir-1',
+                    repositoryId: 'repo-1',
+                }),
+            ).toBe('directory');
+        });
+
+        it('returns "repository" when only repositoryId is present', () => {
+            expect(
+                call('resolveContextLevel', { repositoryId: 'repo-1' }),
+            ).toBe('repository');
+        });
+
+        it('returns "global" when neither id is present', () => {
+            expect(call('resolveContextLevel', {})).toBe('global');
+        });
+    });
+
+    describe('resolveRuleLevel', () => {
+        it('returns "directory" when the rule has a directoryId', () => {
+            expect(
+                call('resolveRuleLevel', {
+                    directoryId: 'dir-1',
+                    repositoryId: 'repo-1',
+                }),
+            ).toBe('directory');
+        });
+
+        it('returns "repository" for a non-global repositoryId', () => {
+            expect(call('resolveRuleLevel', { repositoryId: 'repo-1' })).toBe(
+                'repository',
+            );
+        });
+
+        it('returns "global" when repositoryId is the literal "global"', () => {
+            expect(call('resolveRuleLevel', { repositoryId: 'global' })).toBe(
+                'global',
+            );
+        });
+
+        it('returns "global" when the rule has no ids', () => {
+            expect(call('resolveRuleLevel', {})).toBe('global');
+        });
+
+        it('returns "global" for a null rule (optional-chaining guard)', () => {
+            expect(call('resolveRuleLevel', null)).toBe('global');
         });
     });
 });

@@ -30,6 +30,14 @@ export class TokenUsageQueryDto {
     @ApiPropertyOptional()
     developer?: string;
 
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        description:
+            'Scope results to one repository (resolved to its PR numbers).',
+    })
+    repositoryId?: string;
+
     @IsString()
     @ApiProperty()
     byok: string;

@@ -8,6 +8,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 
 import { FastSyncIdeRulesUseCase } from './fast-sync-ide-rules.use-case';
 import { ValidateRuleFileReferencesUseCase } from './validate-rule-file-references.use-case';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -52,6 +53,13 @@ describe('FastSyncIdeRulesUseCase — emits', () => {
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                {
+                    provide: TelemetryService,
+                    useValue: {
+                        kodyRuleChanged: jest.fn(),
+                        kodyRulesImported: jest.fn(),
+                    },
+                },
                 FastSyncIdeRulesUseCase,
                 { provide: KodyRulesSyncService, useValue: syncService },
                 { provide: CodeManagementService, useValue: codeMgmt },
@@ -82,6 +90,9 @@ describe('FastSyncIdeRulesUseCase — emits', () => {
                 recipients: { kind: 'user', userId: 'user-1' },
                 payload: {
                     repoName: 'acme/api',
+                    // Carried so the in-app notification can link to the
+                    // repository's rules page instead of a generic list.
+                    repositoryId: 'repo-1',
                     rulesCount: 3,
                     syncMode: 'fast',
                 },

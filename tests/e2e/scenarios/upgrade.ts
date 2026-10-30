@@ -1,4 +1,5 @@
 import type { RunContext, Scenario } from "../lib/types.js";
+import { assertHealthyExecution } from "../lib/execution-health.js";
 
 export const upgradeNMinusOneToN: Scenario = {
     id: "upgrade-n-1-to-n",
@@ -45,11 +46,21 @@ export const upgradeNMinusOneToN: Scenario = {
             "Post-upgrade review did not arrive — upgrade broke the review pipeline",
         );
 
+        // Execution HEALTH, not just output: a post-upgrade review can post
+        // findings while an agent/stage crashed (partial_error). Assert the
+        // execution settled `success`, else the upgrade silently degraded it.
+        const executionStatus = await assertHealthyExecution(
+            ctx,
+            session,
+            prNumber,
+        );
+
         return {
             preUpgradeTag: process.env.UPGRADE_FROM_TAG ?? "unknown",
             postUpgradeTag: process.env.UPGRADE_TO_TAG ?? "unknown",
             tenant: ctx.tenant?.email,
             review,
+            executionStatus,
             triggerId,
             sinceIso,
             note: "Login on the upgraded stack succeeded, meaning the tenant created at N-1 survived migrations.",

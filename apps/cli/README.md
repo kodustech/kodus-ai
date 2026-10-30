@@ -107,20 +107,22 @@ kodus pr business-validation --branch main --task-id KC-1441
 kodus pr business-validation src/service.ts src/use-case.ts --task-id KC-1441
 ```
 
-### Decision Memory
+### Kodus Trace
+
+Diffs show _what_ changed. Trace records _why_ it changed.
 
 AI agents make dozens of decisions per session — architecture choices, trade-offs, why approach X was picked over Y. Without a record, that reasoning vanishes when the session ends.
 
-Kodus captures agent decisions into your repo as structured markdown. When you or another agent return to the code, the full context is there.
+Trace captures your agent sessions locally, distills them into typed decisions, and hands them back the next time anyone touches those files.
 
 ```bash
-kodus decisions enable           # Install hooks + initialize config
-kodus decisions status           # See what's been captured
-kodus decisions show [name]      # View PR or module memory
-kodus decisions promote          # Promote decisions to long-term memory
+kodus trace enable                     # Install capture hooks for this repo
+kodus trace src/billing/invoice.ts     # Read the decisions for a path
+kodus trace status                     # See what has been captured
+kodus trace ui                         # Browse sessions in the browser
 ```
 
-Stored in `.kody/pr/by-sha/<head-sha>.md` — versioned with your code, readable by humans and agents. [More on decision memory](#decision-memory-1)
+Works with no Kodus account. Raw sessions stay on your machine under `~/.kodus/sessions/`; distilled decisions travel with the repository on the orphan branch `kodus/trace/v1`. [More on Kodus Trace](#kodus-trace-1)
 
 ---
 
@@ -160,7 +162,7 @@ Once installed, your AI agent can autonomously:
 
 This creates a tight feedback loop: the agent writes, reviews, and fixes — all without leaving your IDE.
 
-Beyond reviews, Kodus also captures **what your agent decided and why** via [Decision Memory](#decision-memory). Every reasoning step is saved into your repo — so when you (or another agent) pick up the work later, the full context is already there. No more re-explaining what was done or losing decisions between sessions.
+Beyond reviews, Kodus also captures **what your agent decided and why** via [Kodus Trace](#kodus-trace). Every reasoning step is saved — so when you (or another agent) pick up the work later, the full context is already there. No more re-explaining what was done or losing decisions between sessions.
 
 ### Setup: Claude Code
 
@@ -364,9 +366,7 @@ kodus pr suggestions --agent --pr-url https://github.com/org/repo/pull/42 --fiel
 ```bash
 kodus hook install --dry-run
 kodus hook uninstall --dry-run
-kodus decisions enable --dry-run
-kodus decisions disable --dry-run
-kodus decisions promote --dry-run
+kodus trace disable --dry-run
 ```
 
 Dry-run prints the planned actions and does not mutate local hooks/config/files.
@@ -451,34 +451,74 @@ kodus review src/index.ts src/utils.ts # Specific files
 
 </details>
 
-## Decision Memory
+## Kodus Trace
 
-Full reference for the decision capture system ([intro above](#decision-memory)).
+Full reference for the decision capture system ([intro above](#kodus-trace)).
+
+### Reading
+
+Reading needs no verb — the paths are positional on the group itself:
+
+```bash
+# Decisions scoped to a file or a directory
+kodus trace src/billing/invoice.ts
+kodus trace src/billing src/payments
+
+# A path that collides with a subcommand name is disambiguated with `--`
+kodus trace -- status
+```
+
+The lookup is path matching against the decision's scope, exact or prefix, in
+both directions. There is no embedding, vector store or similarity search, and
+no network access: shared decisions are read out of the local object database.
+
+### Setup
 
 ```bash
 # Enable with specific agents
-kodus decisions enable --agents claude,cursor,codex
+kodus trace enable --agents claude,cursor,codex
 
 # Custom Codex config path
-kodus decisions enable --agents codex --codex-config ~/.codex/config.toml
+kodus trace enable --agents codex --codex-config ~/.codex/config.toml
 
-# Overwrite existing config
-kodus decisions enable --force
+# What has been captured, and which hooks are installed
+kodus trace status
 
-# Check what's been captured on current branch
-kodus decisions status
-
-# View decisions for a PR or specific module
-kodus decisions show [name]
-
-# Promote PR-level decisions to long-term module memory
-kodus decisions promote --branch feat/auth --modules auth,users
-
-# Disable hooks (preserves all captured data in .kody/)
-kodus decisions disable
+# Remove the hooks (the local store is preserved)
+kodus trace disable
 ```
 
-**How it works:** Hooks fire on agent turn-complete events and persist decisions to `.kody/pr/by-sha/<head-sha>.md`. Files are committed to your repo, versioned with your code, readable by humans and agents.
+### Correcting what the model recorded
+
+```bash
+kodus trace forget <id>       # Drop a decision that is wrong
+kodus trace pin <id>          # Always include it in the review context pack
+kodus trace pin <id> --remove # Undo a pin
+```
+
+### Browsing sessions
+
+```bash
+kodus trace ui                # Serves a local page on 127.0.0.1:4711
+kodus trace ui --port 8080 --no-open
+```
+
+**How it works:**
+
+- Session lifecycle hooks write a redacted record per session to
+  `~/.kodus/sessions/<repo>/records/`, keyed by a hash of the git root. Nothing
+  is written inside the working tree, and every hook exits zero with no token
+  and no reachable API.
+- A `pre-push` hook runs distillation detached, so the push never waits. It
+  shells out to whichever agent CLI you already have installed (`claude`,
+  `codex`, `gemini`, `cursor-agent`) — no key management, no server round trip.
+- Each push reprocesses `merge-base(default, HEAD)..HEAD` and **replaces** the
+  branch's record, so pushing five times leaves one record. Per-commit summaries
+  are cached, so a reprocess only pays for commits it has not seen.
+- Records land on the orphan branch `kodus/trace/v1`, sharded one file per
+  branch, and the source commit carries a `Kodus-Trace: <id>` trailer.
+- Secrets are redacted out of the transcript before any model sees it, and the
+  distilled output is redacted again before storage.
 
 **Supported agents:** Claude Code, Cursor, Codex.
 

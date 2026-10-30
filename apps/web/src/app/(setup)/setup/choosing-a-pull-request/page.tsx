@@ -18,6 +18,7 @@ import { MagicModalContext } from "@components/ui/magic-modal";
 import { Page } from "@components/ui/page";
 import { useSuspenseGetOnboardingPullRequests } from "@services/codeManagement/hooks";
 import { useSuspenseGetBYOK } from "@services/organizationParameters/hooks";
+import { hasVisibleModels } from "src/features/ee/byok/_utils";
 import { useSuspenseGetParameterPlatformConfigs } from "@services/parameters/hooks";
 import { useSuspenseGetOrganizationId } from "@services/setup/hooks";
 import { InfoIcon, PartyPopperIcon } from "lucide-react";
@@ -43,7 +44,7 @@ export default function App() {
     const pullRequests = useSuspenseGetOnboardingPullRequests(teamId);
     const organizationId = useSuspenseGetOrganizationId();
     const byokConfig = useSuspenseGetBYOK();
-    const hasBYOK = !!byokConfig?.configValue?.main;
+    const hasBYOK = hasVisibleModels(byokConfig?.configValue);
 
     const [open, setOpen] = useState(false);
     const [selectedPR, setSelectedPR] = useState<PullRequestOption>(

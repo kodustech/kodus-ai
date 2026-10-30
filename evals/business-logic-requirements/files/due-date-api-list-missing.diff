@@ -1,0 +1,11 @@
+diff --git a/src/api/loans/loanDetail.serializer.ts b/src/api/loans/loanDetail.serializer.ts
+--- a/src/api/loans/loanDetail.serializer.ts
++++ b/src/api/loans/loanDetail.serializer.ts
+@@ -1,6 +1,7 @@
+ export function serializeLoanDetail(loan: Loan) {
+   return {
+     id: loan.id,
+     bookId: loan.bookId,
++    dueDate: loan.dueDate.toISOString(),
+   };
+ }

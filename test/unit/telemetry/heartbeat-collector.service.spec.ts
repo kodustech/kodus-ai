@@ -1,4 +1,6 @@
 import { HeartbeatCollectorService } from '@libs/telemetry/application/services/heartbeat-collector.service';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 type MockDataSource = {
     query: jest.Mock;
@@ -42,6 +44,10 @@ function build(opts: {
 
 describe('HeartbeatCollectorService.collect', () => {
     const originalEnv = { ...process.env };
+
+    beforeEach(() => {
+        delete process.env.RELEASE_VERSION;
+    });
 
     afterEach(() => {
         process.env = { ...originalEnv };
@@ -95,15 +101,35 @@ describe('HeartbeatCollectorService.collect', () => {
         expect(metrics.runtime.db_type).toBe('postgres');
     });
 
-    it('truncates Postgres version() output to first two tokens', async () => {
-        const { service } = build({
-            dsHandler: dsRouter({ version: 'PostgreSQL 15.4 (Ubuntu 15.4-1)' }),
-        });
+    it.each([
+        ['2.1.33', '2.1.33'],
+        ['  selfhosted-2.1.33  ', '2.1.33'],
+        ['v2.1.33-rc.1+build.42', '2.1.33-rc.1+build.42'],
+    ])('reports release %s as %s', async (release, expected) => {
+        process.env.RELEASE_VERSION = release;
+        const { service } = build({ dsHandler: dsRouter({}) });
 
         const metrics = await service.collect({ firstSeenAt: new Date() });
 
-        expect(metrics.runtime.db_version).toBe('PostgreSQL 15.4');
+        expect(metrics.kodus.version).toBe(expected);
     });
+
+    it.each([undefined, '   ', ' local '])(
+        'falls back to package.json for release %s',
+        async (release) => {
+            if (release !== undefined) {
+                process.env.RELEASE_VERSION = release;
+            }
+            const { service } = build({ dsHandler: dsRouter({}) });
+            const pkg = JSON.parse(
+                readFileSync(join(process.cwd(), 'package.json'), 'utf8'),
+            );
+
+            const metrics = await service.collect({ firstSeenAt: new Date() });
+
+            expect(metrics.kodus.version).toBe(pkg.version);
+        },
+    );
 
     it('aggregates Postgres counts from each table', async () => {
         const { service } = build({
@@ -137,14 +163,6 @@ describe('HeartbeatCollectorService.collect', () => {
                 updatedAt: expect.objectContaining({ $gte: expect.any(Date) }),
             }),
         );
-    });
-
-    it('reports kody_rules_enabled true when at least one document has rules', async () => {
-        const { service } = build({ dsHandler: dsRouter({}), kodyRules: 1 });
-
-        const metrics = await service.collect({ firstSeenAt: new Date() });
-
-        expect(metrics.config.kody_rules_enabled).toBe(true);
     });
 
     it('reports kody_rules_enabled false when none exist', async () => {

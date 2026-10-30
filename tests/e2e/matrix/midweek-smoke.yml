@@ -1,0 +1,24 @@
+id: midweek-smoke
+description: |
+    Mon–Thu heartbeat (00:00 BRT cron on e2e-cloud): is the review engine
+    alive? Two PRs on a single provider (github × paid, the BYOK
+    gpt-5.4-mini tenant) catch the SYSTEMIC breakage classes early —
+    rotated/dead LLM key, webhook delivery, review pipeline stuck, broken
+    tenant — so the Friday release train doesn't discover a week of
+    accumulated damage at once (the exact pathology of the jul/2026
+    outage, where every root cause would have tripped one of these three
+    scenarios within a day).
+
+    NOT coverage: gitlab/bitbucket/azure, trial/free licensing,
+    kody-rules, rbac etc. stay on Friday's fast.yml, which gates the
+    self-hosted release build.
+
+scenarios:
+    - onboarding-webhook-registration
+    - code-review-basic
+    - command-review
+
+cells:
+    - target: cloud
+      provider: github
+      license: paid

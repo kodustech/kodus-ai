@@ -1,0 +1,721 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:42:02.022Z",
+  "updatedAt": "2026-10-13T22:01:29.840Z",
+  "complete": true,
+  "selectedCases": [
+    "P38-unreachable-retry-reintroduced",
+    "P38-unreachable-retry-reintroduced-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 10,
+        "violations": 5,
+        "rate": 0.5
+      },
+      "index-reference (#2039)": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P38-unreachable-retry-reintroduced · retry-unreachable-reintroduced [deliver_linked]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 0
+      },
+      "P38-unreachable-retry-reintroduced-control · retry-unreachable-reintroduced [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 152067,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: the `if (status >= 400) return { kind: 'drop' }` guard at line 12 runs before the `status === 429` and `status >= 500` branches, making both retry branches (lines 13-14) unreachable. WHY: every 429 and 5xx is dead-lettered instead of retried, so transient endpoint failures permanently lose deliveries — contradicting the comment on line 9 and orphaning the new RATE_LIMITED_AFTER_MS/RETRY_AFTER_MS constants. This re-introduces the defect the earlier unreachable-retry suggestion fixed (the `>= 400` check was supposed to be removed); the later \"refactor: extract helper\" commit reworked this area and brought the check back, so the earlier fix is not in effect. HOW: move the `>= 400` drop below the two retry checks so 429/5xx are handled first.",
+          "keep": false,
+          "rationale": "The described defect (line 12 `status >= 400` drop precedes the 429/5xx retry branches, making lines 13-14 unreachable and dead-lettering transient failures) is exactly the problem already raised by PreviousDecision round-a-P38-unreachable-retry-reintroduced (src/webhooks/outcome.ts, Type bug, Outcome implemented): \"the retry branch in outcomeFor is unreachable... Delete the `>= 400` check.\" The candidate finding has the same consequence in the same operation and itself states it re-introduces the defect the earlier suggestion fixed. The drop rule explicitly covers repeats even when the earlier fix is described as incomplete/reverted, so this is that entry again and must be dropped. (The underlying technical claim about the current code is factually correct — the branches are indeed unreachable — but it is a duplicate of an already-posted decision, not a new defect.)",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outcomeFor|status >= 400|status === 429",
+                "path": "src"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 113057,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 152648,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 99442,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 148357,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P38-unreachable-retry-reintroduced-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 137812,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: the `if (status >= 400) return { kind: 'drop' }` guard on line 12 is placed before the 429 and `status >= 500` checks, so those retry branches are unreachable for any status >= 400. WHY: 429 and every 5xx now return `drop`, causing transient webhook failures (rate limits, temporary server errors) to be dead-lettered instead of retried — a regression from the previous `status === 429 || status >= 500 → retry` behavior that loses deliveries that should have been redelivered. HOW: move the 429 and 5xx retry checks above the generic `status >= 400` drop branch.",
+          "keep": true,
+          "rationale": "Confirmed in source: line 12 `if (status >= 400) return { kind: 'drop' }` executes before the `status === 429` (line 13) and `status >= 500` (line 14) checks, so both retry branches are unreachable for any status >= 400. The function's own comment (line 9) states 429 and 5xx are transient and should be retried, so this ordering makes transient failures (rate limits, 5xx) dead-letter instead of retried — a real behavior bug, not style. No previous review decision references this file, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: the `if (status >= 400) return { kind: 'drop' }` guard is evaluated before the `status === 429` and `status >= 500` branches, so 429 and 5xx are classified as `drop` and the two retry branches are unreachable dead code. WHY: the retained comment states 429 and 5xx are transient and should be retried, but `outcome.kind` can now only be 'delivered' or 'drop', so dispatch.ts:15 `queue.requeue` is never called and every rate-limited/5xx delivery is dead-lettered — a permanent loss of deliveries the endpoint would have accepted later. HOW: evaluate the retry branches before the generic 4xx drop branch.",
+          "keep": true,
+          "rationale": "Confirmed in source: line 12's `status >= 400` guard precedes the 429 (line 13) and >=500 (line 14) retry branches, making them unreachable dead code. 429 and 5xx both satisfy >=400, so outcomeFor only ever returns 'delivered' or 'drop'. In dispatch.ts the 'retry' case (calling queue.requeue) is never reached; 429/5xx are dead-lettered via queue.deadLetter, contradicting the retained comment that these are transient. Real permanent-loss-of-delivery bug; no previous review decision covers this file or issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outcome|requeue|kind",
+                "path": "src/webhooks/dispatch.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/dispatch.ts",
+                "startLine": 1,
+                "endLine": 25
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/webhooks/outcome.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the `if (status >= 400) return { kind: 'drop' }` guard on line 12 precedes the `status === 429` and `status >= 500` checks, every 429 and 5xx now returns `drop`, so transient webhook failures such as rate limits and temporary server errors are dead-lettered instead of retried, regressing the previous `status === 429 || status >= 500 → retry` behavior and losing deliveries that should have been redelivered. Move the 429 and 5xx retry checks above the generic `status >= 400` drop branch."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/webhooks/outcome.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the `status >= 400` guard is evaluated before the `status === 429` and `status >= 500` branches, both retry branches are unreachable dead code and `outcome.kind` can now only be `'delivered'` or `'drop'`, so `dispatch.ts:15` never calls `queue.requeue` and every rate-limited or 5xx delivery is dead-lettered permanently instead of being retried as the retained comment says it should. Evaluate the `status === 429` and `status >= 500` retry branches before the generic 4xx drop branch."
+        }
+      ],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P38-unreachable-retry-reintroduced-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 100545,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: The `if (status >= 400) return { kind: 'drop' }` branch (line 12) is placed before the `status === 429` (line 13) and `status >= 500` (line 14) checks, making both retry branches unreachable dead code because 429 and every 5xx value also satisfy `status >= 400`. WHY: Transient failures (rate limiting and server errors) are now classified as `drop` and routed to `queue.deadLetter`, permanently losing webhook deliveries that the previous implementation retried, contradicting the file's own comment that '429 and 5xx are transient'. HOW: Check the retry statuses before the generic 4xx drop, e.g. move the `status >= 400` branch below the 429/5xx checks (or restrict it to `status >= 400 && status < 500 && status !== 429`).",
+          "keep": true,
+          "rationale": "Confirmed by reading src/webhooks/outcome.ts: line 12 `if (status >= 400) return { kind: 'drop' ... }` is evaluated before the `status === 429` (line 13) and `status >= 500` (line 14) checks. Since 429 and all 5xx satisfy `status >= 400`, both retry branches are unreachable dead code. dispatch.ts (lines 10-17) routes `drop` to `queue.deadLetter`, so transient 429/5xx responses are permanently dead-lettered instead of requeued — exactly the data-loss path the claim describes, and it contradicts the file's own comment on line 9. The root cause is factually accurate and the failure path is real; no previous review decision addresses this file. No refutation available.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outcomeFor"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/webhooks/dispatch.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/webhooks/outcome.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The `status >= 400` branch at line 12 also matches 429 and every 5xx response, so the retry branches on lines 13-14 are unreachable and transient failures are classified as `drop` and routed to `queue.deadLetter`, permanently losing webhook deliveries that were previously retried. Move the `status >= 400` branch below the `status === 429` and `status >= 500` checks, or restrict it to `status >= 400 && status < 500 && status !== 429`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P38-unreachable-retry-reintroduced-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 80578,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: the `if (status >= 400)` guard at line 12 is evaluated before the `status === 429` and `status >= 500` guards, so those two retry branches are unreachable and every 429/5xx response returns `{ kind: 'drop' }`. WHY: transient endpoint failures (rate limits and server errors) are now dead-lettered via `queue.deadLetter` instead of requeued, permanently losing deliveries that the old code retried — contradicting the comment on line 9 and regressing prior behavior. HOW: check the transient statuses before the generic 4xx/5xx drop, e.g. move the `status === 429` and `status >= 500` guards above the `status >= 400` branch (and keep the generic 4xx drop after them).",
+          "keep": true,
+          "rationale": "Confirmed by reading src/webhooks/outcome.ts: line 12 `if (status >= 400) return { kind: 'drop', ... }` is evaluated before the `status === 429` (line 13) and `status >= 500` (line 14) guards, so those retry branches are unreachable for every 429/5xx response. The root cause is factually correct and the failure path is real (transient endpoint failures are dropped instead of retried), contradicting the comment on line 9. None of the PreviousReviewDecisions concern this file or this failure.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/webhooks/outcome.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The `if (status >= 400)` guard at line 12 runs before the `status === 429` and `status >= 500` guards, so those retry branches are unreachable and every 429/5xx response returns `{ kind: 'drop' }`, dead-lettering rate-limit and server-error deliveries via `queue.deadLetter` instead of requeueing them, contradicting line 9. Move the `status === 429` and `status >= 500` guards above the `status >= 400` branch and keep the generic 4xx drop after them."
+        }
+      ],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P38-unreachable-retry-reintroduced-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 73002,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: the `if (status >= 400)` drop branch at line 12 precedes the 429 and `>= 500` retry checks, so 429 and every 5xx match `>= 400` first and the retry branches at lines 13-14 are unreachable. WHY: transient failures (rate limiting and server errors) that previously returned `'retry'` now return `{ kind: 'drop' }`, so dispatch.ts:17 dead-letters deliveries that should be requeued, permanently losing retries that the old code performed. HOW: move the retry checks before the generic 4xx drop, or exclude 429/5xx from the `>= 400` condition.",
+          "keep": true,
+          "rationale": "Confirmed. In src/webhooks/outcome.ts, line 12 `if (status >= 400) return { kind: 'drop', ... }` is evaluated before the 429 (line 13) and >= 500 (line 14) checks. Since 429 >= 400 and every 5xx >= 400, those retry branches are unreachable and transient failures return 'drop'. dispatch.ts:16-17 maps 'drop' to queue.deadLetter, so rate-limited and server-error deliveries are dead-lettered instead of requeued — matching the described failure path. The comment on line 9 explicitly states 429/5xx are transient, confirming the intended behavior is retry. None of the previous review decisions touch webhooks/outcome.ts. The root cause is factually accurate and the failure path is real.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "dispatch.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outcomeFor|dead.?letter|kind === 'drop'|kind === 'retry'",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/webhooks/dispatch.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/webhooks/outcome.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the `if (status >= 400)` drop branch at line 12 precedes the 429 and `>= 500` retry checks, 429 and every 5xx match `>= 400` first, making the retry branches at lines 13-14 unreachable; transient failures that previously returned `'retry'` now return `{ kind: 'drop' }`, so `dispatch.ts:17` dead-letters deliveries that should be requeued and permanently loses retries the old code performed. Move the retry checks before the generic 4xx drop, or exclude 429 and 5xx from the `>= 400` condition."
+        }
+      ],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P38-unreachable-retry-reintroduced-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 109182,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: The `if (status >= 400)` drop branch (line 12) is evaluated before the 429/5xx retry checks (lines 13-14), so those checks are unreachable and 429 and every 5xx response is classified as `drop` instead of `retry`. WHY: transient failures (rate limiting, server errors) are permanently dead-lettered instead of being retried with the intended backoff, silently losing deliveries — a regression of the pre-PR behavior where `status === 429 || status >= 500` returned 'retry'. HOW: move the retry checks above the generic 4xx drop, e.g. check `status === 429` and `status >= 500` first, then `status >= 400` for drop.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/webhooks/outcome.ts: line 12 `if (status >= 400)` returns 'drop' for any status >= 400, which includes 429 and every 5xx. Lines 13-14 (the 429/5xx retry branches) are therefore unreachable dead code, so transient failures are dead-lettered instead of retried — a real regression of the intended behavior (the comment on line 9 explicitly states 429/5xx are transient). The failure path is concrete and the fix (reorder retry checks before the generic 4xx drop) is valid. No PreviousReviewDecisions entry touches this file or webhook outcome logic, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/webhooks/outcome.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the `if (status >= 400)` drop branch on line 12 runs before the 429/5xx retry checks on lines 13-14, those checks are unreachable and every 429 or 5xx response is classified as `drop`, permanently dead-lettering transient rate limiting and server errors instead of retrying them with the intended backoff and silently losing deliveries. Move the `status === 429` and `status >= 500` retry checks above the generic 4xx drop so `status >= 400` only catches the remaining client errors."
+        }
+      ],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

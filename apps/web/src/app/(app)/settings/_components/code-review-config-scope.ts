@@ -1,14 +1,16 @@
 import type {
+    CustomAgentsRevisions,
     FormattedCodeReviewConfig,
     FormattedGlobalCodeReviewConfig,
 } from "../code-review/_types";
 
-export type ScopedCodeReviewConfig = FormattedCodeReviewConfig & {
-    id: string;
-    name: string;
-    isSelected: boolean;
-    displayName: string;
-};
+export type ScopedCodeReviewConfig = FormattedCodeReviewConfig &
+    CustomAgentsRevisions & {
+        id: string;
+        name: string;
+        isSelected: boolean;
+        displayName: string;
+    };
 
 export const resolveCodeReviewConfigForScope = (
     config: FormattedGlobalCodeReviewConfig,
@@ -18,6 +20,9 @@ export const resolveCodeReviewConfigForScope = (
     if (!repositoryId || repositoryId === "global") {
         return {
             ...config.configs,
+            // Beside the global settings, like a repository's or directory's.
+            customAgentsRevision: config.customAgentsRevision,
+            knowledgeRevision: config.knowledgeRevision,
             id: "global",
             name: "Global",
             isSelected: true,

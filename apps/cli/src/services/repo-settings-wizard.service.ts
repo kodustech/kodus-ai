@@ -155,7 +155,9 @@ class RepositorySettingsWizardService {
             writeLine(line);
         }
 
-        writeLine('Files matching these glob patterns will be skipped during review.');
+        writeLine(
+            'Files matching these glob patterns will be skipped during review.',
+        );
         writeLine(
             `Current ignored files: ${summarizePatterns(current.ignoredFilePatterns)}`,
         );
@@ -199,7 +201,9 @@ class RepositorySettingsWizardService {
         };
     }
 
-    private async collectIgnoredFilePatterns(current: string[]): Promise<string[]> {
+    private async collectIgnoredFilePatterns(
+        current: string[],
+    ): Promise<string[]> {
         while (true) {
             const mode = await this.selectPatternMode(
                 'Ignored files',
@@ -214,11 +218,13 @@ class RepositorySettingsWizardService {
                 case 'common': {
                     const selected = await checkbox<string>({
                         message: 'Choose the file patterns to ignore',
-                        choices: COMMON_IGNORED_FILE_PATTERNS.map((pattern) => ({
-                            name: pattern,
-                            value: pattern,
-                            checked: current.includes(pattern),
-                        })),
+                        choices: COMMON_IGNORED_FILE_PATTERNS.map(
+                            (pattern) => ({
+                                name: pattern,
+                                value: pattern,
+                                checked: current.includes(pattern),
+                            }),
+                        ),
                     });
 
                     if (await this.shouldUseSelectedPatterns()) {

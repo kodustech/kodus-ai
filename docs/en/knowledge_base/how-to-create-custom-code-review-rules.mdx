@@ -1,0 +1,54 @@
+---
+title: "How to create custom code review rules"
+description: "Define rules tailored to your team's architecture, patterns, and coding preferences that are enforced automatically on every PR."
+---
+
+Every team has conventions that generic linters don't cover — architecture boundaries, naming patterns, testing requirements, or business-specific constraints. Custom code review rules let you encode these into automated checks.
+
+## Creating a rule in Kodus
+
+1. Pick **Global** (or a repository / directory) in the scope picker at the top of the **Code review** group in the sidebar, then open **Kody Rules**
+2. Click **New rule**
+3. Configure:
+   - **Rule name** — what the rule checks (e.g., "Service files must have tests")
+   - **Execution mode** — **Per file** (analyzes each changed file) or **Per PR** (analyzes the entire PR)
+   - **Path** — glob pattern to target specific files (e.g., `src/services/**/*.ts`); not used by Per PR rules
+   - **Severity** — Critical, High, Medium, or Low
+   - **Instructions** — detailed description of what to check
+
+## What makes rules powerful
+
+Rules can access rich context:
+
+- **Variables** like `fileDiff`, `pr_title`, `pr_description`, `pr_files_diff`
+- **File references** with `@file:path/to/file.ts` to compare against patterns
+- **MCP functions** to fetch data from connected tools (Jira, repository structure, etc.)
+
+### Example: Architecture boundary rule
+
+```
+Name: Domain layer must not depend on infrastructure
+Execution mode: Per PR
+Instructions: Check pr_files_diff for any import in src/domain/
+that references src/infrastructure/. Reference
+@file:docs/architecture.md for allowed dependencies.
+```
+
+### Example: Test coverage rule
+
+```
+Name: Every service must have a test file
+Execution mode: Per PR
+Instructions: For each file modified in src/services/,
+verify a corresponding test file exists in test/services/.
+Use MCP to check the repository file tree.
+```
+
+## More ways to add rules
+
+- **Import from Rules Library** — click **Discovery** on the Kody Rules page to browse proven rules by language and category
+- **Sync from IDE tools** — auto-import rules from Cursor, Copilot, Claude
+- **Repository rules** — define rules in markdown files in your repo
+- **Auto-generation** — Kody suggests rules based on your review history
+
+For the full reference, see [Kody Rules](/en/how_to_use/code_review/configs/kody_rules).

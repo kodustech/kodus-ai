@@ -1,0 +1,144 @@
+---
+title: "Funções do Workspace"
+description: "Saiba mais sobre o controle de acesso baseado em funções (RBAC) nos workspaces do Kodus, incluindo as diferentes funções de usuário e suas permissões."
+---
+
+<Note>
+**Membros do Workspace vs. Licenças de PR**: São completamente separados e não se afetam.
+
+- **Membros do Workspace**: Admins que configuram as configurações do Kodus (ilimitado)
+- **Licenças de PR**: Desenvolvedores da sua organização Git que recebem revisões do Kody (baseado no seu plano)
+</Note>
+
+## Entendendo as Licenças de PR
+
+As licenças de PR são detectadas automaticamente a partir dos seus repositórios Git com base nos desenvolvedores que abriram PRs nos últimos meses.
+
+**Por que um desenvolvedor não está aparecendo?** Se um desenvolvedor não está aparecendo na sua contagem de licenças de PR, significa que o Kody não está instalado em um repositório onde esse desenvolvedor abriu PRs.
+
+**Exemplo:** Você pode ter 1 admin de workspace gerenciando as configurações, enquanto 20 desenvolvedores recebem revisões automatizadas. Todos os planos incluem PRs ilimitados — seu plano apenas determina quais desenvolvedores têm acesso a revisões.
+
+## Visão Geral
+
+Os workspaces do Kodus suportam **Controle de Acesso Baseado em Funções (RBAC)**, permitindo gerenciar permissões de usuário e níveis de acesso dentro da sua organização. Cada membro do workspace pode receber uma das quatro funções distintas, cada uma com permissões e capacidades específicas.
+
+## Funções Disponíveis
+
+Cada função fornece diferentes níveis de acesso e capacidades dentro do workspace:
+
+### Owner (Proprietário)
+
+**Acesso administrativo completo** ao workspace e todos os seus recursos. Pode visualizar, editar e excluir todas as configurações em todos os repositórios.
+
+
+
+### Billing Manager (Gestor de Cobrança)
+
+**Acesso de gerenciamento financeiro e de cobrança** com acesso ao gerenciamento de faturamento/assinatura e acesso de visualização à maioria das configurações, mas sem acesso de edição às configurações de revisão de código.
+
+### Repository Admin (Admin de Repositório)
+
+**Acesso de gerenciamento de repositório**. Vê todas as configurações, pull requests, issues, cockpit e plugins de toda a organização (somente visualização) e pode editar configurações de revisão de código e Kody Rules para os repositórios atribuídos a ele.
+
+### Contributor (Colaborador)
+
+**Acesso somente de visualização** a toda a organização. Os Contributors podem visualizar configurações, Kody Rules, pull requests e issues em todos os repositórios — sem necessidade de atribuição a repositórios — mas não podem editar nada. Cockpit, uso de tokens, faturamento e gerenciamento de usuários permanecem exclusivos de administradores.
+
+## Matriz de Permissões por Função
+
+Aqui está um detalhamento do que cada função pode fazer, com base na matriz de permissões real:
+
+<Snippet file="rbac-matrix-generated.mdx" />
+
+## Gerenciando Membros do Workspace
+
+Os membros do workspace são gerenciados na aba **Workspace members** de **Organization → Subscription** — não existe uma página de membros separada. Apenas **Owners** podem convidar membros, alterar funções ou remover membros.
+
+### Adicionando Novos Membros
+
+1. Na barra lateral, abra **Organization → Subscription** e escolha a aba **Workspace members**
+2. Clique em **Invite member**
+3. Em **Workspace member invitation**, digite o e-mail do membro e clique em **Add to invite list** (repita para mais pessoas)
+4. Clique em **Send invites**
+5. Os membros convidados entram como **Contributor**; altere a função deles depois (veja abaixo)
+
+### Auto-Join para Membros do Workspace
+
+Habilite o auto-join para permitir que usuários com domínios de e-mail correspondentes entrem no seu workspace automaticamente.
+
+**Como habilitar:**
+1. Vá para **Organization → General** ([app.kodus.io/organization/general](https://app.kodus.io/organization/general))
+2. Em **Auto Join**, ative **Enable Auto Join**, informe seu domínio e salve
+3. Atualmente funciona apenas com o domínio de e-mail da sua conta registrada
+4. Precisa de um domínio diferente? Entre em contato conosco na comunidade
+
+**Como funciona:**
+- Usuários que se cadastram com o seu domínio de e-mail podem escolher entrar na sua organização
+- Eles devem confirmar o e-mail após escolher entrar
+- Todos os usuários de auto-join entram com a função de **Contributor** (acesso somente de visualização a toda a organização)
+- Como Owner, ajuste sua função se eles precisarem de permissões de edição
+
+### Alterando Funções de Membros
+
+1. Vá para **Organization → Subscription → Workspace members**
+2. Encontre o membro cuja função deseja alterar
+3. Abra o seletor na coluna **Role** dele
+4. Selecione a nova função (**Owner**, **Billing Manager**, **Repo Admin** ou **Contributor**)
+5. A alteração entra em vigor imediatamente
+
+Para um **Repository Admin**, atribua os repositórios que ele pode editar com o botão **+** ao lado da função, que abre **Assign repositories**.
+
+### Removendo Membros
+
+1. Em **Organization → Subscription → Workspace members**, localize o membro a ser removido
+2. Abra o menu **Actions** (três pontos) na linha dele
+3. Selecione **Delete**
+4. Confirme com **Remove** no diálogo
+
+O mesmo menu tem **Approve** para membros marcados como **Needs approval** e **Copy invite link** para compartilhar novamente o link de convite de um membro.
+
+## Considerações de Segurança
+
+1. **Princípio do Menor Privilégio**: Sempre atribua a função com o mínimo de permissões necessárias
+2. **Auditorias Regulares**: Revise periodicamente as funções dos membros e ajuste conforme necessário
+3. **Revisões de Acesso**: Realize revisões trimestrais de acesso e permissões do workspace
+4. **Revogação Imediata**: Remova o acesso imediatamente quando um membro sair da organização
+
+## Solução de Problemas
+
+<AccordionGroup>
+  <Accordion title="Não consigo convidar novos membros para o workspace">
+    **Soluções:**
+    - Verifique se você tem a função de Owner — apenas Owners podem convidar membros
+    - Verifique se o seu workspace atingiu algum limite do sistema
+    - Certifique-se de que você tem as permissões corretas na sua conta
+  </Accordion>
+
+  <Accordion title="Um membro não consegue editar configurações de revisão de código">
+    **Soluções:**
+    - Confirme que o membro tem a função Repository Admin ou Owner para o repositório específico
+    - Para um Repository Admin, verifique se o repositório está atribuído a ele (**Assign repositories** na coluna **Role** de **Workspace members**)
+    - Verifique se a atribuição de função do membro está correta
+  </Accordion>
+
+  <Accordion title="Informações de faturamento não são visíveis para um membro da equipe">
+    **Soluções:**
+    - Certifique-se de que o membro tem a função Owner ou Billing Manager
+    - Verifique se os recursos de faturamento estão habilitados para o seu workspace
+    - Verifique se o acesso do membro não foi restringido
+  </Accordion>
+
+  <Accordion title="Um membro não consegue acessar os recursos do cockpit">
+    **Soluções:**
+    - Confirme que o membro tem a função Repository Admin ou Owner (o cockpit não é visível para Contributors ou Billing Managers)
+    - Verifique se a atribuição de função do membro está correta
+  </Accordion>
+
+  <Accordion title="Um desenvolvedor não está aparecendo nas licenças de PR">
+    **Soluções:**
+    - Verifique se o Kody está instalado nos repositórios onde este desenvolvedor abre PRs
+    - Verifique se o desenvolvedor abriu PRs nos últimos meses
+    - Lembre-se: as licenças de PR vêm da atividade Git, não dos membros do workspace
+    - Certifique-se de que o webhook do repositório está configurado corretamente
+  </Accordion>
+</AccordionGroup>

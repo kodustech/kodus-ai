@@ -1,7 +1,5 @@
 import Axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 
-import { getJWTToken } from "./session";
-
 const axiosClient = Axios.create({
     headers: {
         "Accept": "application/json",
@@ -51,18 +49,13 @@ export const axiosApi = {
         }),
 };
 
+// The /api/proxy route injects the Bearer token from the httpOnly session
+// cookie server-side, so these client methods no longer fetch/attach the
+// token themselves — they only need to send the cookie (withCredentials).
 const fetcher = async <T>(url: string, params?: AxiosRequestConfig<any>) => {
-    const headers = {
-        Authorization: "Bearer " + (await getJWTToken()),
-    };
-
-    const axiosParams = {
-        headers,
-        withCredentials: true,
-        ...params,
-    };
-
-    return axiosApi.get<T>(url, axiosParams).then((res) => res.data);
+    return axiosApi
+        .get<T>(url, { withCredentials: true, ...params })
+        .then((res) => res.data);
 };
 
 const post = async <T>(
@@ -70,17 +63,9 @@ const post = async <T>(
     data: any,
     params?: AxiosRequestConfig<any>,
 ): Promise<T> => {
-    const headers = {
-        Authorization: "Bearer " + (await getJWTToken()),
-    };
-
-    const axiosParams = {
-        ...params,
-        headers,
-        withCredentials: true,
-    };
-
-    return axiosApi.post<T>(url, data, axiosParams).then((res) => res.data);
+    return axiosApi
+        .post<T>(url, data, { ...params, withCredentials: true })
+        .then((res) => res.data);
 };
 
 const patch = async <T>(
@@ -88,34 +73,18 @@ const patch = async <T>(
     data: any,
     params?: AxiosRequestConfig<any>,
 ): Promise<T> => {
-    const headers = {
-        Authorization: "Bearer " + (await getJWTToken()),
-    };
-
-    const axiosParams = {
-        ...params,
-        headers,
-        withCredentials: true,
-    };
-
-    return axiosApi.patch<T>(url, data, axiosParams).then((res) => res.data);
+    return axiosApi
+        .patch<T>(url, data, { ...params, withCredentials: true })
+        .then((res) => res.data);
 };
 
 const deleted = async <T>(
     url: string,
     params?: AxiosRequestConfig<any>,
 ): Promise<T> => {
-    const headers = {
-        Authorization: "Bearer " + (await getJWTToken()),
-    };
-
-    const axiosParams = {
-        ...params,
-        headers,
-        withCredentials: true,
-    };
-
-    return axiosApi.delete<T>(url, axiosParams).then((res) => res.data);
+    return axiosApi
+        .delete<T>(url, { ...params, withCredentials: true })
+        .then((res) => res.data);
 };
 
 const put = async <T>(
@@ -123,17 +92,9 @@ const put = async <T>(
     data: any,
     params?: AxiosRequestConfig<any>,
 ): Promise<T> => {
-    const headers = {
-        Authorization: "Bearer " + (await getJWTToken()),
-    };
-
-    const axiosParams = {
-        ...params,
-        headers,
-        withCredentials: true,
-    };
-
-    return axiosApi.put<T>(url, data, axiosParams).then((res) => res.data);
+    return axiosApi
+        .put<T>(url, data, { ...params, withCredentials: true })
+        .then((res) => res.data);
 };
 
 export const axiosAuthorized = {

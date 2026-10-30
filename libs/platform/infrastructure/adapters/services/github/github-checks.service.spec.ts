@@ -51,10 +51,6 @@ describe('GithubChecksService', () => {
         service = module.get<GithubChecksService>(GithubChecksService);
     });
 
-    it('should be defined', () => {
-        expect(service).toBeDefined();
-    });
-
     describe('findCheckRun', () => {
         const findParams = {
             organizationAndTeamData: mockOrganizationAndTeamData,
@@ -159,6 +155,39 @@ describe('GithubChecksService', () => {
             } as any);
 
             expect(result).toBeNull();
+        });
+
+        // The installation lacks `checks:write` until the customer accepts the
+        // new app permissions — a customer-side state, logged as error on
+        // every PR (235/day).
+        it('logs a missing checks permission as warn, not error', async () => {
+            mockOctokit.checks.create.mockRejectedValue(
+                Object.assign(
+                    new Error('Resource not accessible by integration'),
+                    { status: 403 },
+                ),
+            );
+            const logger = (service as any).logger;
+            logger.error = jest.fn();
+            logger.warn = jest.fn();
+
+            const result = await service.createCheckRun({
+                organizationAndTeamData: mockOrganizationAndTeamData,
+                repository: mockRepository,
+                headSha: 'sha123',
+                name: 'test-check',
+                status: CheckStatus.IN_PROGRESS,
+            } as any);
+
+            expect(result).toBeNull();
+            expect(logger.error).not.toHaveBeenCalled();
+            expect(logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    metadata: expect.objectContaining({
+                        organizationId: 'org-1',
+                    }),
+                }),
+            );
         });
     });
 

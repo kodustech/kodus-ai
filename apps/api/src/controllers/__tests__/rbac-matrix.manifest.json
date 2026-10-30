@@ -1,5 +1,93 @@
 [
   {
+    "key": "businessLogic.controller.ts#intent",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/intent",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#postTest",
+    "httpMethod": "POST",
+    "urlPath": "/business-logic/test/post",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#readTools",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/task-sources/:integrationId/tools",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#runs",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/runs",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#status",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/status",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#taskSources",
+    "httpMethod": "GET",
+    "urlPath": "/business-logic/task-sources",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#test",
+    "httpMethod": "POST",
+    "urlPath": "/business-logic/test",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "businessLogic.controller.ts#tryRead",
+    "httpMethod": "POST",
+    "urlPath": "/business-logic/try",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "cli-reviews.controller.ts#detail",
     "httpMethod": "GET",
     "urlPath": "/cli-reviews/:executionUuid",
@@ -385,6 +473,17 @@
     }
   },
   {
+    "key": "codeManagement.controller.ts#getAreaRiskMap",
+    "httpMethod": "GET",
+    "urlPath": "/code-management/area-risk-map",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "codeManagement.controller.ts#getCurrentUser",
     "httpMethod": "GET",
     "urlPath": "/code-management/current-user",
@@ -462,6 +561,28 @@
     }
   },
   {
+    "key": "codeManagement.controller.ts#getWebhookCreationFailures",
+    "httpMethod": "GET",
+    "urlPath": "/code-management/hook-failures",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "codeManagement.controller.ts#getWebhookStatus",
+    "httpMethod": "GET",
+    "urlPath": "/code-management/hook-status",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "codeManagement.controller.ts#onboardingReviewPR",
     "httpMethod": "POST",
     "urlPath": "/code-management/finish-onboarding",
@@ -506,57 +627,46 @@
     }
   },
   {
-    "key": "dryRun.controller.ts#events",
-    "httpMethod": "SSE",
-    "urlPath": "/dry-run/events/:correlationId",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "deny",
-      "repo_admin": "deny",
-      "contributor": "deny"
-    }
-  },
-  {
-    "key": "dryRun.controller.ts#execute",
+    "key": "customAgents.controller.ts#resolve",
     "httpMethod": "POST",
-    "urlPath": "/dry-run/execute",
+    "urlPath": "/code-review/custom-agents/resolve",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "customAgents.controller.ts#status",
+    "httpMethod": "GET",
+    "urlPath": "/code-review/custom-agents/status",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "customAgents.controller.ts#try",
+    "httpMethod": "POST",
+    "urlPath": "/code-review/custom-agents/try",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",
-      "repo_admin": "deny",
+      "repo_admin": "allow",
       "contributor": "deny"
     }
   },
   {
-    "key": "dryRun.controller.ts#getDryRun",
+    "key": "customAgents.controller.ts#tryRun",
     "httpMethod": "GET",
-    "urlPath": "/dry-run/:correlationId",
+    "urlPath": "/code-review/custom-agents/try/:runId",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",
-      "repo_admin": "deny",
-      "contributor": "deny"
-    }
-  },
-  {
-    "key": "dryRun.controller.ts#listDryRuns",
-    "httpMethod": "GET",
-    "urlPath": "/dry-run",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "deny",
-      "repo_admin": "deny",
-      "contributor": "deny"
-    }
-  },
-  {
-    "key": "dryRun.controller.ts#status",
-    "httpMethod": "GET",
-    "urlPath": "/dry-run/status/:correlationId",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "deny",
-      "repo_admin": "deny",
+      "repo_admin": "allow",
       "contributor": "deny"
     }
   },
@@ -678,6 +788,17 @@
       "owner": "allow",
       "billing_manager": "deny",
       "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "kodusCredits.controller.ts#charges",
+    "httpMethod": "GET",
+    "urlPath": "/credits/charges",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "deny",
       "contributor": "deny"
     }
   },
@@ -858,9 +979,42 @@
     }
   },
   {
+    "key": "kodyRules.controller.ts#getGlobalRulesImportStatus",
+    "httpMethod": "GET",
+    "urlPath": "/kody-rules/global-source-repositories/import-status",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "kodyRules.controller.ts#getGlobalSourceRepositories",
+    "httpMethod": "GET",
+    "urlPath": "/kody-rules/global-source-repositories",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "kodyRules.controller.ts#getInheritedRules",
     "httpMethod": "GET",
     "urlPath": "/kody-rules/inherited-rules",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "kodyRules.controller.ts#getKodyRulesIndex",
+    "httpMethod": "GET",
+    "urlPath": "/kody-rules/index",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
@@ -891,20 +1045,20 @@
     }
   },
   {
-    "key": "kodyRules.controller.ts#importFastIdeRules",
-    "httpMethod": "POST",
-    "urlPath": "/kody-rules/import-fast-ide-rules",
+    "key": "kodyRules.controller.ts#listAgentInstructionFiles",
+    "httpMethod": "GET",
+    "urlPath": "/kody-rules/agent-instruction-files",
     "expected": {
       "owner": "allow",
-      "billing_manager": "deny",
+      "billing_manager": "allow",
       "repo_admin": "allow",
-      "contributor": "deny"
+      "contributor": "allow"
     }
   },
   {
-    "key": "kodyRules.controller.ts#listPendingIdeRules",
+    "key": "kodyRules.controller.ts#listPastReviewers",
     "httpMethod": "GET",
-    "urlPath": "/kody-rules/pending-ide-rules",
+    "urlPath": "/kody-rules/past-reviewers",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
@@ -924,6 +1078,17 @@
     }
   },
   {
+    "key": "kodyRules.controller.ts#resyncGlobalRules",
+    "httpMethod": "POST",
+    "urlPath": "/kody-rules/resync-global-rules",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "kodyRules.controller.ts#resyncIdeRules",
     "httpMethod": "POST",
     "urlPath": "/kody-rules/resync-ide-rules",
@@ -935,9 +1100,9 @@
     }
   },
   {
-    "key": "kodyRules.controller.ts#reviewFastIdeRules",
+    "key": "kodyRules.controller.ts#setGlobalSourceRepositories",
     "httpMethod": "POST",
-    "urlPath": "/kody-rules/review-fast-ide-rules",
+    "urlPath": "/kody-rules/global-source-repositories",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",
@@ -974,6 +1139,28 @@
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "license.controller.ts#pruneSeats",
+    "httpMethod": "POST",
+    "urlPath": "/license/prune-seats",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "license.controller.ts#removableSeats",
+    "httpMethod": "GET",
+    "urlPath": "/license/removable-seats",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
       "repo_admin": "deny",
       "contributor": "deny"
     }
@@ -1045,6 +1232,17 @@
     }
   },
   {
+    "key": "organizationParameters.controller.ts#clearModelOverrides",
+    "httpMethod": "POST",
+    "urlPath": "/organization-parameters/model-overrides/clear",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "organizationParameters.controller.ts#createOrUpdate",
     "httpMethod": "POST",
     "urlPath": "/organization-parameters/create-or-update",
@@ -1075,6 +1273,17 @@
       "billing_manager": "deny",
       "repo_admin": "deny",
       "contributor": "deny"
+    }
+  },
+  {
+    "key": "organizationParameters.controller.ts#getByokProviders",
+    "httpMethod": "GET",
+    "urlPath": "/organization-parameters/byok/providers",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
     }
   },
   {
@@ -1111,9 +1320,53 @@
     }
   },
   {
+    "key": "organizationParameters.controller.ts#listModelOverrides",
+    "httpMethod": "GET",
+    "urlPath": "/organization-parameters/model-overrides",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "organizationParameters.controller.ts#listModelsWithKey",
+    "httpMethod": "POST",
+    "urlPath": "/organization-parameters/list-models",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "organizationParameters.controller.ts#modelCapabilities",
+    "httpMethod": "GET",
+    "urlPath": "/organization-parameters/model-capabilities",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "organizationParameters.controller.ts#testByokConnection",
     "httpMethod": "POST",
     "urlPath": "/organization-parameters/test-byok",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "organizationParameters.controller.ts#testByokModel",
+    "httpMethod": "POST",
+    "urlPath": "/organization-parameters/test-byok-model",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",
@@ -1140,17 +1393,6 @@
       "owner": "allow",
       "billing_manager": "deny",
       "repo_admin": "deny",
-      "contributor": "deny"
-    }
-  },
-  {
-    "key": "parameters.controller.ts#applyCodeReviewPreset",
-    "httpMethod": "POST",
-    "urlPath": "/parameters/apply-code-review-preset",
-    "expected": {
-      "owner": "allow",
-      "billing_manager": "deny",
-      "repo_admin": "allow",
       "contributor": "deny"
     }
   },
@@ -1224,6 +1466,17 @@
     "key": "parameters.controller.ts#getCodeReviewParameter",
     "httpMethod": "GET",
     "urlPath": "/parameters/code-review-parameter",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "parameters.controller.ts#getCodeReviewScopes",
+    "httpMethod": "GET",
+    "urlPath": "/parameters/code-review-scopes",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",
@@ -1441,9 +1694,20 @@
     }
   },
   {
-    "key": "pullRequest.controller.ts#getOnboardingSignals",
+    "key": "pullRequest.controller.ts#getAwaitingPullRequests",
     "httpMethod": "GET",
-    "urlPath": "/pull-requests/onboarding-signals",
+    "urlPath": "/pull-requests/awaiting",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "pullRequest.controller.ts#getPullRequestAuthors",
+    "httpMethod": "GET",
+    "urlPath": "/pull-requests/authors",
     "expected": {
       "owner": "allow",
       "billing_manager": "deny",
@@ -1474,6 +1738,28 @@
     }
   },
   {
+    "key": "pullRequest.controller.ts#getPullRequestsDailyDigest",
+    "httpMethod": "GET",
+    "urlPath": "/pull-requests/executions/summary",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
+    "key": "pullRequest.controller.ts#getPullRequestsFacets",
+    "httpMethod": "GET",
+    "urlPath": "/pull-requests/executions/facets",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "allow",
+      "contributor": "allow"
+    }
+  },
+  {
     "key": "pullRequestMessages.controller.ts#createOrUpdatePullRequestMessages",
     "httpMethod": "POST",
     "urlPath": "/pull-request-messages",
@@ -1482,6 +1768,17 @@
       "billing_manager": "deny",
       "repo_admin": "allow",
       "contributor": "deny"
+    }
+  },
+  {
+    "key": "pullRequestMessages.controller.ts#findAllOverrideCounts",
+    "httpMethod": "GET",
+    "urlPath": "/pull-request-messages/override-counts",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "allow"
     }
   },
   {
@@ -1804,6 +2101,17 @@
     }
   },
   {
+    "key": "tokenUsage.controller.ts#getUsageByArea",
+    "httpMethod": "GET",
+    "urlPath": "/usage/tokens/by-area",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "tokenUsage.controller.ts#getUsageByDeveloper",
     "httpMethod": "GET",
     "urlPath": "/usage/tokens/by-developer",
@@ -1818,6 +2126,17 @@
     "key": "tokenUsage.controller.ts#getUsageByPr",
     "httpMethod": "GET",
     "urlPath": "/usage/tokens/by-pr",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "allow",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "tokenUsage.controller.ts#getUsageByReview",
+    "httpMethod": "GET",
+    "urlPath": "/usage/tokens/by-review",
     "expected": {
       "owner": "allow",
       "billing_manager": "allow",

@@ -73,7 +73,7 @@ if [ ! -f "${TLS_DIR}/kodus.lvh.me.crt" ] || [ ! -f "${TLS_DIR}/kodus.lvh.me.key
     (cd "${TLS_DIR}" && mkcert \
         -cert-file kodus.lvh.me.crt -key-file kodus.lvh.me.key \
         '*.kodus.lvh.me' 'kodus.lvh.me' \
-        '*.web.scorpion.lvh.me' 'web.scorpion.lvh.me' >/dev/null)
+        '*.web.acme.lvh.me' 'web.acme.lvh.me' >/dev/null)
 fi
 # Verify the CA is actually in the system trust store (mkcert -install
 # was run). Without it, the browser refuses the cert and cookies
@@ -173,7 +173,7 @@ cat <<EOF
      The \`Domain=.${SSO_E2E_DOMAIN:-kodus.lvh.me}\` line is the proof: it's the
      smallest common DNS suffix between api.${SSO_E2E_DOMAIN:-kodus.lvh.me} and
      app.${SSO_E2E_DOMAIN:-kodus.lvh.me}, computed at request-time — exactly what
-     the Dmitry deployment needed and the old hard-coded
+     the customer deployment needed and the old hard-coded
      \`.kodus.io\` could never produce.
 
   Teardown:    docker compose -f ${COMPOSE} down -v

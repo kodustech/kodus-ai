@@ -1,4 +1,9 @@
-export type OrganizationLicenseInvalid = {
+/** Prepaid-credit balance (USD) for models routed by Kodus ("Kodus as the
+ *  provider"). Rides on every found-license shape; absent when billing
+ *  predates the ledger. May be negative after metered usage. */
+type WithCreditBalance = { creditBalanceUsd?: number };
+
+export type OrganizationLicenseInvalid = WithCreditBalance & {
     valid: false;
     subscriptionStatus: "payment_failed" | "canceled" | "expired" | "inactive";
     numberOfLicenses: number;
@@ -6,9 +11,11 @@ export type OrganizationLicenseInvalid = {
     stripeCustomerId?: string | null;
 };
 
-export type OrganizationLicenseTrial = {
+export type OrganizationLicenseTrial = WithCreditBalance & {
     valid: true;
     subscriptionStatus: "trial";
+    /** Plan the trial converts into (billing returns e.g. "teams_managed"). */
+    planType?: PlanType;
     trialEnd: string;
     byok?: boolean;
     trialReviewCreditsTotal?: number;
@@ -19,11 +26,7 @@ export type OrganizationLicenseTrial = {
 };
 
 export type TrialCreditTier =
-    | "base"
-    | "team_signal"
-    | "qualified"
-    | "manual"
-    | (string & {});
+    "base" | "team_signal" | "qualified" | "manual" | (string & {});
 
 export type TrialUnlockKey =
     | "company_email"
@@ -34,10 +37,7 @@ export type TrialUnlockKey =
     | (string & {});
 
 export type TrialUnlockStatus =
-    | "locked"
-    | "available"
-    | "completed"
-    | "claimed";
+    "locked" | "available" | "completed" | "claimed";
 
 export type TrialUnlock = {
     key: TrialUnlockKey;
@@ -86,16 +86,68 @@ export type PlanType =
     | "enterprise_managed_annual"
     | "enterprise";
 
-export type OrganizationLicenseActive = {
+export type OrganizationLicenseActive = WithCreditBalance & {
     valid: true;
     subscriptionStatus: "active";
     numberOfLicenses: number;
     planType: PlanType;
 };
 
+// ── Prepaid credits ("Kodus as the provider") ────────────────────────────
+
+export type CreditBalance = {
+    balanceUsd: number;
+    lowThresholdUsd: number;
+    markupPct: number;
+    packsUsd: number[];
+    minPurchaseUsd: number;
+    maxPurchaseUsd: number;
+    lifetimePurchasedUsd: number;
+    lifetimeDebitedUsd: number;
+    lastPurchaseAt: string | null;
+    autoTopUp: CreditAutoTopUp;
+};
+
+/** Auto top-up as the UI sees it — never the Stripe ids. */
+export type CreditAutoTopUp = {
+    enabled: boolean;
+    thresholdUsd: number | null;
+    amountUsd: number | null;
+    /** "Visa •••• 4242", or null when no card is saved. */
+    paymentMethod: string | null;
+    lastAt: string | null;
+    /** Last automatic charge failure (a declined card). */
+    lastError: string | null;
+};
+
+export type CreditLedgerEntryType =
+    "purchase" | "debit" | "adjustment" | "refund";
+
+export type CreditLedgerEntry = {
+    id: string;
+    organizationId: string;
+    teamId?: string | null;
+    type: CreditLedgerEntryType;
+    /** Signed USD: purchases positive, debits negative. */
+    amountUsd: number;
+    balanceAfterUsd: number;
+    usageKey: string;
+    metadata?: Record<string, unknown>;
+    createdAt: string;
+};
+
+export type CreditCheckoutResult = {
+    url: string;
+    creditUsd: number;
+    chargeUsd: number;
+    markupPct: number;
+};
+
 export type OrganizationLicenseSelfHosted = {
     valid: true;
     subscriptionStatus: "self-hosted";
+    /** Community self-hosted has no plan; keeps `license.planType` uniform across the union. */
+    planType?: undefined;
 };
 
 export type OrganizationLicenseLicensedSelfHosted = {

@@ -17,6 +17,8 @@ import { MongooseModule, getModelToken } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigModule } from '@nestjs/config';
 
+import { OUTBOX_MESSAGE_REPOSITORY_TOKEN } from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
+import { WebhookContextService } from '@libs/platform/application/services/webhook-context.service';
 import { GitHubPullRequestHandler } from '@libs/platform/infrastructure/webhooks/github/githubPullRequest.handler';
 import { SavePullRequestUseCase } from '@libs/platformData/application/use-cases/pullRequests/save.use-case';
 import { RunCodeReviewAutomationUseCase } from '@libs/ee/automation/runCodeReview.use-case';
@@ -35,11 +37,11 @@ import {
     PullRequestsSchema,
 } from '@libs/platformData/infrastructure/adapters/repositories/schemas/pullRequests.model';
 import { PullRequestsRepository } from '@libs/platformData/infrastructure/adapters/repositories/pullRequests.repository';
+import { resolveMongoTestGate } from '../mongo-test-uri';
 
 // Only use TEST_MONGODB_URI (not API_MG_DB_HOST which may be a Docker hostname
 // loaded by dotenv/config via transitive imports like crypto.ts)
-const MONGODB_URI = process.env.TEST_MONGODB_URI;
-const shouldSkip = !MONGODB_URI;
+const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test', false);
 
 (shouldSkip ? describe.skip : describe)(
     'GitHub Webhook → Handler → SavePullRequestUseCase → MongoDB (full flow)',
@@ -140,10 +142,6 @@ const shouldSkip = !MONGODB_URI;
         });
 
         beforeAll(async () => {
-            const mongoUri = MONGODB_URI?.includes('://')
-                ? MONGODB_URI
-                : `mongodb://${MONGODB_URI}:27017/kodus_test`;
-
             mockCodeManagementService = {
                 getFilesByPullRequestId: jest.fn().mockResolvedValue(API_FILES),
                 getCommitsForPullRequestForCodeReview: jest
@@ -188,6 +186,22 @@ const shouldSkip = !MONGODB_URI;
                         useClass: PullRequestsRepository,
                     },
                     // MOCK everything else
+                    // The handler resolves org/team through
+                    // WebhookContextService (it used to reach for the
+                    // integration-config service directly) — without this
+                    // provider Nest can't build the handler at all.
+                    {
+                        provide: WebhookContextService,
+                        useValue: {
+                            getContext: jest.fn().mockResolvedValue({
+                                organizationAndTeamData: {
+                                    organizationId: TEST_ORG_ID,
+                                    teamId: TEST_TEAM_ID,
+                                },
+                                teamAutomationId: 'test-team-automation',
+                            }),
+                        },
+                    },
                     {
                         provide: INTEGRATION_CONFIG_SERVICE_TOKEN,
                         useValue: {
@@ -237,6 +251,14 @@ const shouldSkip = !MONGODB_URI;
                         provide: EnqueueImplementationCheckUseCase,
                         useValue: {
                             execute: jest.fn().mockResolvedValue(null),
+                        },
+                    },
+                    {
+                        provide: OUTBOX_MESSAGE_REPOSITORY_TOKEN,
+                        // create() is awaited via .catch() on the PR-closed
+                        // path, so the mock has to return a promise.
+                        useValue: {
+                            create: jest.fn().mockResolvedValue(undefined),
                         },
                     },
                 ],

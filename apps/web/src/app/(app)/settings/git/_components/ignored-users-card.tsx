@@ -75,19 +75,30 @@ export const IgnoredUsersCard = ({
         ResourceType.GitSettings,
     );
 
+    // Always merge into the stored config: it also carries the auto-revoke
+    // settings, the pending-revocation timers written by the cron, and the
+    // record of which bots were auto-ignored. Replacing it wholesale drops
+    // them and lets an ignored bot be seeded back on the next discovery run.
+    const saveAutoAssignConfig = (
+        patch: Partial<OrganizationParametersAutoAssignConfig>,
+    ) =>
+        createOrUpdateOrganizationParameter(
+            OrganizationParametersConfigKey.AUTO_LICENSE_ASSIGNMENT,
+            {
+                enabled: false,
+                ignoredUsers: [],
+                ...autoLicenseAssignmentConfig,
+                ...patch,
+            },
+        );
+
     const [handleIgnoredUsersChange, { loading: isSavingIgnoredUsers }] =
         useAsyncAction(async () => {
             try {
-                await createOrUpdateOrganizationParameter(
-                    OrganizationParametersConfigKey.AUTO_LICENSE_ASSIGNMENT,
-                    {
-                        enabled: autoLicenseAssignmentConfig?.enabled ?? false,
-                        ignoredUsers:
-                            mode === "ignore" ? pendingIgnoredUsers : [],
-                        allowedUsers:
-                            mode === "allow" ? pendingAllowedUsers : [],
-                    },
-                );
+                await saveAutoAssignConfig({
+                    ignoredUsers: mode === "ignore" ? pendingIgnoredUsers : [],
+                    allowedUsers: mode === "allow" ? pendingAllowedUsers : [],
+                });
 
                 toast({
                     variant: "success",
@@ -107,14 +118,10 @@ export const IgnoredUsersCard = ({
     const [handleResetFilters, { loading: isResettingFilters }] =
         useAsyncAction(async () => {
             try {
-                await createOrUpdateOrganizationParameter(
-                    OrganizationParametersConfigKey.AUTO_LICENSE_ASSIGNMENT,
-                    {
-                        enabled: autoLicenseAssignmentConfig?.enabled ?? false,
-                        ignoredUsers: [],
-                        allowedUsers: [],
-                    },
-                );
+                await saveAutoAssignConfig({
+                    ignoredUsers: [],
+                    allowedUsers: [],
+                });
 
                 setPendingIgnoredUsers([]);
                 setPendingAllowedUsers([]);
@@ -262,11 +269,11 @@ export const IgnoredUsersCard = ({
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent
-                        className="w-[var(--radix-popover-trigger-width)] p-0"
+                        className="flex max-h-[var(--radix-popover-content-available-height)] w-[var(--radix-popover-trigger-width)] flex-col overflow-hidden p-0"
                         align="start">
-                        <Command>
+                        <Command className="min-h-0 flex-1">
                             <CommandInput placeholder="Search authors..." />
-                            <CommandList>
+                            <CommandList className="max-h-none min-h-0 flex-1">
                                 <CommandEmpty>No author found.</CommandEmpty>
                                 <CommandGroup>
                                     {organizationMembers.map((user) => (
@@ -296,7 +303,7 @@ export const IgnoredUsersCard = ({
                                     ))}
                                 </CommandGroup>
                             </CommandList>
-                            <div className="flex items-center gap-2 border-t p-2">
+                            <div className="flex shrink-0 items-center gap-2 border-t p-2">
                                 <Button
                                     className="flex-1"
                                     size="sm"

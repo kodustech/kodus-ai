@@ -1,0 +1,31 @@
+---
+title: "Cursor、Copilot、またはClaudeの指示をコードレビューで使う方法"
+description: "チームがコーディングエージェント向けにすでに書いた指示とプルリクエストをKodyに照らし合わせさせ、強制したい規約はKodyルールとして管理します。"
+---
+
+Cursor、GitHub Copilot、Claude、またはその他のコーディングエージェント向けの指示をすでに管理している場合、Kodyはコードレビュー中にそれらを読み、反する変更を指摘できます。
+
+## 動作方法
+
+Kodyは、プルリクエストで変更されたファイルをカバーする指示ファイルを読みます。サポートされているファイルには以下が含まれます：
+
+- `.cursorrules` と `.cursor/rules/**/*.mdc`（Cursor）
+- `.github/copilot-instructions.md` と `.github/instructions/**/*.instructions.md`（GitHub Copilot）
+- `CLAUDE.md`（Claude）
+- `AGENTS.md` と `.agents/rules/**`（agents.md 規約）
+
+これらに反する変更は **Repo Instruction** ラベル付きで報告され、指示とその取得元ファイルが引用されます。これらのファイルがKodyルールに変換されることはないため、レビューポリシーが知らないうちに変わることはありません。
+
+## セットアップ方法
+
+1. サイドバーの **Code review** グループ上部にあるスコープピッカーで **Global** またはリポジトリを選択し、**What to review** を開きます
+2. **Coding-agent instructions** をオンにします
+3. そのスコープで次にレビューされるプルリクエストから、変更をカバーする指示ファイルと照らし合わせてチェックされます
+
+新しいワークスペースでは、オンボーディング中に各リポジトリで見つかったコーディングエージェント向けファイルの一覧とともに、この設定について尋ねられます。
+
+## すべてのレビューで規約を強制する
+
+コーディングエージェント向けの指示はコンテキストです。Kodyが指示違反を報告するのは、その指示が変更された行に明確に当てはまる場合だけです。他のレビュールールと同じように強制したい規約は、`.kody/rules` に[リポジトリルール](/ja/how_to_use/code_review/configs/repository_rules)として記述してください。ルールファイルはマージ時に同期され、1ファイルが1ルールとなり、書いたとおりに取り込まれます。
+
+詳細については、[コーディングエージェント向け指示](/ja/how_to_use/code_review/configs/rules_file_detection)を参照してください。

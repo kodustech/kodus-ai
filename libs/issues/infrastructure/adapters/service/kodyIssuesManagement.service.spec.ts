@@ -15,6 +15,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { contextToGenerateIssues } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
+import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 
 describe('KodyIssuesManagementService', () => {
     let service: KodyIssuesManagementService;
@@ -62,7 +63,7 @@ describe('KodyIssuesManagementService', () => {
 
     const mockPrFiles = [
         {
-            filename: 'src/main.ts',
+            path: 'src/main.ts',
             suggestions: [mockSuggestion],
         },
     ];
@@ -145,13 +146,88 @@ describe('KodyIssuesManagementService', () => {
         );
     });
 
-    it('should be defined', () => {
-        expect(service).toBeDefined();
+    describe('createNewIssues — issue text', () => {
+        it('describes the issue with the full explanation, not the short comment body', async () => {
+            pullRequestsServiceMock.findByNumberAndRepositoryName = jest
+                .fn()
+                .mockResolvedValue({ number: 42, user: { id: 'user-1' } });
+            issuesServiceMock.create.mockResolvedValue({ uuid: 'i-1' });
+
+            await service.createNewIssues(
+                {
+                    organizationAndTeamData: mockOrganizationAndTeamData,
+                    repository: mockRepository,
+                    pullRequest: mockPullRequest,
+                } as any,
+                [
+                    {
+                        ...mockSuggestion,
+                        suggestionContent: 'Short body.',
+                        fullExplanation:
+                            'obj can be undefined when the cache misses. Reading prop throws. Use optional chaining.',
+                    } as any,
+                ],
+            );
+
+            expect(issuesServiceMock.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    title: 'Add null safety check',
+                    description:
+                        'obj can be undefined when the cache misses. Reading prop throws. Use optional chaining.',
+                }),
+            );
+        });
     });
 
-    describe('processClosedPr - issue_creation_config behavior', () => {
-        it('should default to auto-create issues when config does not exist in database (returns null)', async () => {
-            parametersServiceMock.findByKey.mockResolvedValue(null);
+    // #2097: a finding the repeat check kept off the PR is stored not sent,
+    // with the schema's default implementationStatus; the earlier comment
+    // already tracks it, so it never becomes an issue.
+    it('leaves a suggestion discarded as a repeat out of the issues', async () => {
+        const valid = await (service as any).filterValidSuggestionsFromPrByStatus([
+            {
+                path: 'src/main.ts',
+                suggestions: [
+                    mockSuggestion,
+                    {
+                        ...mockSuggestion,
+                        id: 'suggestion-repeat',
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
+                        priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
+                    },
+                ],
+            },
+        ]);
+
+        expect(valid.map((s: { id: string }) => s.id)).toEqual(['suggestion-1']);
+    });
+
+    describe('processClosedPr', () => {
+        let mergeSpy: jest.SpyInstance;
+
+        beforeEach(() => {
+            mergeSpy = jest
+                .spyOn(service, 'mergeSuggestionsIntoIssues')
+                .mockResolvedValue(undefined);
+        });
+
+        it.each([
+            ['no config stored', null],
+            [
+                'config without a value',
+                {
+                    configKey: ParametersKey.ISSUE_CREATION_CONFIG,
+                    configValue: undefined,
+                },
+            ],
+            [
+                'config set to true',
+                {
+                    configKey: ParametersKey.ISSUE_CREATION_CONFIG,
+                    configValue: true,
+                },
+            ],
+        ])('creates issues by default (%s)', async (_label, config) => {
+            parametersServiceMock.findByKey.mockResolvedValue(config);
 
             await service.processClosedPr(baseParams);
 
@@ -159,8 +235,12 @@ describe('KodyIssuesManagementService', () => {
                 ParametersKey.ISSUE_CREATION_CONFIG,
                 mockOrganizationAndTeamData,
             );
-            // Should proceed with issue processing (not skip it)
-            // The updateSyncedWithIssuesFlag is always called at the end of a successful flow
+            expect(mergeSpy).toHaveBeenCalledWith(
+                baseParams,
+                'src/main.ts',
+                [expect.objectContaining({ id: 'suggestion-1' })],
+                null,
+            );
             expect(
                 pullRequestsServiceMock.updateSyncedWithIssuesFlag,
             ).toHaveBeenCalledWith(
@@ -171,33 +251,7 @@ describe('KodyIssuesManagementService', () => {
             );
         });
 
-        it('should default to auto-create issues when config exists but configValue is undefined', async () => {
-            parametersServiceMock.findByKey.mockResolvedValue({
-                configKey: ParametersKey.ISSUE_CREATION_CONFIG,
-                configValue: undefined,
-            });
-
-            await service.processClosedPr(baseParams);
-
-            expect(
-                pullRequestsServiceMock.updateSyncedWithIssuesFlag,
-            ).toHaveBeenCalled();
-        });
-
-        it('should auto-create issues when configValue is true', async () => {
-            parametersServiceMock.findByKey.mockResolvedValue({
-                configKey: ParametersKey.ISSUE_CREATION_CONFIG,
-                configValue: true,
-            });
-
-            await service.processClosedPr(baseParams);
-
-            expect(
-                pullRequestsServiceMock.updateSyncedWithIssuesFlag,
-            ).toHaveBeenCalled();
-        });
-
-        it('should skip issue creation when configValue is explicitly false', async () => {
+        it('skips issue creation but still marks the PR synced when the config is explicitly false', async () => {
             parametersServiceMock.findByKey.mockResolvedValue({
                 configKey: ParametersKey.ISSUE_CREATION_CONFIG,
                 configValue: false,
@@ -205,46 +259,19 @@ describe('KodyIssuesManagementService', () => {
 
             await service.processClosedPr(baseParams);
 
-            // Should still call updateSyncedWithIssuesFlag (runs after the if/else)
+            expect(mergeSpy).not.toHaveBeenCalled();
             expect(
                 pullRequestsServiceMock.updateSyncedWithIssuesFlag,
             ).toHaveBeenCalled();
-            // But should NOT attempt to create any issues
-            expect(issuesServiceMock.create).not.toHaveBeenCalled();
         });
 
-        it('should not process when permission validation fails', async () => {
-            permissionValidationServiceMock.validateExecutionPermissions.mockResolvedValue(
-                { allowed: false },
-            );
-
-            await service.processClosedPr(baseParams);
-
-            // Should not even reach the parameters check
-            expect(parametersServiceMock.findByKey).not.toHaveBeenCalled();
-            expect(
-                pullRequestsServiceMock.updateSyncedWithIssuesFlag,
-            ).not.toHaveBeenCalled();
-        });
-    });
-
-    describe('processClosedPr - managed plan with no userGitId', () => {
-        it('should pass userGitId from pullRequest to permission validation for managed plans', async () => {
-            // Before the fix, processClosedPr passed undefined as userGitId,
-            // causing managed plans to return allowed:false (NOT_ERROR).
-            // After the fix, it extracts userGitId from params.pullRequest.user.id
-            // so the permission validation can properly check the licensed user.
-            permissionValidationServiceMock.validateExecutionPermissions.mockResolvedValue(
-                {
-                    allowed: true,
-                    byokConfig: null,
-                },
-            );
+        // Before the fix processClosedPr passed undefined as userGitId, so
+        // managed plans returned allowed:false and no issue was ever created.
+        it('validates permissions against the PR author git id', async () => {
             parametersServiceMock.findByKey.mockResolvedValue(null);
 
             await service.processClosedPr(baseParams);
 
-            // Verify userGitId is extracted from pullRequest.user.id and passed to validation
             expect(
                 permissionValidationServiceMock.validateExecutionPermissions,
             ).toHaveBeenCalledWith(
@@ -252,23 +279,9 @@ describe('KodyIssuesManagementService', () => {
                 mockPullRequest.user.id.toString(),
                 'KodyIssuesManagementService',
             );
-
-            // Should proceed with issue processing
-            expect(parametersServiceMock.findByKey).toHaveBeenCalledWith(
-                ParametersKey.ISSUE_CREATION_CONFIG,
-                mockOrganizationAndTeamData,
-            );
-            expect(
-                pullRequestsServiceMock.updateSyncedWithIssuesFlag,
-            ).toHaveBeenCalledWith(
-                mockPullRequest.number,
-                mockRepository.id,
-                mockOrganizationAndTeamData.organizationId,
-                true,
-            );
         });
 
-        it('should still block when permission fails for a real error (e.g. invalid license)', async () => {
+        it('does nothing when permission validation fails', async () => {
             permissionValidationServiceMock.validateExecutionPermissions.mockResolvedValue(
                 {
                     allowed: false,
@@ -279,6 +292,7 @@ describe('KodyIssuesManagementService', () => {
             await service.processClosedPr(baseParams);
 
             expect(parametersServiceMock.findByKey).not.toHaveBeenCalled();
+            expect(mergeSpy).not.toHaveBeenCalled();
             expect(
                 pullRequestsServiceMock.updateSyncedWithIssuesFlag,
             ).not.toHaveBeenCalled();

@@ -24,6 +24,7 @@ import { HeavyStageEventHandler } from '@libs/core/workflow/engine/heavy-stage-e
 // Infrastructure - Services
 import { WorkflowJobQueueService } from '@libs/core/workflow/infrastructure/workflow-job-queue.service';
 import { WorkflowJobConsumer } from '@libs/core/workflow/infrastructure/workflow-job-consumer.service';
+import { CrossProcessEventsBridge } from '@libs/core/workflow/infrastructure/cross-process-events.bridge';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { ErrorClassifierService } from '@libs/core/workflow/infrastructure/error-classifier.service';
 import { JobProcessorRouterService } from '@libs/core/workflow/infrastructure/job-processor-router.service';
@@ -50,6 +51,9 @@ import { TASK_PROTECTION_SERVICE_TOKEN } from '../domain/contracts/task-protecti
 import { NoOpTaskProtectionService } from '../infrastructure/noop-task-protection.service';
 
 const sharedProviders = [
+    // Cross-process event delivery (pull-request.closed, pr-execution.updated)
+    // over PG LISTEN/NOTIFY — must run in BOTH the API and the worker.
+    CrossProcessEventsBridge,
     {
         provide: JOB_QUEUE_SERVICE_TOKEN,
         useClass: WorkflowJobQueueService,

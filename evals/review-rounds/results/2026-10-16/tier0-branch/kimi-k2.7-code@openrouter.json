@@ -1,0 +1,2493 @@
+{
+  "model": "kimi-k2.7-code@openrouter",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "ef8ace6e81c2ad04800d9543336439a8767fa987",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-15T22:56:31.527Z",
+  "updatedAt": "2026-10-15T23:10:09.399Z",
+  "complete": true,
+  "selectedCases": [
+    "K4-rule-repeats-declined-bug",
+    "R1-repeat-open",
+    "R2-consequence-status-implemented",
+    "K7-rule-repost-prod-profile",
+    "P01-rule-skip-comment-incomplete",
+    "P05-rule-local-path-fixture-touched",
+    "P18-rule-timeout-out-of-40",
+    "P22-rule-forward-parsed-pingpong",
+    "P40-rule-pii-on-structured-log-lines",
+    "P24-create-mode-section-hidden",
+    "R13-repeat-after-move",
+    "R8-consequence-kody-rule-prior",
+    "R12-unrelated-other-file"
+  ],
+  "summary": {
+    "measured": 26,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 18,
+        "violations": 1,
+        "rate": 0.056
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 18,
+        "violations": 2,
+        "rate": 0.111
+      },
+      "index-reference (#2039)": {
+        "n": 30,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "K4-rule-repeats-declined-bug · finishRun-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "K4-rule-repeats-declined-bug · finishBatch-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "R1-repeat-open · resubmit-repeat [not_deliver, proposed]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "K7-rule-repost-prod-profile · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 1,
+        "n": 2,
+        "delivered": 1
+      },
+      "K7-rule-repost-prod-profile · dayKey-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "R2-consequence-status-implemented · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P01-rule-skip-comment-incomplete · skip-comment-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-new-site [deliver]": {
+        "pass": 1,
+        "n": 2,
+        "delivered": 1
+      },
+      "P18-rule-timeout-out-of-40 · geocode-timeout-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P18-rule-timeout-out-of-40 · timezone-timeout-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P22-rule-forward-parsed-pingpong · create-order-raw-body-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P22-rule-forward-parsed-pingpong · cancel-order-raw-body-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P40-rule-pii-on-structured-log-lines · pii-log-field-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "R13-repeat-after-move · resubmit-repeat-moved [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P24-create-mode-section-hidden · billing-hidden-on-create-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 1,
+        "n": 2,
+        "delivered": 1
+      },
+      "R12-unrelated-other-file · refund-guard-inverted [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.9166666666666666,
+    "floor": null,
+    "baseline": null
+  },
+  "runs": 2,
+  "tokens": {
+    "in": 1263129,
+    "out": 192831,
+    "cacheRead": 991104,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 26
+  },
+  "cases": [
+    {
+      "id": "K4-rule-repeats-declined-bug",
+      "checks": "finishRun-repeat: not posted; finishBatch-new-site: posted",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        },
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R1-repeat-open",
+      "checks": "resubmit-repeat: not posted",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "resubmit-repeat",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R2-consequence-status-implemented",
+      "checks": "resubmit-double-charge: posted and linked",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "resubmit-double-charge",
+          "ok": true
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "K7-rule-repost-prod-profile",
+      "checks": "rangeLabel-start-repeat: not posted; dayKey-new-site: posted",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": false
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P01-rule-skip-comment-incomplete",
+      "checks": "Kody Rule on a file new in the PR; the developer answered with a comment that documents nothing; stored implemented; 15 earlier comments",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "skip-comment-repeat",
+          "ok": true
+        },
+        {
+          "what": "skip-comment-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P05-rule-local-path-fixture-touched",
+      "checks": "Kody Rule against local absolute paths, on a test fixture constant; the developer touched the line and the path is still there; stored implemented; 34 earlier comments",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "local-path-fixture-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-new-site",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-new-site",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "id": "P18-rule-timeout-out-of-40",
+      "checks": "Kody Rule (outbound timeout shorter than the function limit) on a file new in the PR; more than 40 later comments push the earlier one out of the history; the fetch line was re-touched and still sets no timeout; stored not_implemented",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "geocode-timeout-repeat",
+          "ok": true
+        },
+        {
+          "what": "timezone-timeout-new-site",
+          "ok": true
+        },
+        {
+          "what": "geocode-timeout-repeat",
+          "ok": true
+        },
+        {
+          "what": "timezone-timeout-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P22-rule-forward-parsed-pingpong",
+      "checks": "Ping-pong on one function: an early comment asked to forward the raw input, a later Kody Rule comment asked to forward only the validated data (stored implemented); the developer forwards the raw object again; 40 earlier comments",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        },
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P40-rule-pii-on-structured-log-lines",
+      "checks": "Kody Rule: a different rule (\"No personal data in logs\") broken on the very lines an earlier, implemented comment about another rule (\"Structured log fields\") covered; 4 earlier comments",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "pii-log-field-new-site",
+          "ok": true
+        },
+        {
+          "what": "pii-log-field-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P24-create-mode-section-hidden",
+      "checks": "Bug finder; a form section never renders when creating a record because its condition needs an id that exists only after save; the developer changed the condition but create mode still hides it; stored implemented; 1 earlier comment",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "billing-hidden-on-create-repeat",
+          "ok": true
+        },
+        {
+          "what": "billing-hidden-on-create-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R13-repeat-after-move",
+      "checks": "resubmit-repeat-moved: not posted",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "resubmit-repeat-moved",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-moved",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R8-consequence-kody-rule-prior",
+      "checks": "resubmit-double-charge: posted and linked",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "resubmit-double-charge",
+          "ok": true
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "id": "R12-unrelated-other-file",
+      "checks": "refund-guard-inverted: posted",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "refund-guard-inverted",
+          "ok": true
+        },
+        {
+          "what": "refund-guard-inverted",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45375,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "text": "Writing all results before updating progress leaves the same window where results exist without recorded progress, violating Rule [1]. In `finishBatch`, move `await db.progress.update(batch.id, 'done')` above `await db.results.insertMany(batch.id, batch.outputs)` so progress is recorded first."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 66491,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "text": "A crash after `db.results.insertMany(batch.id, batch.outputs)` could leave batch results visible while the job’s progress was never recorded, violating Rule [1]. Swap the two `await` statements so `db.progress.update(batch.id, 'done')` runs before `db.results.insertMany`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 71628,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 89154,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36854,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "`dayKey` derives the calendar day using `toISOString().slice(0, 10)`, so users west of UTC get the previous day. Use `formatLocalDate(at)` so the key matches the local calendar date."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 88849,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-local-day",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "text": "**Revises an earlier Kody suggestion** on `src/reports/range.ts:4` (2026-10-06 14:02 UTC).\n\nThe `slice(0, 10)` magic number still appears in `startDay` since the earlier local-day rounding was not applied to the start day, leaving an unnamed literal that should be a named constant. Replace `range.start.toISOString().slice(0, 10)` with `formatLocalDate(range.start)` so the shared helper owns the formatting.\n\n**Also found in:**\n- `src/reports/range.ts:11-11`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-local-day",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "alsoFoundIn": true,
+          "text": "**Revises an earlier Kody suggestion** on `src/reports/range.ts:4` (2026-10-06 14:02 UTC).\n\nThe `slice(0, 10)` magic number still appears in `startDay` since the earlier local-day rounding was not applied to the start day, leaving an unnamed literal that should be a named constant. Replace `range.start.toISOString().slice(0, 10)` with `formatLocalDate(range.start)` so the shared helper owns the formatting.\n\n**Also found in:**\n- `src/reports/range.ts:11-11`"
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "Slicing `at.toISOString()` can return the previous day for users west of UTC because it formats in UTC rather than local time. Replace the `slice(0, 10)` call in `dayKey` with `formatLocalDate(at)` to reuse the existing local-calendar helper."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 127465,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now propagates NotReadyError unchanged, but the only caller pollCharge treats it as 'gateway never received it' and calls the non-idempotent gw.submit, creating duplicate charges. WHY: errors.ts defines NotReadyError as a transient 'has the charge but has not settled it yet' state, while pollCharge resubmits the payload for every such error; with the new propagation path, every pending-settlement charge is duplicated. HOW: Update pollCharge to retry/wait or rethrow NotReadyError instead of calling gw.submit. If resubmit is truly intended only for 'never received', introduce a distinct error class for that case.",
+          "keep": true,
+          "rationale": "The code now propagates NotReadyError from fetchStatus, but pollCharge catches it and calls gw.submit(charge.payload) as a resend. errors.ts explicitly defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', while pollCharge's comment and code treat it as 'the gateway never received it'. Resubmitting a charge the gateway already has is a non-idempotent duplicate risk. This is a distinct downstream consequence of the earlier fix (round-a-propagate), not the same misclassification issue already raised.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "glob": "*.ts",
+                "namesOnly": false
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `errors.ts` defines `NotReadyError` as a transient pending-settlement state, treating it in `pollCharge` as 'gateway never received it' and calling the non-idempotent `gw.submit` duplicates every pending charge now that `fetchStatus` propagates the error. Update `pollCharge` in `src/billing/poller.ts` to retry/wait or rethrow `NotReadyError` instead of resubmitting, and if resubmit is only meant for 'never received', introduce a distinct error class for that case."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58208,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 141936,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged lets pollCharge reach its non-idempotent resubmit branch. WHY: gw.submit is documented as creating a new charge on every call, and NotReadyError is defined as 'gateway has the charge but has not settled it yet', so resubmitting when the charge already exists creates duplicate charges. HOW: Either change pollCharge to retry the status check instead of resubmitting, or clarify/rename the error so the resubmit branch only fires when the gateway truly never received the charge.",
+          "keep": true,
+          "rationale": "The code evidence confirms the claim. `NotReadyError` is defined in `src/billing/errors.ts` as 'The gateway has the charge but has not settled it yet (transient)'. However, `pollCharge` in `src/billing/poller.ts` catches `NotReadyError` and calls `gw.submit(charge.payload)`, with a comment asserting that NotReadyError means 'the gateway never received it'. `gateway.ts` explicitly documents `submit` as 'NOT idempotent: every call creates a new charge'. Therefore, propagating `NotReadyError` unchanged from `fetchStatus` causes `pollCharge` to resubmit an already-existing charge, creating duplicates. This is a distinct failure (duplicate charges) from the prior review issue (misclassifying transient errors as terminal failures), so it is not a repeat of the previous decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "path": "src/billing",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "path": "src/billing",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged from fetchStatus lets pollCharge treat a pending/settling charge as 'gateway never received it' and call the non-idempotent gw.submit. WHY: Every poll of an unsettled charge now creates a duplicate gateway charge. HOW: Either update pollCharge so NotReadyError means 'pending' (return/wait instead of resubmitting) or introduce a separate MissingChargeError for the resubmit branch; do not let NotReadyError bubble to the resubmit path unchanged.",
+          "keep": true,
+          "rationale": "The finding is technically accurate and distinct from the prior review entry. fetchStatus (src/billing/status.ts:8-10) now propagates NotReadyError unchanged as requested in the previous round. However, pollCharge (src/billing/poller.ts:13-15) catches that same NotReadyError, interprets its meaning as 'the gateway never received it' per its own comment, and calls the non-idempotent gw.submit(charge.payload). That creates a concrete duplicate-charge/data-loss path for any charge that is still pending/settling when polled. The prior decision only addressed the failure mode 'NotReadyError wrapped as FailedError and reported as failed'; the current failure is 'duplicate gateway charge on every poll,' which is a different consequence and a direct result of applying the earlier suggestion without updating pollCharge's interpretation. Nothing in the code guards against the repeated resubmit, so the claim is not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "path": ".",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "fetchStatus",
+                "path": ".",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nPropagating `NotReadyError` unchanged lets `pollCharge` reach its non-idempotent resubmit branch, so `gw.submit` creates a duplicate charge when the gateway already has the charge but has not settled it. Either update `pollCharge` to retry the status check instead of resubmitting, or rename/clarify the error so the resubmit branch only runs when the gateway truly never received the charge."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `fetchStatus` propagates `NotReadyError` unchanged, `pollCharge` treats a pending charge as missing and calls the non-idempotent `gw.submit`, generating a duplicate gateway charge on every poll. Update `pollCharge` so `NotReadyError` means pending and return/wait instead of resubmitting, or introduce a separate `MissingChargeError` for the resubmit branch so `NotReadyError` never reaches the resubmit path unchanged."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 46193,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "file": "src/shipping/address.schema.ts",
+          "line": 6,
+          "text": "The literal `2` in `country.length(2)` in `src/shipping/address.schema.ts` violates Rule 16 and obscures the domain meaning of the country code length. Replace it with a named constant such as `COUNTRY_CODE_LENGTH` so the constraint is self-documenting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54150,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "text": "Hardcoding `/Users/dev/billing-archive` means the test settings will fail on any other machine because that directory does not exist. Use a repository-relative path such as `FIXTURES / \"archive\"` or a temporary directory instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41803,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P18-rule-timeout-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "text": "Rule 21 requires every outbound HTTP call in `src/functions/timezone-for-point.ts` to use a timeout shorter than the enclosing 10-second function limit, but the timezone API `fetch` has none, so a slow provider can hang past the deadline and block a controlled error response. Pass an `AbortSignal.timeout` value under 10 seconds to `fetch` so the call aborts before the function deadline."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 75853,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P18-rule-timeout-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "file": "src/functions/geocode-address.ts",
+          "line": 11,
+          "text": "Rule [15] requires numeric literals other than 0, 1, and -1 in business logic to be named constants, and the two-character ISO country code length is domain knowledge that should not be a magic number. Define `ISO_COUNTRY_CODE_LENGTH` as `2` near the top of the file and pass it to `z.string().length()`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "text": "Rule [21] requires every outbound HTTP call to set an explicit timeout shorter than the function's 10-second `maxDuration`, and this `fetch` has no signal, so a hanging timezone API call could consume the full limit. Pass `{ signal: AbortSignal.timeout(5000) }` to the `fetch` call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 100318,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 3,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "file": "tests/conftest.py",
+          "line": 14,
+          "text": "The `archive_dir` in the `settings` fixture hard-codes `/Users/dev/billing-archive`, which only exists on the original developer's laptop and will break tests on other machines. Use the `tmp_path` fixture so each test gets a temporary archive directory."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 60630,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "text": "After validating with `CancelOrderSchema`, `cancelOrderHandler` still forwards the raw `req.body` to `bus.publish`, so any extra client fields leak onto the event bus and violate Rule [21]. Forward `result.data` instead so only parsed fields are published."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58721,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "text": "Forwarding the raw `req.body` after validation lets unchecked fields such as a forged `userId` reach downstream consumers, violating Rule [21]. Pass `result.data` to the event bus instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 49731,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "text": "Logging `customer.email` as `customerEmail` in `src/orders/receipts.ts` violates Rule [42] and exposes PII. Remove the `customerEmail` field from the log context; `orderId` alone is sufficient for tracing."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 52712,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P40-rule-pii-on-structured-log-lines",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/receipts.ts:11` (2026-10-06 12:00 UTC).\n\nLogging `customerEmail` violates Rule [42], which prohibits logging personal data like email addresses. Drop `customerEmail` from the log context and rely on `orderId` to correlate the receipt."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 91072,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 129246,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 287983,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `void submit()` discards the promise returned by the async `submit` function, so a rejection from `onSave` is unhandled. WHY: Users get no feedback when saving fails, and the unhandled promise rejection may surface as a runtime error or fail tests/Node processes configured to treat unhandled rejections as fatal. HOW: Wrap `await onSave(draft)` in a try/catch and surface the error via the existing `errors` state, e.g. `catch (e) { setErrors([e instanceof Error ? e.message : 'Save failed']); }`.",
+          "keep": true,
+          "rationale": "The code at lines 19-23 defines an async `submit()` that returns a Promise, and the `onSubmit` handler at line 33 invokes it as `void submit()`. If `onSave(draft)` rejects, there is no await/catch and the rejection becomes unhandled, matching the finding. The previous review decision concerns a different failure (billing section visibility in create mode), so it does not resolve this issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: void submit() discards the promise returned by the async submit function, so a rejection from onSave is unhandled. WHY: When onSave fails, the user receives no error feedback and the runtime logs an unhandled promise rejection, which can crash a Node process or be caught by global error handlers. HOW: Catch the rejection inside submit and surface it in the errors state, e.g. add a try/await/catch around onSave(draft) and push the error message into problems before calling setErrors.",
+          "keep": true,
+          "rationale": "The code at CustomerForm.tsx:31-34 calls `void submit()`, and `submit()` is async and awaits `onSave(draft)` without any try/catch. If `onSave` rejects, the rejection propagates to the discarded promise, producing an unhandled promise rejection and leaving the user without feedback. This is a real behavior bug, not style. The previous review decision concerns the billing section gating on `draft.id`, which is unrelated to promise rejection handling, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm",
+                "glob": "*.test.*",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/customers",
+                "maxDepth": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: The `showBilling` condition still hides the billing section in create mode because `draft.id` is undefined for new customers. WHY: Users creating a customer cannot enter a billing email, so `validateCustomer` always returns 'A valid billing email is required' and the form cannot be submitted. HOW: Remove the id gate so billing always renders, e.g. `const showBilling = true;` or render `<BillingSection ... />` unconditionally.",
+          "keep": false,
+          "rationale": "The finding describes the same failure already raised by PreviousReviewDecisions entry round-a-P24-create-mode-section-hidden: in create mode the billing section is hidden because it is gated on draft.id/only edit mode, validateCustomer requires a billing email, so creating a customer fails with 'A valid billing email is required'. The current code still exhibits this exact behavior (line 27 evaluates to false in create mode for a new draft), but per the instructions a finding that raises again a problem already recorded in PreviousReviewDecisions must be dropped, even if the prior 'implemented' fix is incomplete.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "text": "In `src/customers/CustomerForm.tsx`, `void submit()` discards the promise returned by the async `submit` function, so a rejection from `onSave(draft)` is unhandled, leaving users without save-failure feedback and risking a runtime error or fatal unhandled rejection in tests/Node processes. Wrap `await onSave(draft)` in a `try/catch` inside `submit` and surface the error through the existing `errors` state with `setErrors([e instanceof Error ? e.message : 'Save failed'])`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 31,
+          "text": "In `src/customers/CustomerForm.tsx`, `void submit()` discards the promise returned by the async `submit` function, so a rejection from `onSave` is unhandled, leaving users without save-failure feedback and logging an unhandled promise rejection that can crash a Node process or trigger global handlers. Chain `.catch(...)` off `submit()` in the `onSubmit` handler and append the error message to the existing `errors` state with `setErrors((prev) => [...prev, err instanceof Error ? err.message : 'Save failed'])`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 187212,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The changed fetchStatus now propagates NotReadyError to pollCharge, which calls the non-idempotent gw.submit. WHY: errors.ts defines NotReadyError as a transient 'charge exists but is not settled' state, so resubmitting on this error can create duplicate charges; this path was unreachable before because NotReadyError was wrapped in FailedError. HOW: reconcile the two semantics—either introduce a distinct MissingChargeError for the 'never received' case, or make pollCharge only resubmit when the gateway confirms the charge is absent, and ensure submit is guarded against duplicates.",
+          "keep": true,
+          "rationale": "The code path is real and the consequence is distinct from the prior review entry. fetchStatus (status.ts:8-9) now re-throws NotReadyError instead of wrapping it in FailedError. pollCharge (poller.ts:13-16) catches NotReadyError and calls the non-idempotent gw.submit. The comment in poller.ts itself reveals a semantic mismatch: it claims NotReadyError means 'the gateway never received it,' so resubmitting is justified, whereas the finding asserts errors.ts defines it as 'charge exists but is not settled.' Resubmitting in the latter case risks duplicate charges. This is a different failure (duplicate charges) from the earlier review problem (retryable error wrongly treated as terminal), so it is not a repeat of PreviousDecision round-a-propagate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "path": "src/billing",
+                "namesOnly": false
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "fetchStatus",
+                "path": "src/billing",
+                "namesOnly": false
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nIn `src/billing/status.ts`, the changed `fetchStatus` now propagates `NotReadyError` to `pollCharge`, which calls the non-idempotent `gw.submit`; since `errors.ts` defines `NotReadyError` as a transient “charge exists but not settled” state and it used to be wrapped in `FailedError`, resubmitting on this error can create duplicate charges. Reconcile the two semantics by either introducing a distinct `MissingChargeError` for the never-received case, making `pollCharge` only resubmit when the gateway confirms the charge is absent, or ensuring `submit` is guarded against duplicates."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 210124,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 363265,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `void submit()` discards the promise returned by the async submit handler. WHY: If `onSave` rejects, the rejection propagates out of `submit()` and becomes an unhandled promise rejection because nothing awaits or catches it, so save failures are not surfaced and may crash the process. HOW: Catch the rejection inside `submit()` and add the error to the `errors` state, e.g. wrap `await onSave(draft)` in `try/catch` and call `setErrors([...])` in the catch.",
+          "keep": true,
+          "rationale": "The code at lines 19-34 shows `async function submit()` calls `await onSave(draft)` but the `onSubmit` handler invokes it as `void submit()`, discarding the returned promise. There is no try/catch around `await onSave(draft)` and no other mechanism in the component to catch a rejection. If `onSave` rejects, the rejection will propagate as an unhandled promise rejection and will not be added to the `errors` state. The previous review decision addresses a different problem (BillingSection visibility in create mode), not this error-handling path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/validate.ts",
+          "claim": "WHAT: `validateCustomer` tests `billingEmail` without trimming whitespace. WHY: A pasted or typed email with a leading or trailing space fails validation even though it is effectively valid, blocking customer creation/edits. HOW: Trim before testing, e.g. `EMAIL.test(draft.billingEmail.trim())`.",
+          "keep": true,
+          "rationale": "Line 8 of src/customers/validate.ts indeed runs EMAIL.test(draft.billingEmail) on the raw value while line 7 trims draft.name. The regex /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/ will reject a billing email with leading or trailing whitespace, so a user-pasted/typed email with spaces would fail validation unnecessarily. No upstream trimming of billingEmail is evident, and the prior review decision addressed a different failure (billing section hidden in create mode), not this whitespace issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "validateCustomer\\(",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "validateCustomer\\(",
+                "path": "src/customers/CustomerForm.tsx"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `void submit()` discards the promise returned by the async submit handler. WHY: If `onSave` rejects, the rejection is not caught and no error is added to the rendered `errors` list, leaving the user without feedback and potentially causing an unhandled promise rejection. HOW: Wrap `await onSave(draft)` in a try/catch inside `submit` and push the error message into `errors`.",
+          "keep": true,
+          "rationale": "The code at CustomerForm.tsx:19-34 defines an async `submit()` that awaits `onSave(draft)` without any try/catch. The form's `onSubmit` handler invokes it as `void submit()`, explicitly discarding the returned promise. Because `onSave` is typed as `(draft: CustomerDraft) => Promise<void>`, it can reject; when it does, the rejection is unhandled and no error message is pushed into the `errors` state rendered below. This is a concrete behavior bug, not a style issue. The previous review decision concerns BillingSection visibility and is unrelated to submit error handling.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 100
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "onSave",
+                "path": "src/customers",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm",
+                "path": "src",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `showBilling` is still gated on `draft.id`, so in create mode the billing inputs are never rendered. WHY: `validateCustomer` rejects a missing/invalid billing email, so 'Create customer' always fails validation without showing the field the user must fill in. HOW: Render billing in both modes, e.g. `const showBilling = mode === 'edit' || mode === 'create';` or remove the gate.",
+          "keep": false,
+          "rationale": "The technical claim is accurate: in create mode `showBilling` is false because `draft.id` is absent, the billing section is hidden, and `validateCustomer` always requires a valid billing email. However, this exact failure—billing section hidden in create mode causing validation to fail—was already raised in PreviousReviewDecisions entry `round-a-P24-create-mode-section-hidden`. Per the duplicate-issue rule, the same problem must not be reported again on this pull request, regardless of the previous outcome.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/validate.ts",
+          "claim": "WHAT: `validateCustomer` tests `billingEmail` against the regex without trimming whitespace. WHY: A pasted or typed email with leading or trailing spaces fails validation even though it is otherwise valid, blocking form submission with a confusing 'A valid billing email is required' error. HOW: Trim the email before testing: `if (!EMAIL.test(draft.billingEmail.trim())) ...`.",
+          "keep": true,
+          "rationale": "The code at src/customers/validate.ts:8 tests `draft.billingEmail` against the EMAIL regex without calling `.trim()`. The regex `/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/` anchors to the start/end of the string, so leading or trailing whitespace will cause an otherwise valid email to fail validation. The caller in CustomerForm.tsx passes `draft` directly to `validateCustomer` without trimming `billingEmail` first. The previous review decision addressed a different issue (the billing section being hidden in create mode), not this whitespace validation behavior, so the finding is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "validateCustomer\\(",
+                "path": "src/customers",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 5,
+        "after": 4
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "text": "Since the submit handler uses `void submit()`, a rejected `onSave` becomes an unhandled promise rejection and the rendered `errors` list never shows the failure. Wrap `await onSave(draft)` in a `try/catch` inside `submit` and call `setErrors` with the caught error message."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/customers/validate.ts",
+          "line": 8,
+          "text": "Emails with leading or trailing spaces fail `EMAIL.test` even though they are otherwise valid, blocking customer creation or edits. Trim `draft.billingEmail` before the regex check."
+        },
+        {
+          "sourceIndex": 2,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "text": "Because the form handler calls `void submit()`, a rejected `onSave` is never caught and becomes an unhandled promise rejection, so save failures are invisible to the user. Catch the error inside `submit` and update the `errors` state with the message."
+        },
+        {
+          "sourceIndex": 3,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/customers/validate.ts",
+          "line": 8,
+          "text": "The regex rejects `billingEmail` values that contain accidental surrounding whitespace, producing a confusing validation error. Add `.trim()` before passing `draft.billingEmail` to `EMAIL.test`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 149471,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The refund guard condition is inverted, so partial refunds are rejected and over-refunds are allowed. WHY: This breaks the function's contract and can cause gw.submit to process a refund larger than the original charge. HOW: Restore the > comparison: throw when amount exceeds charge.amount.",
+          "keep": true,
+          "rationale": "The file shows `if (amount < charge.amount)` throwing 'refund exceeds the charge'. This condition is factually inverted: it rejects partial refunds (amount less than charge) and allows full/over-refunds (amount >= charge) to proceed to gw.submit. The PreviousReviewDecision concerns an unrelated status.ts error propagation issue, not this refund guard, so it does not affect this finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The refund guard condition is inverted, so partial refunds are rejected and over-refunds are allowed. WHY: The check now throws when `amount < charge.amount`, meaning a legitimate partial refund is reported as exceeding the charge, while a refund larger than the charge silently proceeds and can over-credit the customer. HOW: Restore the original comparison: `if (amount > charge.amount) { throw new Error('refund exceeds the charge'); }`.",
+          "keep": true,
+          "rationale": "The code at src/billing/refund.ts:4-6 checks `if (amount < charge.amount)` and throws 'refund exceeds the charge'. This is the inverse of the intended guard: partial refunds (amount < charge.amount) are rejected, while refunds larger than the charge (amount > charge.amount) proceed to `gw.submit`. The claim about the inverted condition and the proposed fix is correct.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund\\(",
+                "path": "src/billing",
+                "excludeTests": false
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 5,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "text": "This breaks the refund contract in `src/billing/refund.ts`: partial refunds are rejected and over-refunds can be passed to `gw.submit`. Restore the `>` comparison so `Error('refund exceeds the charge')` is thrown only when `amount` actually exceeds `charge.amount`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "text": "In `src/billing/refund.ts`, the guard throws on `amount < charge.amount`, so legitimate partial refunds are rejected while over-refunds silently proceed and can over-credit the customer. Swap the comparison to `amount > charge.amount` so `Error('refund exceeds the charge')` is raised only for actual over-refunds."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 195351,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The refund guard was inverted so `amount < charge.amount` now throws 'refund exceeds the charge'. WHY: Partial refunds are wrongly rejected and refunds larger than the original charge are allowed, causing a business/financial correctness failure. HOW: Restore the comparison to `amount > charge.amount` so over-refunds are rejected and partial/full refunds are accepted.",
+          "keep": true,
+          "rationale": "The code at src/billing/refund.ts:4-6 reads `if (amount < charge.amount) { throw new Error('refund exceeds the charge'); }`. This condition rejects any refund smaller than the original charge while accepting any refund larger than it, which matches the reported inverted guard and produces the claimed business/financial correctness failure. The unrelated previous decision about src/billing/status.ts does not affect this issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The refund amount guard was inverted from `amount > charge.amount` to `amount < charge.amount`. WHY: Valid partial refunds now incorrectly throw 'refund exceeds the charge', while refunds larger than the original charge pass through to the non-idempotent `gw.submit`, creating an over-refund transaction and risking financial loss. HOW: Restore the original comparison `if (amount > charge.amount)`.",
+          "keep": true,
+          "rationale": "The current code at src/billing/refund.ts:4-6 checks `if (amount < charge.amount)` and throws 'refund exceeds the charge'. This is backwards: legitimate partial refunds (amount < charge.amount) are rejected, while refunds larger than the original charge bypass the guard and reach the non-idempotent `gw.submit`, risking over-refund. The suggested original comparison `amount > charge.amount` is the correct guard.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "text": "The refund amount guard was inverted so valid partial refunds now throw `'refund exceeds the charge'` while refunds larger than `charge.amount` pass through to the non-idempotent `gw.submit`, creating an over-refund transaction and risking financial loss. Restore the original comparison so `amount > charge.amount` triggers the error."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "text": "The refund guard was inverted so `amount < charge.amount` now throws `'refund exceeds the charge'`, wrongly rejecting partial refunds and allowing refunds larger than `charge.amount`, causing a business/financial correctness failure. Restore the comparison to `amount > charge.amount` so over-refunds are rejected and partial/full refunds are accepted."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

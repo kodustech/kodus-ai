@@ -169,7 +169,7 @@ export default function App() {
                 </div>
             </div>
 
-            <div className="flex flex-14 flex-col justify-center gap-20 p-10">
+            <div className="flex flex-14 flex-col justify-start gap-20 px-10 pt-50 pb-10">
                 <div className="flex flex-col items-center gap-10">
                     <div className="flex max-w-96 flex-col gap-6">
                         <StepIndicators.Auto />

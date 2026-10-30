@@ -1,0 +1,900 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:45:40.261Z",
+  "updatedAt": "2026-10-13T21:58:59.004Z",
+  "complete": true,
+  "selectedCases": [
+    "P39-promo-expiry-unrelated",
+    "P39-promo-expiry-unrelated-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P39-promo-expiry-unrelated · promo-expiry-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P39-promo-expiry-unrelated-control · promo-expiry-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 66139,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry predicate is inverted — apply_promo raises PromoExpired when promo.expires_at is in the future (expires_at > now), which is exactly when the promo is still valid. WHY: Every still-valid promo is rejected with PromoExpired while genuinely expired promos pass and are applied, so the discount feature is broken in both directions (valid codes refused, stale codes honored). HOW: Compare against the past, matching the documented meaning of expires_at (\"the promo can be used until this instant\"): `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)`.",
+          "keep": true,
+          "rationale": "Confirmed. models.py:18 documents expires_at as 'UTC; the promo can be used until this instant', so a promo is valid while now <= expires_at and expired only when now > expires_at. apply.py:12 raises PromoExpired when promo.expires_at > now — i.e., exactly when the promo is still valid — inverting the predicate. Valid codes are refused and stale codes are honored. This is a distinct failure from the previously-decided normalization issue (PromoNotFound), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Valid promos are rejected with `PromoExpired` while genuinely expired ones pass and are applied, breaking the discount feature in both directions. Flip the comparison in `apply_promo` so `PromoExpired(code)` is raised when `promo.expires_at <= datetime.now(timezone.utc)`, matching the documented meaning of `expires_at` as the instant until which the promo can be used."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 80599,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry check is inverted — it raises `PromoExpired` when `promo.expires_at > datetime.now(timezone.utc)`, which is the window in which the promo is still valid. WHY: Per the contract on the field (`expires_at  # UTC; the promo can be used until this instant`), the promo is usable while `now <= expires_at` and expired only when `now > expires_at`; as written every still-valid promo is rejected with PromoExpired and every already-expired promo is accepted and discounted, so the expiry feature does the exact opposite of its intent. HOW: compare the other way: `if datetime.now(timezone.utc) > promo.expires_at: raise PromoExpired(code)`.",
+          "keep": true,
+          "rationale": "Confirmed inverted expiry check. models.py:18 documents the field as \"the promo can be used until this instant\", so a promo is valid while now <= expires_at and expired only when now > expires_at. apply.py:12 instead raises PromoExpired when promo.expires_at > now (the valid window), so every still-valid promo is rejected and every expired promo is accepted and discounted. Root cause and failure path are exactly as described. Not a repeat of any previous decision (index 2 was code normalization; others are unrelated TS files).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at",
+                "glob": "*.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the comparison is inverted, every still-valid promo is rejected with `PromoExpired` and every already-expired promo is accepted and discounted, so the expiry check does the opposite of its intent. Compare the other way, `if datetime.now(timezone.utc) > promo.expires_at: raise PromoExpired(code)`, since the promo is usable while `now <= expires_at`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 76468,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry guard is inverted — it raises PromoExpired when `promo.expires_at > datetime.now(timezone.utc)`, i.e. when the promo is still valid, and falls through to apply the discount when the promo is already expired. WHY: Per the model's own contract (`expires_at: datetime  # UTC; the promo can be used until this instant`), a valid promo is rejected with PromoExpired while an expired promo is accepted and its discount applied — the exact opposite of intended behavior. HOW: Flip the comparison so it raises only once the instant has passed: `if promo.expires_at < datetime.now(timezone.utc): raise PromoExpired(code)`.",
+          "keep": true,
+          "rationale": "Confirmed inverted guard: shop/promos/apply.py:12 raises PromoExpired when promo.expires_at > datetime.now(timezone.utc), i.e. while the promo is still valid, and instead applies the discount once the promo has expired. models.py:18 documents 'the promo can be used until this instant', so the intended condition is expires_at < now. This is a different problem from the earlier normalization suggestion (line 9 lookup), not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py",
+                "startLine": 1,
+                "endLine": 25
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted guard rejects still-valid promos with `PromoExpired` while expired ones fall through and have their discount applied, the opposite of the model contract that `expires_at` can be used until this instant. Flip the comparison so it raises only once `promo.expires_at < datetime.now(timezone.utc)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 88815,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry check is inverted — it raises PromoExpired when `promo.expires_at > now` (the promo is still valid) and lets expired promos through. WHY: Every valid promo is rejected with PromoExpired, while promos past their expires_at still apply their discount, so the feature behaves exactly opposite to its contract (models.py:18 documents 'the promo can be used until this instant'). HOW: Flip the comparison to `if promo.expires_at <= datetime.now(timezone.utc):`.",
+          "keep": true,
+          "rationale": "Confirmed the inverted expiry check: line 12 raises PromoExpired when promo.expires_at > now (promo still valid) and lets expired promos (expires_at <= now) apply their discount, contradicting models.py:18's documented contract \"the promo can be used until this instant\". Not a repeat of any prior decision (index 2 was about code normalization).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Every still-valid promo is rejected with `PromoExpired`, while promos past their `expires_at` still apply their discount, the exact opposite of the contract documented in models.py:18. Flip the comparison to `if promo.expires_at <= datetime.now(timezone.utc):` so only promos past their expiry raise."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P39-promo-expiry-unrelated",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 81445,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry guard is inverted — it raises PromoExpired when `promo.expires_at` is in the future, i.e. when the promo is still valid. WHY: Per models.py:18 ('the promo can be used until this instant'), every unexpired promo is rejected with PromoExpired and expired promos are accepted and applied, producing the wrong outcome (valid codes fail, expired codes grant discounts). HOW: Flip the comparison to `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)`.",
+          "keep": true,
+          "rationale": "Confirmed at shop/promos/apply.py:12-13: `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired(code)` rejects promos whose expiry is in the future (still valid) and allows promos whose expiry is in the past (expired). models.py:18 documents expires_at as 'the promo can be used until this instant', so the comparison is inverted, producing the wrong outcome described. This is a different failure from the earlier normalization decision (index 2), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "models.py",
+                "path": "shop/promos"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the expiry guard is inverted, every unexpired promo is rejected with `PromoExpired` while expired promos are accepted and applied, contradicting `models.py:18`. Flip the comparison to `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)` so only expired promos are rejected."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P39-promo-expiry-unrelated-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 71952,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: the expiry check is inverted — it raises PromoExpired when `promo.expires_at > datetime.now(timezone.utc)`, i.e. exactly when the promo has NOT yet expired. WHY: every still-valid promo is rejected as expired and every already-expired promo is accepted and applied, so discounts are computed with the wrong promos (valid promos fail, expired ones give free discounts). HOW: flip the comparison to `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)`.",
+          "keep": true,
+          "rationale": "Confirmed. models.py:18 documents expires_at as \"the promo can be used until this instant\", so valid means now <= expires_at and expired means now > expires_at. The code raises PromoExpired when `promo.expires_at > datetime.now(timezone.utc)`, which is precisely the still-valid window, and lets already-past promos through. The comparison is inverted exactly as described, causing valid promos to be rejected and expired promos to grant discounts. Not covered by any PreviousReviewDecision (those concern src/reports/*).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class Promo"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted comparison makes `PromoExpired` fire for promos that are still valid while already-expired promos are accepted and applied, so valid discounts fail and expired ones give free discounts. Flip the check to raise `PromoExpired(code)` when `promo.expires_at <= datetime.now(timezone.utc)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P39-promo-expiry-unrelated-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 105573,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry guard is inverted — `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired(code)` raises PromoExpired when the promo is still valid (expires_at in the future) and lets already-expired promos through. WHY: Promos that are still within their validity window are rejected, while promos whose expires_at has passed are applied and grant a discount, contradicting the field contract in models.py:18 (\"the promo can be used until this instant\") and the intent of the PromoExpired guard. HOW: Flip the comparison to raise only when the promo has actually expired.",
+          "keep": true,
+          "rationale": "Confirmed by direct reading: apply.py:12 raises PromoExpired when expires_at is in the future (promo still valid) and lets expired promos through to grant a discount. models.py:18 documents expires_at as the last usable instant, so the comparison is inverted. None of the PreviousReviewDecisions concern this file or failure, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The guard rejects promos that are still within their validity window while applying already-expired promos and granting a discount, contradicting the `expires_at` contract in `models.py:18` that the promo can be used until this instant. Flip the comparison so `PromoExpired(code)` is raised only when `promo.expires_at < datetime.now(timezone.utc)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P39-promo-expiry-unrelated-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 71924,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry guard is inverted — `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired(code)` raises for promos whose expires_at is in the future and accepts promos whose expires_at has already passed. WHY: Every still-valid promo is rejected with PromoExpired while genuinely expired promos fall through and return a discount, per the field's own contract ('the promo can be used until this instant'). HOW: Flip the comparison to `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)` (use `<=` so the boundary instant counts as expired).",
+          "keep": true,
+          "rationale": "Confirmed: models.py:18 documents expires_at as 'the promo can be used until this instant', so a promo is valid while now <= expires_at. The guard `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired(code)` raises exactly when expires_at is in the future (valid promos rejected) and falls through for already-expired promos (discount wrongly granted). The comparison is genuinely inverted. No previous review decision addresses this issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at",
+                "path": "shop/promos"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted guard rejects every still-valid promo with `PromoExpired(code)` while genuinely expired promos fall through and return a discount, contradicting the field contract that the promo can be used until `expires_at`. Flip the comparison to `promo.expires_at <= datetime.now(timezone.utc)` so `PromoExpired(code)` is raised, using `<=` to make the boundary instant count as expired."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P39-promo-expiry-unrelated-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 63689,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: the expiry check is inverted — it raises PromoExpired when `promo.expires_at` is in the future and applies the discount when it is in the past. WHY: every still-valid promo is rejected (feature broken) while every already-expired promo is accepted and discounted (revenue loss / contract break), which is the opposite of the intended behavior described by the `expires_at` field comment. HOW: flip the comparison so the exception is raised once the promo has passed its expiry instant, e.g. `if promo.expires_at <= datetime.now(timezone.utc): raise PromoExpired(code)`.",
+          "keep": true,
+          "rationale": "Confirmed at shop/promos/apply.py:12-13: `if promo.expires_at > datetime.now(timezone.utc): raise PromoExpired(code)`. The model's own comment (models.py:18) states expires_at is the instant until which the promo CAN be used, so a future expires_at means still valid. The comparison is inverted: valid promos are rejected and expired promos are discounted. None of the previous review decisions concern this file or this issue. The finding is technically accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at",
+                "glob": "*.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py",
+                "startLine": 1,
+                "endLine": 25
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted expiry check causes every still-valid promo to raise `PromoExpired` while every already-expired promo is accepted and discounted, breaking the feature and causing revenue loss or contract breaches. Flip the comparison so `PromoExpired` is raised once `promo.expires_at` has passed, i.e. when `promo.expires_at <= datetime.now(timezone.utc)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P39-promo-expiry-unrelated-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 90983,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "shop/promos/apply.py",
+          "claim": "WHAT: The expiry check is inverted — it raises PromoExpired when promo.expires_at is greater than now (i.e. when the promo is still valid) and does not raise when the promo is already expired. WHY: Every promo whose expiry is in the future is rejected as expired, while every already-expired promo is accepted and its discount applied, exactly reversing the intended behavior (Promo.expires_at is documented as 'the promo can be used until this instant'). HOW: Flip the comparison to `if promo.expires_at <= datetime.now(timezone.utc):`.",
+          "keep": true,
+          "rationale": "Confirmed: shop/promos/models.py:18 documents expires_at as 'the promo can be used until this instant' (valid while now <= expires_at; expired when now > expires_at). The check at apply.py:12 raises PromoExpired when promo.expires_at > now, i.e. precisely while the promo is still valid, and lets already-expired promos fall through to apply the discount. The comparison is genuinely inverted relative to the documented contract, so the claim's root cause and failure path are correct. No PreviousReviewDecisions entry covers this file or this expiry logic.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/apply.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "expires_at",
+                "path": "shop"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/models.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "shop/promos/repo.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "shop/promos/apply.py",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The expiry check raises `PromoExpired` when `promo.expires_at` is greater than `datetime.now(timezone.utc)`, so every still-valid promo is rejected while every already-expired promo has its discount applied, reversing the documented behavior of `Promo.expires_at`. Flip the comparison to `if promo.expires_at <= datetime.now(timezone.utc):` so expired promos raise `PromoExpired(code)` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "promo-expiry-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

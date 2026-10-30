@@ -2,6 +2,25 @@ import { CreateSandboxParams, SandboxInstance } from './sandbox.provider';
 
 export const SANDBOX_LEASE_MANAGER_TOKEN = Symbol('SandboxLeaseManager');
 
+/**
+ * Thrown by acquire() when the lease was invalidated — the PR was closed or
+ * force-pushed — while the sandbox was being acquired or created. This is a
+ * SUPERSEDE, not a failure: the review is moot (a force-push re-triggers a
+ * fresh review on the new head; a closed PR needs none). Callers should treat
+ * it as such and continue self-contained, NOT log it as an error.
+ */
+export class SandboxInvalidatedError extends Error {
+    constructor(prKey: string, midCreate = false, options?: ErrorOptions) {
+        super(
+            `SandboxLeaseManager: sandbox invalidated${
+                midCreate ? ' mid-create' : ''
+            } for prKey="${prKey}"`,
+            options,
+        );
+        this.name = 'SandboxInvalidatedError';
+    }
+}
+
 export interface AcquireResult {
     sandbox: SandboxInstance;
     leaseId: string;

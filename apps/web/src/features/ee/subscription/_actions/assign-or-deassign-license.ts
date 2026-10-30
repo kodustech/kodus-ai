@@ -20,7 +20,7 @@ export const assignOrDeassignUserLicenseAction = async ({
 }) => {
     const jwtPayload = await auth();
 
-    const { error, successful } = await assignOrDeassignUserLicense({
+    const result = await assignOrDeassignUserLicense({
         teamId,
         user: {
             gitId: user.git_id,
@@ -34,7 +34,13 @@ export const assignOrDeassignUserLicenseAction = async ({
         userName,
     });
 
+    // Refused seats come back as `error` from the billing service but as
+    // `failed` from the self-hosted API. Callers only ever saw the former, so
+    // a rejected self-hosted assignment read as a success.
+    const failures =
+        "error" in result ? (result.error ?? []) : (result.failed ?? []);
+
     revalidatePath("/settings/subscription");
 
-    return { error, successful };
+    return { failures, successful: result.successful };
 };

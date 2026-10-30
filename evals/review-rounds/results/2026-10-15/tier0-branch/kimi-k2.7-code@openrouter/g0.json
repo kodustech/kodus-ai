@@ -1,0 +1,572 @@
+{
+  "model": "kimi-k2.7-code@openrouter",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "132199b01626ae41e00492d534f84a759d83f954",
+    "sourceDigest": "57647ba521db87a00603e893daa4e6eb7bece36b09f22dfd1fa79783726b7de6"
+  },
+  "startedAt": "2026-10-15T16:21:24.791Z",
+  "updatedAt": "2026-10-15T16:32:18.757Z",
+  "complete": true,
+  "selectedCases": [
+    "R1-repeat-open",
+    "R13-repeat-after-move",
+    "P05-rule-local-path-fixture-touched",
+    "P40-rule-pii-on-structured-log-lines"
+  ],
+  "casesSourceDigest": "a64e7c9038a52c25c06179949aefe3714cccd2690701f15d4fb27d03e1d71722",
+  "summary": {
+    "measured": 8,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 4,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 4,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R1-repeat-open · resubmit-repeat [not_deliver, proposed]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "R13-repeat-after-move · resubmit-repeat-moved [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P40-rule-pii-on-structured-log-lines · pii-log-field-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 1,
+    "floor": null,
+    "baseline": null
+  },
+  "runs": 2,
+  "tokens": {
+    "in": 396794,
+    "out": 42063,
+    "cacheRead": 340480,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 8
+  },
+  "cases": [
+    {
+      "id": "R1-repeat-open",
+      "checks": "resubmit-repeat: not posted",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "resubmit-repeat",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R13-repeat-after-move",
+      "checks": "resubmit-repeat-moved: not posted",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "resubmit-repeat-moved",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-moved",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P05-rule-local-path-fixture-touched",
+      "checks": "Kody Rule against local absolute paths, on a test fixture constant; the developer touched the line and the path is still there; stored implemented; 34 earlier comments",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "local-path-fixture-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-new-site",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P40-rule-pii-on-structured-log-lines",
+      "checks": "Kody Rule: a different rule (\"No personal data in logs\") broken on the very lines an earlier, implemented comment about another rule (\"Structured log fields\") covered; 4 earlier comments",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "pii-log-field-new-site",
+          "ok": true
+        },
+        {
+          "what": "pii-log-field-new-site",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 74210,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 93546,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 129535,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 102098,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 73087,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Absolute paths like `/Users/dev/billing-archive` only exist on the original developer's laptop, so tests will fail elsewhere. Replace it with a repository-relative path such as `FIXTURES / 'archive'` or a temporary directory."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 80051,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Using `archive_dir` as an absolute path from a developer machine (`/Users/dev/...`) will fail in CI or on other laptops. Replace it with a temporary directory, a repository-relative path, or a configurable setting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 38572,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P40-rule-pii-on-structured-log-lines",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/receipts.ts:11` (2026-10-06 12:00 UTC).\n\nLogging `customer.email` in `src/orders/receipts.ts` violates rule [42] by writing PII to logs. Remove `customerEmail` from the `logger.info` fields and keep `orderId` for correlation."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56661,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Logging `customerEmail` records personal identifiable information and violates Rule [42]. Drop the email from the log context and keep only `orderId`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

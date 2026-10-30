@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Badge } from "@components/ui/badge";
-import { Button } from "@components/ui/button";
 import {
     Tooltip,
     TooltipContent,
@@ -96,11 +95,12 @@ export const OverrideIndicator = <T,>({
         setPortalContainer(document.body);
     });
 
-    if (
-        currentLevel === FormattedConfigLevel.GLOBAL ||
-        !initialState ||
-        !portalContainer
-    ) {
+    // Don't gate the badge itself on portalContainer: it's only needed for the
+    // tooltip portal, and it's null until the post-mount effect runs — gating
+    // here hid the "Overridden" badge on first paint (it popped in a frame
+    // later, or stayed missing until a re-render). The tooltip falls back to
+    // the default portal target while portalContainer is still null.
+    if (currentLevel === FormattedConfigLevel.GLOBAL || !initialState) {
         return null;
     }
 
@@ -134,7 +134,7 @@ export const OverrideIndicator = <T,>({
                 </TooltipTrigger>
 
                 {/* Prevent tooltip from being cut off in overflow hidden containers */}
-                <TooltipPortal container={portalContainer}>
+                <TooltipPortal container={portalContainer ?? undefined}>
                     <TooltipContent>
                         <p>
                             This overrides the setting from the{" "}

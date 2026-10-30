@@ -31,7 +31,7 @@ export class TeamCliKeyModel extends CoreModel {
     @JoinColumn({ name: 'team_id', referencedColumnName: 'uuid' })
     team: TeamModel;
 
-    @ManyToOne(() => UserModel, { nullable: true })
+    @ManyToOne(() => UserModel, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'created_by_user_id', referencedColumnName: 'uuid' })
     createdBy?: UserModel;
 }

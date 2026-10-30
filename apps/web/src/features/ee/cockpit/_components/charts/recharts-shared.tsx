@@ -36,7 +36,7 @@ export const RechartsTooltip = ({
     labelFormatter,
     valueFormatter,
     hideZero = false,
-}: TooltipContentProps<number, string> & {
+}: Partial<TooltipContentProps<number, string>> & {
     labelFormatter?: (label: string) => string;
     valueFormatter?: (value: number, name: string) => string;
     /** Drop series with a 0 value (handy for stacked bars). */

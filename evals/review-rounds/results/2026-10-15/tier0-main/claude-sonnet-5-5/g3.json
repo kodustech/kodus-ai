@@ -1,0 +1,383 @@
+{
+  "model": "claude-sonnet-5-5",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "8c206718746410428f38bed002a490ba4fcfb0a5a9e4e86aab2b98b752a62c3d"
+  },
+  "startedAt": "2026-10-15T15:37:21.988Z",
+  "updatedAt": "2026-10-15T15:39:24.672Z",
+  "complete": true,
+  "selectedCases": [
+    "R12-unrelated-other-file",
+    "P01-rule-skip-comment-incomplete",
+    "P24-create-mode-section-hidden"
+  ],
+  "casesSourceDigest": "8fc1e61b6995acc0f6bff96a0186a57c1ca986ecc2355dcab5093f9b1c64ec57",
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 4,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 2,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R12-unrelated-other-file · refund-guard-inverted [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P01-rule-skip-comment-incomplete · skip-comment-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P24-create-mode-section-hidden · billing-hidden-on-create-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 1,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34151,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The guard comparison is inverted (`amount < charge.amount` instead of `amount > charge.amount`). WHY: Valid partial and exact-amount refunds ... partial refunds are rejected with 'refund exceeds the charge', while refunds larger than the original charge pass validation and are submitted to the gateway, allowing over-refunds. HOW: Restore `amount > charge.amount`.",
+          "keep": true,
+          "rationale": "The code at lines 4-6 throws 'refund exceeds the charge' when `amount < charge.amount`. That condition is inverted. Partial refunds are rejected, and refunds larger than the charge go through to `gw.submit`. This is a different problem from the earlier decision, which was about `status.ts`.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "With the comparison inverted, valid partial refunds are rejected with 'refund exceeds the charge', while refunds larger than the original charge pass validation and are submitted to the gateway, allowing over-refunds. Change the guard in `src/billing/refund.ts` back to `amount > charge.amount`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 2,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22552,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The guard comparison is inverted (`amount < charge.amount` instead of `amount > charge.amount`). WHY: Every partial refund is rejected with 'refund exceeds the charge'. Refunds larger than the original charge pass validation and are submitted to the gateway, which allows over-refunding money. HOW: Restore the original comparison.",
+          "keep": true,
+          "rationale": "The code at line 4 throws 'refund exceeds the charge' when amount < charge.amount. That is inverted. Partial refunds are rejected, and refunds larger than the charge go through to gw.submit. The previous decision concerned status.ts, which is a different problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Every partial refund is rejected with 'refund exceeds the charge', while refunds larger than the original charge pass validation and reach the gateway, allowing over-refunding of money. Change the guard in `src/billing/refund.ts` to compare with `amount > charge.amount` instead of `amount < charge.amount`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 1,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4662,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 2,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 2468,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 1,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18073,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 4,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 2,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30558,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `submit()` awaits `onSave(draft)` with no try/catch and is invoked as `void submit()`, so a rejected `onSave` becomes an unhandled promise rejection. WHY: a failed save, such as a network or server error, shows the user no error and logs an unhandled rejection. Nothing guards against a second submit while `onSave` is still pending either. HOW: wrap the `onSave` call in try/catch and push a message into `errors`, and optionally track a submitting flag.",
+          "keep": true,
+          "rationale": "The code matches the claim. `submit()` awaits `onSave(draft)` with no try/catch, and the form calls it as `void submit()`. A rejected `onSave` therefore becomes an unhandled rejection and the user sees no error. There is also no in-flight guard against a second submit. The earlier decision was about the billing section being hidden in create mode, which is a different problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm",
+                "glob": "*.tsx"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A failed save, such as a network or server error, shows the user nothing and surfaces only as an unhandled promise rejection, and a second submit can start while `onSave` is still pending. Wrap the `onSave(draft)` call in `submit()` in try/catch that pushes a message into `errors`, and optionally track a submitting flag."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

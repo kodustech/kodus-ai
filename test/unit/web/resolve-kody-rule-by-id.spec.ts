@@ -24,7 +24,7 @@ describe("resolveKodyRuleById", () => {
 
         const result = await resolveKodyRuleById(
             targetId,
-            { repositoryId: "769144833", directoryId: "dir-1", teamId: "team-1" },
+            { repositoryId: "900000001", directoryId: "dir-1", teamId: "team-1" },
             resolver,
         );
 
@@ -44,7 +44,7 @@ describe("resolveKodyRuleById", () => {
 
         const result = await resolveKodyRuleById(
             targetId,
-            { repositoryId: "769144833", directoryId: "dir-1", teamId: "team-1" },
+            { repositoryId: "900000001", directoryId: "dir-1", teamId: "team-1" },
             resolver,
         );
 
@@ -66,12 +66,12 @@ describe("resolveKodyRuleById", () => {
 
         const result = await resolveKodyRuleById(
             targetId,
-            { repositoryId: "769144833" }, // no teamId, no directoryId
+            { repositoryId: "900000001" }, // no teamId, no directoryId
             resolver,
         );
 
         expect(result).toEqual(target);
-        expect(resolver.byRepo).toHaveBeenCalledWith("769144833", undefined);
+        expect(resolver.byRepo).toHaveBeenCalledWith("900000001", undefined);
         expect(resolver.inherited).not.toHaveBeenCalled(); // skipped without teamId
         expect(resolver.all).toHaveBeenCalled();
     });
@@ -81,7 +81,7 @@ describe("resolveKodyRuleById", () => {
 
         const result = await resolveKodyRuleById(
             "does-not-exist",
-            { repositoryId: "769144833", teamId: "team-1" },
+            { repositoryId: "900000001", teamId: "team-1" },
             resolver,
         );
 
@@ -99,7 +99,7 @@ describe("resolveKodyRuleById", () => {
 
         const result = await resolveKodyRuleById(
             targetId,
-            { repositoryId: "769144833" },
+            { repositoryId: "900000001" },
             resolver,
         );
 

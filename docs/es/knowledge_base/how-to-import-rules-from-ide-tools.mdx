@@ -1,0 +1,31 @@
+---
+title: "Cómo usar tus instrucciones de Cursor, Copilot o Claude en la revisión de código"
+description: "Deja que Kody revise los pull requests contra las instrucciones que tu equipo ya escribió para agentes de código, y mantén como Kody Rules las convenciones que quieras aplicar."
+---
+
+Si tu equipo ya mantiene instrucciones para Cursor, GitHub Copilot, Claude u otros agentes de código, Kody puede leerlas durante la revisión de código y señalar los cambios que las incumplen.
+
+## Cómo funciona
+
+Kody lee los archivos de instrucciones que cubren los archivos que cambia un pull request. Los archivos compatibles incluyen:
+
+- `.cursorrules` y `.cursor/rules/**/*.mdc` (Cursor)
+- `.github/copilot-instructions.md` y `.github/instructions/**/*.instructions.md` (GitHub Copilot)
+- `CLAUDE.md` (Claude)
+- `AGENTS.md` y `.agents/rules/**` (convención agents.md)
+
+Un cambio que incumple alguno de ellos se reporta con la etiqueta **Repo Instruction**, citando la instrucción y el archivo del que proviene. Los archivos nunca se convierten en Kody Rules, así que no pueden cambiar tu política de revisión sin que lo notes.
+
+## Configuración
+
+1. Selecciona **Global** o un repositorio en el selector de alcance en la parte superior del grupo **Code review** de la barra lateral y abre **What to review**
+2. Activa **Coding-agent instructions**
+3. El siguiente pull request revisado en ese alcance se revisa contra los archivos de instrucciones que cubren sus cambios
+
+A los workspaces nuevos se les pregunta esto durante el onboarding, con la lista de archivos para agentes de código encontrados en cada repositorio.
+
+## Aplicar una convención en cada revisión
+
+Las instrucciones para agentes de código son contexto: Kody reporta una incumplida solo cuando aplica claramente a las líneas modificadas. Para una convención que quieras aplicar como cualquier otra regla de revisión, escríbela como una [Regla del Repositorio](/es/how_to_use/code_review/configs/repository_rules) en `.kody/rules`. Los archivos de reglas se sincronizan al fusionar, un archivo por regla, tal como están escritos.
+
+Para más detalles, consulta [Instrucciones para Agentes de Código](/es/how_to_use/code_review/configs/rules_file_detection).

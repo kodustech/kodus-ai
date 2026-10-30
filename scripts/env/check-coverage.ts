@@ -46,9 +46,18 @@ const ALLOWLIST: Array<{ pattern: RegExp; reason: string }> = [
         reason: 'test/dev fixtures (local-only helpers)',
     },
     {
+        // Opt-in flag that gates the live-API contract specs (the Fireworks
+        // trial-model availability + structured-output tests). Read only by
+        // those *.contract.spec.ts files, never by the api/worker/web runtime,
+        // so it must not live in .env.schema. Set to run the live pass:
+        // RUN_LIVE_CONTRACT_TESTS=1.
+        pattern: /^RUN_LIVE_CONTRACT_TESTS$/,
+        reason: 'test-only opt-in flag for live contract specs (not runtime config)',
+    },
+    {
         // Generic names captured by the grep that are almost certainly
         // DI tokens or test identifiers, not env vars.
-        pattern: /^(API_KEY|API_KEY_SECRET|API_KEY_SECRET_PEPPER|API_SECRET_KEY|RUN_NAME)$/,
+        pattern: /^(API_KEY|API_KEY_SECRET|API_KEY_SECRET_PEPPER|API_SECRET_KEY|RUN_NAME|RUN_ID)$/,
         reason: 'generic name — likely DI token or test fixture (false positive)',
     },
     {
@@ -63,7 +72,7 @@ const ALLOWLIST: Array<{ pattern: RegExp; reason: string }> = [
         // scripts in .github/workflows/*.yml (the scan includes *.yml).
         // Injected by the Actions runner — CI plumbing, never Kodus
         // runtime config, so they don't belong in .env.schema.
-        pattern: /^(GITHUB_OUTPUT|GITHUB_ENV|GITHUB_STATE|GITHUB_STEP_SUMMARY|GITHUB_PATH|RUNNER_TEMP)$/,
+        pattern: /^(GITHUB_OUTPUT|GITHUB_ENV|GITHUB_STATE|GITHUB_STEP_SUMMARY|GITHUB_PATH|GITHUB_WORKSPACE|RUNNER_TEMP)$/,
         reason: 'GitHub Actions workflow plumbing (inline node in *.yml), not a Kodus env var',
     },
 ];
@@ -95,6 +104,9 @@ function grepStrongUsages(): Set<string> {
         '--exclude-dir=.claude',
         '--exclude-dir=.cursor',
         '--exclude-dir=.vscode',
+        // Local scratch space (gitignored): may hold clones of other repos or
+        // old checkouts of this one, with env names this branch never reads.
+        '--exclude-dir=.tmp',
         // Nested git worktrees (Claude Code / manual `git worktree`) hold
         // checkouts of OTHER branches — older code using since-renamed env
         // names (e.g. API_OPENROUTER_KEY → API_OPEN_ROUTER_API_KEY,
@@ -119,6 +131,15 @@ function grepStrongUsages(): Set<string> {
         // strings (e.g. SECRET_RE in build-slim-csv.ts, KODUS_PREFIX_RE
         // here). Don't double-count those.
         '--exclude-dir=scripts/env',
+        // Measurement corpus, not runtime code. dataset.json embeds real
+        // source from third-party projects (harvested from public security
+        // advisories), so every `process.env.X` those projects happen to read
+        // — GITLAB_GRAPHQL_URL, MCP_SERVER_NAME and friends — looks like ours.
+        // Same category as evals above: tooling that never runs in api/worker/
+        // web, and a corpus that grows every time a sample is added.
+        // NOTE: --exclude-dir matches the directory BASENAME, not a path —
+        // 'scripts/security-benchmark' would be a silent no-op.
+        '--exclude-dir=security-benchmark',
         '--include=*.ts',
         '--include=*.tsx',
         '--include=*.js',

@@ -26,6 +26,7 @@
 import { WebhookProcessingJobProcessorService } from '@libs/automation/webhook-processing/webhook-processing-job.processor';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IWebhookEventHandler } from '@libs/platform/domain/platformIntegrations/interfaces/webhook-event-handler.interface';
 import { IWorkflowJobRepository } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
@@ -170,5 +171,113 @@ describe('WebhookProcessingJobProcessorService — AbortSignal propagation', () 
 
         // Handler should never be reached.
         expect(executeCalled).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * Regression coverage for "fix(github): fail fast + requeue on rate limit
+ * instead of sleeping silently" (PR #1658, 2026-08-05): before this fix,
+ * ANY error from the GitHub handler — including a rate limit — marked the
+ * job PERMANENT, which DLQ's it (no retry). The whole point of the fix is
+ * that a rate-limit-shaped error must instead be classified RATE_LIMITED
+ * and rethrown as the typed RateLimitError, so RabbitMQErrorHandler
+ * requeues it with a reset-aligned delay instead of dropping the review on
+ * the floor. classify-github-error.spec.ts (test/unit/core/workflow/errors)
+ * already pins the pure classifier; this pins that
+ * WebhookProcessingJobProcessorService actually USES it — the wiring that
+ * had zero coverage, and the actual point of the incident (the review was
+ * "silently LOST", not "the classifier returned the wrong type").
+ */
+describe('WebhookProcessingJobProcessorService — rate-limit classification wiring', () => {
+    let processor: WebhookProcessingJobProcessorService;
+
+    const mockJobRepository = {
+        findOne: jest.fn(),
+        update: jest.fn(),
+    };
+
+    const otherHandlers = {
+        gitlab: { canHandle: jest.fn(), execute: jest.fn() },
+        bitbucket: { canHandle: jest.fn(), execute: jest.fn() },
+        azure: { canHandle: jest.fn(), execute: jest.fn() },
+        forgejo: { canHandle: jest.fn(), execute: jest.fn() },
+    };
+
+    function handlerRejectingWith(error: unknown): IWebhookEventHandler {
+        return {
+            canHandle: jest.fn().mockReturnValue(true),
+            execute: jest.fn().mockRejectedValue(error),
+        };
+    }
+
+    function githubRateLimitError() {
+        const resetUnixSeconds = Math.floor(Date.now() / 1000) + 1800;
+        return {
+            status: 403,
+            response: {
+                headers: {
+                    'x-ratelimit-remaining': '0',
+                    'x-ratelimit-reset': String(resetUnixSeconds),
+                },
+            },
+        };
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockJobRepository.findOne.mockResolvedValue(makeJob());
+        mockJobRepository.update.mockResolvedValue(undefined);
+    });
+
+    it('marks the job RATE_LIMITED (not PERMANENT) and rethrows a RateLimitError on a rate-limit-shaped failure', async () => {
+        processor = new WebhookProcessingJobProcessorService(
+            mockJobRepository as unknown as IWorkflowJobRepository,
+            handlerRejectingWith(githubRateLimitError()),
+            otherHandlers.gitlab as unknown as IWebhookEventHandler,
+            otherHandlers.bitbucket as unknown as IWebhookEventHandler,
+            otherHandlers.azure as unknown as IWebhookEventHandler,
+            otherHandlers.forgejo as unknown as IWebhookEventHandler,
+        );
+
+        await expect(
+            processor.process('job-webhook-1'),
+        ).rejects.toMatchObject({ name: 'RateLimitError' });
+
+        expect(mockJobRepository.update).toHaveBeenCalledWith(
+            'job-webhook-1',
+            expect.objectContaining({
+                status: JobStatus.FAILED,
+                errorClassification: ErrorClassification.RATE_LIMITED,
+            }),
+        );
+        // The PERMANENT path (DLQ, no retry) must NOT have been taken for a
+        // rate limit — that is precisely the bug (review silently lost).
+        expect(mockJobRepository.update).not.toHaveBeenCalledWith(
+            'job-webhook-1',
+            expect.objectContaining({ errorClassification: ErrorClassification.PERMANENT }),
+        );
+    });
+
+    it('keeps a genuine (non-rate-limit) failure PERMANENT — the fix must not blanket-retry every error', async () => {
+        processor = new WebhookProcessingJobProcessorService(
+            mockJobRepository as unknown as IWorkflowJobRepository,
+            handlerRejectingWith(new Error('Repository not found')),
+            otherHandlers.gitlab as unknown as IWebhookEventHandler,
+            otherHandlers.bitbucket as unknown as IWebhookEventHandler,
+            otherHandlers.azure as unknown as IWebhookEventHandler,
+            otherHandlers.forgejo as unknown as IWebhookEventHandler,
+        );
+
+        await expect(processor.process('job-webhook-1')).rejects.toThrow(
+            'Repository not found',
+        );
+
+        expect(mockJobRepository.update).toHaveBeenCalledWith(
+            'job-webhook-1',
+            expect.objectContaining({
+                status: JobStatus.FAILED,
+                errorClassification: ErrorClassification.PERMANENT,
+            }),
+        );
     });
 });

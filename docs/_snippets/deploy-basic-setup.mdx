@@ -40,17 +40,17 @@
 
     **Optional:**
     - `kodus-mcp-manager` — Model Context Protocol broker. Enable with
-      `API_MCP_SERVER_ENABLED=true`. See [MCP Manager](/how_to_deploy/en/deploy_kodus/mcp_manager).
+      `API_MCP_SERVER_ENABLED=true`. See [MCP Manager](/en/how_to_deploy/deploy_kodus/mcp_manager).
     - `worker-analytics` — Cockpit ingestion (DORA metrics, PR
       classifier). **Self-hosted Enterprise only**, not wired by default.
-      See [Analytics Worker](/how_to_deploy/en/deploy_kodus/analytics_worker).
+      See [Analytics Worker](/en/how_to_deploy/deploy_kodus/analytics_worker).
   </Accordion>
 </AccordionGroup>
 
 <Note>
   Code review uses an AST graph + cross-file context that runs in a
   sandbox — `local` (default, runs inside the worker) or `e2b` (paid
-  remote sandbox). See [Sandbox & AST Graph](/how_to_deploy/en/deploy_kodus/sandbox)
+  remote sandbox). See [Sandbox & AST Graph](/en/how_to_deploy/deploy_kodus/sandbox)
   for the modes, caching behavior, and when to pick each.
 </Note>
 
@@ -102,7 +102,7 @@ Both subdomains should have DNS A records pointing to your server's IP address. 
     nano .env
     ```
 
-    See [Environment Variables Configuration](/how_to_deploy/en/deploy_kodus/generic_vm#environment-variables-configuration) for detailed instructions.  
+    See [Environment Variables Configuration](/en/how_to_deploy/deploy_kodus/generic_vm#environment-variables-configuration) for detailed instructions.
   </Step>
 
   <Step title="Run the installer">
@@ -126,7 +126,7 @@ Both subdomains should have DNS A records pointing to your server's IP address. 
 
 <Info>
   For detailed steps on the initial configuration process, refer to our [Getting
-  Started Guide](/how_to_use/en/quickstart).
+  Started Guide](/en/how_to_use/quickstart).
 </Info>
   </Step>
 </Steps>

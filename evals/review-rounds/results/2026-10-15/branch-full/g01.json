@@ -1,0 +1,3939 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "65d8210f3d4ff1d5a5fa4e69740a3ec8f2c429d859a98bb946084efd8385a404"
+  },
+  "startedAt": "2026-10-15T00:56:00.269Z",
+  "updatedAt": "2026-10-15T02:05:19.137Z",
+  "complete": true,
+  "selectedCases": [
+    "R2-consequence-status-implemented",
+    "R8-consequence-kody-rule-prior",
+    "R14-repeat-of-rule-by-finder",
+    "K9-rule-repost-prod-rules-volume",
+    "P06-rule-cli-exit-code-weak-assertion",
+    "P14-rule-mock-undefined-moved",
+    "P22-rule-forward-parsed-pingpong",
+    "P30-probe-retries-timeouts-only",
+    "P38-unreachable-retry-reintroduced"
+  ],
+  "casesSourceDigest": "58a70a3543364c600a3cc98fd528ff4eb142a2d1cfaa0b0679b26bc0d93ea5a4",
+  "summary": {
+    "measured": 45,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 35,
+        "violations": 3,
+        "rate": 0.086
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 25,
+        "violations": 4,
+        "rate": 0.16
+      },
+      "index-reference (#2039)": {
+        "n": 27,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R2-consequence-status-implemented · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 2,
+        "n": 5,
+        "delivered": 2
+      },
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 4
+      },
+      "R14-repeat-of-rule-by-finder · resubmit-repeat-of-rule [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K9-rule-repost-prod-rules-volume · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K9-rule-repost-prod-rules-volume · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P06-rule-cli-exit-code-weak-assertion · cli-exit-code-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P06-rule-cli-exit-code-weak-assertion · cli-exit-code-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P14-rule-mock-undefined-moved · mock-undefined-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 5,
+        "delivered": 3
+      },
+      "P22-rule-forward-parsed-pingpong · create-order-raw-body-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P22-rule-forward-parsed-pingpong · cancel-order-raw-body-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P30-probe-retries-timeouts-only · probe-reset-not-retried-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P38-unreachable-retry-reintroduced · retry-unreachable-reintroduced-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 99354,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Rethrowing NotReadyError here makes pollCharge's resubmit branch reachable, and that branch calls gw.submit, which the Gateway contract documents as NOT idempotent (\"every call creates a new charge\"). WHY: NotReadyError is defined as \"the gateway has the charge but has not settled it yet (transient)\" (errors.ts:1-2); before this PR fetchStatus wrapped it in FailedError so pollCharge's `instanceof NotReadyError` branch never ran — now a merely-unsettled charge causes gw.submit(charge.payload), creating a second charge (duplicate charge / double billing). HOW: Keep propagating NotReadyError, but have the caller retry the read (gw.status) instead of resubmitting, or make submit idempotent keyed by charge.id.",
+          "keep": true,
+          "rationale": "Confirmed the full chain in the current code. status.ts:8-10 now rethrows NotReadyError instead of wrapping it in FailedError. poller.ts:13-15 catches `err instanceof NotReadyError` and calls `gw.submit(charge.payload)`, which gateway.ts:3 explicitly documents as NOT idempotent ('every call creates a new charge'). errors.ts:1 defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', so a merely-unsettled charge now reaches the resubmit branch and issues a duplicate charge. Before this change, FailedError wrapping made that branch unreachable. The poller.ts:7 comment claiming NotReadyError means 'the gateway never received it' contradicts errors.ts but is only a comment; the authoritative error semantics support the finding. This is a concrete, non-speculative double-billing path activated by the diff, not style, and no guard prevents it. Cannot refute; keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|implements Gateway|new NotReadyError",
+                "excludeTests": true,
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "label": "bug",
+          "earlierId": "round-a-propagate",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-propagate",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 135514,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged from fetchStatus makes the caller's resubmit branch in pollCharge reachable, and that branch calls gw.submit, which is documented as non-idempotent (every call creates a new charge), while NotReadyError itself is documented as 'the gateway has the charge but has not settled it yet'. WHY: a charge the gateway already holds gets submitted again, creating a duplicate charge and double-billing the customer. HOW: distinguish the two cases — either don't resubmit on this error (retry gw.status only, since the gateway already has the charge), or make the resubmit idempotent by passing a stable idempotency key / checking gw.status before calling submit. The class doc in errors.ts and the resubmit logic in poller.ts must agree on what NotReadyError means.",
+          "keep": true,
+          "rationale": "Confirmed: status.ts:8-11 propagates NotReadyError unchanged; poller.ts:13-15 catches it and calls gw.submit. errors.ts:1 documents NotReadyError as \"the gateway has the charge but has not settled it yet\", while gateway.ts:3-4 documents submit as non-idempotent (\"every call creates a new charge\"). Thus the propagated error reaches pollCharge's resubmit branch for a charge the gateway already holds, producing a duplicate charge / double-billing. The applied prior-round fix is exactly what makes this branch reachable, and the current diff is concrete evidence the applied change yields a wrong outcome. Not refutable as style/doc-only; it is a real behavioral contradiction with a concrete failure path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/billing/poller.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/billing/gateway.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The new `if (err instanceof NotReadyError) throw err;` forwards a transient NotReadyError to pollCharge, whose catch calls `gw.submit(charge.payload)` — but gateway.submit is documented as NOT idempotent (\"every call creates a new charge\") while NotReadyError is documented as \"the gateway has the charge but has not settled it yet\". WHY: every charge that is merely not settled yet now triggers an extra submit, creating a duplicate charge on the gateway (the previous FailedError wrap kept this resubmit path unreachable, so the change newly exposes it). HOW: only resubmit when the gateway genuinely never received the charge (a distinct \"not received\" error), or make submit idempotent by keying on charge.id; for a transient not-settled state, return/retry without resubmitting.",
+          "keep": true,
+          "rationale": "Confirmed all four documented facts: status.ts now propagates NotReadyError (lines 8-9); poller.ts catches NotReadyError and calls gw.submit (lines 13-15); gateway.ts declares submit NOT idempotent; errors.ts documents NotReadyError as 'the gateway has the charge but has not settled it yet' — directly contradicting poller's 'never received it' resubmit assumption. Before the change, fetchStatus wrapped NotReadyError in FailedError, making the resubmit branch unreachable; the new throw makes it reachable for the already-received-not-settled case, triggering a non-idempotent submit and a duplicate charge. No idempotency key or guard prevents it. This is a distinct consequence newly exposed by the applied prior suggestion (round-a-propagate), not a reversal of it, so it is not superseded.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|submit\\(|NotReadyError|FailedError",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nA charge the gateway already holds gets submitted again, creating a duplicate charge and double-billing the customer. Distinguish the two cases: don't resubmit on `NotReadyError` since the gateway already has the charge (retry `gw.status` only), or make the resubmit idempotent by passing a stable idempotency key or checking `gw.status` before calling `gw.submit`, and ensure the class doc in `errors.ts` and the resubmit logic in `poller.ts` agree on what `NotReadyError` means."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nEvery charge that is merely not settled yet now triggers an extra `gw.submit` call, creating a duplicate charge on the gateway; the previous `FailedError` wrap kept this resubmit path unreachable, so the change newly exposes it. Only resubmit when the gateway genuinely never received the charge (a distinct \"not received\" error), or make `gw.submit` idempotent by keying on `charge.id`, and for a transient not-settled state return or retry without resubmitting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 183287,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError (status.ts:9) to its only caller pollCharge, which reacts by resubmitting the charge via the non-idempotent gw.submit (poller.ts:14) — even though errors.ts:2 documents NotReadyError as 'the gateway has the charge but has not settled it yet'. WHY: before this PR fetchStatus wrapped NotReadyError into FailedError, so the resubmit branch in pollCharge was unreachable; now every poll tick against a not-yet-settled charge calls gw.submit again, and because gateway.submit is explicitly documented as NOT idempotent (gateway.ts:3) this creates a duplicate charge / double billing. Note poller.ts:7's comment ('the gateway never received it: resubmit') directly contradicts errors.ts:1-2, so the two modules disagree on what NotReadyError means. HOW: reconcile the semantics — either only resubmit on a distinct 'charge unknown/never received' error and treat NotReadyError as a pure retry-later (no submit), or make submit idempotent via a dedupe/idempotency key derived from the charge, before relying on the propagation introduced here.",
+          "keep": true,
+          "rationale": "Confirmed by reading all four files. fetchStatus (status.ts:8-9) rethrows NotReadyError, which is the only error pollCharge (poller.ts:13-14) treats as a signal to call the non-idempotent gw.submit (gateway.ts:3). errors.ts:1-2 documents NotReadyError as 'the gateway HAS the charge but has not settled it yet,' directly contradicting poller.ts:7's 'never received it: resubmit' assumption. Prior to this PR fetchStatus wrapped NotReadyError in FailedError, making the resubmit branch unreachable; the change activates it, so an unsettled charge gets re-submitted each tick -> duplicate/double billing. The failure path is real and reachable, not speculative. This is a distinct defect created by applying the earlier round-a-propagate suggestion (which addressed terminal misclassification), not a mere reversal of it, so it should be kept.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "label": "bug",
+          "earlierId": "round-a-propagate",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-propagate",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 164147,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError unchanged now makes pollCharge (src/billing/poller.ts:13-15) treat a transient \"not settled yet\" charge as \"never received\" and call the non-idempotent gw.submit. WHY: errors.ts:1-2 defines NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\", while gateway.ts:3 documents submit as \"NOT idempotent: every call creates a new charge\" — so each poll tick for an unsettled charge now resubmits the payload and creates a duplicate charge. This reverses the practical effect of the earlier suggestion to propagate NotReadyError unchanged. HOW: distinguish the two cases at the source — either introduce a distinct error for \"never received\" that the poller resubmits on (leaving the transient NotReadyError to simply retry without submitting), or make Gateway.submit idempotent (e.g. an idempotency key) so the poller's resubmit path is safe.",
+          "keep": true,
+          "rationale": "The claim is confirmed by the actual code. errors.ts:1 defines NotReadyError as a transient \"not settled yet\" condition, while gateway.ts:3 states submit is NOT idempotent (\"every call creates a new charge\"). status.ts:8-11 (the applied propagation change) re-throws NotReadyError unchanged, so it now flows into poller.ts:13-15, which treats it as \"never received\" and calls the non-idempotent gw.submit. Before this change fetchStatus wrapped NotReadyError in FailedError, so the poller's resubmit branch was dead; the change activates it, producing duplicate charges on each poll tick for an unsettled charge. The failure path is reachable and unguarded, so this is a real behavior bug, and it explicitly revises the earlier round-a-propagate suggestion.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRe-throwing `NotReadyError` unchanged makes `pollCharge` (src/billing/poller.ts:13-15) treat a transient \"not settled yet\" charge as \"never received\" and call the non-idempotent `gw.submit`, so every poll tick resubmits the payload and creates a duplicate charge. Distinguish the two cases at the source by introducing a distinct \"never received\" error that the poller resubmits on while the transient `NotReadyError` simply retries, or make `Gateway.submit` idempotent (e.g. an idempotency key) so the resubmit path is safe."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 107938,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Rethrowing NotReadyError unchanged makes pollCharge treat a transient 'not settled yet' condition as 'gateway never received it' and call the non-idempotent gw.submit(charge.payload). WHY: errors.ts:1 defines NotReadyError as 'the gateway has the charge but has not settled it yet (transient)', while gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge' — so every poll tick where a charge is still settling now creates a duplicate charge (double-billing). Before this change fetchStatus wrapped NotReadyError in FailedError, leaving pollCharge's resubmit branch unreachable; this PR newly exposes it. HOW: separate the two semantics — either do not resubmit on NotReadyError (retry next tick) in pollCharge, or throw a distinct error type that specifically means 'not received'.",
+          "keep": true,
+          "rationale": "The claim is supported by the actual code. errors.ts:1 documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', while gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge'. status.ts:8-9 now rethrows NotReadyError unchanged, making poller.ts:13-15's resubmit branch reachable: every poll tick where a charge is still settling triggers gw.submit(charge.payload), creating a duplicate charge (double-billing). Before this change fetchStatus wrapped NotReadyError in FailedError, leaving that branch unreachable — so the PR newly exposes the failure path. This is concrete evidence that the earlier applied change (round-a-propagate) is incomplete: it propagated NotReadyError without reconciling the two contradictory semantics ('has the charge, not settled' vs poller's 'never received it'). Not refutable as a real defect.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|FailedError|pollCharge|fetchStatus|submit\\(",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "implements Gateway|throw new NotReadyError"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "label": "bug",
+          "earlierId": "round-a-propagate",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-propagate",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 203228,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged makes poller.pollCharge reach its `gw.submit(charge.payload)` branch, but NotReadyError is defined (errors.ts:1) as \"the gateway HAS the charge but has not settled it yet\" while submit is documented (gateway.ts:3) as \"NOT idempotent: every call creates a new charge.\" WHY: every transient NotReady now causes a resubmit of a charge the gateway already holds, creating a duplicate charge (double billing) — before this change fetchStatus converted NotReadyError to FailedError, so poller's branch was dead and no resubmit happened. HOW: make the retry idempotent — either have poller re-poll status (not resubmit) on NotReadyError, or pass a stable idempotency key to submit so a repeat submit for the same charge is a no-op. This revises the earlier \"propagate NotReadyError unchanged\" suggestion because that propagation, combined with the non-idempotent resubmit in poller, introduces duplicate charges.",
+          "keep": true,
+          "rationale": "Verified against source: errors.ts:1 defines NotReadyError as \"gateway has the charge but has not settled it yet\", gateway.ts:3 documents submit as non-idempotent (\"every call creates a new charge\"), and poller.ts:13-15 resubmits via gw.submit(charge.payload) whenever fetchStatus throws NotReadyError. status.ts:8-9 now rethrows NotReadyError unchanged, so the previously-dead poller branch is activated. No upstream guard blocks it, and pollCharge runs each tick, so a transient NotReady (gateway already holds the charge) leads to a resubmit and duplicate charge/double billing. The described root cause and failure path are factually accurate and are a new consequence of applying the earlier \"propagate unchanged\" suggestion, so it is a legitimate revision, not a duplicate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|submit|NotReadyError|FailedError",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nPropagating `NotReadyError` unchanged lets `poller.pollCharge` reach its `gw.submit(charge.payload)` branch for a charge the gateway already holds, and since `submit` is not idempotent (gateway.ts:3) every transient `NotReady` becomes a duplicate charge and double billing — previously `fetchStatus` converted `NotReadyError` to `FailedError`, so that branch was dead. Make the retry idempotent by having `poller` re-poll status on `NotReadyError`, or pass a stable idempotency key such as `charge.id` to `submit`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 84898,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged (line 9) makes pollCharge's resubmit branch newly reachable, and that branch calls gw.submit — which gateway.ts documents as NOT idempotent (\"every call creates a new charge\") — for an error that errors.ts defines as \"The gateway has the charge but has not settled it yet (transient)\". WHY: When gw.status throws NotReadyError for a charge the gateway already holds, pollCharge now re-submits it, creating a duplicate charge (double billing), whereas previously the error was wrapped in FailedError and this path was dead. HOW: If NotReadyError means \"already received, not settled\" (per errors.ts), the poller must not resubmit; instead it should treat it as transient and re-poll, or submit must be made idempotent via a charge-level idempotency key. Reconcile the two contradictory definitions (errors.ts vs the poller.ts comment) and only resubmit when the gateway truly never received the charge.",
+          "keep": true,
+          "rationale": "Confirmed against the code: status.ts:8-9 propagates NotReadyError unchanged, whereas previously all errors were wrapped in FailedError, making pollCharge's NotReadyError branch (poller.ts:13-16) unreachable. The change activates it, and that branch calls gw.submit, which gateway.ts:3 explicitly documents as non-idempotent (\"every call creates a new charge\"). errors.ts:1 defines NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\" — the exact condition under which resubmitting would create a duplicate charge. No guard prevents gw.status from throwing NotReadyError, so the double-billing path is reachable. The finding's mechanism is accurate and not refuted by any code; it is a new problem arising from the earlier propagation change.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|pollCharge|resubmit|submit\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/billing/poller.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/billing/gateway.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "label": "bug",
+          "earlierId": "round-a-propagate",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-propagate",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 128879,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError unchanged makes pollCharge's resubmit branch reachable, but errors.ts defines NotReadyError as 'the gateway has the charge but has not settled it yet' while gateway.submit is explicitly non-idempotent ('every call creates a new charge'). WHY: with the propagation now live, every transient not-ready status triggers gw.submit(charge.payload), creating a duplicate charge for a charge the gateway already holds. HOW: reconcile the contract — if NotReadyError means the gateway already has the charge, poll again instead of resubmitting (do not call the non-idempotent submit), or make submit idempotent with an idempotency key before relying on the resubmit path.",
+          "keep": true,
+          "rationale": "All three supporting facts are confirmed in code: errors.ts documents NotReadyError as \"the gateway has the charge but has not settled it yet\"; gateway.ts:3-4 states submit is NOT idempotent (\"every call creates a new charge\"); and status.ts:8-10 (the re-throw applied in the prior round) makes poller.ts's NotReadyError branch reachable, which then calls the non-idempotent gw.submit(charge.payload). Thus a transient not-ready status for a charge the gateway already holds produces a duplicate charge. The previous decision only required keeping retryable errors retryable and did not adjudicate the resubmit/non-idempotency consequence, so it does not excuse this distinct defect. The root cause and failure path are real and reachable; cannot refute.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRe-throwing `NotReadyError` unchanged makes `pollCharge`'s resubmit branch reachable, and because `errors.ts` defines `NotReadyError` as the gateway already holding the charge while `gateway.submit` is non-idempotent, every transient not-ready status triggers `gw.submit(charge.payload)` and creates a duplicate charge. Reconcile the contract so that if `NotReadyError` means the gateway already has the charge, poll again instead of resubmitting, or make `submit` idempotent with an idempotency key before relying on the resubmit path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 205006,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged (status.ts:8-9) now reaches pollCharge, whose handler calls gw.submit — documented as non-idempotent (\"every call creates a new charge\") — even though NotReadyError is documented as \"the gateway has the charge but has not settled it yet (transient)\" (errors.ts:1-2). WHY: For any gateway response where the charge already exists but is unsettled, the resubmit path creates a second charge, double-charging the customer; before this change that branch was unreachable because every error was wrapped in FailedError. HOW: Treat NotReadyError as a transient pending state in pollCharge (return a pending result / re-poll status) instead of resubmitting, or reconcile the two contradictory definitions of NotReadyError so resubmit is only used when the gateway genuinely never received the charge.",
+          "keep": true,
+          "rationale": "The flow is verified: status.ts now propagates NotReadyError, which poller.ts catches and handles by calling gw.submit — documented non-idempotent (\"every call creates a new charge\"). errors.ts documents NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\", so under that documented semantics the resubmit creates a duplicate charge. Before this change, fetchStatus wrapped every error in FailedError, making pollCharge's NotReadyError branch unreachable; the diff activates it. The two contradictory NotReadyError definitions (transient/unsettled vs. never-received) are a real mismatch that produces a double-charge path, not a style issue. The prior review decision only required propagating NotReadyError; it did not evaluate the downstream resubmit, so it does not refute this distinct problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|FailedError|gw.submit",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `NotReadyError` from `status.ts:8-9` now propagates unchanged into `pollCharge`, whose handler calls the non-idempotent `gw.submit` even though `errors.ts:1-2` documents that error as the gateway having the charge but not settled it yet, any gateway response where the charge already exists but is unsettled takes the resubmit path and creates a second charge, double-charging the customer; before this change that branch was unreachable because every error was wrapped in `FailedError`. Treat `NotReadyError` as a transient pending state in `pollCharge` (return a pending result or re-poll status) instead of resubmitting, or reconcile the two contradictory definitions so `gw.submit` is only used when the gateway genuinely never received the charge."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 142597,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError here makes pollCharge's previously-dead resubmit branch reachable (poller.ts:13-15), which calls the explicitly non-idempotent gw.submit and creates a new charge for a charge the gateway already holds. WHY: errors.ts defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)' while gateway.submit is documented 'NOT idempotent: every call creates a new charge', so each poll tick for an unsettled charge now issues another submit -> duplicate/accumulating charges (double billing). HOW: keep propagating NotReadyError, but stop treating it as 'gateway never received it' at the consumer — either drop the resubmit in pollCharge and simply retry status on the next tick, or make the resubmission idempotent (dedupe by charge id) before calling gw.submit.",
+          "keep": true,
+          "rationale": "Confirmed. errors.ts:1 documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge'. Before this change, fetchStatus caught every error and wrapped it in FailedError, so the `err instanceof NotReadyError` branch in pollCharge (poller.ts:13-15) was unreachable. By re-throwing NotReadyError unchanged (status.ts:8-9), the branch becomes live: each poll tick for a charge the gateway already holds will call gw.submit again, creating a new (non-idempotent) charge -> duplicate/double billing. The root cause and failure path are exactly as described; no upstream guard prevents it. The finding is a distinct consumer-side problem that surfaces because the earlier 'propagate NotReadyError' suggestion was applied, so it is a valid revision rather than a re-raise.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRe-throwing `NotReadyError` makes `pollCharge`'s previously dead resubmit branch reachable at `poller.ts:13-15`, and because `errors.ts` defines it as a transient 'gateway has the charge but has not settled it yet' while `gateway.submit` is documented as NOT idempotent, each poll tick calls `gw.submit` again and creates duplicate/accumulating charges (double billing). Keep propagating `NotReadyError`, but stop treating it as 'gateway never received it' at the consumer by either dropping the resubmit in `pollCharge` and retrying status on the next tick or making the resubmission idempotent (dedupe by charge id) before calling `gw.submit`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 119309,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollCharge still calls gw.submit(charge.payload) when fetchStatus throws NotReadyError, but NotReadyError is documented as 'the gateway has the charge but has not settled it yet' (errors.ts:1) and Gateway.submit is documented as non-idempotent ('every call creates a new charge', gateway.ts:3-4). WHY: pollCharge runs on every tick, so each tick for an accepted-but-unsettled charge creates an additional duplicate charge at the gateway — the new metrics.increment sits directly on top of this resubmit, so the counter will climb in lockstep with the duplicate charges. HOW: do not resubmit on NotReadyError; treat it as transient and return a pending state (or resubmit only with an idempotency key, which the Gateway interface does not currently support).",
+          "keep": true,
+          "rationale": "Confirmed by direct evidence. errors.ts:1 documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', while gateway.ts:3-4 documents submit as 'NOT idempotent: every call creates a new charge'. pollCharge (poller.ts:14-17) catches NotReadyError and calls gw.submit(charge.payload) on every tick, so each tick for an accepted-but-unsettled charge creates an additional duplicate charge. The local comment at poller.ts:8 ('NotReadyError means \"the gateway never received it\": resubmit') directly contradicts the authoritative error semantics, so the code's premise is factually wrong. The prior round-a-resubmit decision is marked not_implemented (not a rejection), and the current diff still contains the resubmit path, so there is no applied change refuting this. The root cause, failure path, and the new metrics.increment placement are all accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|class Gateway|interface Gateway|submit",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|submit",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 10,
+                "path": "src/billing/gateway.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/billing/status.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: metrics.increment('billing.resubmit') is executed before the awaited gw.submit call, so the counter is incremented even when the resubmit attempt fails and throws. WHY: the 'billing.resubmit' metric cannot distinguish resubmit attempts from successful resubmits, over-counting whenever gw.submit rejects (which is precisely the failure path this metric is meant to observe). HOW: increment after the submit resolves successfully, or emit a separate attempt/success/failure metric.",
+          "keep": true,
+          "rationale": "The code at src/billing/poller.ts:15-16 does exactly what the finding claims: `metrics.increment('billing.resubmit')` is executed unconditionally before the awaited `gw.submit(charge.payload)`. If `gw.submit` rejects, the increment has already fired and the error propagates (line 19), so the single `billing.resubmit` counter is bumped even though no resubmit completed, and it cannot distinguish attempts from successful resubmits. Nothing upstream guards this path — the increment sits inside the `err instanceof NotReadyError` branch immediately preceding the await. The claim is a factual description of the control flow, not a style/naming nitpick, and I found no evidence refuting it (no separate success/failure metric, no increment after the await). The only counter-argument is intent (the name could be read as counting attempts), which is a judgment call, not a refutation. Default to keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "billing\\.resubmit"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The `billing.resubmit` counter is incremented before `gw.submit` is awaited, so it counts failed attempts as resubmits and over-counts on exactly the rejection path it is meant to observe. Increment after `gw.submit` resolves successfully, or emit separate attempt/success/failure metrics."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 89149,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: The branch instrumented by the new `metrics.increment('billing.resubmit')` calls `gw.submit(charge.payload)` on `NotReadyError`, but `NotReadyError` means the gateway already holds the charge (errors.ts:1) and `Gateway.submit` is documented as non-idempotent (gateway.ts:3-4), so every tick re-creates the charge. WHY: On a transient not-settled state, each poll creates a duplicate charge, causing double/multiple billing. HOW: Do not resubmit; treat NotReadyError as pending and return without calling submit (e.g. `if (err instanceof NotReadyError) { metrics.increment('billing.not_ready'); return { state: 'pending' as const }; }`), only re-checking status on later ticks.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:1 documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', while gateway.ts:3-4 documents submit() as 'NOT idempotent: every call creates a new charge.' poller.ts:14-17 catches NotReadyError and calls gw.submit(charge.payload) on every tick, so a transient not-settled state produces a duplicate charge each poll — exactly the double-billing path the finding describes. The poller's own comment (lines 7-8) claiming NotReadyError means the gateway 'never received it' directly contradicts the error's definition, so the resubmit rationale is unfounded. The referenced files exist (findFile miss was a path/glob artifact) and the prior decision (not_implemented) only confirms the issue was already surfaced, not resolved.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/billing/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/billing/gateway.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/billing/status.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 96168,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: On a transient NotReadyError the catch block calls `gw.submit(charge.payload)` again, but `gateway.ts` documents `submit` as NOT idempotent (\"every call creates a new charge\") and `errors.ts` documents NotReadyError as \"The gateway has the charge but has not settled it yet\". WHY: Every poll tick that observes a not-yet-settled charge submits a brand-new charge, so a single logical payment produces duplicate/parallel charges and the customer can be billed more than once; the newly added metric now counts each of these duplicate submissions as a normal \"resubmit\". HOW: Do not re-submit on NotReadyError — treat it as transient and wait for the next tick (e.g. return `{ state: 'pending' as const }` without calling `gw.submit`); only submit when the gateway is known not to have received the charge, using an idempotency key.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts documents NotReadyError as \"The gateway has the charge but has not settled it yet\", and gateway.ts documents submit as \"NOT idempotent: every call creates a new charge\". poller.ts:14-16 resubmits on NotReadyError with no idempotency key/dedup. Flow pollCharge -> fetchStatus -> gw.status (rethrown NotReadyError at status.ts:8-9) -> submit creates a duplicate charge each tick. No guard prevents it, so the duplicate-billing path is real. The prior round-a-resubmit decision is not_implemented, not a rejection.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|idempotent|creates a new charge|not settled",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/billing/gateway.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/billing/status.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 116362,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: the NotReadyError branch the new metric was added to (line 15) still calls gw.submit on a charge the gateway already holds, and gateway.submit is explicitly non-idempotent, so every tick creates a duplicate charge. WHY: NotReadyError is defined as 'the gateway has the charge but has not settled it yet' (src/billing/errors.ts:1) and submit is documented 'NOT idempotent: every call creates a new charge' (src/billing/gateway.ts:3), so each poll tick re-charges the customer; the added metric will also silently report these duplicates as normal resubmits. HOW: do not resubmit on NotReadyError — wait for settlement instead (e.g. return a 'not_ready' state / schedule a later poll) rather than calling gw.submit again.",
+          "keep": true,
+          "rationale": "NotReadyError is defined in errors.ts:1 as 'the gateway has the charge but has not settled it yet' and is thrown from gw.status() in status.ts:8-9, i.e. the gateway already holds the charge. pollCharge nonetheless calls gw.submit on this branch, and gateway.ts:3 documents submit as NOT idempotent ('every call creates a new charge'). So each poll tick re-charges the customer, exactly as claimed; the added metric reports these duplicates as resubmits. The poller's own comment claiming the gateway 'never received it' contradicts the authoritative errors.ts definition. The earlier review entry is not_implemented, not a rejection.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 15,
+          "label": "bug",
+          "earlierId": "round-a-resubmit",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R14-repeat-of-rule-by-finder",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 75375,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: the added `metrics.increment('billing.resubmit')` sits in the NotReadyError branch that re-calls the non-idempotent `gw.submit`, so every tick that sees NotReadyError creates another charge on the gateway. WHY: `Gateway.submit` is documented as NOT idempotent ('every call creates a new charge', gateway.ts:3) and `NotReadyError` means the gateway already HAS the charge but hasn't settled it (errors.ts:1, contradicting the stale comment on line 8), so this branch produces duplicate charges and double-bills the customer while the metric counts them. HOW: do not resubmit on NotReadyError — treat it as transient and wait, e.g. `return { state: 'pending' as const };`, and only call `gw.submit` when a distinct 'never received' error is surfaced.",
+          "keep": true,
+          "rationale": "Confirmed: errors.ts:1 defines NotReadyError as \"gateway has the charge but has not settled it yet,\" and gateway.ts:3 documents submit as NOT idempotent (\"every call creates a new charge\"). poller.ts:14-17 catches NotReadyError and re-calls gw.submit on every tick, producing duplicate charges and double-billing while incrementing the resubmit metric. The line-8 comment claiming NotReadyError means \"never received it\" is stale and contradicted by the error's own doc. The prior decision is outcome not_implemented, so it does not resolve the issue. The root cause and failure path are factually correct.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/poller.ts",
+          "line": 14,
+          "label": "bug",
+          "earlierId": "round-a-resubmit",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-of-rule",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K9-rule-repost-prod-rules-volume",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24278,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` currently returns the previous calendar day for users west of UTC after their local evening because `at.toISOString().slice(0, 10)` formats in UTC, violating the local date-only requirement. Replace that expression with `formatLocalDate(at)` from `src/reports/dates.ts`, which is already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K9-rule-repost-prod-rules-volume",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17800,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC, `dayKey` rolls to the previous day after their local evening because `at.toISOString().slice(0, 10)` formats the date in UTC, violating \"Format date-only values in local calendar time\". Use `formatLocalDate(at)` from `./dates` (already imported) so the key is the local calendar day."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K9-rule-repost-prod-rules-volume",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17458,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Using `at.toISOString().slice(0, 10)` in `dayKey` yields the previous calendar day for anyone west of UTC after their local evening, violating the \"Format date-only values in local calendar time\" rule. Replace it with `formatLocalDate(at)` from `./dates`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K9-rule-repost-prod-rules-volume",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14664,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` derives the day with `at.toISOString().slice(0, 10)`, so users west of UTC get the previous calendar day, violating the rule that date-only values be formatted in local calendar time. Return `formatLocalDate(at)` instead, importing it from `./dates` (already imported in this file)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K9-rule-repost-prod-rules-volume",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22829,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 81,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Because `dayKey` builds a date-only key with `at.toISOString().slice(0, 10)`, it uses the UTC instant and can return the previous calendar day west of UTC after the local evening, violating the rule \"Format date-only values in local calendar time\". Replace that expression with `formatLocalDate(at)` from `src/reports/dates.ts`, which is already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23692,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "test/cli/validate.test.ts",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P06-rule-cli-exit-code-weak-assertion",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 25,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "A CLI that logs `failed` but exits 0 would still pass this test, letting a broken manifest through. Assert the exact exit code, e.g. `expect(result.exitCode).toBe(1)`, in addition to the stdout message check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 31267,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 25,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "The duplicate-name test only checks that stdout contains \"failed\", violating the rule that CLI tests assert the exit code; if the CLI prints the message but exits 0, CI would treat the run as success and this test would stay green. Assert the exact exit code, e.g. `expect(result.exitCode).toBe(1)`, alongside the message check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24297,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P06-rule-cli-exit-code-weak-assertion",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P06-rule-cli-exit-code-weak-assertion",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "The duplicate-name test (lines 23-26) only checks that stdout contains \"failed\" and never asserts the exit code, so a CLI that reports the failure yet exits 0 would still pass, violating rule 1's requirement that every CLI test assert the exact exit code. Add `expect(result.exitCode).toBe(1);` before the stdout assertion."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23417,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P06-rule-cli-exit-code-weak-assertion",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "A CLI that reports the duplicate name but exits 0 would leave CI green, since this test only checks `stdout` for \"failed\" rather than asserting the exit code. Add `expect(result.exitCode).toBe(1)` alongside the existing message check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41820,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Because the test only checks that stdout contains \"failed\", a CLI that prints the message but exits 0 keeps the test green while a broken manifest is accepted. Assert the exact exit code with `expect(result.exitCode).toBe(1)` alongside the existing message check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P14-rule-mock-undefined-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23887,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/mocks/orders.mock.ts",
+          "line": 20,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mock-null-not-undefined"
+          ],
+          "marked": false,
+          "text": "The mock sets `dispatchedAt` to `undefined`, which JSON cannot represent, so code exercised only against this mock passes `=== undefined` checks that fail in production where the API serializes the field as `null`. Set `dispatchedAt: null` in `pendingOrder` so the mock matches the real response."
+        }
+      ],
+      "claims": [
+        {
+          "id": "mock-undefined-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P14-rule-mock-undefined-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35699,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/mocks/orders.mock.ts",
+          "line": 20,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mock-null-not-undefined"
+          ],
+          "marked": false,
+          "text": "A not-yet-dispatched order serializes as `\"dispatchedAt\": null` in production, so code tested against this mock never meets that null and an `=== undefined` check passes here while failing against the real API. Set `dispatchedAt: null` in `pendingOrder`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/mocks/orders.mock.ts",
+          "line": 21,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mock-null-not-undefined"
+          ],
+          "marked": false,
+          "text": "An untracked order comes back as `\"trackingNumber\": null` from the real API, so code tested against this mock never meets that null, and the sibling `cartOrder` added in this same diff correctly uses `null`, making the inconsistency worse. Set `trackingNumber: null` in `pendingOrder`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "mock-undefined-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P14-rule-mock-undefined-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16829,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/mocks/orders.mock.ts",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mock-null-not-undefined"
+          ],
+          "marked": false,
+          "text": "Because JSON has no `undefined`, setting `dispatchedAt` to `undefined` in `pendingOrder` never matches the `null` the real API returns for a not-yet-dispatched order, so code tested against this mock will not exercise the absent-value path. Use `dispatchedAt: null` to satisfy the rule that mock responses use `null` for absent values, and apply the same fix to `trackingNumber: undefined` on line 21."
+        }
+      ],
+      "claims": [
+        {
+          "id": "mock-undefined-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P14-rule-mock-undefined-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4201,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/mocks/orders.mock.ts",
+          "line": 20,
+          "label": "kody_rules",
+          "earlierId": "round-a-P14-rule-mock-undefined-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "src/mocks/orders.mock.ts",
+          "line": 21,
+          "label": "kody_rules",
+          "earlierId": "round-a-P14-rule-mock-undefined-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "mock-undefined-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P14-rule-mock-undefined-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 2862,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/mocks/orders.mock.ts",
+          "line": 20,
+          "label": "kody_rules",
+          "earlierId": "round-a-P14-rule-mock-undefined-moved",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "mock-undefined-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24390,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Because the handler publishes `req.body` after validating with `CancelOrderSchema`, unvalidated extra fields from the client travel with the event. Publish `result.data` instead so the event carries the parsed result."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23774,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Fields the schema never checked, such as `status` and `totalCents`, are forwarded to the event bus even though `CancelOrderSchema.safeParse` already produced a sanitized result. Publish `result.data` instead of the raw `req.body`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22449,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Because `req.body` is published raw after `CancelOrderSchema` validation, extra client fields such as `status` or `totalCents` bypass the `orderId` and `reason` checks and reach the event bus. Publish `result.data` instead so only the parsed result is forwarded."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24552,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Because the handler forwards raw `req.body` to the event bus after validating with `CancelOrderSchema`, any extra fields the client sent — never checked by the schema — travel into the published event. Pass `result.data`, the same object used for the response, instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19420,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Because the handler publishes raw `req.body` instead of the parsed `CancelOrderSchema` result, a client can smuggle unchecked fields such as a spoofed `actorId` or `status` into the `order.cancel_requested` event. Pass `result.data` to `bus.publish` so only validated fields are forwarded."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 292105,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: The retry gate only fires for `isTimeout(err)`, so transient non-timeout socket errors (ECONNRESET/ECONNREFUSED/EPIPE, e.g. the LB recycling a keep-alive socket) still return `false` on the first attempt. WHY: `router.ts:8` fails closed while `upstreams.auth.healthy` is false, so one such blip returns 503 to every user until the next 30s refresh — the exact lockout this retry was meant to prevent. HOW: broaden the transient check to also cover common socket error codes before giving up.",
+          "keep": true,
+          "rationale": "Confirmed: isTimeout (health.ts:8-10) matches only DOMException TimeoutError, so fetch socket errors (ECONNRESET/ECONNREFUSED/EPIPE, which surface as TypeError) make the line 19 guard false and fall through to 'return false' on attempt 0 — no retry. Combined with router.ts:8 failing closed, one non-timeout blip returns 503 to all users until the next refresh. The prior decision (partially_implemented) only covered the timeout half; this is the un-implemented connection-reset remainder, so it does not contradict the applied change.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/router.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: The retry gate only fires when `isTimeout(err)` is true, so transient non-timeout network failures thrown by fetch (ECONNRESET when the load balancer recycles a keep-alive socket, ECONNREFUSED, ETIMEDOUT, EPIPE, EAI_AGAIN — surfaced as a TypeError with `err.cause.code`) are not retried at all. WHY: The very first such blip makes `probeUpstream` return false, sets `upstreams.auth.healthy = false`, and router.ts:8 fails closed with a 503 for every request until the next refresh (up to 30s) — the exact single-blip lockout the retry was added to absorb, so the feature does not deliver its stated intent. HOW: broaden the retry predicate to also treat transient network TypeErrors as retryable, e.g. `const retryable = isTimeout(err) || isTransientNetworkError(err); if (retryable && attempt < PROBE_RETRIES) continue;` where `isTransientNetworkError` checks `err.cause?.code` against the transient set.",
+          "keep": true,
+          "rationale": "Confirmed: health.ts:19 retries only when isTimeout(err) is true, and isTimeout (line 8-9) matches only a DOMException named TimeoutError. Transient non-timeout fetch failures (ECONNRESET/ECONNREFUSED/EPIPE/EAI_AGAIN, thrown as TypeError with err.cause.code) fall through to `return false`, setting upstream.healthy=false, after which router.ts:8 fails closed with 503 until the next refresh. The line-18 comment claims transient network failures are retried, but the code does not do so for non-timeout errors, so the described single-blip lockout is real and the root cause is factually correct. This is consistent with (not contrary to) the prior partially_implemented decision asking to retry timeouts AND connection resets; the current code shows that fix is incomplete, so there is no basis to refute.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/router.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/gateway/health.ts",
+          "line": 19,
+          "label": "security",
+          "earlierId": "round-a-P30-probe-retries-timeouts-only",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "src/gateway/health.ts",
+          "line": 8,
+          "label": "bug",
+          "earlierId": "round-a-P30-probe-retries-timeouts-only",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 34,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 414676,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: The retry guard `isTimeout(err) && attempt < PROBE_RETRIES` only retries errors that are `DOMException`s named 'TimeoutError', so transient socket-level failures — e.g. an ECONNRESET when the load balancer recycles a keep-alive socket, which Node's fetch rejects as `TypeError: fetch failed` — are not retried. WHY: a single such blip makes `probeUpstream` return false on the first attempt, `refreshHealth` sets `upstreams.auth.healthy = false` (health.ts:28), and router.ts:8-9 then returns 503 to every request until the next 30 s refresh — the exact 'one blip locks every user out' failure the retry comment claims to prevent. HOW: broaden the predicate to cover network-level errors too, e.g. retry when the error is a `TypeError` (Node fetch's socket-failure type) in addition to the timeout DOMException.",
+          "keep": true,
+          "rationale": "Verified: isTimeout (health.ts:8-9) matches only DOMException 'TimeoutError'. Node fetch rejects socket-level failures such as ECONNRESET with TypeError: fetch failed, so the guard on line 19 is false, probeUpstream returns false on the first attempt (line 21), refreshHealth marks auth unhealthy (line 28), and router.ts:8-9 503s every request until the next refresh. Root cause and failure path are factually correct; the earlier decision asking for connection-reset retries was only partially implemented (timeouts only), so this does not contradict an applied change.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/router.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: The retry predicate `isTimeout(err) && attempt < PROBE_RETRIES` only retries timeouts, so transient connection resets (ECONNRESET) are not retried and mark the upstream unhealthy on the first failure, contradicting the 'Retry transient network failures' comment. WHY: undici throws a network reset as a TypeError whose cause.code is 'ECONNRESET' (not a DOMException named 'TimeoutError'), so isTimeout returns false and probeUpstream immediately returns false; router.ts:8-10 then fails closed (`if (!upstreams.auth.healthy) 503`) for every request, so a single reset (e.g. an LB recycling a keep-alive socket) locks all users out until the next 30s refresh. HOW: broaden the transient check to also cover connection resets before returning false.",
+          "keep": true,
+          "rationale": "Confirmed. health.ts:8-10 isTimeout only matches `err instanceof DOMException && err.name === 'TimeoutError'`. A keep-alive socket reset surfaces from undici as a TypeError whose cause.code is 'ECONNRESET', not a DOMException TimeoutError, so isTimeout returns false and line 19 falls through to `return false` on the very first failure despite the 'Retry transient network failures' comment. router.ts:8-10 confirms the fail-closed consequence: `if (!upstreams.auth.healthy) return 503` for every request. This is the un-implemented half of the earlier decision (round-a-P30-probe-retries-timeouts-only, outcome partially_implemented), which explicitly asked to retry both timeouts AND connection resets — the current code retries only timeouts, so the finding does not contradict an applied change, it identifies the remaining gap. The root cause, failure path, and consequence are all technically correct.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "isTimeout|probeUpstream|PROBE_RETRIES|healthy"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/router.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/gateway/health.ts",
+          "line": 19,
+          "label": "bug",
+          "earlierId": "round-a-P30-probe-retries-timeouts-only",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "src/gateway/health.ts",
+          "line": 19,
+          "label": "bug",
+          "earlierId": "round-a-P30-probe-retries-timeouts-only",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 31,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 191364,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: The retry condition `isTimeout(err) && attempt < PROBE_RETRIES` only matches a `DOMException` named `TimeoutError`, so connection-level transient failures (e.g. `TypeError: fetch failed` with `cause.code === 'ECONNRESET'` when a load balancer recycles a keep-alive socket) are not retried and line 19 falls through to `return false` on the first attempt. WHY: The comment claims \"Retry transient network failures so one blip does not take the upstream out of rotation,\" but a single ECONNRESET still marks the upstream unhealthy; router.ts:8 then returns 503 for every request until the next 30 s refresh, locking all users out on one blip. HOW: Broaden the predicate to treat connection-reset/refused/timeout causes as transient before retrying.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/gateway/health.ts: isTimeout (lines 8-10) only returns true for a DOMException named 'TimeoutError', so the retry guard on line 19 does not retry connection-level failures such as undici's TypeError('fetch failed') with cause.code 'ECONNRESET'. Such an error falls straight through to line 21 return false on the first attempt, contradicting the line-18 comment. This is the un-implemented half of previous decision index 5 (partially_implemented: timeouts retried, connection resets not), so it does not contradict an applied change — it flags the remaining gap. No refuting evidence exists.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "isTimeout|PROBE_RETRIES|probeUpstream"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/gateway/health.ts",
+          "line": 8,
+          "label": "bug",
+          "earlierId": "round-a-P30-probe-retries-timeouts-only",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 186346,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: The retry guard `isTimeout(err) && attempt < PROBE_RETRIES` only retries DOMException 'TimeoutError', so transient socket failures (ECONNRESET/ECONNREFUSED/EPIPE), which undici surfaces as `TypeError: fetch failed` with `cause.code`, are never retried despite the comment claiming transient network failures are. WHY: a single recycled keep-alive socket or reset connection on the auth upstream still returns false on the first attempt, and router.ts:8 then rejects every request with 503 until the next 30 s refresh — one network blip locks out all users, the exact failure the retry was added to prevent. HOW: classify transient network errors by both timeout and socket error code before deciding to retry.",
+          "keep": true,
+          "rationale": "Confirmed in code: isTimeout (health.ts:8-10) matches only DOMException 'TimeoutError', and the retry guard (line 19) is gated exclusively on it. Undici surfaces ECONNRESET/ECONNREFUSED/EPIPE as TypeError: fetch failed with cause.code, which fails isTimeout, so no retry occurs and probeUpstream returns false, marking the upstream unhealthy. router.ts:8-9 then 503s every request. This is the un-applied half of the earlier partially_implemented decision (round-a-P30-probe-retries-timeouts-only), which requested retrying connection resets too; the current diff shows only the timeout half landed. Root cause and failure path are factually correct and reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "isTimeout|PROBE_RETRIES|probeUpstream",
+                "path": "src/gateway"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "healthy|503|refreshHealth",
+                "path": "src/gateway/router.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/gateway/health.ts",
+          "line": 19,
+          "label": "bug",
+          "earlierId": "round-a-P30-probe-retries-timeouts-only",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P30-probe-retries-timeouts-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 190530,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/gateway/health.ts",
+          "claim": "WHAT: The new retry only triggers for `DOMException`/`TimeoutError`, so connection resets are still treated as fatal even though the comment on line 18 claims transient network failures are retried. WHY: A single ECONNRESET (e.g. the load balancer recycling a keep-alive socket) makes `fetch` throw a `TypeError: fetch failed` with `cause.code === 'ECONNRESET'`; `isTimeout` returns false, `probeUpstream` returns false immediately, `refreshHealth` marks `auth.healthy = false`, and `router.ts:8` fails closed with a 503 for every request until the next 30 s refresh — one blip locks out all users. HOW: Broaden the predicate to also treat connection-level transient errors as retryable, e.g. `function isTransient(err: unknown) { if (err instanceof DOMException && err.name === 'TimeoutError') return true; const code = (err as { cause?: { code?: string } })?.cause?.code; return code === 'ECONNRESET' || code === 'EPIPE'; }` and use `if (isTransient(err) && attempt < PROBE_RETRIES) continue;`.",
+          "keep": true,
+          "rationale": "Verified in code: `isTimeout` (health.ts:8-10) only matches DOMException TimeoutError. A connection reset surfaces from `fetch` as a TypeError (cause.code 'ECONNRESET'), so line 19's guard is false and line 21 immediately returns false, marking the auth upstream unhealthy; router.ts:8 then fails closed with 503 for all requests until the next refresh. The prior suggestion (round-a-P30) requested retrying both timeouts and connection resets and was only partially implemented — the current diff gives concrete evidence the connection-reset half is still missing, so this is a genuine, reachable defect, not code style or a generic suggestion.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/health.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "isTimeout|isTransient|PROBE_RETRIES|ECONNRESET"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/gateway/router.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/gateway/health.ts",
+          "line": 19,
+          "label": "security",
+          "earlierId": "round-a-P30-probe-retries-timeouts-only",
+          "earlierOutcome": "partially_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "probe-reset-not-retried-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 119535,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: The `if (status >= 400) return { kind: 'drop', ... }` check on line 12 runs before the `status === 429` and `status >= 500` branches, making both retry branches unreachable. WHY: 429 and all 5xx statuses satisfy `>= 400`, so transient failures are dead-lettered instead of retried (queue.deadLetter is called via dispatch.ts:17), silently dropping deliveries that the comment on line 9 says should be retried. HOW: delete the `>= 400` check; the final `return { kind: 'drop', reason: `unexpected status ${status}` }` already covers the remaining non-retryable statuses.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/webhooks/outcome.ts: line 12 `if (status >= 400) return { kind: 'drop', ... }` is evaluated before the `status === 429` (line 13) and `status >= 500` (line 14) checks. Since 429 and all 5xx satisfy `>= 400`, both retry branches are unreachable and transient failures fall through to `drop`. grep confirms dispatch.ts:10 calls outcomeFor and dispatch.ts:17 routes the drop outcome to queue.deadLetter, so deliveries the comment (line 9) says should be retried are silently dead-lettered. The root cause and failure path are factually correct. Although a prior-round decision (round-a-P38-unreachable-retry-reintroduced) was marked implemented, the current code still contains the buggy `>= 400` guard — concrete evidence the applied change was reverted/reintroduced, so re-raising is warranted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outcomeFor|deadLetter",
+                "path": "src/webhooks"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-P38-unreachable-retry-reintroduced",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 92997,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: The `if (status >= 400) return { kind: 'drop', ... }` at line 12 matches 429 and every 5xx, so the retry branches at lines 13-14 are unreachable dead code. WHY: 429 and all 5xx responses are dead-lettered instead of requeued, so transient endpoint failures permanently lose deliveries that the endpoint would have accepted on retry — a regression versus the previous code that returned 'retry' for `status === 429 || status >= 500`. HOW: remove the `>= 400` check; the final return already drops every other non-retryable status.",
+          "keep": true,
+          "rationale": "Verified in src/webhooks/outcome.ts: line 12 `if (status >= 400) return { kind: 'drop', ... }` executes before lines 13-14, so it matches 429 and every 5xx, making both retry branches unreachable dead code. Transient endpoint failures (429/5xx) are therefore dead-lettered instead of retried, contradicting the comment on line 9 that they are transient. The technical claim is factually correct and the failure path is real, not refuted. (The previous decision marking this same issue \"implemented\" is contradicted by the current code, which still contains the `>= 400` check — concrete evidence the applied change is absent/reverted, consistent with its own \"reintroduced\" identifier.)",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-P38-unreachable-retry-reintroduced",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P38-unreachable-retry-reintroduced",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 91771,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: The `if (status >= 400) return { kind: 'drop', ... }` guard on line 12 runs before the 429 and 5xx checks, so lines 13 and 14 are unreachable. WHY: 429 and every 5xx are >= 400, so transient failures are permanently dead-lettered instead of retried, contradicting the comment on line 9 and breaking webhook redelivery. HOW: Move the transient checks before the generic 4xx drop, or narrow the drop guard to `status >= 400 && status !== 429` and let the final return drop the rest.",
+          "keep": true,
+          "rationale": "Confirmed in src/webhooks/outcome.ts: line 12 `if (status >= 400) return { kind: 'drop' }` executes before the 429 (line 13) and 5xx (line 14) retry branches. Since 429 and every 5xx are >= 400, both retry branches are unreachable and transient failures are dead-lettered, contradicting the transient comment on line 9. Although a prior decision claimed this was fixed, the current diff still contains the offending guard first, which is concrete evidence the applied change is not present.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "line": 12,
+          "earlierId": "round-a-P38-unreachable-retry-reintroduced",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P38-unreachable-retry-reintroduced",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 63802,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: The `if (status >= 400) return { kind: 'drop', ... }` branch on line 12 runs before the 429 and 5xx checks, making lines 13-14 unreachable. WHY: Every 429 and 5xx response is dead-lettered instead of retried, so transient failures permanently drop webhook deliveries — the exact opposite of the intent documented on line 9 and of the previously-applied fix. HOW: Delete the `if (status >= 400) return { kind: 'drop', reason: `endpoint answered ${status}` };` line; the final `return { kind: 'drop', reason: `unexpected status ${status}` }` already drops the remaining non-transient statuses.",
+          "keep": true,
+          "rationale": "Confirmed: line 12 `if (status >= 400) return { kind: 'drop' ... }` short-circuits before the `status === 429` (line 13) and `status >= 500` (line 14) retry branches, making both unreachable. All 429/5xx responses are dropped instead of retried, contradicting the intent on line 9. The current diff re-introduces the `>= 400` guard that a prior review had it removed, so the earlier applied fix has been reverted — concrete evidence the change is wrong.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-P38-unreachable-retry-reintroduced",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P38-unreachable-retry-reintroduced",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P38-unreachable-retry-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 121594,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: The `if (status >= 400) return { kind: 'drop', ... }` check on line 12 is evaluated before the `status === 429` (line 13) and `status >= 500` (line 14) checks, so both retry branches are unreachable. WHY: every 429 and every 5xx satisfies `>= 400`, so transient responses that the comment on line 9 declares retryable are dead-lettered by dispatch.ts instead of requeued, silently losing retries and dropping deliveries that should be redelivered. HOW: Move the transient checks above the generic 4xx drop.",
+          "keep": true,
+          "rationale": "Verified in src/webhooks/outcome.ts: line 12 `if (status >= 400) return { kind: 'drop' }` precedes the 429 (line 13) and 5xx (line 14) retry checks, so every 429 and 5xx matches >=400 and returns drop, making both retry branches dead code — exactly as claimed. This is the same bug as PreviousDecision round-a-P38-unreachable-retry-reintroduced (outcome 'implemented'), but the current diff still contains the offending `>= 400` check, i.e. concrete evidence the earlier fix was reverted/reintroduced, so the prior decision does not resolve it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/webhooks/outcome.ts",
+          "claim": "WHAT: `if (status >= 400) return { kind: 'drop', ... }` on line 12 runs before the `status === 429` (line 13) and `status >= 500` (line 14) checks, making both retry branches unreachable. WHY: every 429 and every 5xx is dead-lettered instead of retried, so transient webhook failures are permanently dropped and dispatch.ts:15 `queue.requeue(...)` is never invoked — contradicting the comment on line 9 that these statuses are transient. HOW: move the 429/5xx retry checks above the generic 4xx drop check (or delete the `>= 400` check, since the final return already drops the remaining statuses).",
+          "keep": true,
+          "rationale": "Verified in src/webhooks/outcome.ts: line 12 `if (status >= 400) return { kind: 'drop', ... }` catches every status >= 400, so the 429 branch (line 13) and 5xx branch (line 14) are unreachable, and dispatch.ts:15 `queue.requeue(...)` is never reached for these transient statuses. The claim is factually correct. Although a prior decision (round-a-P38) claimed this fix was implemented, the current code still contains the offending `>= 400` check, providing concrete evidence the applied change was reverted/not landed — so the finding is not superseded and should be kept.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/webhooks/outcome.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "outcomeFor|requeue",
+                "path": "src/webhooks"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/webhooks/outcome.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-P38-unreachable-retry-reintroduced",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "src/webhooks/outcome.ts",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-P38-unreachable-retry-reintroduced",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "retry-unreachable-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

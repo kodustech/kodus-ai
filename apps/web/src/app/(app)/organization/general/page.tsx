@@ -12,8 +12,8 @@ import { auth } from "src/core/config/auth";
 import { GeneralOrganizationSettingsPage } from "./_page-component";
 
 export default async function OrganizationSettingsPage() {
-    const organizationId = await getOrganizationId();
-    const jwtPayload = await auth();
+    // Independent — fetch in parallel instead of chaining two round-trips.
+    const [, jwtPayload] = await Promise.all([getOrganizationId(), auth()]);
     const email = jwtPayload?.user.email ?? "";
     const userDomain = email.split("@")[1];
 
@@ -23,55 +23,62 @@ export default async function OrganizationSettingsPage() {
         domains: [userDomain],
     };
 
-    try {
-        const result = await getOrganizationParameterByKey<{
-            configValue: Timezone;
-        }>({
-            key: OrganizationParametersConfigKey.TIMEZONE_CONFIG,
-        });
+    const loadTimezone = async () => {
+        try {
+            const result = await getOrganizationParameterByKey<{
+                configValue: Timezone;
+            }>({
+                key: OrganizationParametersConfigKey.TIMEZONE_CONFIG,
+            });
 
-        if (result?.configValue) {
-            timezoneConfigValue = result.configValue;
+            if (result?.configValue) {
+                timezoneConfigValue = result.configValue;
+            }
+        } catch (error: unknown) {
+            if (error instanceof TypedFetchError && error.statusCode === 404) {
+                await authorizedFetch(
+                    ORGANIZATION_PARAMETERS_PATHS.CREATE_OR_UPDATE,
+                    {
+                        method: "POST",
+                        body: JSON.stringify({
+                            key: OrganizationParametersConfigKey.TIMEZONE_CONFIG,
+                            configValue: timezoneConfigValue,
+                        }),
+                    },
+                );
+            }
         }
-    } catch (error: unknown) {
-        if (error instanceof TypedFetchError && error.statusCode === 404) {
-            await authorizedFetch(
-                ORGANIZATION_PARAMETERS_PATHS.CREATE_OR_UPDATE,
-                {
-                    method: "POST",
-                    body: JSON.stringify({
-                        key: OrganizationParametersConfigKey.TIMEZONE_CONFIG,
-                        configValue: timezoneConfigValue,
-                    }),
-                },
-            );
-        }
-    }
+    };
 
-    try {
-        const result = await getOrganizationParameterByKey<{
-            configValue: OrganizationParametersAutoJoinConfig;
-        }>({
-            key: OrganizationParametersConfigKey.AUTO_JOIN_CONFIG,
-        });
+    const loadAutoJoin = async () => {
+        try {
+            const result = await getOrganizationParameterByKey<{
+                configValue: OrganizationParametersAutoJoinConfig;
+            }>({
+                key: OrganizationParametersConfigKey.AUTO_JOIN_CONFIG,
+            });
 
-        if (result?.configValue) {
-            autoJoinConfigValue = result.configValue;
+            if (result?.configValue) {
+                autoJoinConfigValue = result.configValue;
+            }
+        } catch (error: unknown) {
+            if (error instanceof TypedFetchError && error.statusCode === 404) {
+                await authorizedFetch(
+                    ORGANIZATION_PARAMETERS_PATHS.CREATE_OR_UPDATE,
+                    {
+                        method: "POST",
+                        body: JSON.stringify({
+                            key: OrganizationParametersConfigKey.AUTO_JOIN_CONFIG,
+                            configValue: autoJoinConfigValue,
+                        }),
+                    },
+                );
+            }
         }
-    } catch (error: unknown) {
-        if (error instanceof TypedFetchError && error.statusCode === 404) {
-            await authorizedFetch(
-                ORGANIZATION_PARAMETERS_PATHS.CREATE_OR_UPDATE,
-                {
-                    method: "POST",
-                    body: JSON.stringify({
-                        key: OrganizationParametersConfigKey.AUTO_JOIN_CONFIG,
-                        configValue: autoJoinConfigValue,
-                    }),
-                },
-            );
-        }
-    }
+    };
+
+    // Both parameter loads are independent of each other.
+    await Promise.all([loadTimezone(), loadAutoJoin()]);
 
     return (
         <GeneralOrganizationSettingsPage

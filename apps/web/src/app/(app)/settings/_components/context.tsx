@@ -171,4 +171,74 @@ export const CodeReviewModelDataProvider = (
     </CodeReviewModelDataContext.Provider>
 );
 
+/**
+ * Fetch state of the client-side code review config query. The
+ * kodus-config.yml overlay is only ever requested there — the server render
+ * deliberately skips it — so the UI needs to tell "the overlay is still on its
+ * way" from "the overlay failed", and neither from stored config.
+ */
+export type CodeReviewConfigFetchState = {
+    isFetching: boolean;
+    isError: boolean;
+};
+
+const CodeReviewConfigFetchStateContext =
+    createContext<CodeReviewConfigFetchState>({
+        isFetching: false,
+        isError: false,
+    });
+
+export const useCodeReviewConfigFetchState = (): CodeReviewConfigFetchState =>
+    useContext(CodeReviewConfigFetchStateContext);
+
+export const CodeReviewConfigFetchStateProvider = (
+    props: React.PropsWithChildren & { value: CodeReviewConfigFetchState },
+) => (
+    <CodeReviewConfigFetchStateContext.Provider value={props.value}>
+        {props.children}
+    </CodeReviewConfigFetchStateContext.Provider>
+);
+
 export { resolveCodeReviewConfigForScope };
+
+/**
+ * Generic bridge for SSR-seeded parameter values.
+ * Keyed by ParametersConfigKey, so any new parameter only adds a key — no new provider.
+ * Carries `initialTeamId` so consumers can guard: only apply the seed when
+ * the active team matches the one the seed was fetched for (same pattern as
+ * the shell's `effectiveTeamId === initialTeamId` check).
+ */
+type InitialParameterValue = {
+    uuid: string;
+    configKey: string;
+    configValue: string;
+} | null;
+
+type InitialParametersBridge = {
+    initialTeamId: string;
+    parameters: Partial<Record<string, InitialParameterValue>>;
+};
+
+const InitialParametersContext = createContext<InitialParametersBridge>({
+    initialTeamId: "",
+    parameters: {},
+});
+
+export const useInitialTeamId = (): string => {
+    return useContext(InitialParametersContext).initialTeamId;
+};
+
+export const useInitialParameter = (key: string): InitialParameterValue => {
+    const { parameters } = useContext(InitialParametersContext);
+    return parameters[key] ?? null;
+};
+
+export const InitialParametersProvider = (
+    props: React.PropsWithChildren & {
+        value: InitialParametersBridge;
+    },
+) => (
+    <InitialParametersContext.Provider value={props.value}>
+        {props.children}
+    </InitialParametersContext.Provider>
+);

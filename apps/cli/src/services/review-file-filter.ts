@@ -3,8 +3,12 @@ import { cliWarn } from '../utils/logger.js';
 import type { FileContent } from '../types/review.js';
 
 const MAX_FILES = 500;
-const MAX_DIFF_SIZE = 1024 * 1024; // 1MB
-const MAX_CONTENT_SIZE = 5 * 1024 * 1024; // 5MB
+// Must match the API DTO limits (apps/api/src/dtos/cli-review.dto.ts):
+// per-file diff 500K and per-file content 2M — counted in characters
+// (@MaxLength uses string length, not UTF-8 byte size). Using byte counts
+// here would silently drop non-ASCII files that the API accepts.
+const MAX_DIFF_CHARS = 500_000; // 500K characters
+const MAX_CONTENT_CHARS = 2_000_000; // 2M characters
 
 export function filterReviewFiles(
     files: FileContent[],
@@ -12,21 +16,19 @@ export function filterReviewFiles(
 ): FileContent[] {
     const skipped: string[] = [];
     const filtered = files.filter((file) => {
-        const diffBytes = Buffer.byteLength(file.diff, 'utf8');
-        const contentBytes = Buffer.byteLength(file.content, 'utf8');
+        const diffChars = file.diff.length;
+        const contentChars = file.content.length;
 
-        if (diffBytes > MAX_DIFF_SIZE) {
-            const sizeKB = Math.round(diffBytes / 1024);
+        if (diffChars > MAX_DIFF_CHARS) {
             skipped.push(
-                `  - ${file.path} (diff: ${sizeKB}KB, max: ${MAX_DIFF_SIZE / 1024}KB)`,
+                `  - ${file.path} (diff: ${diffChars.toLocaleString()} chars, max: 500,000)`,
             );
             return false;
         }
 
-        if (contentBytes > MAX_CONTENT_SIZE) {
-            const sizeMB = (contentBytes / (1024 * 1024)).toFixed(1);
+        if (contentChars > MAX_CONTENT_CHARS) {
             skipped.push(
-                `  - ${file.path} (content: ${sizeMB}MB, max: ${MAX_CONTENT_SIZE / (1024 * 1024)}MB)`,
+                `  - ${file.path} (content: ${contentChars.toLocaleString()} chars, max: 2,000,000)`,
             );
             return false;
         }

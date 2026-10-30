@@ -138,6 +138,12 @@ export interface ICentralizedConfigService {
     removeStaleKodyRules(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         ruleFiles: IKodyRuleFileMeta[];
+        /**
+         * Config files from the same repository-tree read. Non-empty proves
+         * the read succeeded, so zero rule files is a real deletion rather
+         * than an unreadable repository.
+         */
+        configFiles?: IConfigFileMeta[];
         actor: {
             organizationId: string;
             source: string;

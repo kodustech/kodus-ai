@@ -6,10 +6,10 @@ import { OrganizationAndTeamData } from '@/config/types/general/organizationAndT
 import { PullRequestHandlerService } from '@/core/infrastructure/adapters/services/codeBase/pullRequestManager.service';
 import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
 import { CacheService } from '@/shared/utils/cache/cache.service';
-import * as globalPathsJsonFile from '@/shared/utils/codeBase/ignorePaths/generated/paths.json';
+import { getDefaultKodusConfigFile } from '@/shared/utils/validateCodeReviewConfigFile';
 
 describe('pullRequestManager', () => {
-    const globalFilePaths = globalPathsJsonFile.paths;
+    const globalFilePaths = getDefaultKodusConfigFile().ignorePaths;
 
     let pullRequestManagerService: PullRequestHandlerService;
 
@@ -51,10 +51,6 @@ describe('pullRequestManager', () => {
         pullRequestManagerService = module.get<PullRequestHandlerService>(
             PullRequestHandlerService,
         );
-    });
-
-    it('should be defined', () => {
-        expect(pullRequestManagerService).toBeDefined();
     });
 
     const MOCK_ORGANIZATION_AND_TEAM_DATA: OrganizationAndTeamData = {

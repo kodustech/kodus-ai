@@ -20,6 +20,10 @@ import {
 } from './token-usage/ensure-indexes';
 import { backfillTokenUsageTu } from './token-usage/backfill-tu';
 import { migrateKodyRulesOriginRequestType } from './kody-rules/migrate-origin-request-type';
+import {
+    freezeAgentFileRules,
+    restoreAgentFileRules,
+} from './kody-rules/freeze-agent-file-rules';
 
 const TEST_DB = 'kodus_migration_it';
 const TELEMETRY = 'observability_telemetry';
@@ -196,5 +200,69 @@ describe('kody-rules migration (integration)', () => {
 
         const second = await migrateKodyRulesOriginRequestType(db);
         expect(second.rulesMigrated).toBe(0); // idempotent
+    });
+});
+
+describe('kody-rules agent-file freeze (integration)', () => {
+    it('deletes onboarding imports, clears pins, is idempotent and restorable', async () => {
+        if (!available) return;
+        const c = db.collection('kodyRules');
+        await c.deleteMany({});
+        await c.insertOne({
+            organizationId: 'org-it',
+            rules: [
+                {
+                    uuid: 'onboarding-claude',
+                    origin: 'repo_file_sync',
+                    repositoryId: 'global',
+                    sourcePath: 'CLAUDE.md',
+                    status: 'active',
+                },
+                {
+                    uuid: 'onboarding-template',
+                    origin: 'repo_file_sync',
+                    repositoryId: 'global',
+                    sourcePath: '.kody/rules/a.md',
+                    status: 'active',
+                },
+                {
+                    uuid: 'synced-on-purpose',
+                    origin: 'repo_file_sync',
+                    repositoryId: 'repo-1',
+                    sourcePath: 'CLAUDE.md',
+                    status: 'active',
+                    pinnedSync: true,
+                },
+            ],
+        });
+
+        const first = await freezeAgentFileRules(db);
+        expect(first.removed).toBe(1);
+        expect(first.pinsCleared).toBe(1);
+
+        const doc = await c.findOne({ organizationId: 'org-it' });
+        const byUuid = Object.fromEntries(
+            (doc!.rules as any[]).map((r) => [r.uuid, r]),
+        );
+        expect(byUuid['onboarding-claude']).toMatchObject({
+            status: 'deleted',
+            previousStatus: 'active',
+        });
+        expect(byUuid['onboarding-template'].status).toBe('active');
+        expect(byUuid['synced-on-purpose']).toMatchObject({
+            status: 'active',
+            pinnedSync: false,
+        });
+
+        const second = await freezeAgentFileRules(db);
+        expect(second.docsUpdated).toBe(0);
+
+        expect((await restoreAgentFileRules(db)).restored).toBe(1);
+        const restored = await c.findOne({ organizationId: 'org-it' });
+        expect(
+            (restored!.rules as any[]).find(
+                (r) => r.uuid === 'onboarding-claude',
+            ),
+        ).toMatchObject({ status: 'active' });
     });
 });

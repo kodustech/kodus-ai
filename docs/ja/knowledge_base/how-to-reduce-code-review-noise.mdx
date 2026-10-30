@@ -1,0 +1,64 @@
+---
+title: "コードレビューのノイズと誤検知を減らす方法"
+description: "AIコードレビューを調整して、最も関連性の高い提案のみを表示し、アラート疲れを回避します。"
+---
+
+優先度の低い提案が多すぎると、開発者はコードレビューのフィードバックを完全に無視してしまう可能性があります。重要なことを表示し、重要でないことは表示しないようにレビューを調整することが重要です。
+
+## 重大度のしきい値
+
+Kodus は、どの検出結果を実際に投稿するかをフィルタリングします：
+
+- **Minimum severity to post** — 指定したしきい値以上のサジェストのみ投稿（デフォルト：Medium）。Kody はより低い重大度の問題も検出しますが、それらにはコメントしません。
+- **Apply the threshold to Kody Rules** — デフォルトはオフで、チーム独自のルールは常に表示されます
+
+サイドバーの **Code review → What to review**（旧 **Review filters**）、または `kodus-config.yml` で設定します：
+
+```yaml
+suggestionControl:
+  severityLevelFilter: medium   # low | medium | high | critical
+  applyFiltersToKodyRules: false
+```
+
+このページの `kodus-config.yml` のスニペットは、**Code review → General**（リポジトリまたはディレクトリのスコープ）で **kodus Config File Overrides Web Preferences** がオンになっている場合にのみ、そのリポジトリで有効になります。
+
+## ファイルとパスを無視する
+
+ノイズを生成するファイルをスキップします（ロックファイル、生成されたコード、設定ファイル）。**Code review → General** の **Ignored files** に追加するか、`kodus-config.yml` で設定します：
+
+```yaml
+ignorePaths:
+  - yarn.lock
+  - package-lock.json
+  - "**/*.generated.ts"
+  - dist/**
+```
+
+## タイトルによってPRをスキップする
+
+レビューが不要なPRをスキップします（リリース、バージョンバンプ）。**Code review → General** の **Ignore title keywords** にキーワードを追加するか、`kodus-config.yml` で設定します：
+
+```yaml
+ignoredTitleKeywords:
+  - "release"
+  - "bump version"
+  - "chore"
+```
+
+## 分析カテゴリの切り替え
+
+**Code review → What to review** の **Bug**、**Performance**、**Security**、**Business Logic** のスイッチ、または `kodus-config.yml` で、不要なレビューカテゴリ全体を無効にします：
+
+```yaml
+reviewOptions:
+  bug: true
+  security: true
+  performance: false        # ノイズが多い場合は無効化
+  business_logic: false     # 不要な場合は無効化
+```
+
+## レビューの頻度
+
+アクティブな開発中のスパムを防ぐために**自動一時停止**（**Code review → General** → **Enable Automated Code Review** → **Review Cadence**）を使用します — Kodusは連続した急速なプッシュを検出したときにレビューを一時停止します（デフォルト：15分以内に3回のプッシュ）。
+
+詳細については、[一般設定](/ja/how_to_use/code_review/configs/general)と[重大度のしきい値](/ja/how_to_use/code_review/configs/suggestion_control)を参照してください。

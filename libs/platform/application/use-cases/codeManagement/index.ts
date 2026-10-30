@@ -1,3 +1,4 @@
+import { AutoRevokeRemovedLicenseSeatsUseCase } from './auto-revoke-removed-license-seats.use-case';
 import { BackfillAstGraphBuildUseCase } from './backfill-ast-graph-build.use-case';
 import { ChatWithKodyFromGitUseCase } from './chatWithKodyFromGit.use-case';
 import { CreateIntegrationUseCase } from './create-integration.use-case';
@@ -13,7 +14,9 @@ import { GetPRsUseCase } from './get-prs.use-case';
 import { GetRepositoriesUseCase } from './get-repositories';
 import { GetRepositoryTreeByDirectoryUseCase } from './get-repository-tree-by-directory.use-case';
 import { GetSelectedRepositoriesUseCase } from './get-selected-repositories.use-case';
+import { GetWebhookCreationFailuresUseCase } from './get-webhook-creation-failures.use-case';
 import { GetWebhookStatusUseCase } from './get-webhook-status.use-case';
+import { PruneRemovedLicenseSeatsUseCase } from './prune-removed-license-seats.use-case';
 import { ReceiveWebhookUseCase } from './receiveWebhook.use-case';
 import { SearchCodeManagementUsersUseCase } from './search-code-management-users.use-case';
 import { TriggerBusinessValidationUseCase } from './trigger-business-validation.use-case';
@@ -36,8 +39,11 @@ export default [
     GetRepositoryTreeByDirectoryUseCase,
     GetPRsByRepoUseCase,
     GetWebhookStatusUseCase,
+    GetWebhookCreationFailuresUseCase,
     SearchCodeManagementUsersUseCase,
     GetCurrentCodeManagementUserUseCase,
     TriggerBusinessValidationUseCase,
     UpdateAutoLicenseAllowedUsersUseCase,
+    PruneRemovedLicenseSeatsUseCase,
+    AutoRevokeRemovedLicenseSeatsUseCase,
 ];

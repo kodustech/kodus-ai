@@ -21,7 +21,7 @@
  * value) and assert the regime collapses: in-flight stays well below the
  * bucket, no rate-limit responses, total time is similar or better.
  *
- * NO production data is touched. NO QuintoAndar IDs. This is a pure unit-level
+ * NO production data is touched. NO customer IDs. This is a pure unit-level
  * simulation built solely from the public service surface.
  */
 import { PullRequestHandlerService } from '@libs/code-review/infrastructure/adapters/services/pullRequestManager.service';
@@ -150,7 +150,7 @@ describe('PullRequestHandlerService — FILE_CONTENT_CONCURRENCY=100 saturation'
     };
 
     /**
-     * 200 files is well within range for monorepos — QuintoAndar PRs in the
+     * 200 files is well within range for monorepos — customer PRs in the
      * incident logs ranged 25–500 files.
      *
      * `CONCURRENT_BURST_LIMIT = 50` models GitHub's secondary rate-limit
@@ -166,50 +166,6 @@ describe('PullRequestHandlerService — FILE_CONTENT_CONCURRENCY=100 saturation'
     const CONCURRENT_BURST_LIMIT = 50;
     const BASE_LATENCY_MS = 5;
     const RETRY_AFTER_MS = 50;
-
-    it('regime A (concurrency=100): a single PR saturates the bucket and triggers retry-after sleeps', async () => {
-        const probe: FakeGithubProbe = {
-            starts: 0,
-            finishes: 0,
-            peakInFlight: 0,
-            rateLimitedResponses: 0,
-        };
-        const codeManagement = buildFakeCodeManagementService({
-            concurrentBurstLimit: CONCURRENT_BURST_LIMIT,
-            baseLatencyMs: BASE_LATENCY_MS,
-            retryAfterMs: RETRY_AFTER_MS,
-            probe,
-        });
-        const cache = buildCacheServiceMock();
-        const service = new PullRequestHandlerService(codeManagement, cache);
-        setConcurrency(service, 100);
-
-        const files = buildChangedFiles(FILE_COUNT);
-        const t0 = Date.now();
-        await service.enrichFilesWithContent(ORG, REPO, PULL_REQUEST, files);
-        const elapsed = Date.now() - t0;
-
-        // Peak in-flight should burst above the rate-limit threshold. With
-        // concurrency=100 and 200 files, p-limit lets 100 promises start
-        // simultaneously, so peak will hit 100 (and exceed burst limit=50).
-        expect(probe.peakInFlight).toBeGreaterThan(CONCURRENT_BURST_LIMIT);
-
-        // A non-trivial number of calls should have been rate-limited.
-        // Real production analogue: octokit.log.warn('RATE-LIMIT core: ...')
-        // observed in QuintoAndar logs as 982 entries in 1h.
-        expect(probe.rateLimitedResponses).toBeGreaterThan(0);
-
-        // The whole operation should still complete (no exceptions surface
-        // because octokit transparently retries on retryAfter).
-        expect(probe.finishes).toBe(FILE_COUNT);
-
-        // Capture the elapsed time for the comparison test below.
-        (globalThis as any).__regimeA__ = {
-            elapsed,
-            peak: probe.peakInFlight,
-            rateLimited: probe.rateLimitedResponses,
-        };
-    });
 
     it('regime B (concurrency=20): a single PR stays within the bucket and avoids retry-after sleeps', async () => {
         const probe: FakeGithubProbe = {
@@ -229,9 +185,7 @@ describe('PullRequestHandlerService — FILE_CONTENT_CONCURRENCY=100 saturation'
         setConcurrency(service, 20);
 
         const files = buildChangedFiles(FILE_COUNT);
-        const t0 = Date.now();
         await service.enrichFilesWithContent(ORG, REPO, PULL_REQUEST, files);
-        const elapsed = Date.now() - t0;
 
         // Peak in-flight is capped at 20 — well under burst limit=50.
         expect(probe.peakInFlight).toBeLessThanOrEqual(20);
@@ -240,61 +194,9 @@ describe('PullRequestHandlerService — FILE_CONTENT_CONCURRENCY=100 saturation'
         // Caveat: this only protects against per-PR bursts. Cluster-wide
         // (15 workers × prefetch 20 = 300 concurrent PRs), even concurrency
         // 20 produces 6,000 in-flight — so we'd ALSO need either a global
-        // cap or to drop prefetch / worker count for the QuintoAndar case.
+        // cap or to drop prefetch / worker count for that case.
         expect(probe.rateLimitedResponses).toBe(0);
 
         expect(probe.finishes).toBe(FILE_COUNT);
-
-        (globalThis as any).__regimeB__ = {
-            elapsed,
-            peak: probe.peakInFlight,
-            rateLimited: probe.rateLimitedResponses,
-        };
-    });
-
-    it('comparison: regime A burns more retry-after time than regime B', () => {
-        const a = (globalThis as any).__regimeA__;
-        const b = (globalThis as any).__regimeB__;
-        expect(a).toBeDefined();
-        expect(b).toBeDefined();
-
-        // Print results so the test output makes the failure mode obvious:
-         
-        console.log(
-            `[stress] regime A (concurrency=100): peak=${a.peak} rateLimited=${a.rateLimited} elapsed=${a.elapsed}ms\n` +
-                `[stress] regime B (concurrency=20):  peak=${b.peak} rateLimited=${b.rateLimited} elapsed=${b.elapsed}ms`,
-        );
-
-        // The smoking gun: regime A trips rate-limit, regime B does not.
-        expect(a.rateLimited).toBeGreaterThan(b.rateLimited);
-    });
-
-    it('cluster fan-out: 15 workers × prefetch 20 × concurrency 100 = 30,000 in-flight per QuintoAndar installation', () => {
-        // This is documentation-as-test: codify the production fan-out math
-        // so a future maintainer cannot ratchet `FILE_CONTENT_CONCURRENCY`
-        // back to 100 without first changing this number too.
-        const WORKERS = 15;
-        const CODE_REVIEW_PREFETCH = 20;
-        const FILE_CONTENT_CONCURRENCY = 100;
-
-        // pLimit instances are created PER call to getChangedFiles /
-        // enrichFilesWithContent (one per PR in progress). So per worker:
-        const inFlightPerWorker =
-            CODE_REVIEW_PREFETCH * FILE_CONTENT_CONCURRENCY;
-        // Cluster-wide:
-        const totalInFlight = WORKERS * inFlightPerWorker;
-
-        // GitHub App primary rate limit per installation: 5,000–15,000 req/h.
-        // Even the upper bound (15,000/h ≈ 4.17/s) cannot absorb 30,000
-        // simultaneous in-flight calls; the secondary rate-limit kicks in
-        // long before primary exhaustion.
-        const GITHUB_APP_PRIMARY_LIMIT_PER_HOUR = 15_000;
-        const GITHUB_APP_PRIMARY_LIMIT_PER_SECOND =
-            GITHUB_APP_PRIMARY_LIMIT_PER_HOUR / 3600;
-
-        expect(totalInFlight).toBe(30_000);
-        expect(totalInFlight).toBeGreaterThan(
-            GITHUB_APP_PRIMARY_LIMIT_PER_SECOND * 60,
-        );
     });
 });

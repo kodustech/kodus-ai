@@ -1,0 +1,1103 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:37:37.773Z",
+  "updatedAt": "2026-10-13T22:21:03.944Z",
+  "complete": true,
+  "selectedCases": [
+    "P31-skip-before-title-set",
+    "P31-skip-before-title-set-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 15,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 16,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P31-skip-before-title-set · skip-before-title-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P31-skip-before-title-set · scope-null-match-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P31-skip-before-title-set-control · skip-before-title-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P31-skip-before-title-set-control · scope-null-match-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 279831,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf casts the result of /^\\w+\\(([^)]+)\\):/.exec(title) to RegExpExecArray and immediately returns match[1], but exec returns null for any title that lacks a `(scope)` prefix. WHY: buildEntries calls scopeOf(entry.title) for every commit at line 34, so an ordinary title such as `fix: handle empty input` (or any `chore:`/`feat:` without a scope) makes match null and throws `TypeError: Cannot read properties of null (reading '1')`, crashing the changelog generation. HOW: guard the null result and default to an empty scope, which the Entry already expects (`scope: ''`).",
+          "keep": true,
+          "rationale": "Confirmed: /^\\w+\\(([^)]+)\\):/.exec(title) returns null for titles without a '(scope)' prefix; the `as RegExpExecArray` cast is compile-time only, so match[1] at line 25 throws TypeError. buildEntries line 34 calls scopeOf for every commit, and the SKIP guard at line 32 runs against the still-empty title (line 31) and doesn't include fix/feat anyway, so a plain 'fix: ...' title reaches scopeOf and crashes. Real, reachable bug; distinct from the earlier empty-title SKIP finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`scopeOf` casts the `exec` result to `RegExpExecArray` and returns `match[1]`, but `exec` returns `null` for any title lacking a `(scope)` prefix, so `buildEntries` calling it at line 34 for every commit makes ordinary `fix:`/`chore:`/`feat:` titles such as `fix: handle empty input` throw `TypeError: Cannot read properties of null (reading '1')` and crash changelog generation. Guard the null result and default to an empty scope, which `Entry` already expects (`scope: ''`)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 377699,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf dereferences the result of RegExp.exec without a null check, so `match[1]` throws TypeError whenever the commit title does not match /^\\w+\\(([^)]+)\\):/. WHY: buildEntries calls scopeOf (line 34) for every commit that is not skipped, and commit subjects without a `type(scope):` prefix (e.g. `fix: handle empty input`, `Update README`) are common, so changelog generation crashes with `Cannot read properties of null (reading '1')` instead of producing output. HOW: fall back to an empty scope when there is no match, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "Confirmed: scopeOf does `const match = /^\\w+\\(([^)]+)\\):/.exec(title) as RegExpExecArray; return match[1];` (lines 23-26). The `as` cast is compile-time only, so when the regex doesn't match (e.g. `fix: handle empty input`, `Update README` — no parens/scope), exec returns null and match[1] throws TypeError. buildEntries (line 34) calls scopeOf for every non-skipped commit, and the SKIP list only covers chore/Merge/ci/docs, so common titles without a type(scope): prefix reach scopeOf and crash changelog generation. Reachable, real bug. Not a repeat of any previous decision (none concern scopeOf or this crash).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `scripts/release/changelog.ts`, `scopeOf` dereferences the result of `RegExp.exec` without a null check, so `match[1]` throws `TypeError` whenever the commit title does not match `/^\\w+\\(([^)]+)\\):/`; because `buildEntries` calls `scopeOf` at line 34 for every commit that is not skipped, common subjects without a `type(scope):` prefix crash changelog generation with `Cannot read properties of null (reading '1')`. Change `scopeOf` to fall back to an empty string when there is no match by returning `match ? match[1] : ''`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 222040,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf casts the `RegExpExecArray | null` returned by exec() to `RegExpExecArray` and then reads `match[1]`, so when the title has no `(scope)` segment before the colon the cast hides a null and `match[1]` throws `TypeError: Cannot read properties of null (reading '1')`. WHY: buildEntries calls scopeOf for every non-skipped commit, and ordinary titles like 'feat: first cut' or 'fix: handle empty input' do not match /^\\w+\\(([^)]+)\\):/, so changelog generation crashes on the first scope-less commit instead of producing output. HOW: return a fallback when there is no match, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "Confirmed: scopeOf casts the null-able exec() result to RegExpExecArray and reads match[1] without a null check. The regex /^\\w+\\(([^)]+)\\):/ does not match scope-less conventional titles like 'feat: first cut' or 'fix: handle empty input', so exec() returns null and match[1] throws TypeError. buildEntries (line 34) invokes scopeOf for every non-skipped commit, and because shouldSkip is called with the still-empty title (line 32, before assignment on line 33) it never skips, so scope-less commits always reach scopeOf and crash changelog generation. This is a genuine, reachable crash, and it is a different problem than the earlier SKIP-ordering decision (which was about skipping failing), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf casts the `RegExpExecArray | null` result of exec() to `RegExpExecArray` and then reads `match[1]` without checking for null. WHY: any commit whose title lacks a `type(scope):` prefix (e.g. `fix: …`, `feat: …`, or — because the SKIP check never matches — `chore:`/`Merge …`/`ci:` commits) makes exec() return null, so `match[1]` throws `TypeError: Cannot read properties of null (reading '1')` and buildEntries crashes during changelog generation. HOW: guard the null result and fall back to an empty scope.",
+          "keep": true,
+          "rationale": "Confirmed: scopeOf casts exec()'s `RegExpExecArray | null` to `RegExpExecArray` and reads `match[1]` with no null check. The regex `/^\\w+\\(([^)]+)\\):/` returns null for any title without a `type(scope):` prefix (e.g. `fix: …`), and buildEntries calls scopeOf unconditionally at line 34 for every commit. Since the SKIP check runs while entry.title is still '' (lines 31–32), nothing is filtered, so such titles reach scopeOf and throw `TypeError: Cannot read properties of null (reading '1')`. This is a real, reachable crash. It is not a repeat of PreviousDecision index 22, which concerns the SKIP-before-title assignment producing wrong changelog content; this finding's failure is a crash from a missing null guard (and would occur even for `fix:` commits that are not in SKIP).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `scopeOf` casts the nullable result of `exec()` to `RegExpExecArray`, a title without a `(scope)` segment before the colon makes `match[1]` throw `TypeError: Cannot read properties of null (reading '1')`, and `buildEntries` crashes on the first scope-less commit instead of producing changelog output. Guard the `exec()` result and return an empty string when there is no match, so titles like `feat: first cut` or `fix: handle empty input` do not break `scripts/release/changelog.ts`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "scripts/release/changelog.ts",
+          "line": 24,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `scopeOf` casts the nullable `exec()` result to `RegExpExecArray`, any commit title lacking a `type(scope):` prefix—including `fix: …`, `feat: …`, and, since the SKIP check never matches, `chore:`/`Merge …`/`ci:` commits—makes `match[1]` throw `TypeError: Cannot read properties of null (reading '1')`, crashing `buildEntries` during changelog generation. Guard the `exec()` result and fall back to an empty scope in `scripts/release/changelog.ts`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 363396,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf dereferences match[1] after /^\\w+\\(([^)]+)\\):/.exec(title) even though exec returns null for any title without a `type(scope):` prefix. WHY: for a common commit title like `feat: first cut` (or any unscoped feat/fix/perf commit) exec returns null, the `as RegExpExecArray` cast hides it, and `match[1]` throws `TypeError: Cannot read properties of null`, aborting buildEntries for the whole range. HOW: guard the null and fall back to a default scope: `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';` (or return a `'(general)'` bucket).",
+          "keep": true,
+          "rationale": "Confirmed. `scopeOf` uses `/^\\w+\\(([^)]+)\\):/`, which requires a parenthesized scope. For a common unscoped title such as `feat: first cut`, `exec` returns null; the `as RegExpExecArray` cast silences the type check and `match[1]` on line 25 throws `TypeError: Cannot read properties of null`. This is reached from `buildEntries` line 34 for every non-skipped commit, aborting the whole range. The earlier changelog.ts decision (round-a-P31-skip-before-title-set) addresses a different failure (SKIP tested against an empty title before assignment), not this null dereference, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 24,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "For a common unscoped title like `feat: first cut`, `exec` returns null, the `as RegExpExecArray` cast hides it, and `match[1]` throws `TypeError: Cannot read properties of null`, aborting `buildEntries` for the entire range. Guard the null result and fall back to a default scope such as `''` or a `'(general)'` bucket."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 215590,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf casts the result of exec() to RegExpExecArray and immediately reads match[1], but the regex only matches scoped titles like 'feat(cart): x', so exec returns null for any title without a 'word(...)' prefix (e.g. 'fix: handle empty input', 'feat: first cut'). WHY: match[1] on null throws TypeError, so buildEntries crashes for the first non-scoped commit and the changelog can never be generated. HOW: guard the null result and return an empty scope when the title has no scope.",
+          "keep": true,
+          "rationale": "The regex /^\\w+\\(([^)]+)\\):/ only matches scoped titles like 'feat(cart): x'; for a non-scoped title such as 'fix: handle empty input' exec returns null, and scopeOf immediately dereferences match[1], throwing TypeError. buildEntries calls scopeOf (line 34) for every commit, and the SKIP guard at line 32 tests entry.title while it is still '' so nothing is filtered, meaning the first non-scoped commit reliably crashes changelog generation. The claim is factually correct and the failure path is reachable. This is a different failure (crash) from PreviousDecision 22 (wrong changelog contents from the broken SKIP check), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`scopeOf` casts the result of `exec()` to `RegExpExecArray` and reads `match[1]`, but the regex only matches scoped titles like `feat(cart): x`, so `exec` returns null for any title without a `word(...)` prefix (for example `fix: handle empty input` or `feat: first cut`); this throws a `TypeError` and makes `buildEntries` crash for the first non-scoped commit, preventing changelog generation. Guard the null result and return an empty scope when the title has no scope."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P31-skip-before-title-set-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 233033,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: shouldSkip(entry) is called while entry.title is still the empty string, so the SKIP regexes are tested against '' and never match. WHY: buildEntries initializes `title: ''`, then runs `if (shouldSkip(entry)) continue;` before assigning `entry.title = commit.message.split('\\n')[0].trim()`, so chore/ci/docs/Merge commits are never filtered out and appear in the changelog. HOW: derive the title first and pass it to the filter, e.g. `const title = commit.message.split('\\n')[0].trim(); if (SKIP.some((re) => re.test(title))) continue; const entry: Entry = { sha: commit.sha.slice(0, 7), title, scope: scopeOf(title) };`.",
+          "keep": true,
+          "rationale": "Confirmed in code: buildEntries creates `entry` with `title: ''` (line 31), calls `shouldSkip(entry)` (line 32), and only afterwards sets `entry.title = commit.message.split('\\n')[0].trim()` (line 33). shouldSkip runs SKIP regexes against entry.title (line 19), so at call time it tests `''` and never matches. The failure consequence (chore/ci/docs/Merge commits not filtered, appearing in the changelog) follows directly. No PreviousReviewDecision concerns this file, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "shouldSkip|SKIP|scopeOf",
+                "path": "scripts/release"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf dereferences `match[1]` on the result of a regex that returns null whenever the commit title has no `type(scope):` prefix. WHY: any commit like `feat: first cut` or `fix: handle empty input` makes `/^\\w+\\(([^)]+)\\):/.exec(title)` return null, so `match[1]` throws TypeError and buildEntries crashes on the first non-scoped commit; the `as RegExpExecArray` cast suppresses the compiler warning. HOW: guard for the null result and fall back to a default scope, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : 'other';`.",
+          "keep": true,
+          "rationale": "Confirmed: `/^\\w+\\(([^)]+)\\):/.exec(title)` returns null for titles without a `type(scope):` prefix (e.g. `feat: first cut`), and line 25 unconditionally reads `match[1]`, throwing a TypeError. In buildEntries (line 28-37), shouldSkip is invoked before `entry.title` is set (still `''`), so the SKIP patterns never match and unscoped commits reach scopeOf(title) at line 34 with no guard. The `as RegExpExecArray` cast only silences the compiler. This is a genuine crash path, not code style, and no previous decision covers this file or symbol.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "scopeOf",
+                "path": "scripts/release"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`scopeOf` dereferences `match[1]` on a regex result that is `null` whenever the commit title has no `type(scope):` prefix, so commits like `feat: first cut` or `fix: handle empty input` make `/^\\w+\\(([^)]+)\\):/.exec(title)` return `null`, `match[1]` throws a `TypeError`, and `buildEntries` crashes on the first non-scoped commit while the `as RegExpExecArray` cast suppresses the compiler warning. Guard for the `null` result and fall back to a default scope, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : 'other';`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "scripts/release/changelog.ts",
+          "line": 31,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`shouldSkip(entry)` is called while `entry.title` is still the empty string, so the `SKIP` regexes test against `''` and never match; `buildEntries` initializes `title: ''`, then runs `if (shouldSkip(entry)) continue;` before assigning `entry.title = commit.message.split('\\n')[0].trim()`, so `chore`/`ci`/`docs`/`Merge` commits are never filtered out and appear in the changelog. Derive the title first and pass it to the filter, e.g. `const title = commit.message.split('\\n')[0].trim(); if (SKIP.some((re) => re.test(title))) continue; const entry: Entry = { sha: commit.sha.slice(0, 7), title, scope: scopeOf(title) };`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P31-skip-before-title-set-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 256922,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: shouldSkip(entry) is called before entry.title is assigned, so the SKIP regexes are tested against the still-empty title and never match. WHY: the skip filter is dead — chore/ci/docs/Merge commits are always included in the generated changelog. HOW: populate the title before the skip check (or pass the title string to shouldSkip): assign `entry.title = commit.message.split('\\n')[0].trim();` first, then `if (shouldSkip(entry)) continue;`.",
+          "keep": true,
+          "rationale": "Confirmed: entry.title is initialized to '' (line 31), shouldSkip(entry) runs at line 32 testing SKIP regexes against the empty string, and the real title is only assigned at line 33. The skip filter is therefore dead and skip-eligible commits (chore/ci/docs/Merge) are always emitted. Root cause and failure path are accurate; no previous review decision covers this file/behavior.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf returns match[1] from RegExp.exec without checking for null, so it throws TypeError when the title does not match /^\\w+\\(([^)]+)\\):/. WHY: every commit without a Conventional-Commit scope (e.g. \"fix: handle empty input (review)\", \"chore: lint\") makes exec return null and crashes buildEntries at `entry.scope = scopeOf(entry.title)`, breaking changelog generation. HOW: guard the result, e.g. `return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "Confirmed. scopeOf casts the result of RegExp.exec to RegExpExecArray and returns match[1] with no null guard. The regex /^\\w+\\(([^)]+)\\):/ only matches scoped Conventional Commits; any unscoped title (e.g. \"fix: ...\", \"feat: ...\") makes exec return null, and match[1] throws a TypeError. buildEntries calls scopeOf(entry.title) at line 34 with the real title, and the earlier shouldSkip call at line 32 operates on the empty-string title (title is set only at line 33), so it never filters these out. No upstream guard prevents the crash. The previous review decisions concern src/reports/* files, not this file, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`scopeOf` reads `match[1]` from `RegExp.exec` without a null check, so any commit lacking a Conventional-Commit scope (e.g. `fix: handle empty input (review)`, `chore: lint`) returns null and crashes `buildEntries` at `entry.scope = scopeOf(entry.title)`, breaking changelog generation. Guard the result, e.g. `return match ? match[1] : '';`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "scripts/release/changelog.ts",
+          "line": 31,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`shouldSkip(entry)` runs before `entry.title` is assigned, so the SKIP regexes are tested against the still-empty title and never match, leaving the filter dead and always including chore/ci/docs/Merge commits in the generated changelog. Assign `entry.title = commit.message.split('\\n')[0].trim();` before the skip check, or pass the title string to `shouldSkip`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P31-skip-before-title-set-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 249903,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: shouldSkip(entry) is called on line 32 while entry.title is still the empty string assigned on line 31 — the title is only set on line 33 — so `SKIP.some((re) => re.test(entry.title))` always tests '' and always returns false. WHY: the SKIP filter (chore/ci/docs/Merge) never matches, so those commits are never dropped and pollute the generated changelog (wrong output). HOW: populate the title before testing, e.g. move `entry.title = commit.message.split('\\n')[0].trim();` above the `if (shouldSkip(entry)) continue;` line, or change shouldSkip to take the title string and pass the computed title.",
+          "keep": true,
+          "rationale": "Confirmed: entry.title is set to '' on line 31, shouldSkip(entry) is invoked on line 32 testing that empty string against SKIP regexes anchored with '^', and the real title is only assigned on line 33. Therefore shouldSkip always returns false and the chore/ci/docs/Merge filter never drops commits, polluting the changelog. The root cause is factually accurate and the failure path is reachable on every commit. No prior review decision addresses this file or this defect.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "shouldSkip|SKIP",
+                "path": "scripts/release"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf dereferences the result of RegExp.exec without a null check (`const match = /^\\w+\\(([^)]+)\\):/.exec(title) as RegExpExecArray; return match[1];`), and exec returns null whenever the commit title has no `(scope)` part. WHY: any title that does not match `^\\w+\\(...\\):` (e.g. \"fix: ...\", \"Initial commit\", \"Merge branch ...\") makes `match[1]` throw `TypeError: Cannot read properties of null`, aborting the whole changelog build; the `as RegExpExecArray` cast hides this from the type checker. HOW: guard the result — `const m = /^\\w+\\(([^)]+)\\):/.exec(title); return m ? m[1] : '';` (or `return m?.[1] ?? '';`).",
+          "keep": true,
+          "rationale": "Confirmed: scopeOf (scripts/release/changelog.ts:24-25) casts RegExp.exec's result to RegExpExecArray and dereferences match[1] with no null guard. exec returns null for any title without a `(scope)` part (e.g. \"fix: ...\", \"Initial commit\"), throwing TypeError. The sole caller buildEntries (line 34) passes the real commit title; shouldSkip is invoked at line 32 while title is still '' so it filters nothing, and the SKIP list doesn't cover such titles anyway. No upstream guard or try/catch prevents the crash, and no PreviousReviewDecision addresses this file/function. The claim is technically accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Any commit title without a `(scope)` part (such as `fix: ...`, `Initial commit`, or `Merge branch ...`) makes `match[1]` throw `TypeError: Cannot read properties of null`, aborting the whole changelog build, and the `as RegExpExecArray` cast hides this from the type checker. Guard the `RegExp.exec` result in `scopeOf` before indexing, e.g. `return match ? match[1] : '';`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "scripts/release/changelog.ts",
+          "line": 31,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `shouldSkip(entry)` runs on line 32 before `entry.title` is assigned on line 33, `SKIP.some((re) => re.test(entry.title))` always tests the empty string and returns false, so chore/ci/docs/Merge commits are never filtered and pollute the generated changelog. Populate `entry.title` before calling `shouldSkip`, or change `shouldSkip` to accept the computed title string directly."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P31-skip-before-title-set-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 200657,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: shouldSkip(entry) is called at line 32 while entry.title is still the empty string assigned at line 31; entry.title is only set on line 33. WHY: every SKIP regex is tested against '' and never matches, so the skip filter never removes chore/ci/docs/merge commits and they are emitted into the changelog. HOW: assign entry.title (and scope) before evaluating the skip predicate, e.g. build the title first and pass it to shouldSkip.",
+          "keep": true,
+          "rationale": "Confirmed by reading scripts/release/changelog.ts:31-33. Line 31 initializes entry.title='', line 32 calls shouldSkip(entry) which evaluates SKIP regexes against entry.title, and entry.title is only set from the commit message at line 33. Since '' matches none of the SKIP patterns, the skip filter never removes chore/ci/docs/merge commits — a real wrong-output bug. No previous review decision touches this file or issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "shouldSkip"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf does `match[1]` on the result of `RegExp.exec` without a null check, hidden by the `as RegExpExecArray` cast. WHY: for any commit title that lacks a `type(scope):` prefix (e.g. `fix: handle empty input`, `Merge branch ...`), `exec` returns null and `match[1]` throws `TypeError: Cannot read properties of null (reading '1')`, so buildEntries aborts and changelog generation fails. HOW: guard the null and fall back to an empty/default scope.",
+          "keep": true,
+          "rationale": "Confirmed: scopeOf runs /^\\w+\\(([^)]+)\\):/ on the commit title; titles lacking a type(scope): prefix (e.g. 'fix: handle empty input') yield a null exec result, and the `as RegExpExecArray` cast hides that, so match[1] throws TypeError and buildEntries aborts. The SKIP guard in shouldSkip runs before entry.title is assigned (title is '' at that point), so it does not prevent non-scoped titles from reaching scopeOf. No previous decision addresses this file or failure.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "scopeOf",
+                "path": "scripts/release/changelog.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 24,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Any commit title that lacks a `type(scope):` prefix (e.g. `fix: handle empty input` or `Merge branch ...`) makes `RegExp.exec` return null in `scopeOf`, so `match[1]` throws `TypeError: Cannot read properties of null (reading '1')` and `buildEntries` aborts, failing changelog generation. Guard the null result and fall back to an empty or default scope."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "scripts/release/changelog.ts",
+          "line": 31,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `shouldSkip(entry)` runs at line 32 while `entry.title` is still the empty string set on line 31 (it is only assigned on line 33), every SKIP regex is tested against `''` and never matches, so chore, ci, docs, and merge commits are emitted into the changelog. Assign `entry.title` (and `scope`) before evaluating the skip predicate, e.g. build the title first and pass it to `shouldSkip`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P31-skip-before-title-set-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 205972,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: shouldSkip(entry) is called on line 32 while entry.title is still '' because entry.title is assigned on line 33, after the check. WHY: SKIP.some(re => re.test('')) is always false, so no commit is ever skipped — chore/Merge/ci/docs commits are always emitted into the changelog, silently defeating the skip filter. HOW: build the entry (or read the commit subject) before testing shouldSkip.",
+          "keep": true,
+          "rationale": "Verified in scripts/release/changelog.ts: entry is built with title:'' on line 31, shouldSkip(entry) runs on line 32, and title is only set on line 33. shouldSkip tests SKIP regexes against entry.title; none of the patterns (/^chore/, /^Merge /, /^ci:/, /^docs/) match the empty string, so shouldSkip always returns false and no commit is ever skipped — chore/Merge/ci/docs commits are always emitted. The described failure path is real and reachable. No PreviousReviewDecisions entry touches changelog.ts.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "shouldSkip|SKIP",
+                "path": "scripts/release/changelog.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf dereferences match[1] after a regex .exec() that returns null for any title not matching `type(scope):` (the `as RegExpExecArray` cast hides the null). WHY: buildEntries calls scopeOf on every non-skipped commit (line 34), so a commit whose subject lacks a scope (e.g. \"fix: typo\", \"Update deps\") throws TypeError: Cannot read properties of null and aborts the whole changelog/release generation. HOW: return a fallback when there is no match.",
+          "keep": true,
+          "rationale": "Confirmed. scopeOf runs a regex .exec() that returns null for any subject lacking a `type(scope):` prefix (e.g. \"fix: typo\", \"Update deps\"). The `as RegExpExecArray` cast is erased at runtime, so match[1] dereferences null and throws TypeError, aborting buildEntries/release generation. Line 34 calls scopeOf on every commit — indeed on ALL commits, since shouldSkip at line 32 tests entry.title while it is still '' (set at line 31), so nothing is ever skipped. No guard validates the title first. No prior review decision concerns changelog.ts/scopeOf, so this is not a repeat. Root cause and failure path are accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "scripts/release/changelog.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `scopeOf` dereferences `match[1]` after `exec()` can return null (the `as RegExpExecArray` cast hides that), `buildEntries` on line 34 throws `TypeError: Cannot read properties of null` for any subject without a scope such as `fix: typo` or `Update deps`, aborting changelog/release generation. Remove the cast and return a fallback when there is no match."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "scripts/release/changelog.ts",
+          "line": 31,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Since `shouldSkip(entry)` runs on line 32 while `entry.title` is still `''` (it is assigned on line 33), `SKIP.some(re => re.test(''))` is always false and chore/Merge/ci/docs commits are always emitted into the changelog, silently defeating the skip filter. Read the commit subject or build the entry with its `title` before calling `shouldSkip`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

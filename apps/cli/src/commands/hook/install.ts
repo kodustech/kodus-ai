@@ -3,6 +3,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import { confirm } from '@inquirer/prompts';
 import { gitService } from '../../services/git.service.js';
+import {
+    TRACE_HOOK_END_MARKER,
+    TRACE_HOOK_MARKER,
+} from '../../services/git-hooks.service.js';
 import { exitWithCode } from '../../utils/cli-exit.js';
 import { cliError, cliInfo } from '../../utils/logger.js';
 import type { GlobalOptions } from '../../types/cli.js';
@@ -18,6 +22,24 @@ import {
 } from '../../utils/command-errors.js';
 
 const KODUS_MARKER = '# kodus-hook';
+
+export function extractTraceBlock(content: string | null): string | null {
+    if (!content) {
+        return null;
+    }
+
+    const lines = content.split('\n');
+    const start = lines.findIndex((line) => line.trim() === TRACE_HOOK_MARKER);
+    if (start === -1) {
+        return null;
+    }
+
+    const end = lines.findIndex(
+        (line, idx) => idx > start && line.trim() === TRACE_HOOK_END_MARKER,
+    );
+
+    return lines.slice(start, end === -1 ? undefined : end + 1).join('\n');
+}
 
 function generateHookScript(failOn: string, fast: boolean): string {
     const flags: string[] = [];
@@ -102,8 +124,7 @@ export async function installAction(
             throw new CommandError('NOT_IN_GIT_REPO', 'Not a git repository.');
         }
 
-        const gitRoot = await gitService.getGitRoot();
-        const hooksDir = path.join(gitRoot.trim(), '.git', 'hooks');
+        const hooksDir = await gitService.getHooksDir();
         const hookPath = path.join(hooksDir, 'pre-push');
 
         // Check if hook already exists
@@ -163,9 +184,17 @@ export async function installAction(
         // Ensure hooks directory exists
         await fs.mkdir(hooksDir, { recursive: true });
 
-        // Write hook script
+        // Write hook script. `kodus trace enable` appends its own block to the
+        // same file, so carry it across rather than silently disabling capture.
         const script = generateHookScript(failOn, fast);
-        await fs.writeFile(hookPath, script, { mode: 0o755 });
+        const preservedTraceBlock = extractTraceBlock(existingContent);
+        await fs.writeFile(
+            hookPath,
+            preservedTraceBlock
+                ? `${script.replace(/\s*$/, '')}\n\n${preservedTraceBlock}\n`
+                : script,
+            { mode: 0o755 },
+        );
 
         cliInfo(chalk.green('✓ Pre-push hook installed successfully!'));
         cliInfo(chalk.dim(`  Path: ${hookPath}`));

@@ -1,0 +1,568 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "high",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "b58687f24e5d36cf5f30a62a77621c668dfa73f3",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-13T23:18:59.487Z",
+  "updatedAt": "2026-10-13T23:49:36.440Z",
+  "complete": true,
+  "selectedCases": [
+    "P15-rule-nth-called-listed-site",
+    "P15-rule-nth-called-listed-site-control"
+  ],
+  "summary": {
+    "measured": 5,
+    "infra": 5,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 20,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P15-rule-nth-called-listed-site-control · audit-nth-called-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P15-rule-nth-called-listed-site-control · opt-out-nth-called-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P15-rule-nth-called-listed-site",
+      "error": "Kody Rules could not be evaluated: all 1 rule check(s) failed to run. Your Kody Rules were not applied to this PR."
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P15-rule-nth-called-listed-site",
+      "error": "Kody Rules could not be evaluated: all 1 rule check(s) failed to run. Your Kody Rules were not applied to this PR."
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P15-rule-nth-called-listed-site",
+      "error": "Kody Rules could not be evaluated: all 1 rule check(s) failed to run. Your Kody Rules were not applied to this PR."
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P15-rule-nth-called-listed-site",
+      "error": "Kody Rules could not be evaluated: all 1 rule check(s) failed to run. Your Kody Rules were not applied to this PR."
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P15-rule-nth-called-listed-site",
+      "error": "Kody Rules could not be evaluated: all 1 rule check(s) failed to run. Your Kody Rules were not applied to this PR."
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P15-rule-nth-called-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 72341,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/digest.test.ts",
+          "line": 26,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Because `audit.record` is called three times in this test (one delivery entry per user plus the batch summary), `toHaveBeenCalledWith` passes as long as any call matches, so swapped user ids or a mis-ordered batch entry would still pass. Pin the first call with `toHaveBeenNthCalledWith(1, ...)`, change the next per-user assertion to `nth(2)`, and change the batch assertion already in the file to `nth(3)` so the delivery-then-summary order is enforced."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/digest.test.ts",
+          "line": 27,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "With three `audit.record` calls in the test, `toHaveBeenCalledWith` does not pin which call it matched, so the order of the per-user entries is unverified. Assert it as the second call with `toHaveBeenNthCalledWith(2, ...)`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/notifications/digest.test.ts",
+          "line": 42,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "`mailer.send` is called twice in this test (ben, then cai), so `toHaveBeenCalledWith` passes even if the two calls are swapped or duplicated, and the test title claims \"mails the rest in order\" but does not actually assert the order. Pin the first send with `toHaveBeenNthCalledWith(1, ...)`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/notifications/digest.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "With two `mailer.send` calls, `toHaveBeenCalledWith` cannot pin the recipient order, so the opt-out ordering the test intends to verify is not actually checked. Use `toHaveBeenNthCalledWith(2, ...)` for the second call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "audit-nth-called-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P15-rule-nth-called-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 47229,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/digest.test.ts",
+          "line": 26,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Because `audit.record` is called multiple times per-user plus the batch summary, `toHaveBeenCalledWith` passes if any call matched, so delivered entries emitted in the wrong order or with swapped payloads would go unnoticed and the ordering this test claims to verify is not pinned. Assert the specific call with `toHaveBeenNthCalledWith(1, ...)` instead."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/digest.test.ts",
+          "line": 27,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Because `audit.record` is called several times in this test, `toHaveBeenCalledWith` matches any call, so swapped `u1`/`u2` payloads or a change in their order relative to the batch entry would go unnoticed against the rule `Pin mock call arguments`. Pin this second call with `toHaveBeenNthCalledWith(2, ...)`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/notifications/digest.test.ts",
+          "line": 42,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Because `mailer.send` is called twice in this opt-out test, `toHaveBeenCalledWith` passes if any call matched, so mailing the two recipients in the wrong order would still pass and the in-order behavior the test title claims is not actually pinned. Use `toHaveBeenNthCalledWith(1, ...)` for the `ben` call."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/notifications/digest.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Because `mailer.send` is called twice in the test, `toHaveBeenCalledWith` passes when any call matched, so swapping the `ben`/`cai` arguments would keep the test green and the asserted order meaningless against the rule `Pin mock call arguments`. Assert the second call with `toHaveBeenNthCalledWith(2, ...)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "audit-nth-called-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P15-rule-nth-called-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 60453,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/digest.test.ts",
+          "line": 26,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Because `toHaveBeenCalledWith` passes when any call matches, the order promised by the test name is not pinned even though `audit.record` is called three times (`u1`, `u2`, then the batch summary). Assert this first call with `toHaveBeenNthCalledWith(1, ...)` (and the `u2`/batch assertions below with 2 and 3) so the sequence is fixed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/digest.test.ts",
+          "line": 27,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "`toHaveBeenCalledWith` does not pin the per-user call order among the three `audit.record` calls, so swapping the `u1` and `u2` calls would still pass. Use `toHaveBeenNthCalledWith(2, ...)` to pin this call's position."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/notifications/digest.test.ts",
+          "line": 42,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "`toHaveBeenCalledWith` passes when any call matches, so with two `mailer.send` calls (`ben`, then `cai`) the order of the sends is not pinned. Assert the first send with `toHaveBeenNthCalledWith(1, ...)`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/notifications/digest.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "With two calls to `mailer.send`, this assertion does not pin `cai` as the second send, so swapping the arguments of the two assertions would still pass. Use `toHaveBeenNthCalledWith(2, ...)` so the order is fixed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "audit-nth-called-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P15-rule-nth-called-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 79668,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/digest.test.ts",
+          "line": 26,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "With three `audit.record` calls (u1, u2, then the batch summary), the first per-user assertion using `toHaveBeenCalledWith` can pass even if `u1`/`u2` are swapped or the batch summary is recorded first, violating the rule 'Pin mock call arguments'. Assert the call position explicitly with `toHaveBeenNthCalledWith(1, ...)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/digest.test.ts",
+          "line": 27,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Since `audit.record` is asserted three times, the second per-user assertion using `toHaveBeenCalledWith` does not pin that `u2`'s entry is the second one recorded, violating the rule 'Pin mock call arguments'. Assert the call position with `toHaveBeenNthCalledWith(2, ...)`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/notifications/digest.test.ts",
+          "line": 42,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "In the new 'skips users who opted out' test, `mailer.send` has `toHaveBeenCalledTimes(2)` plus two `toHaveBeenCalledWith` assertions, so `ben` and `cai` could be mailed in the wrong order and still pass, contrary to the test title and the rule 'Pin mock call arguments'. Assert the first send with `toHaveBeenNthCalledWith(1, ...)`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/notifications/digest.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "The second `mailer.send` assertion uses `toHaveBeenCalledWith` even though the mock is called twice, so swapping `cai`'s and `ben`'s arguments still passes and leaves the intended ordering guarantee untested, violating the rule 'Pin mock call arguments'. Assert the call position with `toHaveBeenNthCalledWith(2, ...)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "audit-nth-called-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P15-rule-nth-called-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 67736,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/notifications/digest.test.ts",
+          "line": 26,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Because this test asserts `audit.record` three times, `toHaveBeenCalledWith` only checks that some call matched, so swapping the u1 and u2 `digest.delivered` entries would still pass. Pin the call order with `toHaveBeenNthCalledWith(1, 'digest.delivered', { userId: 'u1', week })`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/notifications/digest.test.ts",
+          "line": 27,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "Because this test asserts `audit.record` three times, `toHaveBeenCalledWith` passes when any call matched and does not pin that u2 was the second delivery. Assert this call with `toHaveBeenNthCalledWith(2, 'digest.delivered', { userId: 'u2', week })`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/notifications/digest.test.ts",
+          "line": 42,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "`mailer.send` is called twice in this test, asserted via `toHaveBeenCalledTimes(2)`, so `toHaveBeenCalledWith` passes even if ben's send happens after cai's despite the test claiming order. Pin the order with `toHaveBeenNthCalledWith(1, 'ben@example.test', 'weekly-digest', { week, locale: 'en-US' })`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/notifications/digest.test.ts",
+          "line": 43,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "text": "`mailer.send` is called twice in this test, so `toHaveBeenCalledWith` does not verify that cai's send is the second one. Assert the second call with `toHaveBeenNthCalledWith(2, 'cai@example.test', 'weekly-digest', { week, locale: 'es-ES' })`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "audit-nth-called-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

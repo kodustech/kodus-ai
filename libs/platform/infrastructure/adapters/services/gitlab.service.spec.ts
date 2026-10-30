@@ -3,7 +3,10 @@ import { Gitlab } from '@gitbeaker/rest';
 import axios from 'axios';
 
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
+import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { GitlabService } from './gitlab.service';
+import { gitlabRequesterFn } from './gitlab-request-handler';
+import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 jest.mock('axios');
 jest.mock('@gitbeaker/rest', () => ({
@@ -24,7 +27,7 @@ describe('GitlabService', () => {
     let integrationConfigService: Record<string, never>;
     let authIntegrationService: Record<string, never>;
     let configService: ConfigService;
-    let cacheService: Record<string, never>;
+    let cacheService: { getFromCache: jest.Mock; addToCache: jest.Mock };
 
     const mockedAxios = axios as jest.Mocked<typeof axios>;
     const mockedGitlab = Gitlab as unknown as jest.Mock;
@@ -38,7 +41,10 @@ describe('GitlabService', () => {
         configService = {
             get: jest.fn(),
         } as unknown as ConfigService;
-        cacheService = {};
+        cacheService = {
+            getFromCache: jest.fn().mockResolvedValue(undefined),
+            addToCache: jest.fn().mockResolvedValue(undefined),
+        };
 
         service = new GitlabService(
             integrationService as any,
@@ -49,6 +55,202 @@ describe('GitlabService', () => {
         );
 
         jest.clearAllMocks();
+    });
+
+    it.each([
+        ['createIssueComment', 'MergeRequestNotes'],
+        ['createSingleIssueComment', 'MergeRequestNotes'],
+    ] as const)('returns null when %s cannot publish', async (method, api) => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            [api]: { create: jest.fn().mockRejectedValue(new Error('denied')) },
+        });
+
+        await expect(
+            service[method]({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'repo' },
+                prNumber: 42,
+                body: 'Automatic approval held',
+            }),
+        ).resolves.toBeNull();
+    });
+
+    // A rate-limit error has no `cause`; reading `cause.description` threw a
+    // TypeError, so the comment publisher never saw the 429.
+    it('surfaces a rate-limited inline comment as a 429, not a TypeError', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        const rateLimited = Object.assign(
+            new Error('GitLab answered HTTP 429; retry after 30s'),
+            { name: 'GitbeakerRetryError', status: 429, retryAfterMs: 30_000 },
+        );
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequests: {
+                allDiffVersions: jest.fn().mockRejectedValue(rateLimited),
+            },
+        });
+
+        const error = await service
+            .createReviewComment({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'repo' },
+                prNumber: 42,
+                lineComment: { path: 'a.ts', line: 1, body: 'x' },
+            })
+            .catch((e) => e);
+
+        expect(error).not.toBeInstanceOf(TypeError);
+        expect(error.status).toBe(429);
+        expect(error.retryAfterMs).toBe(30_000);
+        expect(error.errorType).toBe('failed');
+    });
+
+    it('posts status as a plain note and PR-level findings as discussions', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        const createNote = jest.fn().mockResolvedValue({ id: 11 });
+        const createDiscussion = jest.fn().mockResolvedValue({
+            id: 'discussion-1',
+            notes: [{ id: 12 }],
+        });
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestNotes: { create: createNote },
+            MergeRequestDiscussions: { create: createDiscussion },
+        });
+        const request = {
+            organizationAndTeamData,
+            repository: { id: 'repo-1', name: 'repo' },
+            prNumber: 42,
+            body: 'Code Review Completed',
+        };
+
+        await service.createIssueComment(request);
+        await service.createIssueComment({
+            ...request,
+            body: 'Fix this rule violation',
+            suggestion: { id: 'finding-1' },
+        });
+
+        expect(createNote).toHaveBeenCalledTimes(1);
+        expect(createNote).toHaveBeenCalledWith(
+            'repo-1',
+            42,
+            'Code Review Completed',
+        );
+        expect(createDiscussion).toHaveBeenCalledTimes(1);
+        expect(createDiscussion).toHaveBeenCalledWith(
+            'repo-1',
+            42,
+            'Fix this rule violation',
+        );
+    });
+
+    it('updates a plain note without opening a discussion', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        const editNote = jest.fn().mockResolvedValue({ id: 11 });
+        const editDiscussion = jest.fn();
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestNotes: { edit: editNote },
+            MergeRequestDiscussions: { editNote: editDiscussion },
+        });
+
+        await service.updateIssueComment({
+            organizationAndTeamData,
+            repository: { id: 'repo-1' },
+            prNumber: 42,
+            commentId: 11,
+            noteId: 11,
+            body: 'Code Review Started',
+        });
+
+        expect(editNote).toHaveBeenCalledWith('repo-1', 42, 11, {
+            body: 'Code Review Started',
+        });
+        expect(editDiscussion).not.toHaveBeenCalled();
+    });
+
+    it('keeps the discussion ID needed to update an approval reason', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        const editNote = jest.fn().mockResolvedValue({ id: 42 });
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestDiscussions: {
+                all: jest.fn().mockResolvedValue([
+                    {
+                        id: 'discussion-1',
+                        notes: [{ id: 42, body: 'Old reason' }],
+                    },
+                ]),
+                editNote,
+            },
+        });
+        const request = {
+            organizationAndTeamData,
+            repository: { id: 'repo-1', name: 'repo' },
+            prNumber: 42,
+        };
+
+        const comments = await service.getAllCommentsInPullRequest(request);
+        expect(comments).toEqual([
+            { id: 42, body: 'Old reason', threadId: 'discussion-1' },
+        ]);
+        await service.updateIssueComment({
+            ...request,
+            commentId: 42,
+            noteId: 42,
+            threadId: comments[0].threadId,
+            body: 'Current reason',
+        });
+        expect(editNote).toHaveBeenCalledWith(
+            'repo-1',
+            42,
+            'discussion-1',
+            42,
+            { body: 'Current reason' },
+        );
+    });
+
+    it('reports a failed comment lookup instead of treating it as an empty list', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestDiscussions: {
+                all: jest
+                    .fn()
+                    .mockRejectedValue(new Error('GitLab unavailable')),
+            },
+        });
+
+        await expect(
+            service.getAllCommentsInPullRequest({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'repo' },
+                prNumber: 42,
+                failOnError: true,
+            }),
+        ).rejects.toThrow('GitLab unavailable');
+    });
+
+    it('distinguishes no Kody approval from an unavailable GitLab lookup', async () => {
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({});
+        jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue({
+            MergeRequestApprovals: {
+                showConfiguration: jest
+                    .fn()
+                    .mockResolvedValueOnce({ approved_by: [] })
+                    .mockRejectedValueOnce(new Error('GitLab unavailable')),
+            },
+            Users: { showCurrentUser: jest.fn().mockResolvedValue({ id: 7 }) },
+        });
+        const request = {
+            organizationAndTeamData,
+            repository: { id: 'repo-1', name: 'repo' },
+            prNumber: 42,
+        };
+
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(PullRequestReviewState.NONE);
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(null);
     });
 
     it('normalizes bare stored hosts before creating the GitLab API client', () => {
@@ -63,6 +265,7 @@ describe('GitlabService', () => {
             host: 'https://gitlab.example.com',
             queryTimeout: 600000,
             camelize: false,
+            requesterFn: gitlabRequesterFn,
         });
     });
 
@@ -97,27 +300,948 @@ describe('GitlabService', () => {
         });
     });
 
-    it('does not duplicate the protocol when building clone params for self-hosted GitLab', async () => {
-        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
-            accessToken: 'oauth-token',
-            authMode: AuthMode.OAUTH,
-            host: 'https://gitlab.example.com/',
+    describe('getCloneParams', () => {
+        const mockAuthDetails = () =>
+            jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+                accessToken: 'oauth-token',
+                authMode: AuthMode.OAUTH,
+                host: 'https://gitlab.example.com/',
+            });
+
+        const mockProjectsShow = (show: jest.Mock) =>
+            mockedGitlab.mockReturnValue({ Projects: { show } });
+
+        it('does not duplicate the protocol when building clone params for self-hosted GitLab', async () => {
+            mockAuthDetails();
+            mockProjectsShow(
+                jest.fn().mockResolvedValue({
+                    path_with_namespace: 'group/repo',
+                }),
+            );
+
+            const cloneParams = await service.getCloneParams({
+                organizationAndTeamData,
+                repository: {
+                    id: 'repo-1',
+                    name: 'repo',
+                    fullName: 'group/repo',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cloneParams.url).toBe(
+                'https://gitlab.example.com/group/repo',
+            );
+            expect(cloneParams.auth).toMatchObject({
+                type: AuthMode.OAUTH,
+                token: 'oauth-token',
+            });
         });
 
-        const cloneParams = await service.getCloneParams({
-            organizationAndTeamData,
-            repository: {
-                id: 'repo-1',
-                name: 'repo',
-                fullName: 'group/repo',
-                defaultBranch: 'main',
+        // A stored fullName can hold the display form. Encoding it verbatim
+        // produces `My Group/My%20Project`, which GitLab answers with a 302
+        // to /users/sign_in and git reports as
+        // `unable to update url base from redirection`.
+        it('builds the URL from path_with_namespace when fullName holds the display form', async () => {
+            mockAuthDetails();
+            const show = jest.fn().mockResolvedValue({
+                path_with_namespace: 'my-group/my-project',
+            });
+            mockProjectsShow(show);
+
+            const cloneParams = await service.getCloneParams({
+                organizationAndTeamData,
+                repository: {
+                    id: '326',
+                    name: 'My Project',
+                    fullName: 'My Group/My Project',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(show).toHaveBeenCalledWith('326');
+            expect(cloneParams.url).toBe(
+                'https://gitlab.example.com/my-group/my-project',
+            );
+            expect(cloneParams.url).not.toContain('%20');
+        });
+
+        // The numeric id survives a move between groups; the stored path does
+        // not, and silently loses the new parent subgroup.
+        it('picks up a subgroup the stored fullName predates', async () => {
+            mockAuthDetails();
+            mockProjectsShow(
+                jest.fn().mockResolvedValue({
+                    path_with_namespace: 'parent/group/repo',
+                }),
+            );
+
+            const cloneParams = await service.getCloneParams({
+                organizationAndTeamData,
+                repository: {
+                    id: 'repo-2',
+                    name: 'repo',
+                    fullName: 'group/repo',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cloneParams.url).toBe(
+                'https://gitlab.example.com/parent/group/repo',
+            );
+        });
+
+        // CLI mode passes the placeholder id '0' with a fullName parsed from the
+        // local remote. '0' is a truthy string, so this needs an explicit check
+        // or every CLI clone burns a guaranteed-failing round-trip.
+        it.each(['0', '', undefined])(
+            'skips the project lookup when the id is the placeholder %p',
+            async (id) => {
+                mockAuthDetails();
+                const show = jest.fn();
+                mockProjectsShow(show);
+
+                const cloneParams = await service.getCloneParams({
+                    organizationAndTeamData,
+                    repository: {
+                        id: id as string,
+                        name: 'repo',
+                        fullName: 'group/repo',
+                        defaultBranch: 'main',
+                    },
+                });
+
+                expect(show).not.toHaveBeenCalled();
+                expect(cloneParams.url).toBe(
+                    'https://gitlab.example.com/group/repo',
+                );
             },
+        );
+
+        it('falls back to the stored fullName when the project lookup fails', async () => {
+            mockAuthDetails();
+            mockProjectsShow(
+                jest.fn().mockRejectedValue(new Error('404 Not Found')),
+            );
+
+            const cloneParams = await service.getCloneParams({
+                organizationAndTeamData,
+                repository: {
+                    id: 'repo-3',
+                    name: 'repo',
+                    fullName: 'group/repo',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cloneParams.url).toBe(
+                'https://gitlab.example.com/group/repo',
+            );
         });
 
-        expect(cloneParams.url).toBe('https://gitlab.example.com/group/repo');
-        expect(cloneParams.auth).toMatchObject({
-            type: AuthMode.OAUTH,
-            token: 'oauth-token',
+        it('still encodes path segments that need it', async () => {
+            mockAuthDetails();
+            mockProjectsShow(
+                jest.fn().mockResolvedValue({
+                    path_with_namespace: 'group/repo name',
+                }),
+            );
+
+            const cloneParams = await service.getCloneParams({
+                organizationAndTeamData,
+                repository: {
+                    id: 'repo-4',
+                    name: 'repo name',
+                    fullName: 'group/repo name',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cloneParams.url).toBe(
+                'https://gitlab.example.com/group/repo%20name',
+            );
+        });
+
+        // Every clone otherwise pays the Projects.show round-trip on its
+        // critical path, including repeated clones of the same repository
+        // across reviews.
+        it('reuses a cached path_with_namespace instead of calling Projects.show again', async () => {
+            mockAuthDetails();
+            const show = jest.fn().mockResolvedValue({
+                path_with_namespace: 'should-not-be-used',
+            });
+            mockProjectsShow(show);
+            cacheService.getFromCache.mockResolvedValue('group/cached-repo');
+
+            const cloneParams = await service.getCloneParams({
+                organizationAndTeamData,
+                repository: {
+                    id: 'repo-5',
+                    name: 'repo',
+                    fullName: 'group/repo',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cacheService.getFromCache).toHaveBeenCalledWith(
+                'gitlab-project-path-org-1-team-1-https://gitlab.example.com-repo-5',
+            );
+            expect(show).not.toHaveBeenCalled();
+            expect(cloneParams.url).toBe(
+                'https://gitlab.example.com/group/cached-repo',
+            );
+        });
+
+        it('caches a resolved path_with_namespace on a cache miss', async () => {
+            mockAuthDetails();
+            mockProjectsShow(
+                jest.fn().mockResolvedValue({
+                    path_with_namespace: 'group/repo',
+                }),
+            );
+
+            await service.getCloneParams({
+                organizationAndTeamData,
+                repository: {
+                    id: 'repo-6',
+                    name: 'repo',
+                    fullName: 'group/repo',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cacheService.addToCache).toHaveBeenCalledWith(
+                'gitlab-project-path-org-1-team-1-https://gitlab.example.com-repo-6',
+                'group/repo',
+                1800000,
+            );
+        });
+
+        // The GitLab integration is resolved per team, and two teams in the
+        // same org can point to different GitLab hosts and still share a
+        // numeric project id — the key must be scoped past organizationId
+        // alone or one team's clone can serve another team's cached slug.
+        it('scopes the cache key by team and GitLab host, not just organization', async () => {
+            mockAuthDetails();
+            mockProjectsShow(
+                jest.fn().mockResolvedValue({
+                    path_with_namespace: 'group/repo',
+                }),
+            );
+
+            await service.getCloneParams({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-2',
+                },
+                repository: {
+                    id: 'repo-6',
+                    name: 'repo',
+                    fullName: 'group/repo',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cacheService.getFromCache).toHaveBeenCalledWith(
+                'gitlab-project-path-org-1-team-2-https://gitlab.example.com-repo-6',
+            );
+        });
+
+        // The clone URL and API client both normalize the host through
+        // getGitlabWebBaseUrl; the cache key must go through the same
+        // normalization or `gitlab.example.com`, `https://gitlab.example.com`
+        // and a trailing-slash variant each produce their own entry for the
+        // same instance, missing the cache on every raw-string mismatch.
+        it('shares one cache entry across raw host variants of the same instance', async () => {
+            mockProjectsShow(
+                jest.fn().mockResolvedValue({
+                    path_with_namespace: 'group/repo',
+                }),
+            );
+
+            for (const host of [
+                'gitlab.example.com',
+                'https://gitlab.example.com',
+                'https://gitlab.example.com/',
+            ]) {
+                jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+                    accessToken: 'oauth-token',
+                    authMode: AuthMode.OAUTH,
+                    host,
+                });
+
+                await service.getCloneParams({
+                    organizationAndTeamData,
+                    repository: {
+                        id: 'repo-8',
+                        name: 'repo',
+                        fullName: 'group/repo',
+                        defaultBranch: 'main',
+                    },
+                });
+            }
+
+            const keysUsed = new Set(
+                cacheService.getFromCache.mock.calls.map((call) => call[0]),
+            );
+            expect(keysUsed).toEqual(
+                new Set([
+                    'gitlab-project-path-org-1-team-1-https://gitlab.example.com-repo-8',
+                ]),
+            );
+        });
+
+        // A failed lookup must not be cached — caching the fullName fallback
+        // would keep retrying the stored (possibly wrong) path for the full
+        // TTL instead of the API on the very next clone.
+        it('does not cache the fallback when the project lookup fails', async () => {
+            mockAuthDetails();
+            mockProjectsShow(
+                jest.fn().mockRejectedValue(new Error('404 Not Found')),
+            );
+
+            await service.getCloneParams({
+                organizationAndTeamData,
+                repository: {
+                    id: 'repo-7',
+                    name: 'repo',
+                    fullName: 'group/repo',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cacheService.addToCache).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('getPullRequest draft detection', () => {
+        const repository = {
+            id: 'repo-1',
+            name: 'repo',
+            default_branch: 'main',
+        };
+
+        const getPullRequest = async (mergeRequest: object) => {
+            Object.defineProperty(service, 'getAuthDetails', {
+                value: jest.fn().mockResolvedValue({
+                    accessToken: 'oauth-token',
+                    authMode: AuthMode.OAUTH,
+                }),
+            });
+
+            mockedGitlab.mockReturnValue({
+                MergeRequests: {
+                    show: jest.fn().mockResolvedValue(mergeRequest),
+                },
+            });
+
+            return service.getPullRequest({
+                organizationAndTeamData,
+                repository,
+                prNumber: 1,
+            });
+        };
+
+        it('maps the target branch commit from diff_refs.start_sha', async () => {
+            const result = await getPullRequest({
+                id: 1,
+                iid: 1,
+                diff_refs: {
+                    base_sha: 'merge-base',
+                    start_sha: 'target-tip',
+                    head_sha: 'source-tip',
+                },
+            });
+
+            expect(result?.base?.sha).toBe('target-tip');
+            expect(result?.head?.sha).toBe('source-tip');
+        });
+
+        it('maps draft null and work_in_progress true to draft', async () => {
+            const result = await getPullRequest({
+                id: 1,
+                iid: 1,
+                draft: null,
+                work_in_progress: true,
+            });
+
+            expect(result?.isDraft).toBe(true);
+        });
+
+        it('maps omitted draft and work_in_progress true to draft', async () => {
+            const result = await getPullRequest({
+                id: 1,
+                iid: 1,
+                work_in_progress: true,
+            });
+
+            expect(result?.isDraft).toBe(true);
+        });
+
+        it('prefers explicit draft false over work_in_progress true', async () => {
+            const result = await getPullRequest({
+                id: 1,
+                iid: 1,
+                draft: false,
+                work_in_progress: true,
+            });
+
+            expect(result?.isDraft).toBe(false);
+        });
+    });
+
+    describe('getRepositoryContentFile 404 classification', () => {
+        // Gitbeaker puts the HTTP response on `cause`, not on the error itself.
+        const gitbeaker404 = (description: string) =>
+            Object.assign(new Error(description), {
+                cause: { description, response: { status: 404 } },
+            });
+
+        it('logs a missing file as warn on every attempt, not as error', async () => {
+            Object.defineProperty(service, 'getAuthDetails', {
+                value: jest.fn().mockResolvedValue({
+                    accessToken: 'oauth-token',
+                    authMode: AuthMode.OAUTH,
+                }),
+            });
+            jest.spyOn(service, 'getDefaultBranch').mockResolvedValue('main');
+            mockedGitlab.mockReturnValue({
+                RepositoryFiles: {
+                    show: jest
+                        .fn()
+                        .mockRejectedValue(gitbeaker404('404 File Not Found')),
+                },
+            });
+            const logger = (service as any).logger;
+
+            const result = await service.getRepositoryContentFile({
+                organizationAndTeamData,
+                repository: { id: 'repo-1', name: 'repo' },
+                file: { filename: 'kodus-config.yml' },
+                pullRequest: {
+                    head: { ref: 'feature' },
+                    base: { ref: 'main' },
+                },
+            });
+
+            expect(result).toBeNull();
+            expect(logger.error).not.toHaveBeenCalled();
+            expect(logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'File not found in GitLab attempt',
+                }),
+            );
+            expect(logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'File not found in GitLab default branch attempt',
+                }),
+            );
+        });
+
+        it('logs an unknown user ID as warn, not as error', async () => {
+            Object.defineProperty(service, 'getAuthDetails', {
+                value: jest.fn().mockResolvedValue({
+                    accessToken: 'oauth-token',
+                    authMode: AuthMode.OAUTH,
+                }),
+            });
+            mockedGitlab.mockReturnValue({
+                Users: {
+                    show: jest
+                        .fn()
+                        .mockRejectedValue(gitbeaker404('404 User Not Found')),
+                },
+            });
+            const logger = (service as any).logger;
+
+            const result = await service.getUserById({
+                organizationAndTeamData,
+                userId: '116',
+            });
+
+            expect(result).toBeNull();
+            expect(logger.error).not.toHaveBeenCalled();
+            expect(logger.warn).toHaveBeenCalledTimes(1);
+        });
+    });
+    // The author lookup ran on every review for the same people (a user that
+    // timed out 3×5s did so 21 times in one day), and its cache key had no
+    // organization in it — an org could be served another org's GitLab user.
+    describe('getUserByEmailOrNameWithRetry cache', () => {
+        const store = new Map<string, string>();
+        const ttls = new Map<string, number>();
+        let usersAll: jest.Mock;
+        const lookup = (orgId: string) =>
+            (service as any).getUserByEmailOrNameWithRetry(
+                {
+                    organizationAndTeamData: {
+                        organizationId: orgId,
+                        teamId: 't',
+                    },
+                    email: 'dev@acme.io',
+                    userName: 'Dev',
+                },
+                1,
+                50,
+            );
+        const gitlabUser = (id: number, username: string) => ({
+            id,
+            username,
+            email: 'dev@acme.io',
+            name: 'Dev',
+        });
+
+        beforeEach(() => {
+            store.clear();
+            ttls.clear();
+            cacheService.getFromCache.mockImplementation(async (k: string) =>
+                store.has(k) ? JSON.parse(store.get(k)!) : null,
+            );
+            cacheService.addToCache.mockImplementation(
+                async (k: string, v: unknown, ttl: number) => {
+                    store.set(k, JSON.stringify(v));
+                    ttls.set(k, ttl);
+                },
+            );
+            Object.defineProperty(service, 'getAuthDetails', {
+                value: jest.fn().mockResolvedValue({
+                    accessToken: 'oauth-token',
+                    authMode: AuthMode.OAUTH,
+                }),
+            });
+            usersAll = jest.fn();
+            mockedGitlab.mockReturnValue({ Users: { all: usersAll } });
+        });
+
+        it('does not serve one organization the user found for another', async () => {
+            usersAll
+                .mockResolvedValueOnce([gitlabUser(1, 'org-a-user')])
+                .mockResolvedValueOnce([gitlabUser(2, 'org-b-user')]);
+
+            expect((await lookup('org-a')).username).toBe('org-a-user');
+            expect((await lookup('org-b')).username).toBe('org-b-user');
+            expect(usersAll).toHaveBeenCalledTimes(2);
+        });
+
+        it('remembers a user that does not exist instead of searching again', async () => {
+            usersAll.mockResolvedValue([]);
+
+            expect(await lookup('org-a')).toBeNull();
+            expect(await lookup('org-a')).toBeNull();
+            // one lookup = the email search + the name search
+            expect(usersAll).toHaveBeenCalledTimes(2);
+            expect([...ttls.values()]).toEqual([1800000]);
+        });
+
+        it('remembers a lookup that timed out instead of paying the timeout again', async () => {
+            usersAll.mockImplementation(() => new Promise(() => undefined));
+
+            expect(await lookup('org-a')).toBeNull();
+            expect(await lookup('org-a')).toBeNull();
+            expect(usersAll).toHaveBeenCalledTimes(1);
+            expect([...ttls.values()]).toEqual([600000]);
+        });
+
+        // A failed search is not an answer: caching it as "not found" for the
+        // full 30 minutes left an existing author unresolved after one blip.
+        it('keeps a failed search only briefly, not as a 30-minute "not found"', async () => {
+            usersAll.mockRejectedValue(
+                Object.assign(new Error('502 Bad Gateway'), {
+                    cause: { response: { status: 502 } },
+                }),
+            );
+
+            expect(await lookup('org-a')).toBeNull();
+            expect([...ttls.values()]).toEqual([600000]);
+        });
+    });
+
+    describe('createMergeRequestWebhook', () => {
+        const webhookUrl = 'https://kodus.example/webhook/gitlab';
+
+        const setUpWebhookCreation = ({
+            repositories,
+            add,
+        }: {
+            repositories: Array<{ id: number }>;
+            add: jest.Mock;
+        }) => {
+            const createOrUpdateConfig = jest.fn().mockResolvedValue(undefined);
+            // The writer reads the stored record first to refuse a stale
+            // overwrite (#2003 review). Default: nothing stored yet.
+            const findIntegrationConfigFormatted = jest
+                .fn()
+                .mockResolvedValue(undefined);
+
+            (service as any).integrationConfigService = {
+                createOrUpdateConfig,
+                findIntegrationConfigFormatted,
+            };
+
+            jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+                accessToken: 'token',
+                authMode: AuthMode.TOKEN,
+                host: 'gitlab.example.com',
+            });
+            const gitlabApi = {
+                ProjectHooks: {
+                    all: jest.fn().mockResolvedValue([]),
+                    add,
+                },
+            };
+            jest.spyOn(service as any, 'instanceGitlabApi').mockReturnValue(
+                gitlabApi,
+            );
+            jest.spyOn(
+                service as any,
+                'findOneByOrganizationAndTeamDataAndConfigKey',
+            ).mockResolvedValue(repositories);
+
+            process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK = webhookUrl;
+
+            return {
+                createOrUpdateConfig,
+                gitlabApi,
+                findIntegrationConfigFormatted,
+            };
+        };
+
+        afterEach(() => {
+            delete process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK;
+        });
+
+        it('a stale run does not overwrite a record a newer run already wrote', async () => {
+            // The queue orders writes but not OBSERVATIONS: a save that started
+            // earlier can reach the write last. The record carries when it was
+            // written, so the stale run must recognise itself and leave it
+            // alone — otherwise it resurrects a failure a newer save just
+            // cleared, or erases the one the newer save surfaced (#2003
+            // review).
+            const { createOrUpdateConfig, findIntegrationConfigFormatted } =
+                setUpWebhookCreation({
+                    repositories: [{ id: 11 }],
+                    add: jest.fn().mockResolvedValue({}),
+                });
+            // A record whose observation BEGAN after this run's (this run's
+            // `startedAt` is the moment the call entered, i.e. about now).
+            findIntegrationConfigFormatted.mockResolvedValue({
+                startedAt: new Date(Date.now() + 60_000).toISOString(),
+                failures: {
+                    '99': { reason: 'newer', at: new Date().toISOString() },
+                },
+            });
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('a newer run overwrites a record an older run is still reconciling', async () => {
+            // The inverse of the stale-run case, and the reason the guard reads
+            // start times: the older observation began FIRST, so its record must
+            // not outlive a newer one even though it may reach its write last
+            // (#2003 review).
+            const { createOrUpdateConfig, findIntegrationConfigFormatted } =
+                setUpWebhookCreation({
+                    repositories: [{ id: 11 }],
+                    add: jest.fn().mockResolvedValue({}),
+                });
+            findIntegrationConfigFormatted.mockResolvedValue({
+                startedAt: new Date(Date.now() - 60_000).toISOString(),
+                failures: {
+                    '99': { reason: 'older', at: new Date().toISOString() },
+                },
+            });
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            expect(createOrUpdateConfig).toHaveBeenCalled();
+            const value = (createOrUpdateConfig as jest.Mock).mock.calls[0][1];
+            expect(value).toEqual(
+                expect.objectContaining({ startedAt: expect.any(String) }),
+            );
+        });
+
+        it('records a failure for every selected project when auth resolution fails', async () => {
+            // An expired or revoked token fails for every project at once: the
+            // alert has to name them all, otherwise the silent failure #1983 is
+            // about survives whenever auth is the thing that broke.
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }, { id: 22 }],
+                add: jest.fn().mockResolvedValue({}),
+            });
+            jest.spyOn(service as any, 'getAuthDetails').mockRejectedValue({
+                response: { status: 401, statusText: 'Unauthorized' },
+            });
+
+            // The method still swallows the error (its caller fires it unawaited
+            // and never attaches a handler, so a rejection would surface as an
+            // unhandled one) — what matters is that the record is written before
+            // the swallow.
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            expect(createOrUpdateConfig).toHaveBeenCalledWith(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                expect.objectContaining({
+                    failures: expect.objectContaining({
+                        '11': expect.objectContaining({
+                            reason: expect.stringContaining('401'),
+                        }),
+                        '22': expect.objectContaining({
+                            reason: expect.stringContaining('401'),
+                        }),
+                    }),
+                }),
+                'integration-1',
+                organizationAndTeamData,
+            );
+        });
+
+        it('does not write the auth-failure record when the selection changed before it landed', async () => {
+            // The same overlap the success path guards against, on the other
+            // branch: an older run whose auth fails last must not replace the
+            // record a newer run already wrote for the CURRENT selection, or the
+            // settings alert names repositories nobody has selected anymore.
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }, { id: 22 }],
+                add: jest.fn().mockResolvedValue({}),
+            });
+            jest.spyOn(
+                service as any,
+                'findOneByOrganizationAndTeamDataAndConfigKey',
+            )
+                .mockReset()
+                .mockResolvedValueOnce([{ id: 11 }, { id: 22 }])
+                .mockResolvedValueOnce([{ id: 33 }]);
+            jest.spyOn(service as any, 'getAuthDetails').mockRejectedValue({
+                response: { status: 401, statusText: 'Unauthorized' },
+            });
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            expect(createOrUpdateConfig).not.toHaveBeenCalledWith(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                expect.anything(),
+                expect.anything(),
+                expect.anything(),
+            );
+        });
+
+        it('records the failures anyway when the guard read fails', async () => {
+            // The guard protects a wholesale replacement, so losing the whole
+            // record to a transient read error costs more than a stale one — and
+            // that is exactly what a propagating BadRequestException did.
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }, { id: 22 }],
+                add: jest.fn().mockResolvedValue({}),
+            });
+            jest.spyOn(
+                service as any,
+                'findOneByOrganizationAndTeamDataAndConfigKey',
+            )
+                .mockReset()
+                .mockResolvedValueOnce([{ id: 11 }, { id: 22 }])
+                .mockRejectedValueOnce(new Error('BadRequest'));
+            jest.spyOn(service as any, 'getAuthDetails').mockRejectedValue({
+                response: { status: 401, statusText: 'Unauthorized' },
+            });
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            expect(createOrUpdateConfig).toHaveBeenCalledWith(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                expect.objectContaining({
+                    failures: expect.objectContaining({
+                        '11': expect.objectContaining({
+                            reason: expect.stringContaining('401'),
+                        }),
+                        '22': expect.objectContaining({
+                            reason: expect.stringContaining('401'),
+                        }),
+                    }),
+                }),
+                'integration-1',
+                organizationAndTeamData,
+            );
+        });
+
+        it('logs the failure and stops when the selection read itself fails', async () => {
+            // The read used to sit outside every try: its BadRequestException
+            // escaped the method unlogged while the caller swallows the
+            // rejection, so a transient DB failure left no trace at all.
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }],
+                add: jest.fn().mockResolvedValue({}),
+            });
+            jest.spyOn(
+                service as any,
+                'findOneByOrganizationAndTeamDataAndConfigKey',
+            )
+                .mockReset()
+                .mockRejectedValue(new Error('BadRequest'));
+
+            await expect(
+                service.createMergeRequestWebhook({ organizationAndTeamData }),
+            ).resolves.toBeUndefined();
+
+            expect(createOrUpdateConfig).not.toHaveBeenCalledWith(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                expect.anything(),
+                expect.anything(),
+                expect.anything(),
+            );
+        });
+
+        it('does not overwrite the record when the selection changed mid-run', async () => {
+            // Two overlapping saves (two tabs, or a change right after a save):
+            // the run that started first must not clobber the newer state.
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }],
+                add: jest.fn().mockResolvedValue({}),
+            });
+            jest.spyOn(
+                service as any,
+                'findOneByOrganizationAndTeamDataAndConfigKey',
+            )
+                .mockResolvedValueOnce([{ id: 11 }])
+                .mockResolvedValueOnce([{ id: 22 }]);
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('keeps the hooks of the reachable projects and records the refused ones', async () => {
+            const add = jest.fn().mockImplementation((projectId: number) => {
+                if (projectId === 22) {
+                    return Promise.reject({
+                        response: { status: 403, statusText: 'Forbidden' },
+                    });
+                }
+
+                return Promise.resolve({});
+            });
+
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }, { id: 22 }],
+                add,
+            });
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            // The project GitLab refuses must not cost the next one its hook.
+            expect(add).toHaveBeenCalledWith(
+                11,
+                webhookUrl,
+                expect.any(Object),
+            );
+            expect(add).toHaveBeenCalledWith(
+                22,
+                webhookUrl,
+                expect.any(Object),
+            );
+
+            expect(createOrUpdateConfig).toHaveBeenCalledWith(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                {
+                    startedAt: expect.any(String),
+                    recordedAt: expect.any(String),
+                    failures: {
+                        '22': expect.objectContaining({
+                            reason: expect.stringContaining('HTTP 403'),
+                            at: expect.any(String),
+                        }),
+                    },
+                },
+                'integration-1',
+                organizationAndTeamData,
+            );
+
+            const [, written] = createOrUpdateConfig.mock.calls[0];
+            const failures = written.failures;
+
+            expect(failures['22'].reason).toContain('Maintainer or Owner');
+            expect(failures['11']).toBeUndefined();
+        });
+
+        it('clears the recorded failures once every project has its hook', async () => {
+            const add = jest.fn().mockResolvedValue({});
+
+            const { createOrUpdateConfig } = setUpWebhookCreation({
+                repositories: [{ id: 11 }],
+                add,
+            });
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            expect(createOrUpdateConfig).toHaveBeenCalledWith(
+                IntegrationConfigKey.WEBHOOK_CREATION_FAILURES,
+                {
+                    startedAt: expect.any(String),
+                    recordedAt: expect.any(String),
+                    failures: {},
+                },
+                'integration-1',
+                organizationAndTeamData,
+            );
+        });
+
+        // Without the URL the hooks point at, GitLab rejects the add. That
+        // rejection must land in the recorded failures like any other provider
+        // error: the point of this PR is that an unconfigured deployment sees
+        // WHY its webhooks are missing, not a silently skipped step. This is
+        // also the direction the reviewer asked for, since the guard they
+        // expected does not exist and the failure path is the real behaviour.
+        it('records the failure when the webhook URL is not configured', async () => {
+            const add = jest
+                .fn()
+                .mockRejectedValue(
+                    new Error('url is missing, url must be a valid URL'),
+                );
+            const { gitlabApi } = setUpWebhookCreation({
+                repositories: [{ id: 11 }],
+                add,
+            });
+            const record = jest
+                .spyOn(service as any, 'recordWebhookCreationFailures')
+                .mockResolvedValue(undefined);
+
+            delete process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK;
+
+            await service.createMergeRequestWebhook({
+                organizationAndTeamData,
+            });
+
+            // The hook is attempted with no URL (that is what GitLab rejects),
+            // and the rejection is recorded per repository.
+            expect(gitlabApi.ProjectHooks.all).toHaveBeenCalled();
+            expect(add).toHaveBeenCalled();
+            expect(record).toHaveBeenCalledWith(
+                organizationAndTeamData,
+                expect.objectContaining({
+                    '11': expect.objectContaining({
+                        reason: expect.any(String),
+                        at: expect.any(String),
+                    }),
+                }),
+                expect.any(String),
+            );
         });
     });
 });

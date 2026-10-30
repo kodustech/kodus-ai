@@ -12,6 +12,7 @@ import {
     IKodyRule,
     IKodyRules,
     KodyRulesStatus,
+    IKodyRuleIndexEntry,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { KodyRulesModel } from '@libs/kodyRules/infrastructure/adapters/repositories/schemas/kodyRules.model';
 import { KodyRulesValidationService } from '../service/kody-rules-validation.service';
@@ -42,9 +43,17 @@ export class KodyRulesRepository implements IKodyRulesRepository {
     //#endregion
 
     //#region Get/Find
-    async findById(uuid: string): Promise<IKodyRule | null> {
+    async findById(
+        uuid: string,
+        organizationId: string,
+    ): Promise<IKodyRule | null> {
         const pipeline = [
-            { $match: { 'rules.uuid': uuid } },
+            {
+                $match: {
+                    'rules.uuid': uuid,
+                    organizationId,
+                },
+            },
             { $unwind: '$rules' },
             { $match: { 'rules.uuid': uuid } },
             { $replaceRoot: { newRoot: '$rules' } },
@@ -59,6 +68,19 @@ export class KodyRulesRepository implements IKodyRulesRepository {
     ): Promise<KodyRulesEntity | null> {
         const doc = await this.kodyRulesModel.findOne(filter).exec();
         return doc ? mapSimpleModelToEntity(doc, KodyRulesEntity) : null;
+    }
+
+    async findOrganizationIdsWithRules(): Promise<string[]> {
+        // Projection + lean: only the organizationId of docs that have ≥1 rule.
+        // The detector sweep needs the org list, not every embedded rules array
+        // (loading all of them would grow memory unbounded on a large fleet).
+        const docs = await this.kodyRulesModel
+            .find({ 'rules.0': { $exists: true } }, { organizationId: 1 })
+            .lean()
+            .exec();
+        return docs
+            .map((d: any) => d?.organizationId)
+            .filter((id: unknown): id is string => typeof id === 'string');
     }
 
     async find(filter?: Partial<IKodyRules>): Promise<KodyRulesEntity[]> {
@@ -139,6 +161,34 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         return doc ? mapSimpleModelToEntity(doc, KodyRulesEntity) : null;
     }
 
+    async findRulesIndex(
+        organizationId: string,
+    ): Promise<IKodyRuleIndexEntry[]> {
+        // Project inside MongoDB: the embedded rules array carries each
+        // rule's body, examples and compiled detector, and a picker only
+        // needs the title and where the rule lives. Uses the organizationId
+        // index from kodyRules.model.ts.
+        const pipeline: PipelineStage[] = [
+            { $match: { organizationId } },
+            { $unwind: '$rules' },
+            {
+                $project: {
+                    _id: 0,
+                    uuid: '$rules.uuid',
+                    title: '$rules.title',
+                    repositoryId: '$rules.repositoryId',
+                    directoryId: '$rules.directoryId',
+                    type: '$rules.type',
+                    status: '$rules.status',
+                },
+            },
+        ];
+
+        return this.kodyRulesModel
+            .aggregate<IKodyRuleIndexEntry>(pipeline)
+            .exec();
+    }
+
     async countRules(
         organizationId: string,
         status?: KodyRulesStatus,
@@ -148,12 +198,10 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         // MongoDB just to return a single number. Requires the
         // organizationId index from kodyRules.model.ts for sub-ms
         // lookups.
-        const pipeline: PipelineStage[] = [
-            { $match: { organizationId } },
-        ];
+        const pipeline: PipelineStage[] = [{ $match: { organizationId } }];
         if (status) {
-            pipeline.push(
-                { $project: {
+            pipeline.push({
+                $project: {
                     total: {
                         $size: {
                             $filter: {
@@ -163,12 +211,12 @@ export class KodyRulesRepository implements IKodyRulesRepository {
                             },
                         },
                     },
-                } },
-            );
+                },
+            });
         } else {
-            pipeline.push(
-                { $project: { total: { $size: { $ifNull: ['$rules', []] } } } },
-            );
+            pipeline.push({
+                $project: { total: { $size: { $ifNull: ['$rules', []] } } },
+            });
         }
         const [result] = await this.kodyRulesModel
             .aggregate<{ total: number }>(pipeline)
@@ -327,6 +375,41 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         return updated
             ? mapSimpleModelToEntity(updated, KodyRulesEntity)
             : null;
+    }
+
+    async markAutoPausesDigested(
+        organizationId: string,
+        ruleId: string,
+        pausedAts: Date[],
+        digestedAt: Date,
+    ): Promise<boolean> {
+        const result = await this.kodyRulesModel
+            .updateOne(
+                { organizationId },
+                {
+                    $set: {
+                        'rules.$[current].autoPause.digestedAt': digestedAt,
+                        'rules.$[previous].lastAutoPause.digestedAt':
+                            digestedAt,
+                    },
+                },
+                {
+                    arrayFilters: [
+                        {
+                            'current.uuid': ruleId,
+                            'current.autoPause.pausedAt': { $in: pausedAts },
+                        },
+                        {
+                            'previous.uuid': ruleId,
+                            'previous.lastAutoPause.pausedAt': {
+                                $in: pausedAts,
+                            },
+                        },
+                    ],
+                },
+            )
+            .exec();
+        return result.modifiedCount > 0;
     }
 
     async updateRulesStatusByFilter(

@@ -1,0 +1,13 @@
+diff --git a/libs/code-review/domain/custom-agents/directory-cascade.ts b/libs/code-review/domain/custom-agents/directory-cascade.ts
+index f74007687..22ef8861a 100644
+--- a/libs/code-review/domain/custom-agents/directory-cascade.ts
++++ b/libs/code-review/domain/custom-agents/directory-cascade.ts
+@@ -54,7 +54,7 @@ function addOrReplace<T>(
+     );
+     const replaced = new Set<T>();
+     const result = (Array.isArray(inherited) ? inherited : []).map((entry) => {
+-        const mine = ownByKey.get(keyOf(entry));
++        const mine = undefined && ownByKey.get(keyOf(entry));
+         if (!mine) return entry;
+         replaced.add(mine);
+         return mine;

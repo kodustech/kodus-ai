@@ -1,8 +1,12 @@
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ICodeReviewFeedbackRepository } from '@libs/code-review/domain/codeReviewFeedback/contracts/codeReviewFeedback.repository';
-import { ICodeReviewFeedback } from '@libs/code-review/domain/codeReviewFeedback/interfaces/codeReviewFeedback.interface';
+import {
+    ICodeReviewFeedback,
+    ICollectedReaction,
+} from '@libs/code-review/domain/codeReviewFeedback/interfaces/codeReviewFeedback.interface';
 import { CodeReviewFeedbackEntity } from '@libs/code-review/domain/codeReviewFeedback/entities/codeReviewFeedback.entity';
 import {
     mapSimpleModelsToEntities,
@@ -12,6 +16,8 @@ import { CodeReviewFeedbackModel } from './schemas/mongoose/codeReviewFeedback.m
 
 @Injectable()
 export class CodeReviewFeedbackRepository implements ICodeReviewFeedbackRepository {
+    private readonly logger = createLogger(CodeReviewFeedbackRepository.name);
+
     constructor(
         @InjectModel(CodeReviewFeedbackModel.name)
         private readonly codeReviewFeedbackModel: Model<CodeReviewFeedbackModel>,
@@ -45,6 +51,77 @@ export class CodeReviewFeedbackRepository implements ICodeReviewFeedbackReposito
             );
         } catch (error) {
             console.log(error);
+            throw error;
+        }
+    }
+
+    async bulkUpsertReactions(
+        reactions: ICollectedReaction[],
+    ): Promise<number> {
+        if (!reactions?.length) {
+            return 0;
+        }
+
+        const operations = reactions.map((reaction) => ({
+            updateOne: {
+                filter: {
+                    organizationId: reaction.organizationId,
+                    suggestionId: reaction.suggestionId,
+                },
+                update: {
+                    $set: {
+                        reactions: reaction.reactions,
+                        comment: reaction.comment,
+                        pullRequest: reaction.pullRequest,
+                    },
+                    // Only on insert: an existing row may already have been
+                    // flagged as embedded, and refreshing a thumbs count must
+                    // not silently undo that.
+                    $setOnInsert: { syncedEmbeddedSuggestions: false },
+                },
+                upsert: true,
+            },
+        }));
+
+        try {
+            // Unordered: one rejected document should not stop the reactions
+            // queued behind it. Mongo applies everything it can and reports
+            // the rest together.
+            const result = await this.codeReviewFeedbackModel.bulkWrite(
+                operations,
+                { ordered: false },
+            );
+
+            return (result.upsertedCount ?? 0) + (result.modifiedCount ?? 0);
+        } catch (error) {
+            // A partially applied write still applied something. Without the
+            // counts below you cannot tell "nothing was saved" from "most of
+            // it was saved and three documents were rejected".
+            const partialResult = error?.result ?? {};
+            const writeErrors: any[] = error?.writeErrors ?? [];
+
+            this.logger.error({
+                message: 'Failed to upsert code review reactions',
+                context: CodeReviewFeedbackRepository.name,
+                error,
+                metadata: {
+                    organizationId: reactions[0]?.organizationId,
+                    operations: operations.length,
+                    upserted: partialResult.upsertedCount ?? 0,
+                    modified: partialResult.modifiedCount ?? 0,
+                    failed: writeErrors.length,
+                    // Codes and positions only — the rejected documents carry
+                    // customer content and have no place in a log line.
+                    failureCodes: [
+                        ...new Set(
+                            writeErrors.map((writeError) => writeError?.code),
+                        ),
+                    ],
+                    firstFailedSuggestionId:
+                        reactions[writeErrors[0]?.index]?.suggestionId,
+                },
+            });
+
             throw error;
         }
     }

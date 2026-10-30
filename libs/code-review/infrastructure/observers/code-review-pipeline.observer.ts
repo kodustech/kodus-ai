@@ -6,6 +6,8 @@ import {
 } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { IAutomationExecution } from '@libs/automation/domain/automationExecution/interfaces/automation-execution.interface';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
+import { SUMMARY_GENERATION_FAILED_REASON } from '@libs/code-review/pipeline/stages/finish-comments.stage';
+import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import {
     CheckConclusion,
@@ -136,7 +138,35 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
         // logic, PR-level comments, summary, verify, kody-rules agent) and
         // should degrade the review to PARTIAL_ERROR / neutral rather than
         // red-flagging the whole run.
-        const errors = context.errors || [];
+        //
+        // A SUMMARY_GENERATION_FAILED_REASON error is excluded here too
+        // (#1844): RequestChangesOrApproveStage already approves through it,
+        // so landing the check on NEUTRAL anyway would show an approved PR
+        // next to a non-green check — a confusing, inconsistent pair for the
+        // exact case this fix exists to make unremarkable. Still counts if
+        // it co-occurs with any other error (unfiltered elsewhere in
+        // `errors`), since that other failure is real and does degrade the
+        // check.
+        const errors = (context.errors || []).filter((e) => {
+            const isSummaryGenerationFailure =
+                e?.metadata?.reason === SUMMARY_GENERATION_FAILED_REASON;
+
+            if (isSummaryGenerationFailure) {
+                this.logger.debug({
+                    message:
+                        'Ignoring SUMMARY_GENERATION_FAILED_REASON error when deriving the check conclusion',
+                    context: CodeReviewPipelineObserver.name,
+                    error: e?.error,
+                    metadata: {
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                        reason: e?.metadata?.reason,
+                    },
+                });
+            }
+
+            return !isSummaryGenerationFailure;
+        });
         const hasCriticalError =
             context.statusInfo.status === AutomationStatus.ERROR ||
             errors.some((e) => (e.severity ?? 'critical') === 'critical');
@@ -202,7 +232,7 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
         const errorsByMessage = new Map<string, number>();
 
         (context.errors || []).forEach((item) => {
-            const message = item.error?.message?.trim();
+            const message = describePipelineError(item).text;
             if (message) {
                 errorsByMessage.set(
                     message,
@@ -391,15 +421,22 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
 
         let message = '';
         if (errors.length > 0) {
-            const uniqueMessages = [
-                ...new Set(
-                    errors.map((e) => e.error?.message || String(e.error)),
-                ),
-            ];
-            const displayMessages = uniqueMessages.slice(0, 3);
-            const remaining = uniqueMessages.length - displayMessages.length;
+            // One sentence, not a concatenation. Joining every raw provider
+            // string produced run-ons like "Not Found [kody-rules] all 1 judge
+            // shard(s) failed… green-wash…" in the UI — three internal messages
+            // glued together, none of them actionable. Show the single most
+            // actionable reason; the rest stay in `partialErrors` metadata,
+            // which the UI already renders under "View failed files".
+            const reasons = errors.map((e) => describePipelineError(e));
+            const best =
+                reasons.find((r) => r.classified)?.text ?? reasons[0]?.text;
+            const others = new Set(
+                reasons.map((r) => r.text).filter((t) => t !== best),
+            ).size;
 
-            message = `${displayMessages.join('\n')}${remaining > 0 ? `\n(+${remaining} more)` : ''}`;
+            message = best
+                ? `${best}${others > 0 ? ` (+${others} more issue${others > 1 ? 's' : ''})` : ''}`
+                : '';
         }
 
         // Surface the BusinessLogicValidationStage outcome message so the

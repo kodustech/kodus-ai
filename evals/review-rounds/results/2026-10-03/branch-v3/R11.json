@@ -1,0 +1,635 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "gpt-5.6-luna",
+  "judgeReasoningEffort": "low",
+  "reps": 3,
+  "engine": {
+    "commit": "14439a95335f07c92cb445ccea3069a9b2904e30",
+    "sourceDigest": "0e0cd300fc96bc97368cb5f8f3b15cae405c3de01769dc360fb5c578754e4bc5"
+  },
+  "startedAt": "2026-10-03T21:56:47.394Z",
+  "updatedAt": "2026-10-03T22:59:56.860Z",
+  "complete": true,
+  "selectedCases": [
+    "R11-kodus1902-reversal"
+  ],
+  "summary": {
+    "measured": 3,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "index-reference (#2039)": {
+        "n": 7,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R11-kodus1902-reversal · unclaimed-path-unfenced [if_delivered_linked, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 1484754,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: The new `noLiveOwner` condition `(status <> :processing OR leaseExpiresAt IS NULL OR leaseExpiresAt < :now)` treats a `PROCESSING` row whose `leaseExpiresAt` is NULL as having no live owner. WHY: The reaper (`findStaleJobs`) deliberately treats `PROCESSING` + NULL lease as LIVE until `updatedAt` ages past `olderThan` (legacy rows from workers that do not renew a lease column), so a job a legacy/rolling-deploy worker is actively running is judged ownerless and gets stamped FAILED, dropping that worker's review and notifying the author of a failure for a review still in progress. HOW: mirror the reaper — only treat a PROCESSING row as ownerless when its lease has actually expired, and additionally require that no `leaseOwner` is set, e.g. `(status <> :processing OR (leaseOwner IS NULL AND (leaseExpiresAt IS NULL OR leaseExpiresAt < :now)))` — or drop the `leaseExpiresAt IS NULL` clause and add the `updatedAt < :olderThan` legacy branch.",
+          "keep": true,
+          "rationale": "The claim is confirmed by the code. `findStaleProcessing` (the reaper, lines 436-448) treats a PROCESSING row with NULL `leaseExpiresAt` as LIVE unless `updatedAt < olderThan` — an explicit legacy branch for rows from workers that do not renew a lease. The new `noLiveOwner` guard at lines 248-254 instead treats any PROCESSING row with NULL `leaseExpiresAt` as ownerless (`status <> :processing OR leaseExpiresAt IS NULL OR ...`), so it stamps a terminal status over a legacy worker's actively-running job — dropping that worker's review and notifying the author of a failure for an in-progress review, exactly the #1830 symptom the lease fence exists to prevent. The two conditions are demonstrably inconsistent, and the path is reachable (noLiveOwner:true is used by code-review-job-processor.service.ts:653). This is a different problem from PreviousDecision index 1 (which concerned `if (!owned) return;` swallowing a failure pre-lease-claim), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 180,
+                "endLine": 320
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "findStaleJobs|noLiveOwner|leaseExpiresAt|leaseOwner",
+                "path": "libs/core/workflow"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 395,
+                "endLine": 470
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: The new `noLiveOwner` guard treats `leaseExpiresAt IS NULL` as \"no live owner\" even when `status = PROCESSING`. WHY: For PENDING rows the first disjunct (`status <> PROCESSING`) is already true, so the `leaseExpiresAt IS NULL` branch is redundant there and its only practical effect is to let the write land on a PROCESSING row that has no lease — a legacy row the reaper itself considers potentially live (findStaleProcessing only reclaims a NULL-lease row once `updatedAt < olderThan`, lines 443-448). The BYOK failure path can therefore overwrite the row of a worker still running it, contradicting the method's own doc comment (\"`status <> PROCESSING`, or a lease that has already expired\"). HOW: drop the `leaseExpiresAt IS NULL` disjunct, or bound it with the same staleness test the reaper uses: `(status <> :processing OR (leaseExpiresAt IS NOT NULL AND leaseExpiresAt < :now) OR (leaseExpiresAt IS NULL AND updatedAt < :olderThan))`.",
+          "keep": true,
+          "rationale": "The guard's `leaseExpiresAt IS NULL` disjunct is not covered by the method's own doc comment (\"`status <> PROCESSING`, or a lease that has already expired\"), and it is strictly more permissive than the reaper's own staleness test. findStaleProcessing (lines 436-448) explicitly treats a PROCESSING row with `leaseExpiresAt IS NULL` as potentially live until `updatedAt < olderThan` — i.e. the codebase itself acknowledges legacy NULL-lease PROCESSING rows can be actively running. The noLiveOwner guard skips that staleness check and lets the BYOK/requireNoLiveOwner failure write (handleFailure → jobRepository.update with `{ noLiveOwner: true }`, service lines 642-655) land FAILED over such a row, overwriting the outcome of a still-running (legacy) worker — the same class of data-loss the lease fence exists to prevent. I could not find evidence that a NULL-lease PROCESSING row can never be live, so the claim is not refuted. It is also a different failure than the PreviousReviewDecision (which was about `if (!owned) return;` swallowing pre-lease failures, not about overwriting a live row), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 180,
+                "endLine": 300
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 400,
+                "endLine": 470
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "handleFailure|leaseExpiresAt|leaseOwner",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 607,
+                "endLine": 700
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 440,
+                "endLine": 500
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: When `leaseClaimed` is false the general catch passes `ownedBy: undefined`, so `handleFailure` performs a fully UNGUARDED `jobRepository.update(jobId, failurePatch)` that stamps FAILED on the row regardless of who owns it. WHY: This PR itself documents (lines 644-648) that a redelivery of the same jobId can be consumed while another worker holds the row PROCESSING (the inbox dedupes on (consumerId, messageId), not jobId, and the reaper republishes with a fresh messageId). If that second delivery throws a pre-claim error (the rate-limit gate at 127 or the payload check at 110-118), the catch overwrites the live worker's PROCESSING row with FAILED; the live worker's guarded `markCompleted` then matches no row, its review result is dropped, and the author is notified of a failure for a review that is still running — the exact #1830 symptom the BYOK branch was hardened against with `requireNoLiveOwner`. The subsequent `throw` also makes the consumer's catch (workflow-job-consumer.service.ts:432) stamp FAILED/PERMANENT unguarded on the same row. HOW: For the non-lease case use the same fence as the BYOK branch and only fail loudly when nobody owns the row, e.g. `handleFailure(jobId, error, { organizationId: this.organizationIdFor(job), requireNoLiveOwner: !leaseClaimed, ownedBy: leaseClaimed ? this.instanceId : undefined })`, and return without notifying/rethrowing when it reports a live owner.",
+          "keep": true,
+          "rationale": "Confirmed: with leaseClaimed false, handleFailure receives ownedBy:undefined and executes the unguarded update at line 678, stamping FAILED regardless of ownership. The code itself (lines 642-648) documents that a same-jobId redelivery can run while another worker holds the row PROCESSING, and pre-claim errors (payload check 110-118, rate-limit gate 127) throw before the lease claim, so leaseClaimed stays false and the unguarded write can stomp the live worker's row. No per-job lock blocks this concurrency. This is not a repeat of the prior decision, whose failure was the opposite (pre-claim failures being swallowed); the current failure is a consequence of applying that earlier suggestion, and the proposed requireNoLiveOwner fence is consistent with — not a reversal of — the earlier intent. Not refutable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 90,
+                "endLine": 160
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 420,
+                "endLine": 560
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 560,
+                "endLine": 720
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 90,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "acquiredLock|noLiveOwner|leaseOwner|requireNoLiveOwner",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: When `leaseClaimed` is false the general catch passes `ownedBy: undefined`, so `handleFailure` performs a fully UNGUARDED write (lines 674-680) that stamps FAILED regardless of who currently owns the row. WHY: A failure raised before the lease claim (the payload check at line 117, `rateLimitGate.check` at line 127) can be a redelivery of a jobId that another worker has already claimed PROCESSING — the inbox dedupes on (consumerId, messageId), not jobId, and the reaper republishes with a fresh messageId — so this unguarded FAILED lands over that worker's row, its guarded completion matches nothing, its review result is dropped, and the author gets a failure notice for a review that is still running (the #1830 symptom the lease fence exists to prevent). HOW: route the no-lease case through the fence this PR already added — pass `requireNoLiveOwner: true` when `!leaseClaimed` — and treat a `false` result as 'a live worker owns it' (stop) instead of falling through to notify+rethrow, e.g. keep the rethrow only when the write actually landed.",
+          "keep": true,
+          "rationale": "The code path the finding describes is real and reachable. In the general catch (lines 474-497), when `leaseClaimed` is false the call passes `ownedBy: undefined`, and `handleFailure` then takes the `if (!options?.ownedBy)` branch (lines 674-680) — a fully unguarded `jobRepository.update(jobId, failurePatch)` that stamps FAILED with no ownership predicate. A failure raised before the lease claim can indeed occur while another worker owns the row: the code's own `requireNoLiveOwner` comment (lines 642-655) and the BYOK-exhausted branch (lines 179-193) explicitly document that the inbox dedupes on (consumerId, messageId) not jobId and that the reaper republishes with a fresh messageId, so a redelivery of the same jobId can be consumed while another worker has it PROCESSING. A `rateLimitGate.check` throw (line 127) or any exception between the payload check and the lease claim would therefore hit the unguarded write and clobber the live worker's row, whose guarded completion then matches nothing — dropping its review and notifying the author spuriously. The finding is NOT a repeat of the earlier decision: that entry's failure was the opposite (the no-lease failure being *swallowed* by the early return); this one is the *unguarded write clobbering another worker* produced by the developer's chosen fall-through, which the review guidance explicitly treats as a different problem (a consequence of applying the earlier suggestion). The proposed fix (route the no-lease case through the existing `requireNoLiveOwner` fence and stop only when a live owner is detected) is consistent and does not reverse the earlier fix's intent. Not refutable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 420,
+                "endLine": 520
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 620,
+                "endLine": 720
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 100,
+                "endLine": 240
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 420,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 240
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 63,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 4,
+        "after": 4
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "kodus-1902-round-a",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `libs/code-review/workflow/code-review-job-processor.service.ts:457` (2026-09-30 07:54 UTC).\n\nWhen leaseClaimed is false the general catch passes ownedBy: undefined, so handleFailure performs a fully unguarded jobRepository.update(jobId, failurePatch) that stamps FAILED on the row regardless of who owns it, letting a redelivery of the same jobId overwrite another worker's PROCESSING row and drop its review result (the #1830 symptom). Use the same fence as the BYOK branch with requireNoLiveOwner: !leaseClaimed, and return without notifying or rethrowing when it reports a live owner."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 228,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new noLiveOwner guard treats leaseExpiresAt IS NULL as \"no live owner\" even when status = PROCESSING, so the BYOK failure path can overwrite the row of a worker still running it, contradicting the method's own doc comment. Drop the leaseExpiresAt IS NULL disjunct, or bound it with the same staleness test the reaper uses: (status <> :processing OR (leaseExpiresAt IS NOT NULL AND leaseExpiresAt < :now) OR (leaseExpiresAt IS NULL AND updatedAt < :olderThan))."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "kodus-1902-round-a",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `libs/code-review/workflow/code-review-job-processor.service.ts:457` (2026-09-30 07:54 UTC).\n\nWhen leaseClaimed is false the general catch passes ownedBy: undefined, so handleFailure performs a fully unguarded write that stamps FAILED regardless of who currently owns the row, and a pre-claim failure can land over another worker's PROCESSING row (the #1830 symptom). Route the no-lease case through the fence this PR already added by passing requireNoLiveOwner: true when !leaseClaimed, and treat a false result as a live worker owning it (stop) instead of falling through to notify and rethrow."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 248,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new noLiveOwner condition (status <> :processing OR leaseExpiresAt IS NULL OR leaseExpiresAt < :now) treats a PROCESSING row whose leaseExpiresAt is NULL as ownerless, so a job a legacy/rolling-deploy worker is actively running gets stamped FAILED, dropping that worker's review. Mirror the reaper's findStaleJobs logic, e.g. (status <> :processing OR (leaseOwner IS NULL AND (leaseExpiresAt IS NULL OR leaseExpiresAt < :now))), or drop the leaseExpiresAt IS NULL clause and add the updatedAt < :olderThan legacy branch."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 1188505,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: For a run that never claimed the lease (`leaseClaimed === false`), the main catch passes `ownedBy: undefined`, which makes `handleFailure` take its unguarded `update(jobId, failurePatch)` branch (workflow-job.repository.ts:674-680) and then proceeds to `notifyReviewFailed` — neither write nor notice is fenced against a live owner. WHY: A redelivery of the same jobId that throws before the claim (the rate-limit gate at line 127, payload validation at line 117) while another worker is actively PROCESSING the row will now stamp FAILED over that live row (its guarded markCompleted then matches no row and its review is dropped) and email the author a failure notice for a review that is still running — exactly the #1830 symptom the new `requireNoLiveOwner` guard was added to prevent in the BYOK path. The old code passed `ownedBy: this.instanceId` unconditionally, so the guarded write matched nothing and the pre-change `if (!owned) return` skipped the notice; the applied fix reversed that for this case. HOW: route the never-claimed case through the same `requireNoLiveOwner` fence used at line 190, and skip the notice (but still rethrow) when a live owner exists, so a truly orphaned run still fails loudly while a live worker keeps its row and its notice.",
+          "keep": true,
+          "rationale": "The claim is technically sound and reachable. In the main catch (code-review-job-processor.service.ts:474-506), `ownedBy: leaseClaimed ? this.instanceId : undefined` means a run that threw before the lease claim (leaseClaimed === false, e.g. the payload check at line 117 or the rate-limit gate at line 127) passes `ownedBy: undefined`. handleFailure (line 674-680) then takes `if (!options?.ownedBy)` and performs `await this.jobRepository.update(jobId, failurePatch)` with no lease/live-owner fence, returning true. With `owned = true`, the `if (leaseClaimed && !owned) return` guard is false, so the code proceeds to `notifyReviewFailed` (skipped only for rate-limit errors) and rethrows — the FAILED stamp can land over a row another worker is actively PROCESSING, dropping its review, and the author gets a failure notice for a still-running review. The file's own comment at lines 179-189 explicitly acknowledges this redelivery-while-live-owner scenario as real for the BYOK path, and that path uses the `requireNoLiveOwner: true` fence (line 192) precisely to avoid it — the never-claimed generic-error path does not. This is a DIFFERENT failure from PreviousDecision index 1 (which was about the failure being swallowed / never rethrown, now fixed by `leaseClaimed && !owned`); this finding's consequence is the opposite: an unguarded overwrite of a live row plus a spurious notice, arising as a consequence of applying that earlier fix, so it is not a repeat. Not refutable on the evidence.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 100,
+                "endLine": 200
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 440,
+                "endLine": 510
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/workflow-job.repository.ts",
+                "startLine": 620,
+                "endLine": 700
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "requireNoLiveOwner|async handleFailure|leaseClaimed",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "workflow-job.repository.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 607,
+                "endLine": 720
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 46,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "kodus-1902-round-a",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `libs/code-review/workflow/code-review-job-processor.service.ts:457` (2026-09-30 07:54 UTC).\n\nFor a run that never claimed the lease (`leaseClaimed === false`), the main catch passes `ownedBy: undefined`, so `handleFailure` takes its unguarded `update(jobId, failurePatch)` branch (workflow-job.repository.ts:674-680) and `notifyReviewFailed` can stamp FAILED over a row another worker is actively PROCESSING (its guarded `markCompleted` then matches no row and drops its review) and email a failure notice; a redelivery of the same jobId that throws before the claim (rate-limit gate at line 127, payload validation at line 117) hits this, which is the #1830 symptom `requireNoLiveOwner` was added to prevent in the BYOK path. The old code passed `ownedBy: this.instanceId` unconditionally, so the guarded write matched nothing and the pre-change `if (!owned) return` skipped the notice, but the applied fix reversed that. Route the never-claimed case through the same `requireNoLiveOwner` fence used at line 190, and when a live owner exists skip the notice but still rethrow, so a truly orphaned run fails loudly while a live worker keeps its row and notice."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 1114748,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: the new `{ noLiveOwner: true }` guard is passed to `this.jobRepository.update(...)` while `jobRepository` is typed as `IWorkflowJobRepository`, but this PR only widens the concrete `WorkflowJobRepository.update` signature (repository.ts 177-179) — the repository contract `libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts` is not part of the diff. WHY: if the contract still declares the third parameter as `{ leaseOwner: string; requireProcessing?: boolean }`, the object literal `{ noLiveOwner: true }` fails TypeScript's excess-property and required-property checks, so the module fails to build and the new BYOK guard can never run. HOW: widen the `update` guard parameter in the contract to `{ leaseOwner: string; requireProcessing?: boolean } | { noLiveOwner: true }`, mirroring the class. (I grepped the tree for the interface declaration and it was not present in this checkout, so confirm the contract was widened.)",
+          "keep": true,
+          "rationale": "The call is typed against IWorkflowJobRepository, so the literal { noLiveOwner: true } is checked against the interface signature, not the widened concrete class (an implementing class may legally widen a parameter, but that does not relax the call site). A tree-wide grep shows the string noLiveOwner exists ONLY in the concrete repository class and the service call site — no contract file contains it — supporting the claim that the interface union was not widened. If the interface still types the guard as { leaseOwner: string; requireProcessing?: boolean }, the object literal fails both the missing-required-property and excess-property checks, breaking compilation. I found no evidence the contract was widened, so the finding cannot be refuted.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "workflow-job.repository.contract.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "IWorkflowJobRepository"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\(.*leaseOwner|requireProcessing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: `ownedBy: leaseClaimed ? this.instanceId : undefined` sends a run that never claimed the lease down `handleFailure`'s unguarded branch (`if (!options?.ownedBy)` → `update(jobId, failurePatch)`), which stamps FAILED on the row unconditionally, and the same run then rethrows into the consumer's unguarded FAILED write (workflow-job-consumer.service.ts:432). WHY: when a concurrent delivery of the same jobId fails before its claim (the rate-limit gate at line 127 throws before the claim write at line 259) while another worker already holds the lease, this overwrites that worker's PROCESSING row; its guarded markCompleted then matches nothing, its review result is dropped, and the author gets a failure notice for a review still running — the #1830 symptom, reintroduced because the gate keys on \"this run never claimed\" instead of \"another worker actually owns the row\" (the sibling BYOK path already guards this with `requireNoLiveOwner: true`). HOW: fence the pre-claim case on a live owner and skip the rethrow when the write does not land: pass `requireNoLiveOwner: !leaseClaimed` and use `if (!owned) return;` (with `requireNoLiveOwner` the write lands and returns true when nobody owns the row, so a genuinely unowned row still gets FAILED and the republish, while a live-owner row is left to that worker).",
+          "keep": true,
+          "rationale": "Confirmed: pre-claim failures (rate-limit gate at line 127 runs before the lease claim at 259/272) pass ownedBy=undefined, hitting handleFailure's unguarded branch (line 674: unconditional update(jobId, failurePatch)) which stamps FAILED with no lease/noLiveOwner fence; and with leaseClaimed=false the line-495 guard does not return, so the run also notifies and rethrows. The codebase's own BYOK comments (lines 179-189) affirm that a redelivery of the same jobId can be consumed while another worker owns the row, and that stamping FAILED there kills that worker's completion and drops its review — yet the general catch path (line 484) omits the requireNoLiveOwner fence the BYOK path uses. This is a distinct failure from PreviousDecision index 1 (which described the failure being swallowed, not overwriting a live row), and it arises as a consequence of applying that earlier suggestion, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 100,
+                "endLine": 300
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 440,
+                "endLine": 560
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "private async handleFailure|requireNoLiveOwner|ownedBy|leaseOwner",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 560,
+                "endLine": 680
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 246,
+                "endLine": 340
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 60,
+                "endLine": 100
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 55,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "kodus-1902-round-a",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `libs/code-review/workflow/code-review-job-processor.service.ts:457` (2026-09-30 07:54 UTC).\n\n`ownedBy: leaseClaimed ? this.instanceId : undefined` sends a run that never claimed the lease down handleFailure's unguarded branch (`if (!options?.ownedBy)` → `update(jobId, failurePatch)`), which stamps FAILED unconditionally before the run rethrows into the consumer's unguarded FAILED write (workflow-job-consumer.service.ts:432); when a concurrent delivery of the same jobId fails before its claim (the rate-limit gate at line 127 throws before the claim write at line 259) while another worker holds the lease, this overwrites that worker's PROCESSING row, its guarded markCompleted matches nothing, its review result is dropped, and the author gets a failure notice for a review still running — the #1830 symptom, reintroduced because the gate keys on \"this run never claimed\" instead of \"another worker actually owns the row\" (the sibling BYOK path already guards this with `requireNoLiveOwner: true`). Fence the pre-claim case on a live owner and skip the rethrow when the write does not land by passing `requireNoLiveOwner: !leaseClaimed` and using `if (!owned) return;`, so a genuinely unowned row still gets FAILED and the republish while a live-owner row is left to that worker."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 649,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new `{ noLiveOwner: true }` guard is passed to `this.jobRepository.update(...)` while `jobRepository` is typed as `IWorkflowJobRepository`, but this PR only widens the concrete `WorkflowJobRepository.update` signature (repository.ts 177-179) and leaves the contract at `libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts` declaring the third parameter as `{ leaseOwner: string; requireProcessing?: boolean }`, so the object literal fails TypeScript's excess-property and required-property checks, the module fails to build, and the new BYOK guard can never run. Widen the contract's `update` guard parameter to `{ leaseOwner: string; requireProcessing?: boolean } | { noLiveOwner: true }`, mirroring the class (the interface declaration was not present in this checkout, so confirm the contract was widened)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

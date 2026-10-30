@@ -20,6 +20,14 @@ export type CodeManagementIssue = {
     updatedAt: string;
     closedAt: string | null;
     platform: PlatformType;
+    /** The issue this one is a sub-issue of, where the host links them (GitHub). */
+    parent?: { number: number; repository: string } | null;
+    /** This issue's sub-issues, where the host links them (GitHub). */
+    subIssues?: Array<{
+        number: number;
+        title: string;
+        state: 'open' | 'closed';
+    }>;
 };
 
 export type ListIssuesParams = {
@@ -39,7 +47,7 @@ export type ListIssuesParams = {
 
 export type GetIssueParams = {
     organizationAndTeamData: OrganizationAndTeamData;
-    repository: { owner: string; name: string };
+    repository: { id?: string; owner: string; name: string };
     issueNumber: number;
 };
 

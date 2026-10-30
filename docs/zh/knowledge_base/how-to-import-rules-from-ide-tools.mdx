@@ -1,0 +1,31 @@
+---
+title: "如何在代码审查中使用您的 Cursor、Copilot 或 Claude 指令"
+description: "让 Kody 根据团队已经为编码代理编写的指令检查拉取请求，并把想要强制执行的约定保留为 Kody 规则。"
+---
+
+如果您的团队已经为 Cursor、GitHub Copilot、Claude 或其他编码代理编写了指令，Kody 可以在代码审查期间读取它们，并指出违反这些指令的更改。
+
+## 工作原理
+
+Kody 读取覆盖拉取请求所更改文件的指令文件。支持的文件包括：
+
+- `.cursorrules` 和 `.cursor/rules/**/*.mdc`（Cursor）
+- `.github/copilot-instructions.md` 和 `.github/instructions/**/*.instructions.md`（GitHub Copilot）
+- `CLAUDE.md`（Claude）
+- `AGENTS.md` 和 `.agents/rules/**`（agents.md 约定）
+
+违反其中某条指令的更改会以 **Repo Instruction** 标签报告，并引用该指令及其所在文件。这些文件从不会变成 Kody 规则，因此不会悄悄改变您的审查策略。
+
+## 设置
+
+1. 在侧边栏 **Code review** 分组顶部的范围选择器中选择 **Global** 或某个代码库，然后打开 **What to review**
+2. 开启 **Coding-agent instructions**
+3. 该范围内下一个被审查的拉取请求会根据覆盖其更改的指令文件进行检查
+
+新的工作区会在入门引导中被询问此项，并附上在每个代码库中找到的编码代理文件列表。
+
+## 在每次审查中强制执行某个约定
+
+编码代理指令只是上下文：只有当某条指令明确适用于被更改的行时，Kody 才会报告违反情况。对于希望像其他审查规则一样强制执行的约定，请在 `.kody/rules` 中把它写成[代码库规则](/zh/how_to_use/code_review/configs/repository_rules)。规则文件在合并时同步，每个文件一条规则，完全按原样导入。
+
+更多详情，请参阅[编码代理指令](/zh/how_to_use/code_review/configs/rules_file_detection)。

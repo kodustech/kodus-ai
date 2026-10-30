@@ -1,0 +1,2110 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "8d22cf93b7b767539c70cf6d879db8b39e0dbdde1464815e132caf5145e6d525"
+  },
+  "startedAt": "2026-10-13T21:22:45.518Z",
+  "updatedAt": "2026-10-13T21:36:59.684Z",
+  "complete": true,
+  "selectedCases": [
+    "P16-rule-no-overwrite-listed-site",
+    "P16-rule-no-overwrite-listed-site-control",
+    "P17-rule-partial-fixture-label-comment",
+    "P17-rule-partial-fixture-label-comment-control",
+    "P18-rule-timeout-out-of-40",
+    "P18-rule-timeout-out-of-40-control"
+  ],
+  "summary": {
+    "measured": 30,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 15,
+        "violations": 13,
+        "rate": 0.867
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 35,
+        "violations": 1,
+        "rate": 0.029
+      },
+      "index-reference (#2039)": {
+        "n": 66,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P16-rule-no-overwrite-listed-site · snapshot-overwrite-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 5,
+        "delivered": 3
+      },
+      "P16-rule-no-overwrite-listed-site · merge-overwrite-new-site [deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 4
+      },
+      "P16-rule-no-overwrite-listed-site-control · snapshot-overwrite-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P16-rule-no-overwrite-listed-site-control · merge-overwrite-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P17-rule-partial-fixture-label-comment · partial-fixture-comment-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P17-rule-partial-fixture-label-comment-control · partial-fixture-comment-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P18-rule-timeout-out-of-40 · geocode-timeout-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P18-rule-timeout-out-of-40 · timezone-timeout-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P18-rule-timeout-out-of-40-control · geocode-timeout-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P18-rule-timeout-out-of-40-control · timezone-timeout-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43633,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Re-running `datasets snapshot` for a version that was already snapshotted silently destroys the previous snapshot, since `target.write_text` replaces the file and breaks the rule \"Commands never overwrite existing outputs\". Check `target.exists()` before writing and raise `SystemExit` naming the file unless `args.force` was passed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Re-running `datasets report` silently clobbers the previous report with no way to recover it, because `report.write_text` overwrites the file and breaks the rule \"Commands never overwrite existing outputs\". Check `report.exists()` first and raise `SystemExit` naming the file unless `args.force` was passed."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Re-running `datasets merge` silently replaces the existing merged output at `args.output`, destroying the previous result and breaking the rule \"Commands never overwrite existing outputs\". Check whether the path exists before writing and raise `SystemExit` naming the file unless `args.force` was passed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 2761,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23811,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "The `snapshot` command silently truncates and replaces an existing file at `target`, so the `--force` guard the rule requires is never honored. Check `target.exists()` against `args.force` before writing and exit with an error naming the file."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "The `report` command silently replaces any existing file at `report`, so `--force` is never read as the rule requires. Check the path before writing and exit with an error that names the file."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "The `merge` command replaces any existing file at `args.output` without ever consulting `args.force`, so the overwrite rule is bypassed. Check the path before writing and exit with an error naming the file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30914,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 22,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Because snapshot writes the target without checking whether it already exists, running `datasets snapshot orders out/` twice silently replaces the earlier snapshot file, violating the rule \"Commands never overwrite existing outputs\". Check the target path and refuse unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 28,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Because `write_report` writes to the output path with no existence check, running `datasets report orders out.txt` twice silently replaces the previous report, violating the rule \"Commands never overwrite existing outputs\". Check the target path and refuse unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Because `merge` writes to the output path with no existence check, running `datasets merge out.json a b` twice silently replaces the previous merged file, violating the rule \"Commands never overwrite existing outputs\". Check the target path and refuse unless `--force` was passed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 52256,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "The `merge` command violates the 'Commands never overwrite existing outputs' rule because it writes to `args.output` without checking whether the file exists; running `datasets merge merged.json orders users` twice silently replaces the first merged file, and `--force` declared in `main()` is never read. Check the target path before writing and exit with an error naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "The `report` command violates the 'Commands never overwrite existing outputs' rule because it writes to `args.output` without checking whether the file exists; running `datasets report orders report.txt` twice silently replaces the first report, and `--force` declared in `main()` is never read. Check the target path before writing and exit with an error naming the file unless `--force` was passed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P16-rule-no-overwrite-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 27820,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Because `out.open(\"w\")` silently truncates an existing file, the export command destroys data that rule [1] says must be protected unless `--force` is passed. Check `out.exists()` before opening and exit with an error naming the file."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "The snapshot command writes to the computed target path without an existence check, so an existing snapshot for that version is silently overwritten, violating rule [1]. Check `target.exists()` first and raise a `SystemExit` naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "The report command unconditionally writes the report file, clobbering any prior report that rule [1] requires be protected. Add the `report.exists()` check before `write_text`, raising a `SystemExit` naming the file unless `--force` is given."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "The merge command writes the merged JSON directly over `args.output`, destroying any existing file that rule [1] protects. Check the path's existence first and exit with an error naming the file unless `--force` was passed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P16-rule-no-overwrite-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 23836,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Any pre-existing CSV at `args.output` is silently destroyed because `export_csv` opens it with mode `\"w\"` without ever consulting the `--force` flag defined in `main()`. Check the target path before writing and exit with an error naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 22,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Re-running `snapshot` for the same dataset and version clobbers the previous snapshot with no error because the target file is written unconditionally. Verify the target does not already exist (unless `--force` was passed) and fail with a message naming the file before writing."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 28,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Any report already at `args.output` is truncated because `write_report` performs no existence check and never consults the globally defined `--force` flag. Check `report.exists()` first and exit with an error naming the file unless `--force` was given."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "An existing file at `args.output` is overwritten with no guard because `merge` writes the merged JSON directly and ignores the `--force` option declared in `main()`. Check whether the path exists and exit with an error naming the file unless `--force` was passed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P16-rule-no-overwrite-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 25071,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Any existing export at that path is silently destroyed because `out.open(\"w\")` never consults `args.force`. Check whether `out` exists and raise `SystemExit` naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "An existing snapshot for that version is clobbered without checking `--force`. Verify `target` exists first and raise `SystemExit` naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "An existing report is silently replaced because the `--force` flag defined in `main()` is never consulted. Check `report` before writing and raise `SystemExit` naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "An existing merge result is destroyed because the parsed `--force` flag is never enforced. Check the `Path(args.output)` target before writing and raise `SystemExit` naming the file unless `--force` was passed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P16-rule-no-overwrite-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 31129,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "Because `export_csv` opens `out` with mode `\"w\"`, an existing output file is silently truncated even though `main()` documents `--force` as required to overwrite it. Before opening it for writing, check `out.exists()` and raise `SystemExit` naming the file unless `args.force` is set."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`snapshot` writes the snapshot JSON unconditionally via `write_text`, clobbering an existing snapshot for the same dataset/version despite rule [1]. Add an existence check guarded by `args.force` that raises `SystemExit` naming `target` before the write."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`write_report` overwrites the report file with `write_text`, ignoring the `--force` flag and clobbering an existing report. Guard the write with an `args.force`-aware existence check that raises `SystemExit` naming `report`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`merge` writes the merged output unconditionally, destroying any existing file at `args.output` even though the CLI advertises `--force` for overwriting. Check the target path before writing and raise `SystemExit` naming the file unless `args.force` is set."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P16-rule-no-overwrite-listed-site-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 22842,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`export_csv` opens `args.output` in write mode unconditionally, silently truncating any existing file. Check the target path before opening and exit with an error naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`snapshot` writes the target snapshot file without checking whether it already exists, silently clobbering it. Refuse to overwrite an existing output and exit with an error naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`write_report` writes the report file unconditionally, overwriting any existing file. Check the path first and exit with an error naming the file unless `--force` was passed."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "text": "`merge` writes `args.output` unconditionally, silently destroying any existing file. Check the target path first and exit with an error naming the file unless `--force` was passed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13800,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-partial-fixture-justified"
+          ],
+          "marked": false,
+          "text": "Because the `overdue_invoice` fixture omits `id`, `customer_id`, `currency`, and `status`, and the `# fixture` comment on line 17 only labels it, the omission is undocumented and fails the rule. Replace that comment with one justifying the omitted attributes, such as `# Only the amount and the due date feed the fee; id, customer, currency and status play no part in LateFeeCalculator.`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15708,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-partial-fixture-justified"
+          ],
+          "marked": false,
+          "text": "Because the `overdue_invoice` fixture builds an `Invoice` with only `amount_cents` and `due_on`, omitting `id`, `customer_id`, `currency`, and `status`, the `# fixture` comment leaves readers unsure whether those omissions are intentional. Replace it with a comment explaining that only `amount_cents` and `due_on` feed the fee calculation and that `id`, `customer_id`, `currency`, and `status` are irrelevant to these late-fee tests."
+        }
+      ],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15173,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-partial-fixture-justified"
+          ],
+          "marked": false,
+          "text": "The `# fixture` comment above `overdue_invoice` only labels the fixture and leaves unexplained why the omitted attributes `id`, `customer_id`, `currency`, and `status` are irrelevant, which fails Rule 1's justification requirement. Replace it with a comment explaining why those attributes do not matter to the tests using this fixture."
+        }
+      ],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 12618,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-partial-fixture-justified"
+          ],
+          "marked": false,
+          "text": "The comment above `overdue_invoice` only labels the fixture as `# fixture`, so readers cannot tell why `id`, `customer_id`, `currency`, and `status` are omitted. Replace it with a comment explaining that only `amount_cents` and `due_on` feed the fee and the other attributes are irrelevant to `LateFeeCalculator`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19289,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P17-rule-partial-fixture-label-comment",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-partial-fixture-justified"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `spec/billing/late_fee_calculator_spec.rb:17` (2026-10-06 12:00 UTC).\n\nThe `overdue_invoice` fixture builds an `Invoice` with only `amount_cents` and `due_on`, omitting `id`, `customer_id`, `currency` and `status`, so the `# fixture` label does not explain why those omissions are irrelevant to these tests. Replace the label with a comment stating that only the amount and due date feed the fee and that the omitted attributes play no part in `LateFeeCalculator`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P17-rule-partial-fixture-label-comment-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 17943,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-partial-fixture-justified"
+          ],
+          "marked": false,
+          "text": "The `overdue_invoice` fixture builds an `Invoice` with only `amount_cents` and `due_on`, and the `# fixture` comment merely labels it without explaining why omitting `id`, `customer_id`, `currency`, and `status` is safe. Replace that comment with one stating the calculator only reads the amount and due date, so the other attributes are irrelevant to these tests."
+        }
+      ],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P17-rule-partial-fixture-label-comment-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 12718,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-partial-fixture-justified"
+          ],
+          "marked": false,
+          "text": "The `overdue_invoice` fixture omits `id`, `customer_id`, `currency`, and `status` that the full `invoice` fixture sets, but the `# fixture` comment only labels it instead of satisfying Rule 1's requirement to explain why the omissions don't matter. Replace the label with a justification, such as noting that the calculator only reads `amount_cents` and `due_on`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P17-rule-partial-fixture-label-comment-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 11217,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-partial-fixture-justified"
+          ],
+          "marked": false,
+          "text": "Because `overdue_invoice` is built with only `amount_cents` and `due_on`, the `# fixture` comment fails Rule 1 by labeling the fixture without explaining why the omitted Invoice attributes are irrelevant. Replace that label with a justification of why the missing attributes do not affect the tests using it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P17-rule-partial-fixture-label-comment-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 12261,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-partial-fixture-justified"
+          ],
+          "marked": false,
+          "text": "The comment above `overdue_invoice` only labels the fixture and does not justify why `id`, `customer_id`, `currency`, and `status` are omitted. Replace it with a comment explaining that the calculator depends only on `amount_cents` and `due_on`, so those other attributes do not matter for these tests."
+        }
+      ],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P17-rule-partial-fixture-label-comment-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 17264,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-partial-fixture-justified"
+          ],
+          "marked": false,
+          "text": "The comment above the `overdue_invoice` fixture only labels it as a fixture and leaves the omitted `Invoice` attributes (`id`, `customer_id`, `currency`, `status`) unexplained, making the partial construction look arbitrary. Replace it with a comment that justifies the omission, such as noting that the calculator only reads `amount_cents` and `due_on`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37054,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "If the geocoding provider hangs, the `fetch` can outlive the function's 10s limit (`FUNCTION_LIMIT_SECONDS`) and the handler is killed without a response. Add an explicit timeout shorter than that limit, e.g. `signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS)` with `const GEOCODE_TIMEOUT_MS = 8000;` (named constant per rule 15)."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "A hanging timezone API upstream keeps the handler alive until the platform's 10s limit (`FUNCTION_LIMIT_SECONDS`). Add an explicit `AbortSignal.timeout` shorter than that limit, e.g. `signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS)` with `const OUTBOUND_TIMEOUT_MS = 8000;` near `FUNCTION_LIMIT_SECONDS`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 10,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-docs-public-api"
+          ],
+          "marked": false,
+          "text": "`handler` is exported from module code but lacks a doc comment, so callers cannot see what it does at a glance. Add a one-line doc comment above it describing the IANA timezone lookup for a lat/lng point via the timezone API."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37603,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "A hung geocoding provider call can keep the invocation alive until the platform kills it, since the function limit is 10s (`FUNCTION_LIMIT_SECONDS`) and the `fetch` has no timeout, violating the rule 'Outbound calls time out before the function does'. Add an explicit `AbortSignal.timeout` shorter than the function limit to that `fetch`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "If the timezone provider hangs, the request is killed by the platform limit rather than failing cleanly, because the outbound `fetch` has no explicit timeout and `maxDuration` is `FUNCTION_LIMIT_SECONDS` (10s), violating the rule 'Outbound calls time out before the function does'. Add an `AbortSignal.timeout` with a value shorter than the function limit, such as `OUTBOUND_TIMEOUT_MS = 5_000`, to the `fetch`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 47528,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "In `src/functions/geocode-address.ts`, a hung provider makes the outbound geocode fetch run until the platform kills the function at `maxDuration` 10s, so the caller gets no controlled error. Add an `AbortSignal.timeout` shorter than the function limit, such as `signal: AbortSignal.timeout(8000)`, and derive that value from a named constant."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "In `src/functions/timezone-for-point.ts`, a hung timezone provider makes the handler run until the platform kills it at `maxDuration` 10s. Pass an `AbortSignal.timeout` signal shorter than the function limit, such as `OUTBOUND_TIMEOUT_MS = 5_000` alongside `FUNCTION_LIMIT_SECONDS`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26288,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "A hung geocoding provider keeps the request alive until the platform's 10s `maxDuration` kills it, so no response is returned at all. Add `signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS)` to the fetch options, with a module-scope `OUTBOUND_TIMEOUT_MS` shorter than `FUNCTION_LIMIT_SECONDS` (e.g. 8_000)."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "If the timezone provider hangs, the request runs until the function's 10s `maxDuration` kills it and the caller gets no controlled 502 response. Add an `AbortSignal.timeout(LOOKUP_TIMEOUT_MS)` signal with a named constant shorter than `FUNCTION_LIMIT_SECONDS` (e.g. 5s) so the call fails fast."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26218,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "If the provider hangs, the request runs until the platform kills it because the fetch has no timeout despite the 10s function limit, violating the rule \"Outbound calls time out before the function does\". Add an `AbortSignal.timeout` signal shorter than the function limit to the fetch."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "If the provider hangs, the fetch can consume the whole 10s `FUNCTION_LIMIT_SECONDS` budget and the request is killed with a 5xx instead of a controlled 502, violating the rule \"Outbound calls time out before the function does\". Define a named timeout constant shorter than the function limit (e.g. 5000 ms) and pass it as an `AbortSignal.timeout` signal to the fetch."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 14,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "text": "A failed timezone lookup cannot be traced to the coordinates that caused it because the warn log only passes the HTTP status, violating the \"Structured log fields\" rule. Add `point.lat` and `point.lng` (or the upstream URL) as named fields on the log object so the failure is diagnosable."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P18-rule-timeout-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 23888,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "If the geocoding provider hangs, the fetch runs until the 10s function limit, so the caller gets a platform timeout instead of the intended 502. Add an explicit `signal: AbortSignal.timeout(...)` with a timeout shorter than FUNCTION_LIMIT_SECONDS, such as `const GEOCODE_TIMEOUT_MS = 8_000;`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/geocode-address.ts",
+          "line": 14,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-docs-public-api"
+          ],
+          "marked": false,
+          "text": "Exported functions are expected to be documented, and `handler` currently has no doc comment. Add a one-line doc comment above it describing what it does."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "Because the handler's own limit is 10s (`maxDuration`), a hung provider keeps the function running until that limit with no controlled failure. Pass an `AbortSignal.timeout` signal shorter than the function limit, e.g. derived from FUNCTION_LIMIT_SECONDS."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P18-rule-timeout-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 38529,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "Because the geocoding `fetch` has no timeout, a hanging provider runs until the function's `maxDuration` kills it, returning a 504 to the caller instead of the handled 502 path, violating the rule that outbound calls time out before the function does. Add an `AbortSignal.timeout` shorter than the 10s function limit, e.g. `signal: AbortSignal.timeout((FUNCTION_LIMIT_SECONDS - 2) * 1000)` or a named `OUTBOUND_TIMEOUT_MS` constant."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "Because the timezone API `fetch` has no timeout, a hanging provider keeps the handler alive until the platform kills it at the 10s `maxDuration` instead of failing fast through the 502 branch, violating the rule that outbound calls time out before the function does. Add an explicit timeout signal shorter than `FUNCTION_LIMIT_SECONDS`, e.g. `const FETCH_TIMEOUT_MS = 5000;` and pass `{ signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }` to the `fetch`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P18-rule-timeout-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 63461,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "With no timeout on the outbound fetch to the geocoding provider, a hung request can consume the entire 10s `FUNCTION_LIMIT_SECONDS` budget and the function is killed before it can return a 502, violating the rule that outbound calls time out before the function does. Define a timeout constant shorter than the function limit (e.g. `const GEOCODE_TIMEOUT_MS = 5000;`) and pass `signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS)` to `fetch`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/geocode-address.ts",
+          "line": 25,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-non-null"
+          ],
+          "marked": false,
+          "text": "Because `body` is untyped external data, `body.results[0]` is read without validation and throws when the provider returns an object without `results`, the same class of unchecked external data the rule 'No non-null assertions on external data' guards against. Narrow the parsed JSON with a zod schema (or at least guard `Array.isArray(body?.results)`) before reading `results[0]`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "Without a timeout on the timezone API fetch, a hung provider makes the function run until the platform limit and the caller never gets the 502 branch, violating the rule that outbound calls time out before the function does. Pass an `AbortSignal.timeout` shorter than `FUNCTION_LIMIT_SECONDS`, e.g. `signal: AbortSignal.timeout((FUNCTION_LIMIT_SECONDS - 1) * 1000)`, so the call fails before the function's own limit."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P18-rule-timeout-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 57674,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "The outbound geocoding fetch in `src/functions/geocode-address.ts` violates the \"Outbound calls time out before the function does\" rule: a hanging provider runs until the platform's 10s `maxDuration` kills it, wasting the whole function budget with no controlled failure. Add `AbortSignal.timeout` with a value shorter than `FUNCTION_LIMIT_SECONDS`, such as a named `GEOCODE_TIMEOUT_MS` constant of 8000."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "The outbound fetch to the timezone API in `src/functions/timezone-for-point.ts` has no timeout, so a stalled provider hangs until the 10s `maxDuration` kills it and returns a 500 instead of the intended 502 `lookup_failed`. Pass an explicit `AbortSignal.timeout` on the fetch's `signal` with a value shorter than `FUNCTION_LIMIT_SECONDS`, such as `TIMEOUT_MS` set to 5000."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P18-rule-timeout-out-of-40-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 58698,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "Because the fetch to the geocoding provider sets no timeout, a hung provider can consume the entire 10-second handler budget and the function is killed instead of returning a clean error, violating \"Outbound calls time out before the function does\". Add an explicit timeout shorter than the function limit, e.g. `signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS)` with `const OUTBOUND_TIMEOUT_MS = 5000;` declared next to `FUNCTION_LIMIT_SECONDS`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/geocode-address.ts",
+          "line": 26,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-non-null"
+          ],
+          "marked": false,
+          "text": "`body.results[0]` dereferences an unvalidated network response; `res.json()` is typed as `any`, so if the provider returns an error payload without `results` this throws a TypeError (500) instead of the intended 404, violating \"No non-null assertions on external data\" (the unchecked index access here is the same class of unsound access). Parse the payload with a zod schema (`results: z.array(z.object({ lat: z.number(), lng: z.number() }))`) and handle a failed parse before indexing into it."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "Because the fetch to the timezone API sets no timeout, a hung TZ API connection keeps the promise pending until the platform kills the function, even though the function's limit is 10 seconds (`FUNCTION_LIMIT_SECONDS`), violating \"Outbound calls time out before the function does\". Add an explicit `AbortSignal.timeout` signal shorter than the function limit, e.g. a named `OUTBOUND_TIMEOUT_MS` of 8000."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

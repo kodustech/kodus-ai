@@ -1,3 +1,4 @@
+import { buildGitAuthHeader } from './git-auth-header';
 import { createLogger } from '@libs/core/log/logger';
 import { PlatformType } from '@libs/core/domain/enums';
 import { Injectable } from '@nestjs/common';
@@ -6,29 +7,121 @@ import { exec, execFile, ExecFileOptions, spawn } from 'child_process';
 import {
     lstat,
     mkdtemp,
+    open,
     readFile,
     realpath,
     rm,
     writeFile,
     mkdir,
 } from 'fs/promises';
+import type { FileHandle } from 'fs/promises';
+import { constants as fsConstants } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { basename, isAbsolute, join, relative, sep } from 'path';
 import { promisify } from 'util';
 
 import {
     CreateSandboxParams,
     ISandboxProvider,
     SandboxInstance,
+    SandboxRunOptions,
     SandboxRunResult,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import {
+    fetchSubmodules,
+    isContainedRelativePath,
+    SubmoduleGitHost,
+} from '@libs/sandbox/infrastructure/providers/submodule-fetch';
 
 const execFileAsync = promisify(execFile);
 
-const CLONE_TIMEOUT_MS = 120_000;
+/**
+ * Clone budget. 120s is tight for large monorepos — a shallow fetch of a PR
+ * ref on a repo the size of Keycloak or cal.com can exceed it, and the review
+ * then runs with no sandbox at all. Overridable so a deployment that reviews
+ * big repositories can raise it.
+ */
+const CLONE_TIMEOUT_MS =
+    Number(process.env.API_SANDBOX_CLONE_TIMEOUT_MS) || 120_000;
+// Submodule fetch is best-effort and must never hold a review hostage — see
+// `fetchSubmodules` below.
+const SUBMODULES_TIMEOUT_MS = 120_000;
 const CMD_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 5 * 1024 * 1024; // 5 MB — cap output to prevent memory issues
+
+/**
+ * Per-program argument blocklist for `exec`. The command whitelist admits
+ * `find` and `fd` as read-only finders, but both accept flags that run an
+ * arbitrary program (`-exec`/`-execdir`/`-ok` on find, `-x`/`-X`/`--exec` on
+ * fd) — host RCE on a self-hosted worker — or that write/delete files
+ * (`-delete`, `-fprint*`, `-fls`). Other readers accept flags that follow
+ * symlinks out of the clone (`find -L/-H/-follow`, `fd -L/--follow`, `grep
+ * -R/--dereference-recursive/--dereference`, ast-grep `--follow`), or rewrite
+ * files (ast-grep `-U/--update-all`). A flag matched here fails the command.
+ * Programs with no entry (cat/head/tail/wc/file) carry no such flag and pass
+ * through.
+ *
+ * Why `--follow` matters even with the per-argument symlink check below: that
+ * check canonicalizes the paths passed as arguments, but `ast-grep . --follow`
+ * passes `.` (inside the clone) and the walker then descends into a symlinked
+ * directory it discovers during traversal — a path that was never an argument,
+ * so the realpath check never sees it. The follower flags must be refused
+ * outright for every traversing reader.
+ */
+const DANGEROUS_FLAGS: Record<string, RegExp> = {
+    find: /^-(exec|execdir|ok|okdir|delete|fprint|fprintf|fprint0|fls|L|H|follow)$/,
+    fd: /^(-x|-X|--exec|--exec-batch|-L|--follow)$/,
+    grep: /^(-R|--dereference-recursive|--dereference)$/,
+    sg: /^(-U|--update-all|--follow)$/,
+    'ast-grep': /^(-U|--update-all|--follow)$/,
+};
+
+/**
+ * Short-flag characters that carry the same danger as the long forms when they
+ * appear inside a `-abc` cluster. clap (fd, ast-grep) and getopt (grep) let a
+ * short flag's value glue on (`-xsh` == `-x sh`) and let booleans stack before
+ * it (`-Lx` == `-L -x`, `-Rn` == `-R -n`), so the anchored `^-x$`/`^-R$` tests
+ * above miss them. The cluster is rejected when it contains any of these chars
+ * — failing closed on a grep/fd argument that happens to glue a dangerous
+ * letter after a value flag is far cheaper than an exec/symlink-escape bypass,
+ * and the long form or a separate token is always available. `find` does not
+ * cluster short flags, so it has no entry and keeps its exact match above.
+ */
+const DANGEROUS_SHORT_FLAGS: Record<string, Set<string>> = {
+    fd: new Set(['x', 'X', 'L']),
+    grep: new Set(['R']),
+    sg: new Set(['U']),
+    'ast-grep': new Set(['U']),
+};
+
+/**
+ * Variables that tell git which repository to work on. They outrank `-C` and
+ * `cwd`: a process started from a git hook (the pre-push test suite) inherits
+ * GIT_DIR, and `git init <tempDir>` then re-initialized the caller's
+ * repository (core.bare=true, core.hooksPath=/dev/null) instead of creating
+ * the sandbox's own. Everything the sandbox runs must resolve its own clone.
+ */
+const GIT_REPOSITORY_ENV = [
+    'GIT_DIR',
+    'GIT_WORK_TREE',
+    'GIT_INDEX_FILE',
+    'GIT_OBJECT_DIRECTORY',
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+    'GIT_COMMON_DIR',
+    'GIT_NAMESPACE',
+];
+
+/** `process.env` plus `extra`, without the variables that relocate git. */
+export function sandboxEnv(
+    extra?: Record<string, string | undefined>,
+): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+    for (const key of GIT_REPOSITORY_ENV) {
+        delete env[key];
+    }
+    return env;
+}
 
 @Injectable()
 export class LocalSandboxService implements ISandboxProvider {
@@ -62,6 +155,7 @@ export class LocalSandboxService implements ISandboxProvider {
             platform,
             checkoutSha,
             unifiedDiff,
+            baseBranch,
         } = params;
 
         const tempDir = await mkdtemp(join(tmpdir(), 'kodus-sandbox-'));
@@ -89,6 +183,7 @@ export class LocalSandboxService implements ISandboxProvider {
 
             await execFileAsync('git', ['init', tempDir], {
                 timeout: CLONE_TIMEOUT_MS,
+                env: sandboxEnv(),
             });
 
             // Disable all git hooks to prevent arbitrary code execution
@@ -96,12 +191,12 @@ export class LocalSandboxService implements ISandboxProvider {
             await execFileAsync(
                 'git',
                 ['-C', tempDir, 'config', 'core.hooksPath', '/dev/null'],
-                { timeout: 5_000 },
+                { timeout: 5_000, env: sandboxEnv() },
             );
 
             // Pass auth header via env vars instead of -c args
             // to keep the token out of ps/proc/cmdline
-            const fetchEnv: Record<string, string> = { ...process.env } as any;
+            const fetchEnv: Record<string, string> = sandboxEnv() as any;
             if (authToken) {
                 fetchEnv.GIT_CONFIG_COUNT = '1';
                 fetchEnv.GIT_CONFIG_KEY_0 = 'http.extraHeader';
@@ -126,7 +221,60 @@ export class LocalSandboxService implements ISandboxProvider {
 
             await execFileAsync('git', ['-C', tempDir, 'checkout', localRef], {
                 timeout: CLONE_TIMEOUT_MS,
+                env: sandboxEnv(),
             });
+
+            // Only a submodule declared identically on the BASE branch is
+            // fetched, so the base has to be in the checkout first. The token
+            // here is the self-hosted customer's own OAuth token or PAT and
+            // reaches every project they can see, so failing to fetch the
+            // base means fetching no submodule at all — see
+            // `baseDeclaredDumpArgs`.
+            let baseRef: string | undefined;
+            if (baseBranch) {
+                const localBaseRef = `refs/remotes/origin/${baseBranch}`;
+                try {
+                    await execFileAsync(
+                        'git',
+                        [
+                            '-C',
+                            tempDir,
+                            'fetch',
+                            '--depth=1',
+                            cloneUrl,
+                            `refs/heads/${baseBranch}:${localBaseRef}`,
+                        ],
+                        {
+                            timeout: CLONE_TIMEOUT_MS,
+                            env: fetchEnv,
+                        } as ExecFileOptions,
+                    );
+                    baseRef = localBaseRef;
+                } catch (error) {
+                    this.logger.warn({
+                        message: `[SUBMODULES] Could not fetch base branch ${baseBranch}; no submodule will be fetched`,
+                        context: LocalSandboxService.name,
+                        error:
+                            error instanceof Error
+                                ? error
+                                : new Error(String(error)),
+                        metadata: { prNumber, baseBranch },
+                    });
+                }
+            }
+
+            // The checkout above has no submodule handling, so every path the
+            // repository declares in `.gitmodules` would otherwise be an empty
+            // directory the agent reads as "this code does not exist" (#1939).
+            await this.fetchSubmodules(
+                tempDir,
+                cloneUrl,
+                authHeader,
+                {
+                    prNumber,
+                },
+                baseRef,
+            );
 
             // CLI mode: replay the user's local diff on top of the
             // merge-base SHA, so the agent reviews the same code the user
@@ -171,8 +319,17 @@ export class LocalSandboxService implements ISandboxProvider {
             // explicitly instead of piggybacking on this entry point.
             const run = async (
                 command: string,
-                opts?: { timeoutMs?: number },
+                opts?: SandboxRunOptions,
             ): Promise<SandboxRunResult> => {
+                // The local sandbox is the worker's own host: there is no
+                // root channel, and none is ever opened from a review.
+                if (opts?.asRoot) {
+                    return {
+                        stdout: '',
+                        stderr: 'Running as root is not available in the local sandbox',
+                        exitCode: 1,
+                    };
+                }
                 if (/`|\$\(/.test(command)) {
                     this.logger.warn({
                         message:
@@ -195,7 +352,7 @@ export class LocalSandboxService implements ISandboxProvider {
                         cwd: capturedRepoDir,
                         timeout: opts?.timeoutMs ?? CMD_TIMEOUT_MS,
                         maxBuffer: MAX_BUFFER,
-                        env: process.env,
+                        env: sandboxEnv(opts?.envs),
                     });
                     return {
                         stdout: stdout || '',
@@ -211,31 +368,8 @@ export class LocalSandboxService implements ISandboxProvider {
                 }
             };
 
-            // Path safety: reads go through `resolveSafePath` so absolute
-            // paths, `..` traversals, and symlink escapes are all rejected
-            // at the boundary. Writes can target files that don't exist
-            // yet (so `lstat`/`realpath` don't apply), but we still
-            // normalize and compare against the repo root so the final
-            // target can't escape — `validatePath` plus the prefix check
-            // covers `../..`, `/etc/...`, and embedded traversals.
-            const sandboxReadFile = async (path: string): Promise<string> => {
-                const fullPath = path.startsWith('/')
-                    ? path
-                    : join(capturedRepoDir, path);
-                return readFile(fullPath, 'utf-8');
-            };
-
-            const sandboxWriteFile = async (
-                path: string,
-                content: string,
-            ): Promise<void> => {
-                const fullPath = path.startsWith('/')
-                    ? path
-                    : join(capturedRepoDir, path);
-                const dir = join(fullPath, '..');
-                await mkdir(dir, { recursive: true });
-                await writeFile(fullPath, content, 'utf-8');
-            };
+            const { readFile: sandboxReadFile, writeFile: sandboxWriteFile } =
+                this.buildSandboxFileAccess(capturedRepoDir);
 
             return {
                 remoteCommands,
@@ -257,6 +391,66 @@ export class LocalSandboxService implements ISandboxProvider {
         }
     }
 
+    /**
+     * Populate the submodules a repository declares, after the checkout.
+     *
+     * A thin adapter: the ORDER, the retries, the time budget and the logging
+     * live in `fetchSubmodules`, shared with the E2B provider so the two
+     * cannot drift. That matters more here than there — this provider runs
+     * directly on the self-hosted customer's own machine, with no proxy in
+     * between.
+     */
+    private async fetchSubmodules(
+        repoDir: string,
+        cloneUrl: string,
+        authHeader: string,
+        logMetadata: Record<string, unknown> = {},
+        /** Base-branch ref; without it nothing is fetched. */
+        baseRef?: string,
+    ): Promise<void> {
+        const host: SubmoduleGitHost = {
+            readGitmodules: () =>
+                readFile(join(repoDir, '.gitmodules'), 'utf8').catch(
+                    () => null,
+                ),
+            git: (args, opts) =>
+                execFileAsync('git', ['-C', repoDir, ...args], {
+                    timeout: opts?.timeoutMs ?? CMD_TIMEOUT_MS,
+                    // process.env first so the scoped header wins, and note the
+                    // header travels as GIT_CONFIG_VALUE_0 — never as a process
+                    // argument, same as the clone above.
+                    env: sandboxEnv(opts?.env),
+                } as ExecFileOptions) as Promise<{ stdout: string }>,
+            removeDir: async (relative) => {
+                // Built from the submodule NAME in `.gitmodules`, written by
+                // the pull request author, and this runs on the self-hosted
+                // customer's own machine. The shared module rejects a name
+                // with a `..` segment; the guard is repeated at the one place
+                // that deletes recursively.
+                if (!isContainedRelativePath(relative)) {
+                    throw new Error(
+                        `refusing to remove a path outside the checkout: ${relative}`,
+                    );
+                }
+                await rm(join(repoDir, relative), {
+                    recursive: true,
+                    force: true,
+                });
+            },
+        };
+
+        await fetchSubmodules(host, {
+            repoCloneUrl: cloneUrl,
+            baseRef,
+            authHeader: authHeader || undefined,
+            totalBudgetMs: SUBMODULES_TIMEOUT_MS,
+            stepTimeoutMs: CMD_TIMEOUT_MS,
+            logger: this.logger,
+            logContext: LocalSandboxService.name,
+            logMetadata,
+        });
+    }
+
     private buildRemoteCommands(repoDir: string): RemoteCommands {
         return {
             grep: async (
@@ -268,16 +462,18 @@ export class LocalSandboxService implements ISandboxProvider {
 
                 // rg with --no-follow ensures symlinks are not followed during search.
                 // cwd = repoDir so rg outputs relative paths (downstream expects "./src/foo.ts")
+                // `-e` and `--`: a pattern or path starting with "-" is never
+                // read as an rg flag (`--pre` would run a command).
                 const args = [
                     '--no-heading',
                     '-n',
                     '--no-follow',
+                    ...(glob ? ['--glob', glob] : []),
+                    '-e',
                     pattern,
+                    '--',
                     path,
                 ];
-                if (glob) {
-                    args.push('--glob', glob);
-                }
 
                 try {
                     const { stdout } = await execFileAsync('rg', args, {
@@ -320,28 +516,60 @@ export class LocalSandboxService implements ISandboxProvider {
                 path: string,
                 maxDepth: number,
             ): Promise<string> => {
-                await this.resolveSafePath(repoDir, path);
+                // A path that does not exist is a REAL ABSENCE, not a failure to
+                // look, and it is the ordinary case for this command's main
+                // caller: `RepoLookup.exists` lists the PARENT of a candidate,
+                // and a candidate like "<dir>/__tests__/<name>" usually has no
+                // parent directory at all. resolveSafePath lstat()s the path, so
+                // it raised ENOENT and the whole retrieval was abandoned — the
+                // customer's rule was then reported unmet and never judged
+                // (issue #1826).
+                //
+                // ENOENT is swallowed only AFTER resolveSafePath's validatePath
+                // has run, so the traversal guard still applies; the symlink and
+                // repo-boundary errors it raises are re-thrown untouched. This
+                // mirrors resolveSafeWritePath, which already separates "not
+                // there yet" from "not allowed".
+                try {
+                    await this.resolveSafePath(repoDir, path);
+                } catch (error: any) {
+                    if (error?.code === 'ENOENT') {
+                        return '';
+                    }
+                    throw error;
+                }
                 // Use relative path with cwd so output paths are relative (consistent with grep)
                 // -not -type l excludes symlinks from results
-                const { stdout } = await execFileAsync(
-                    'find',
-                    [
-                        path,
-                        '-maxdepth',
-                        String(maxDepth),
-                        '-type',
-                        'f',
-                        '-not',
-                        '-type',
-                        'l',
-                    ],
-                    {
-                        cwd: repoDir,
-                        timeout: CMD_TIMEOUT_MS,
-                        maxBuffer: MAX_BUFFER,
-                    },
-                );
-                return stdout;
+                try {
+                    const { stdout } = await execFileAsync(
+                        'find',
+                        [
+                            // A path starting with "-" is anchored so find
+                            // reads it as a path, not an expression.
+                            path.startsWith('-') ? `./${path}` : path,
+                            '-maxdepth',
+                            String(maxDepth),
+                            '-type',
+                            'f',
+                            '-not',
+                            '-type',
+                            'l',
+                        ],
+                        {
+                            cwd: repoDir,
+                            timeout: CMD_TIMEOUT_MS,
+                            maxBuffer: MAX_BUFFER,
+                        },
+                    );
+                    return stdout;
+                } catch (error: any) {
+                    // Absence was already answered above, by the ENOENT branch
+                    // of resolveSafePath. Reaching here means the path IS there
+                    // and `find` still failed — unreadable, timed out, buffer
+                    // exceeded. That is a broken lookup, and returning an empty
+                    // listing would let a caller read it as "not there".
+                    throw error;
+                }
             },
 
             exec: async (
@@ -457,8 +685,16 @@ export class LocalSandboxService implements ISandboxProvider {
                     // when they look like filesystem paths (start with `/`) —
                     // flag shorthands like `-n` or `--include` start with `-`,
                     // never `/`.
+                    // Treat both separators so a Windows-style arg (`C:\x`,
+                    // `..\etc`) is caught the same as POSIX (`/x`, `../etc`).
+                    // `isAbsolute` is platform-aware; the extra `startsWith('/')`
+                    // keeps POSIX absolute paths blocked even when running on
+                    // Windows (defense in depth).
                     const hasTraversal = args.some(
-                        (a) => a.startsWith('/') || /(^|\/)\.\.($|\/)/.test(a),
+                        (a) =>
+                            isAbsolute(a) ||
+                            a.startsWith('/') ||
+                            /(^|[/\\])\.\.($|[/\\])/.test(a),
                     );
                     if (hasTraversal) {
                         return {
@@ -468,7 +704,92 @@ export class LocalSandboxService implements ISandboxProvider {
                         };
                     }
 
+                    // Two of the whitelisted programs are file *finders* that
+                    // also carry flags turning them into command runners or
+                    // writers (`find -exec sh -c ...`, `fd -x ...`, `find
+                    // -delete`), and several readers carry flags that follow
+                    // symlinks out of the clone (`find -L`, `grep -R`). The
+                    // whitelist alone does not make them read-only, so reject
+                    // those flags per program. Readers without such flags
+                    // (cat/head/tail/wc/file) have no entry and pass through.
+                    const dangerousFlag = DANGEROUS_FLAGS[program];
+                    if (dangerousFlag) {
+                        const shortFlags = DANGEROUS_SHORT_FLAGS[program];
+                        const bad = args.find((a) => {
+                            // Long/exact forms, incl. the joined `--exec=sh`
+                            // / `-x=sh`: strip any `=value` before testing.
+                            if (dangerousFlag.test(a.split('=', 1)[0])) {
+                                return true;
+                            }
+                            // Short-flag cluster (`-Rn`, `-xsh`, `-Lx`): a
+                            // dangerous short can hide anywhere in it, glued or
+                            // stacked. Reject the cluster if any dangerous char
+                            // appears before an `=value`.
+                            if (shortFlags && /^-[^-]/.test(a)) {
+                                for (const ch of a.slice(1)) {
+                                    if (ch === '=') break;
+                                    if (shortFlags.has(ch)) return true;
+                                }
+                            }
+                            return false;
+                        });
+                        if (bad) {
+                            return {
+                                stdout: `Flag "${bad}" is not allowed for "${program}" in local sandbox (it can execute, write, delete, or follow symlinks out of the repo).`,
+                                stderr: '',
+                                exitCode: 1,
+                            };
+                        }
+                    }
+
                     validated.push({ program, args });
+                }
+
+                // Defense in depth for the disclosure vector: a whitelisted
+                // reader still follows symlinks, so a symlink committed in the
+                // repo (or a path reached through a symlinked directory) would
+                // let `cat`/`head`/… escape the clone. Mirror `read`: for every
+                // argument that resolves to an existing path, refuse anything
+                // whose real path leaves the repo. Non-path args (grep
+                // patterns, flag values) don't exist on disk and are skipped.
+                const repoRealForArgs = await realpath(repoDir);
+                for (const { args } of validated) {
+                    for (const arg of args) {
+                        // Check EVERY argument, including `-`-prefixed ones: a
+                        // committed symlink can be named `-foo` and read with
+                        // `cat -- -foo`, and skipping dashes here let it escape
+                        // the clone. A genuine flag (`-n`, `--color`) simply does
+                        // not exist on disk, so realpath throws and it is skipped
+                        // by the catch below — only a real path is ever checked.
+                        let real: string;
+                        try {
+                            real = await realpath(join(repoDir, arg));
+                        } catch {
+                            continue; // not a real path → a pattern/flag value
+                        }
+                        if (!this.isPathInside(repoRealForArgs, real)) {
+                            return {
+                                stdout: `Argument "${arg}" resolves outside the repository (symlink escape) and is not allowed.`,
+                                stderr: '',
+                                exitCode: 1,
+                            };
+                        }
+                        // realpath resolves symlinks but not hard links: a hard
+                        // link inside the clone to an outside file has an
+                        // in-repo path yet shares the outside inode, so cat/grep
+                        // would still read it. A fresh git clone never creates
+                        // extra links, so a regular file with nlink > 1 is an
+                        // injected hard-link escape — refuse it. Directories
+                        // legitimately have nlink > 1, so this is files only.
+                        const st = await lstat(real);
+                        if (st.isFile() && st.nlink > 1) {
+                            return {
+                                stdout: `Argument "${arg}" is a hard link that escapes the repository and is not allowed.`,
+                                stderr: '',
+                                exitCode: 1,
+                            };
+                        }
+                    }
                 }
 
                 if (validated.length === 1) {
@@ -480,6 +801,7 @@ export class LocalSandboxService implements ISandboxProvider {
                                 cwd: repoDir,
                                 timeout: CMD_TIMEOUT_MS,
                                 maxBuffer: MAX_BUFFER,
+                                env: sandboxEnv(),
                             },
                         );
                         return {
@@ -500,6 +822,7 @@ export class LocalSandboxService implements ISandboxProvider {
                     const children = validated.map(({ program, args }, idx) =>
                         spawn(program, args, {
                             cwd: repoDir,
+                            env: sandboxEnv(),
                             stdio: [
                                 idx === 0 ? 'ignore' : 'pipe',
                                 'pipe',
@@ -570,6 +893,59 @@ export class LocalSandboxService implements ISandboxProvider {
         };
     }
 
+    private buildSandboxFileAccess(repoDir: string): {
+        readFile: (path: string) => Promise<string>;
+        writeFile: (path: string, content: string) => Promise<void>;
+    } {
+        return {
+            readFile: async (path: string): Promise<string> => {
+                const safePath = await this.resolveSafePath(repoDir, path);
+                return readFile(safePath, 'utf-8');
+            },
+            writeFile: async (path: string, content: string): Promise<void> => {
+                const safePath = await this.resolveSafeWritePath(repoDir, path);
+                const dir = join(safePath, '..');
+                await mkdir(dir, { recursive: true });
+
+                // Re-validate after mkdir to shrink TOCTOU window.
+                // A concurrent actor could swap a parent dir for a symlink
+                // between resolveSafeWritePath and the actual write.
+                const repoReal = await realpath(repoDir);
+                const finalCheck = await realpath(dir);
+                if (!this.isPathInside(repoReal, finalCheck)) {
+                    throw new Error(
+                        `Path escapes repo boundary after mkdir: ${path}`,
+                    );
+                }
+
+                // Normalize the validated target to the REAL repo root before
+                // the openat traversal. resolveSafeWritePath returns a repoDir-
+                // prefixed path; when repoDir is reached through a symlink (e.g.
+                // a symlinked temp mount), handing that mix to the helper makes
+                // its relative(repoReal, …) guard see a leading `..` and reject a
+                // legitimate write. finalCheck is the already-realpath'd parent,
+                // so join it with the target filename to get a path under
+                // repoReal (the final component stays un-resolved so O_NOFOLLOW
+                // still refuses a symlinked target file).
+                const safePathReal = join(finalCheck, basename(safePath));
+
+                // Open the target refusing to follow a symlink at ANY path
+                // component (not just the final one). On Linux this fully
+                // closes the parent-dir-swap TOCTOU (#1532); elsewhere it is a
+                // best-effort O_NOFOLLOW on the final component (see helper).
+                const fd = await this.openRepoWriteHandle(
+                    repoReal,
+                    safePathReal,
+                );
+                try {
+                    await fd.writeFile(content, 'utf-8');
+                } finally {
+                    await fd.close();
+                }
+            },
+        };
+    }
+
     /**
      * Apply a unified diff on top of the currently-checked-out commit. Used
      * in CLI mode so the agent sees the user's actual local working state.
@@ -600,13 +976,19 @@ export class LocalSandboxService implements ISandboxProvider {
         try {
             await execFileAsync(
                 'git',
-                ['-C', repoDir, 'config', 'user.email', 'kodus-cli@kodus.local'],
-                { timeout: 5_000 },
+                [
+                    '-C',
+                    repoDir,
+                    'config',
+                    'user.email',
+                    'kodus-cli@kodus.local',
+                ],
+                { timeout: 5_000, env: sandboxEnv() },
             );
             await execFileAsync(
                 'git',
                 ['-C', repoDir, 'config', 'user.name', 'Kodus CLI'],
-                { timeout: 5_000 },
+                { timeout: 5_000, env: sandboxEnv() },
             );
         } catch {
             // ignore — `git apply` may still work without identity
@@ -623,11 +1005,10 @@ export class LocalSandboxService implements ISandboxProvider {
                     '--whitespace=nowarn',
                     patchPath,
                 ],
-                { timeout: CLONE_TIMEOUT_MS },
+                { timeout: CLONE_TIMEOUT_MS, env: sandboxEnv() },
             );
             this.logger.log({
-                message:
-                    'CLI diff applied successfully on top of merge-base',
+                message: 'CLI diff applied successfully on top of merge-base',
                 context: LocalSandboxService.name,
             });
             return;
@@ -655,7 +1036,7 @@ export class LocalSandboxService implements ISandboxProvider {
                     '--reject',
                     patchPath,
                 ],
-                { timeout: CLONE_TIMEOUT_MS },
+                { timeout: CLONE_TIMEOUT_MS, env: sandboxEnv() },
             );
         } catch (error: any) {
             this.logger.warn({
@@ -669,12 +1050,120 @@ export class LocalSandboxService implements ISandboxProvider {
         }
     }
 
-    private validatePath(path: string): void {
-        if (path.startsWith('/')) {
-            throw new Error('Absolute paths are not allowed');
+    /**
+     * Whether `child` is `root` itself or nested under it, decided with
+     * `path.relative` instead of a `startsWith(root + '/')` string prefix.
+     *
+     * The prefix form hard-codes the POSIX `/` separator: on Windows (where
+     * `path` and `fs.realpath` yield `\`) it would never match, silently
+     * treating every in-repo path as an escape — which in the write path
+     * made the parent-symlink loop `break` early and skip its checks. The
+     * `relative` form is separator-agnostic and also rejects a different
+     * drive/root (where `relative` returns an absolute path).
+     */
+    private isPathInside(root: string, child: string): boolean {
+        const rel = relative(root, child);
+        return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+    }
+
+    /**
+     * Open `safePath` for writing while refusing to traverse a symlink at ANY
+     * path component — closing the parent-dir-swap TOCTOU (#1532) that a plain
+     * `open(path, O_NOFOLLOW)` leaves open (O_NOFOLLOW guards only the FINAL
+     * component; an intermediate directory swapped for a symlink after
+     * validation is still followed).
+     *
+     * Linux: emulate `openat(2)`. Anchor a descriptor on the trusted, already
+     * realpath'd repo root, then descend one component at a time via
+     * `/proc/self/fd/<fd>/<component>` opened with `O_NOFOLLOW`. Because each
+     * hop resolves relative to the held directory fd (a stable inode) and
+     * refuses to follow a symlink, a component swapped for a symlink after
+     * validation fails with `ELOOP` instead of redirecting the write outside
+     * the repo. `caller` must have created the parent dirs already.
+     *
+     * Non-Linux (dev macOS/Windows only — every real deployment runs the local
+     * sandbox on self-hosted Docker/Linux): there is no `/proc/self/fd`, so we
+     * fall back to a direct `open` with `O_NOFOLLOW` on the final component
+     * plus the post-mkdir realpath re-check the caller already performed. This
+     * is best-effort; a native `openat` addon would be needed to close it on
+     * those platforms (out of scope — see #1532).
+     */
+    private async openRepoWriteHandle(
+        repoReal: string,
+        safePath: string,
+    ): Promise<FileHandle> {
+        const writeFlags =
+            fsConstants.O_WRONLY |
+            fsConstants.O_CREAT |
+            fsConstants.O_TRUNC |
+            fsConstants.O_NOFOLLOW;
+
+        if (process.platform !== 'linux') {
+            return open(safePath, writeFlags, 0o644);
         }
+
+        const rel = relative(repoReal, safePath);
+        // safePath was validated to live inside repoReal, so `rel` never
+        // escapes; guard defensively anyway.
+        if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+            throw new Error(`Path escapes repo boundary: ${safePath}`);
+        }
+        const parts = rel.split(sep).filter((p) => p.length > 0);
+        const fileName = parts.pop();
+        if (!fileName) {
+            throw new Error(`Invalid write path: ${safePath}`);
+        }
+
+        // Trust anchor: repoReal is the realpath of the sandbox root we own, so
+        // it is canonical (not a symlink).
+        let dirFd = await open(
+            repoReal,
+            fsConstants.O_RDONLY |
+                fsConstants.O_DIRECTORY |
+                fsConstants.O_NOFOLLOW,
+        );
+        try {
+            for (const part of parts) {
+                // openat(dirFd, part): resolve `part` inside the held dir fd
+                // WITHOUT following a symlink — a swapped-in symlink → ELOOP.
+                const nextFd = await open(
+                    `/proc/self/fd/${dirFd.fd}/${part}`,
+                    fsConstants.O_RDONLY |
+                        fsConstants.O_DIRECTORY |
+                        fsConstants.O_NOFOLLOW,
+                );
+                await dirFd.close();
+                dirFd = nextFd;
+            }
+            // Create/open the file relative to the validated parent fd, again
+            // refusing to follow a symlink for the final component.
+            return await open(
+                `/proc/self/fd/${dirFd.fd}/${fileName}`,
+                writeFlags,
+                0o644,
+            );
+        } finally {
+            // The returned file handle is independent of this parent dir fd.
+            await dirFd.close();
+        }
+    }
+
+    private validatePath(path: string, repoDir?: string): void {
+        // Check for .. traversal FIRST, before any absolute-path logic,
+        // so paths like /repo/../../../etc/passwd are always rejected.
         if (path.includes('..')) {
             throw new Error('Path traversal using ".." is not allowed');
+        }
+        // `isAbsolute` (not `startsWith('/')`) so a Windows absolute path like
+        // `C:\repo\x` is recognized as absolute instead of being treated as a
+        // relative segment and joined onto repoDir.
+        if (isAbsolute(path)) {
+            if (repoDir && this.isPathInside(repoDir, path)) {
+                // Absolute path under repoDir — OK, will be validated by
+                // the realpath check in resolveSafePath / resolveSafeWritePath.
+                return;
+            }
+            throw new Error('Absolute paths are not allowed');
         }
     }
 
@@ -686,8 +1175,8 @@ export class LocalSandboxService implements ISandboxProvider {
         repoDir: string,
         path: string,
     ): Promise<string> {
-        this.validatePath(path);
-        const candidate = join(repoDir, path);
+        this.validatePath(path, repoDir);
+        const candidate = isAbsolute(path) ? path : join(repoDir, path);
 
         // Check if the target itself is a symlink before resolving
         const stat = await lstat(candidate);
@@ -698,8 +1187,87 @@ export class LocalSandboxService implements ISandboxProvider {
         // Resolve to real path and verify it's still under repoDir
         const real = await realpath(candidate);
         const repoReal = await realpath(repoDir);
-        if (!real.startsWith(repoReal + '/') && real !== repoReal) {
+        if (!this.isPathInside(repoReal, real)) {
             throw new Error(`Path escapes repo boundary: ${path}`);
+        }
+
+        return candidate;
+    }
+
+    /**
+     * Resolve a relative write path within the repo. The target file may not
+     * exist yet, so we cannot rely on lstat/realpath of the target itself;
+     * instead we validate every existing parent directory is a real directory
+     * under the repo root and reject any symlink in the path or target.
+     */
+    private async resolveSafeWritePath(
+        repoDir: string,
+        path: string,
+    ): Promise<string> {
+        this.validatePath(path, repoDir);
+        const repoReal = await realpath(repoDir);
+        const candidate = isAbsolute(path) ? path : join(repoDir, path);
+
+        try {
+            const targetStat = await lstat(candidate);
+            if (targetStat.isSymbolicLink()) {
+                throw new Error(
+                    `Symlink detected, refusing to write through: ${path}`,
+                );
+            }
+        } catch (error: unknown) {
+            const isEnoent =
+                typeof error === 'object' &&
+                error !== null &&
+                'code' in error &&
+                (error as { code: string }).code === 'ENOENT';
+            if (!isEnoent) {
+                throw error;
+            }
+        }
+
+        let current = candidate;
+        while (true) {
+            const parent = join(current, '..');
+            // Stop once the parent reaches (or passes) repoDir: repoDir is the
+            // trusted root, already realpath-verified as repoReal. `!== repoDir`
+            // via the empty `relative` result keeps the pre-existing behavior
+            // of not re-validating repoDir itself.
+            const parentRel = relative(repoDir, parent);
+            const parentStrictlyInside =
+                parentRel !== '' &&
+                !parentRel.startsWith('..') &&
+                !isAbsolute(parentRel);
+            if (parent === current || !parentStrictlyInside) {
+                break;
+            }
+            try {
+                const stat = await lstat(parent);
+                if (stat.isSymbolicLink()) {
+                    throw new Error(
+                        `Symlinked parent directory detected: ${path}`,
+                    );
+                }
+                if (!stat.isDirectory()) {
+                    throw new Error(`Non-directory parent in path: ${path}`);
+                }
+                const parentReal = await realpath(parent);
+                if (!this.isPathInside(repoReal, parentReal)) {
+                    throw new Error(`Path escapes repo boundary: ${path}`);
+                }
+                break;
+            } catch (error: unknown) {
+                const isEnoent =
+                    typeof error === 'object' &&
+                    error !== null &&
+                    'code' in error &&
+                    (error as { code: string }).code === 'ENOENT';
+                if (isEnoent) {
+                    current = parent;
+                    continue;
+                }
+                throw error;
+            }
         }
 
         return candidate;
@@ -710,33 +1278,7 @@ export class LocalSandboxService implements ISandboxProvider {
         token: string,
         username?: string,
     ): string {
-        switch (platform) {
-            case PlatformType.GITHUB:
-                return `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
-            case PlatformType.BITBUCKET: {
-                // Bitbucket git-over-HTTPS auth differs from the REST API.
-                // Atlassian API tokens (ATATT…, the scheme that replaces app
-                // passwords) authenticate to git ONLY with the literal
-                // username `x-bitbucket-api-token-auth` — the REST API accepts
-                // <email>:<token>, but git rejects that pair (→ "could not
-                // read Username"). Classic app passwords keep using the
-                // Bitbucket account username. See #1168.
-                const gitUsername = token.startsWith('ATATT')
-                    ? 'x-bitbucket-api-token-auth'
-                    : username;
-                if (!gitUsername) {
-                    throw new Error(
-                        'Bitbucket authentication requires a username (app password) or an Atlassian API token, but neither was provided.',
-                    );
-                }
-                return `Authorization: Basic ${Buffer.from(`${gitUsername}:${token}`).toString('base64')}`;
-            }
-            case PlatformType.GITLAB:
-            case PlatformType.AZURE_REPOS:
-                return `Authorization: Basic ${Buffer.from(`oauth2:${token}`).toString('base64')}`;
-            default:
-                return `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString('base64')}`;
-        }
+        return buildGitAuthHeader(platform, token, username);
     }
 
     private getPrRefspec(

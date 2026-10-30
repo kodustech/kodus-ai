@@ -1,0 +1,25 @@
+{
+    "name": "branch-prefix-issue-confirmed-by-title",
+    "issue": "#2018",
+    "repository": {
+        "issues": [
+            {
+                "number": 12,
+                "title": "Scale servings on the recipe page",
+                "body": "Cooks change servings.\n\n## Acceptance criteria\n- Amounts are rounded to two decimals"
+            }
+        ]
+    },
+    "gitIssuesConnected": true,
+    "trackers": [],
+    "pullRequest": {
+        "title": "feat: scale servings",
+        "body": "Adds a servings input.",
+        "branch": "feature/12-scale-servings"
+    },
+    "expect": {
+        "outcome": "validated",
+        "criteria": ["Amounts are rounded to two decimals"],
+        "toolsCalled": ["KODUS_GET_ISSUE"]
+    }
+}

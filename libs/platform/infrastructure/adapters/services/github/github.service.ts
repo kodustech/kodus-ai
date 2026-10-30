@@ -1,10 +1,14 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
+import { extractDiffHunks } from './extract-diff-hunks';
 import { ConfigService } from '@nestjs/config';
 import { createAppAuth } from '@octokit/auth-app';
 import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
+import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-with-bounded-timeout';
 import { graphql } from '@octokit/graphql';
 import { enterpriseServer313 } from '@octokit/plugin-enterprise-server';
 import { retry } from '@octokit/plugin-retry';
+import { groupCommentsByPullRequest } from './github-comment-sample';
 import { throttling } from '@octokit/plugin-throttling';
 import { Octokit, RestEndpointMethodTypes } from '@octokit/rest';
 
@@ -20,8 +24,13 @@ import {
 } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
-import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
+import { getSuggestionShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
+import {
+    resolveAgentPrompt,
+    formatFixBlock,
+    formatTitleLine,
+} from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
 import {
@@ -49,6 +58,7 @@ import {
 } from '@libs/core/domain/enums';
 import {
     CommentResult,
+    FileChange,
     Repository,
     ReviewComment,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -77,7 +87,21 @@ import {
     GetIssueParams,
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import {
+    CheckAnnotation,
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    CheckEvidenceStatus,
+    CheckEvidenceSupport,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeManagement/authMode.enum';
+import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import {
     CodeManagementConnectionStatus,
     ICodeManagementService,
@@ -115,6 +139,7 @@ import {
     EMPTY_REPO_SEED_CONTENT,
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
+import { listingFailed } from '../repository-listing';
 
 interface GitHubAuthResponse {
     token: string;
@@ -136,6 +161,9 @@ interface GitHubInstallationData {
     target_id: number;
 }
 
+/** A compare response lists at most this many files, with no way to page. */
+const GITHUB_COMPARE_MAX_FILES = 300;
+
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITHUB, 'codeManagement')
 export class GithubService
@@ -153,6 +181,11 @@ export class GithubService
     private readonly TTL = 50 * 60 * 1000; // 50 minutes
 
     private readonly logger = createLogger(GithubService.name);
+
+    /** Caps on the extra annotation round trips a single review will make. */
+    private static readonly MAX_ANNOTATED_RUNS = 10;
+    private static readonly MAX_RAW_DIFF_CHARS = 8_000_000;
+    private static readonly MAX_ANNOTATIONS_PER_RUN = 50;
 
     private readonly enterpriseOctokit = Octokit.plugin(
         enterpriseServer313,
@@ -214,16 +247,6 @@ export class GithubService
         }
 
         return `${normalizedHost}/api/v3`;
-    }
-
-    private getGithubGraphqlBaseUrl(host?: string): string | undefined {
-        const normalizedHost = this.normalizeGithubHost(host);
-
-        if (!normalizedHost) {
-            return undefined;
-        }
-
-        return `${normalizedHost}/api/graphql`;
     }
 
     private getGithubWebBaseUrl(host?: string): string {
@@ -420,9 +443,19 @@ export class GithubService
                 params.organizationAndTeamData,
             );
 
+            // `deferWebhooks` marks an intermediate chunk of a chunked save,
+            // whose persisted selection is still partial. Reconciling here
+            // would read that partial selection as the desired state and
+            // delete the webhooks of every repository outside it — with 200
+            // repositories saved in chunks of 50, the first chunk removes the
+            // other 150, and the later chunks recreate them. In between, those
+            // repositories silently stop delivering PR events, and the hooks
+            // never come back if the process dies mid-save. The last chunk
+            // arrives with the complete selection and reconciles once.
             const shouldRefreshTokenWebhooks =
                 githubAuthDetail?.authMode === AuthMode.TOKEN &&
-                params.configKey === IntegrationConfigKey.REPOSITORIES;
+                params.configKey === IntegrationConfigKey.REPOSITORIES &&
+                !params.deferWebhooks;
 
             const previousRepositories = shouldRefreshTokenWebhooks
                 ? ((await this.findOneByOrganizationAndTeamDataAndConfigKey(
@@ -531,9 +564,18 @@ export class GithubService
                     ? 'user'
                     : 'organization';
 
-            const authDetails = {
+            const installationToken: string | undefined =
                 // @ts-expect-error property not found in type
-                authToken: installationAuthentication?.token,
+                installationAuthentication?.token;
+
+            const authDetails = {
+                // Encrypt at rest like the PAT path (authenticateWithToken):
+                // the installation token is a live credential and must not be
+                // persisted in clear. Every
+                // reader already decrypt()s authToken.
+                authToken: installationToken
+                    ? encrypt(installationToken)
+                    : null,
                 installationId:
                     // @ts-expect-error property not found in type
                     installationAuthentication?.installationId || null,
@@ -1359,6 +1401,22 @@ export class GithubService
         });
     }
 
+    // `User.suspendedAt` only exists on GitHub Enterprise schemas — on
+    // github.com every batch fails with "Field 'suspendedAt' doesn't exist"
+    // and we were re-issuing (and error-logging) the doomed query on every
+    // member listing. Remember the schema verdict PER API BASE URL: the
+    // schema is a property of the GitHub instance, and a process-wide flag
+    // would let a github.com org disable the (real) suspension check for a
+    // GHE org served by the same service instance.
+    private suspendedAtUnsupportedByBaseUrl = new Map<string, boolean>();
+
+    private graphqlBaseUrlOf(octokit: Octokit): string {
+        return (
+            (octokit as any)?.request?.endpoint?.DEFAULTS?.baseUrl ??
+            'https://api.github.com'
+        );
+    }
+
     private async getSuspendedStatusBatch(
         octokit: Octokit,
         logins: string[],
@@ -1367,6 +1425,13 @@ export class GithubService
         if (logins.length === 0) return new Map();
 
         const statusMap = new Map<string, boolean>();
+
+        const baseUrl = this.graphqlBaseUrlOf(octokit);
+        if (this.suspendedAtUnsupportedByBaseUrl.get(baseUrl)) {
+            logins.forEach((login) => statusMap.set(login, true));
+            return statusMap;
+        }
+
         let aliasCounter = 0;
 
         for (let i = 0; i < logins.length; i += batchSize) {
@@ -1394,6 +1459,19 @@ export class GithubService
                     statusMap.set(login, userData?.suspendedAt === null);
                 });
             } catch (error) {
+                const message =
+                    error instanceof Error ? error.message : String(error);
+                if (/'suspendedAt' doesn't exist/.test(message)) {
+                    this.suspendedAtUnsupportedByBaseUrl.set(baseUrl, true);
+                    this.logger.warn({
+                        message:
+                            'GraphQL schema has no User.suspendedAt (github.com) — treating all members as active and skipping future suspended-status batches for this API base URL',
+                        context: GithubService.name,
+                        metadata: { baseUrl },
+                    });
+                    logins.forEach((login) => statusMap.set(login, true));
+                    return statusMap;
+                }
                 this.logger.error({
                     message: 'GraphQL batch query failed for suspended status',
                     context: GithubService.name,
@@ -2649,9 +2727,338 @@ export class GithubService
         return this.instanceOctokit(organizationAndTeamData);
     }
 
-    async listIssues(
-        params: ListIssuesParams,
-    ): Promise<CodeManagementIssue[]> {
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, commitSha } = params;
+
+        const octokit = await this.getAuthenticatedOctokit(
+            organizationAndTeamData,
+        );
+
+        // Check runs and commit statuses are separate surfaces — modern
+        // integrations report through the former, older ones (and many
+        // self-hosted CIs) still only post the latter. Fetch both; a failure
+        // on one must not discard the other.
+        const [runs, statuses] = await Promise.allSettled([
+            octokit.rest.checks.listForRef({
+                owner: repository.owner,
+                repo: repository.name,
+                ref: commitSha,
+                per_page: 100,
+            }),
+            octokit.rest.repos.listCommitStatusesForRef({
+                owner: repository.owner,
+                repo: repository.name,
+                ref: commitSha,
+                per_page: 100,
+            }),
+        ]);
+
+        const evidence: CheckEvidence[] = [];
+        const needingAnnotations: Array<{
+            evidence: CheckEvidence;
+            runId: number;
+        }> = [];
+
+        if (runs.status === 'fulfilled') {
+            for (const run of runs.value.data?.check_runs ?? []) {
+                const mapped = this.mapGithubCheckRun(run);
+
+                if (params.includeAnnotations) {
+                    // The run reports its own annotation count, so a run with
+                    // none costs no extra round trip.
+                    if ((run.output?.annotations_count ?? 0) > 0) {
+                        needingAnnotations.push({
+                            evidence: mapped,
+                            runId: run.id,
+                        });
+                    } else {
+                        mapped.annotations = [];
+                    }
+                }
+
+                evidence.push(mapped);
+            }
+        } else {
+            // Names the consequence, because the review continues with
+            // whatever is readable. A token without Checks:read — a PAT rather
+            // than the App installation — sees commit statuses only, and since
+            // only FAILING checks become evidence, a repository whose CI runs
+            // entirely on GitHub Actions then contributes nothing at all
+            // rather than obviously nothing.
+            this.logger.warn({
+                message:
+                    'Failed to list GitHub check runs; CI evidence is limited ' +
+                    'to commit statuses for this commit. Observed with a ' +
+                    'fine-grained token, which cannot reach this endpoint; a ' +
+                    'GitHub App installation can, as can a classic token with ' +
+                    'the repo scope.',
+                context: GithubService.name,
+                error: runs.reason,
+                metadata: {
+                    repository: repository.name,
+                    commitSha,
+                    evidenceFrom: 'commit-statuses-only',
+                },
+            });
+        }
+
+        if (statuses.status === 'fulfilled') {
+            for (const status of statuses.value.data ?? []) {
+                evidence.push(this.mapGithubCommitStatus(status));
+            }
+        } else {
+            this.logger.warn({
+                message: 'Failed to list GitHub commit statuses',
+                context: GithubService.name,
+                error: statuses.reason,
+                metadata: { repository: repository.name, commitSha },
+            });
+        }
+
+        if (needingAnnotations.length > 0) {
+            await this.attachGithubAnnotations(
+                octokit,
+                repository,
+                needingAnnotations,
+            );
+        }
+
+        return evidence;
+    }
+
+    /**
+     * The hunks GitHub omitted from the file listing.
+     *
+     * `pulls.listFiles` (and `compare`, which shares the limit) drop `patch`
+     * once a single file's diff grows past their size cap — routinely true of
+     * a lockfile bump, which is precisely the change a dependency scan cares
+     * about. The raw diff media type is not capped the same way, so one
+     * request recovers every missing hunk at once.
+     */
+    async getFilePatches(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name: string; owner?: string };
+        prNumber: number;
+        paths: string[];
+    }): Promise<Array<{ path: string; patch: string }>> {
+        const { organizationAndTeamData, repository, prNumber, paths } = params;
+
+        if (!paths.length) {
+            return [];
+        }
+
+        try {
+            const octokit = await this.getAuthenticatedOctokit(
+                organizationAndTeamData,
+            );
+
+            const owner =
+                repository.owner ??
+                (await this.getGithubAuthDetails(organizationAndTeamData))?.org;
+
+            const { data } = await octokit.rest.pulls.get({
+                owner,
+                repo: repository.name,
+                pull_number: prNumber,
+                mediaType: { format: 'diff' },
+            });
+
+            // A whole-PR diff is large by nature; refuse one big enough to be
+            // a memory problem rather than trading a missing hunk for an OOM.
+            const diff = String(data ?? '');
+            if (diff.length > GithubService.MAX_RAW_DIFF_CHARS) {
+                this.logger.warn({
+                    message:
+                        'Raw pull request diff is too large to parse for the ' +
+                        'missing hunks; those files keep no patch.',
+                    context: GithubService.name,
+                    metadata: {
+                        prNumber,
+                        repository: repository.name,
+                        diffChars: diff.length,
+                    },
+                });
+                return [];
+            }
+
+            return extractDiffHunks(diff, paths);
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read the raw pull request diff',
+                context: GithubService.name,
+                error,
+                metadata: { prNumber, repository: repository.name },
+            });
+            return [];
+        }
+    }
+
+    async supportsCheckEvidence(
+        _organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CheckEvidenceSupport> {
+        return { statuses: true, annotations: true };
+    }
+
+    private async attachGithubAnnotations(
+        octokit: Awaited<ReturnType<GithubService['getAuthenticatedOctokit']>>,
+        repository: { owner: string; name: string },
+        targets: Array<{ evidence: CheckEvidence; runId: number }>,
+    ): Promise<void> {
+        const capped = targets.slice(0, GithubService.MAX_ANNOTATED_RUNS);
+
+        const results = await Promise.allSettled(
+            capped.map(({ runId }) =>
+                octokit.rest.checks.listAnnotations({
+                    owner: repository.owner,
+                    repo: repository.name,
+                    check_run_id: runId,
+                    per_page: GithubService.MAX_ANNOTATIONS_PER_RUN,
+                }),
+            ),
+        );
+
+        results.forEach((result, index) => {
+            if (result.status !== 'fulfilled') {
+                // Leave `annotations` unset: the caller must be able to tell a
+                // failed fetch from a run that genuinely reported nothing.
+                this.logger.warn({
+                    message: 'Failed to list GitHub check annotations',
+                    context: GithubService.name,
+                    error: result.reason,
+                    metadata: { checkRunId: capped[index].runId },
+                });
+                return;
+            }
+
+            capped[index].evidence.annotations = (result.value.data ?? [])
+                .slice(0, GithubService.MAX_ANNOTATIONS_PER_RUN)
+                .map((annotation) => this.mapGithubAnnotation(annotation));
+        });
+    }
+
+    private mapGithubAnnotation(annotation: {
+        path?: string | null;
+        start_line?: number | null;
+        end_line?: number | null;
+        annotation_level?: string | null;
+        message?: string | null;
+        title?: string | null;
+    }): CheckAnnotation {
+        const startLine = annotation.start_line ?? 0;
+
+        const mapped: CheckAnnotation = {
+            path: annotation.path ?? '',
+            startLine,
+            endLine: annotation.end_line ?? startLine,
+            level: this.mapGithubAnnotationLevel(annotation.annotation_level),
+            message: annotation.message ?? '',
+        };
+
+        if (annotation.title) {
+            mapped.title = annotation.title;
+        }
+
+        return mapped;
+    }
+
+    private mapGithubAnnotationLevel(
+        level: string | null | undefined,
+    ): CheckAnnotation['level'] {
+        if (level === 'notice' || level === 'warning' || level === 'failure') {
+            return level;
+        }
+        return 'warning';
+    }
+
+    private mapGithubCheckRun(run: {
+        id: number;
+        name: string;
+        status: string | null;
+        conclusion: string | null;
+        html_url?: string | null;
+        completed_at?: string | null;
+        app?: { slug?: string | null } | null;
+        output?: { annotations_count?: number | null } | null;
+    }): CheckEvidence {
+        const evidence: CheckEvidence = {
+            id: String(run.id),
+            name: run.name,
+            status: this.mapGithubCheckStatus(run.status),
+            conclusion: this.mapGithubCheckConclusion(run.conclusion),
+            url: run.html_url ?? null,
+            completedAt: run.completed_at ?? null,
+            platform: PlatformType.GITHUB,
+        };
+
+        if (run.app?.slug) {
+            evidence.reporter = run.app.slug;
+        }
+
+        return evidence;
+    }
+
+    private mapGithubCheckStatus(status: string | null): CheckEvidenceStatus {
+        if (status === 'completed') {
+            return 'completed';
+        }
+        // GitHub has grown extra pre-run states (waiting/requested/pending);
+        // they all mean "no result yet", same as queued.
+        if (
+            status === 'queued' ||
+            status === 'waiting' ||
+            status === 'requested' ||
+            status === 'pending'
+        ) {
+            return 'queued';
+        }
+        return 'in_progress';
+    }
+
+    private mapGithubCheckConclusion(
+        conclusion: string | null,
+    ): CheckEvidenceConclusion | null {
+        const known: CheckEvidenceConclusion[] = [
+            'success',
+            'failure',
+            'neutral',
+            'cancelled',
+            'timed_out',
+            'skipped',
+            'stale',
+            'action_required',
+        ];
+        return known.find((value) => value === conclusion) ?? null;
+    }
+
+    private mapGithubCommitStatus(status: {
+        id: number;
+        context: string;
+        state: string;
+        target_url?: string | null;
+        updated_at?: string | null;
+    }): CheckEvidence {
+        // Commit statuses have no queued/in-progress split: `pending` covers
+        // both, and every other state is terminal.
+        const pending = status.state === 'pending';
+
+        return {
+            id: String(status.id),
+            name: status.context,
+            status: pending ? 'in_progress' : 'completed',
+            conclusion: pending
+                ? null
+                : status.state === 'success'
+                  ? 'success'
+                  : 'failure',
+            url: status.target_url ?? null,
+            completedAt: pending ? null : (status.updated_at ?? null),
+            platform: PlatformType.GITHUB,
+        };
+    }
+
+    async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
         const { organizationAndTeamData, repository, filters = {} } = params;
 
         const page = Math.max(1, filters.page ?? 1);
@@ -2698,13 +3105,84 @@ export class GithubService
                 return null;
             }
 
-            return this.mapGithubIssue(response.data);
+            return {
+                ...this.mapGithubIssue(response.data),
+                ...(await this.issueHierarchy(
+                    octokit,
+                    repository,
+                    issueNumber,
+                    response.data as {
+                        parent_issue_url?: string | null;
+                        sub_issues_summary?: { total?: number };
+                    },
+                )),
+            };
         } catch (error) {
             if ((error as { status?: number })?.status === 404) {
                 return null;
             }
             throw error;
         }
+    }
+
+    /**
+     * The parent and sub-issues GitHub links an issue to. The issue names
+     * its parent by URL and only counts its sub-issues, so they are listed
+     * only when there are some. Best effort: a failure leaves them out.
+     */
+    private async issueHierarchy(
+        octokit: Awaited<ReturnType<typeof this.getAuthenticatedOctokit>>,
+        repository: { owner: string; name: string },
+        issueNumber: number,
+        data: {
+            parent_issue_url?: string | null;
+            sub_issues_summary?: { total?: number };
+        },
+    ): Promise<Pick<CodeManagementIssue, 'parent' | 'subIssues'>> {
+        const parent = /\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)$/.exec(
+            data.parent_issue_url ?? '',
+        );
+        let subIssues: CodeManagementIssue['subIssues'];
+        if ((data.sub_issues_summary?.total ?? 0) > 0) {
+            subIssues = await octokit
+                .request(
+                    'GET /repos/{owner}/{repo}/issues/{issue_number}/sub_issues',
+                    {
+                        owner: repository.owner,
+                        repo: repository.name,
+                        issue_number: issueNumber,
+                        per_page: 25,
+                    },
+                )
+                .then(({ data: items }) =>
+                    (
+                        items as Array<{
+                            number: number;
+                            title: string;
+                            state: string;
+                        }>
+                    ).map((item) => ({
+                        number: item.number,
+                        title: item.title,
+                        state:
+                            item.state === 'closed'
+                                ? ('closed' as const)
+                                : ('open' as const),
+                    })),
+                )
+                .catch(() => undefined);
+        }
+        return {
+            ...(parent
+                ? {
+                      parent: {
+                          number: Number(parent[2]),
+                          repository: parent[1],
+                      },
+                  }
+                : {}),
+            ...(subIssues?.length ? { subIssues } : {}),
+        };
     }
 
     private mapGithubIssue(item: {
@@ -2911,27 +3389,63 @@ export class GithubService
                         doNotRetry: [400, 401, 403, 404, 422, 451],
                     },
                     throttle: {
+                        // NEVER sleep inside the octokit call (mirrors the App
+                        // path above). A primary-rate-limit retryAfter is the
+                        // time until the hourly bucket resets — up to ~59 min.
+                        // Returning `true` made octokit sleep that whole window
+                        // holding the worker slot; the webhook job's own 9-min
+                        // watchdog then killed it with ZERO user-facing signal,
+                        // so the review just vanished. Return false → the 403
+                        // throws immediately → the processor converts it to
+                        // RateLimitError(resetAt) and the RabbitMQ error handler
+                        // republishes the job aligned to the reset. A review
+                        // that can't reach GitHub must surface a clear error,
+                        // not hang silently.
                         onRateLimit: (
-                            _retryAfter,
+                            retryAfter,
                             options: { method: string; url: string },
                             octokit,
                         ) => {
                             octokit.log.warn(
-                                `Request quota exhausted for request ${options.method} ${options.url}`,
+                                `RATE-LIMIT: ${options.method} ${options.url} — retryAfter=${retryAfter}s (failing fast, not sleeping)`,
                             );
-
-                            return true;
+                            this.logger.warn({
+                                message: `GitHub primary rate limit — failing fast (retryAfter=${retryAfter}s) so the review surfaces a clear error instead of hanging silently`,
+                                context: GithubService.name,
+                                serviceName: 'GithubService',
+                                metadata: {
+                                    method: options.method,
+                                    url: options.url,
+                                    retryAfter,
+                                    organizationId:
+                                        organizationAndTeamData?.organizationId,
+                                    teamId: organizationAndTeamData?.teamId,
+                                },
+                            });
+                            return false;
                         },
                         onSecondaryRateLimit: (
-                            _retryAfter,
+                            retryAfter,
                             options: { method: string; url: string },
                             octokit,
                         ) => {
                             octokit.log.warn(
-                                `Secondary rate limit hit for request ${options.method} ${options.url}`,
+                                `SECONDARY-RATE-LIMIT: ${options.method} ${options.url} — wait=${retryAfter}s (failing fast)`,
                             );
-
-                            return true;
+                            this.logger.warn({
+                                message: `GitHub secondary rate limit — failing fast (wait=${retryAfter}s)`,
+                                context: GithubService.name,
+                                serviceName: 'GithubService',
+                                metadata: {
+                                    method: options.method,
+                                    url: options.url,
+                                    retryAfter,
+                                    organizationId:
+                                        organizationAndTeamData?.organizationId,
+                                    teamId: organizationAndTeamData?.teamId,
+                                },
+                            });
+                            return false;
                         },
                     },
                 });
@@ -3000,7 +3514,11 @@ export class GithubService
             ) {
                 // Decrypt the PAT before using it
                 const decryptedPAT = decrypt(githubAuthDetail?.authToken);
-                const graphQlBaseUrl = this.getGithubGraphqlBaseUrl(
+                // @octokit/graphql turns a GHES REST base (`<host>/api/v3`)
+                // into `<host>/api/graphql` itself. Any other base gets
+                // `/graphql` appended, so `<host>/api/graphql` became
+                // `<host>/api/graphql/graphql` and every GraphQL call 404ed.
+                const graphQlBaseUrl = this.getGithubApiBaseUrl(
                     githubAuthDetail.host,
                 );
 
@@ -3070,9 +3588,18 @@ export class GithubService
                 platform: PlatformType.GITHUB,
             });
 
-            const authDetails = {
+            const installationToken: string | undefined =
                 // @ts-expect-error property not found in type
-                authToken: installationAuthentication?.token,
+                installationAuthentication?.token;
+
+            const authDetails = {
+                // Encrypt at rest like the PAT path (authenticateWithToken):
+                // the installation token is a live credential and must not be
+                // persisted in clear. Every
+                // reader already decrypt()s authToken.
+                authToken: installationToken
+                    ? encrypt(installationToken)
+                    : null,
                 installationId:
                     // @ts-expect-error property not found in type
                     installationAuthentication?.installationId || null,
@@ -3126,37 +3653,71 @@ export class GithubService
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
 
-            // Usar cache do accountType se disponível
-            let isOrgAccount = githubAuthDetail.accountType === 'organization';
-
-            // Para integrações legadas, assumir organização (historicamente só orgs eram permitidas)
-            if (!githubAuthDetail.accountType) {
-                isOrgAccount = true;
-                this.logger.log({
-                    message:
-                        'Legacy integration detected - assuming organization',
-                    context: 'GitHubService',
-                    metadata: { org: githubAuthDetail?.org },
-                });
+            if (githubAuthDetail.accountType === 'user') {
+                return await this.getAccountOwnerAsMember(
+                    octokit,
+                    githubAuthDetail.org,
+                );
             }
 
-            if (isOrgAccount) {
-                const members = await octokit.paginate(
-                    octokit.rest.orgs.listMembers,
-                    {
+            try {
+                return await octokit.paginate(octokit.rest.orgs.listMembers, {
+                    org: githubAuthDetail?.org,
+                    per_page: 100,
+                });
+            } catch (err) {
+                // Integrations created before `accountType` was recorded have
+                // no way to tell an org from a personal account, and personal
+                // accounts 404 here. Anything else is a real failure.
+                if (
+                    githubAuthDetail.accountType ||
+                    this.statusOf(err) !== 404
+                ) {
+                    throw err;
+                }
+
+                this.logger.log({
+                    message:
+                        'Legacy integration 404d as an organization - treating it as a personal account',
+                    context: GithubService.name,
+                    metadata: {
+                        ...organizationAndTeamData,
                         org: githubAuthDetail?.org,
-                        per_page: 100,
                     },
+                });
+
+                return await this.getAccountOwnerAsMember(
+                    octokit,
+                    githubAuthDetail.org,
                 );
-                return members;
-            } else {
-                // Para contas pessoais, retornar o próprio usuário como "membro"
-                const user = await octokit.rest.users.getAuthenticated();
-                return [user.data];
             }
         } catch (err) {
             throw new BadRequestException(err);
         }
+    }
+
+    /**
+     * A personal account has no members, so the account owner is the whole
+     * list. Resolved by login rather than via `users.getAuthenticated()`:
+     * on cloud this octokit carries a GitHub App *installation* token, which
+     * answers 403 on `GET /user`. `GET /users/{login}` is public data and
+     * works under both an installation token and a PAT.
+     */
+    private async getAccountOwnerAsMember(octokit: Octokit, login: string) {
+        const owner = await octokit.rest.users.getByUsername({
+            username: login,
+        });
+
+        return [owner.data];
+    }
+
+    private statusOf(err: unknown): number | undefined {
+        const candidate = err as {
+            status?: number;
+            response?: { status?: number };
+        };
+
+        return candidate?.status ?? candidate?.response?.status;
     }
 
     async getAllCommits(
@@ -3612,6 +4173,72 @@ export class GithubService
             }));
     }
 
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ): Promise<FileChange[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            baseBranch,
+            headSha,
+        } = params;
+        const metadata = {
+            organizationId: organizationAndTeamData?.organizationId,
+            repository: repository?.name,
+            prNumber,
+            baseBranch,
+            headSha,
+        };
+
+        try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+            const octokit = await this.instanceOctokit(organizationAndTeamData);
+
+            // Three dots: from the merge base, so only the PR's own changes.
+            const { data } = await octokit.repos.compareCommitsWithBasehead({
+                owner: githubAuthDetail?.org,
+                repo: repository?.name,
+                basehead: `${baseBranch}...${headSha}`,
+            });
+
+            const files = data?.files ?? [];
+            if (files.length >= GITHUB_COMPARE_MAX_FILES) {
+                this.logger.warn({
+                    message: `Compare for PR#${prNumber} at ${headSha} hit the ${GITHUB_COMPARE_MAX_FILES}-file cap`,
+                    context: GithubService.name,
+                    metadata: { ...metadata, reason: 'compare_file_cap' },
+                });
+                return null;
+            }
+
+            return files.map((file) => ({
+                filename: file.filename,
+                previous_filename: file.previous_filename,
+                status: file.status,
+                additions: file.additions,
+                deletions: file.deletions,
+                changes: file.changes,
+                patch: file.patch,
+            })) as FileChange[];
+        } catch (error) {
+            // A rate limit is not a missing diff: the caller must not answer it
+            // with a full review.
+            if (is429Error(error)) throw error;
+            this.logger.warn({
+                message: `Could not read the diff of PR#${prNumber} at ${headSha}`,
+                context: GithubService.name,
+                error,
+                metadata: { ...metadata, reason: 'compare_failed' },
+            });
+            return null;
+        }
+    }
+
     async getPullRequestsForRTTM(
         params,
     ): Promise<PullRequestCodeReviewTime[] | null> {
@@ -3726,6 +4353,7 @@ export class GithubService
             deletions: file.deletions,
             changes: file.changes,
             patch: file.patch,
+            previous_filename: file.previous_filename,
         }));
 
         if (cacheKey && result.length > 0) {
@@ -3763,42 +4391,6 @@ export class GithubService
         return `<sub>${text}</sub>\n\n`;
     }
 
-    private formatPromptForLLM(lineComment: any) {
-        let copyPrompt = '';
-        if (lineComment?.suggestion?.llmPrompt) {
-            if (lineComment.path) {
-                copyPrompt += `File ${lineComment.path}:\n\n`;
-            }
-
-            if (lineComment.start_line && lineComment.line) {
-                copyPrompt += `Line ${lineComment.start_line} to ${lineComment.line}:\n\n`;
-            } else if (lineComment.line) {
-                copyPrompt += `Line ${lineComment.line}:\n\n`;
-            }
-
-            copyPrompt += lineComment?.suggestion?.llmPrompt;
-
-            if (lineComment?.body?.improvedCode) {
-                copyPrompt +=
-                    '\n\nSuggested Code:\n\n' + lineComment?.body?.improvedCode;
-            }
-
-            copyPrompt = `\n\n<details>
-
-<summary>Prompt for LLM</summary>
-
-\`\`\`
-
-${copyPrompt}
-
-\`\`\`
-
-</details>\n\n`;
-        }
-
-        return copyPrompt;
-    }
-
     formatBodyForGitHub(
         lineComment: any,
         repository: any,
@@ -3806,28 +4398,19 @@ ${copyPrompt}
         suggestionCopyPrompt: boolean,
         isCommittableSuggestion?: boolean,
     ) {
-        const improvedCode = isCommittableSuggestion
-            ? lineComment?.suggestion?.validatedData?.code
-            : lineComment?.body?.improvedCode;
-
-        const language = isCommittableSuggestion
-            ? 'suggestion'
-            : lineComment?.suggestion?.language?.toLowerCase() ||
-              repository?.language?.toLowerCase();
-
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
             : '';
 
-        const codeBlock = improvedCode
+        // Code shows in the comment only as a native committable suggestion;
+        // otherwise the fix lives in the collapsed block below the body.
+        const codeBlock = isCommittableSuggestion
             ? this.formatCodeBlock(
-                  language,
-                  isCommittableSuggestion
-                      ? improvedCode
-                      : this.dedentCode(improvedCode),
+                  'suggestion',
+                  lineComment.suggestion.validatedData.code,
               )
             : '';
-        const suggestionContent = lineComment?.body?.suggestionContent || '';
+        const suggestionContent = `${formatTitleLine(lineComment?.suggestion?.oneSentenceSummary)}${lineComment?.body?.suggestionContent || ''}`;
         const actionStatement = lineComment?.body?.actionStatement
             ? `${lineComment.body.actionStatement}\n\n`
             : '';
@@ -3836,14 +4419,22 @@ ${copyPrompt}
             [
                 getCodeReviewBadge(),
                 lineComment?.suggestion
-                    ? getLabelShield(lineComment.suggestion.label)
+                    ? getSuggestionShield(lineComment.suggestion)
                     : '',
                 severityShield,
             ].join(' ') + '\n\n';
 
-        const copyPrompt = suggestionCopyPrompt
-            ? this.formatPromptForLLM(lineComment)
-            : '';
+        const copyPrompt = formatFixBlock({
+            copyPrompt: suggestionCopyPrompt,
+            path: lineComment?.path,
+            startLine: lineComment?.start_line,
+            endLine: lineComment?.line,
+            prompt: resolveAgentPrompt(lineComment?.suggestion),
+            improvedCode: this.dedentCode(
+                lineComment?.body?.improvedCode || '',
+            ),
+            language: lineComment?.suggestion?.language || repository?.language,
+        });
 
         const experimentalWarning = isCommittableSuggestion
             ? `
@@ -3959,7 +4550,12 @@ This is an experimental feature that generates committable changes. Review the d
                 error.message.includes('line must be part of the diff') ||
                 error.message.includes(
                     'start_line must be part of the same hunk as the line',
-                );
+                ) ||
+                // Same failure class, third message shape GitHub uses for it
+                // (prod: 81 occurrences / 25 orgs) — without this, the
+                // retry-with-adjusted-line recovery in
+                // createReviewCommentWithRetry never ran for this shape.
+                error.message.includes('pull_request_review_thread.line');
 
             const errorType = isLineMismatch
                 ? 'failed_lines_mismatch'
@@ -4604,18 +5200,25 @@ This is an experimental feature that generates committable changes. Review the d
                     /No commit found for the ref/i.test(
                         (error as any)?.message ?? '',
                     );
-                this.logger.warn({
-                    message: refDeleted
-                        ? 'PR head ref missing — falling back to base ref'
-                        : 'Error getting file content from pull request',
-                    context: GithubService.name,
-                    error,
-                    metadata: {
-                        ...params,
-                        prHeadMissing: refDeleted,
-                        httpStatus: status,
-                    },
-                });
+                if (!(params.suppressNotFoundLogs && status === 404)) {
+                    this.logger.warn({
+                        message: refDeleted
+                            ? 'PR head ref missing — falling back to base ref'
+                            : 'Error getting file content from pull request',
+                        context: GithubService.name,
+                        error,
+                        metadata: {
+                            ...params,
+                            prHeadMissing: refDeleted,
+                            httpStatus: status,
+                        },
+                    });
+                }
+
+                // Same branch: the base read would repeat the identical call.
+                if (pullRequest.base?.ref === pullRequest.head?.ref) {
+                    throw error;
+                }
 
                 // If it fails, try to fetch from the base branch
                 const lines = (await octokit.repos.getContent({
@@ -4628,12 +5231,25 @@ This is an experimental feature that generates committable changes. Review the d
                 return lines;
             }
         } catch (error) {
-            this.logger.error({
-                message: 'Error getting file content to branch base',
-                context: GithubService.name,
-                error,
-                metadata: { ...params },
-            });
+            const status =
+                (error as any)?.status ?? (error as any)?.response?.status;
+            if (status === 404) {
+                // Missing on both refs: a normal answer, not a failure.
+                if (!params.suppressNotFoundLogs) {
+                    this.logger.warn({
+                        message: 'File not found on PR head or base branch',
+                        context: GithubService.name,
+                        metadata: { ...params },
+                    });
+                }
+            } else {
+                this.logger.error({
+                    message: 'Error getting file content to branch base',
+                    context: GithubService.name,
+                    error,
+                    metadata: { ...params },
+                });
+            }
         }
     }
 
@@ -4979,6 +5595,7 @@ This is an experimental feature that generates committable changes. Review the d
                     ...params,
                 },
             });
+            return null;
         }
     }
 
@@ -5014,6 +5631,7 @@ This is an experimental feature that generates committable changes. Review the d
                     ...params,
                 },
             });
+            throw error;
         }
     }
 
@@ -5350,8 +5968,20 @@ This is an experimental feature that generates committable changes. Review the d
 
         try {
             for (const repo of repositories) {
+                // The hook lives under the REPO's namespace, not the
+                // integration account's. getCorrectOwner resolves personal
+                // PAT integrations to the authenticated user's login, which
+                // 404s ("Not Found - list-repository-webhooks") for every
+                // repo the account merely collaborates on — the whole
+                // registerRepo call then fails. Prefer the owner recorded on
+                // the repository itself; keep getCorrectOwner as a fallback
+                // for legacy configs missing both fields.
+                const repoOwner =
+                    repo.full_name?.split('/')[0] ||
+                    repo.organizationName ||
+                    owner;
                 const { data: webhooks } = await octokit.repos.listWebhooks({
-                    owner: owner,
+                    owner: repoOwner,
                     repo: repo.name,
                 });
 
@@ -5362,14 +5992,14 @@ This is an experimental feature that generates committable changes. Review the d
 
                 if (webhookToDelete) {
                     await octokit.repos.deleteWebhook({
-                        owner: owner,
+                        owner: repoOwner,
                         repo: repo.name,
                         hook_id: webhookToDelete.id,
                     });
                 }
 
                 const response = await octokit.repos.createWebhook({
-                    owner: owner,
+                    owner: repoOwner,
                     repo: repo.name,
                     config: {
                         url: webhookUrl,
@@ -5387,11 +6017,11 @@ This is an experimental feature that generates committable changes. Review the d
                 });
 
                 this.logger.log({
-                    message: `Webhook adicionado ao repositório ${repo.name} (owner: ${owner})`,
+                    message: `Webhook adicionado ao repositório ${repo.name} (owner: ${repoOwner})`,
                     context: GithubService.name,
                     metadata: {
                         ...params,
-                        owner,
+                        owner: repoOwner,
                         repositoryName: repo.name,
                         webhookId: response?.data?.id,
                     },
@@ -5478,6 +6108,7 @@ This is an experimental feature that generates committable changes. Review the d
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -5493,7 +6124,10 @@ This is an experimental feature that generates committable changes. Review the d
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Repository name is required',
+                );
             }
 
             const authDetails = await this.getGithubAuthDetails(
@@ -5507,7 +6141,10 @@ This is an experimental feature that generates committable changes. Review the d
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'GitHub authentication details not found',
+                );
             }
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
@@ -5534,7 +6171,10 @@ This is an experimental feature that generates committable changes. Review the d
                         metadata: params,
                     });
 
-                    return [];
+                    return listingFailed(
+                        params.throwOnError,
+                        'Default branch not found',
+                    );
                 }
             }
 
@@ -5553,6 +6193,21 @@ This is an experimental feature that generates committable changes. Review the d
                 });
 
                 return [];
+            }
+
+            if (tree.truncated) {
+                this.logger.warn({
+                    message:
+                        'GitHub cut the repository tree; the listing is incomplete',
+                    context: GithubService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                        repositoryId: repository.id,
+                        branch,
+                        entries: tree.tree.length,
+                    },
+                });
             }
 
             const files = tree.tree
@@ -5606,7 +6261,11 @@ This is an experimental feature that generates committable changes. Review the d
                 metadata: params,
             });
 
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 
@@ -5873,7 +6532,7 @@ This is an experimental feature that generates committable changes. Review the d
         );
 
         if (!allReviews?.length) {
-            return null;
+            return PullRequestReviewState.NONE;
         }
 
         const myReviews = allReviews
@@ -5889,10 +6548,19 @@ This is an experimental feature that generates committable changes. Review the d
             );
 
         if (!myReviews?.length) {
-            return null;
+            return PullRequestReviewState.NONE;
         }
 
-        const lastReview = myReviews.at(-1);
+        // A comment review does not undo an approval on GitHub, so Kody's
+        // state is its latest approval, change request or dismissal.
+        const lastReview =
+            myReviews
+                .filter((review) =>
+                    ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(
+                        review.state,
+                    ),
+                )
+                .at(-1) ?? myReviews.at(-1);
 
         switch (lastReview?.state) {
             case 'APPROVED':
@@ -5908,6 +6576,84 @@ This is an experimental feature that generates committable changes. Review the d
             default:
                 return null;
         }
+    }
+
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        if (!repository?.name || !repository.id || !prNumber) {
+            throw new Error(
+                'Repository and PR number are required to dismiss approval',
+            );
+        }
+        const githubAuth = await this.getGithubAuthDetails(
+            organizationAndTeamData,
+        );
+        const octokit = await this.instanceOctokit(
+            organizationAndTeamData,
+            githubAuth,
+        );
+        const graphQLWithAuth = await this.instanceGraphQL(
+            organizationAndTeamData,
+        );
+        const identity: { viewer: { login: string; id: string } } =
+            await graphQLWithAuth('query { viewer { login id } }');
+        const reviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
+            owner: githubAuth.org,
+            repo: repository.name,
+            pull_number: prNumber,
+            per_page: 100,
+        });
+        const ownApprovals = reviews.filter(
+            (review) =>
+                review.state === 'APPROVED' &&
+                review.user?.login === identity.viewer.login &&
+                review.user?.node_id === identity.viewer.id,
+        );
+        for (const review of ownApprovals) {
+            const reviewId = review.id;
+            const timeoutMs = 15_000;
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                await runWithBoundedTimeout(
+                    octokit.rest.pulls.dismissReview({
+                        owner: githubAuth.org,
+                        repo: repository.name,
+                        pull_number: prNumber,
+                        review_id: reviewId,
+                        message:
+                            'Kody held automatic approval after a new review.',
+                        request: { signal: controller.signal },
+                    }),
+                    timeoutMs,
+                    `GitHub approval dismissal review=${reviewId}`,
+                );
+            } catch (error) {
+                this.logger.warn({
+                    message:
+                        'GitHub approval dismissal failed; review state is unverified',
+                    context: GithubService.name,
+                    error,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        teamId: organizationAndTeamData.teamId,
+                        repositoryId: repository.id,
+                        prNumber,
+                        reviewId,
+                        timeoutMs,
+                    },
+                });
+                throw error;
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+        return ownApprovals.length;
     }
 
     async checkIfPullRequestShouldBeApproved(params: {
@@ -6014,7 +6760,16 @@ This is an experimental feature that generates committable changes. Review the d
                 params.organizationAndTeamData,
             );
 
-            if (!githubAuthDetail) {
+            // getGithubAuthDetails always returns a truthy object (it spreads
+            // the lookup and defaults authMode), so a plain `!githubAuthDetail`
+            // check never fires for an org with no GitHub integration. Assert
+            // on the auth material instead: without it we would build a
+            // github.com URL with an empty token and let the caller clone from
+            // the wrong host (#1541).
+            if (
+                !githubAuthDetail?.authToken &&
+                !githubAuthDetail?.installationId
+            ) {
                 throw new BadRequestException('Instalation not found');
             }
 
@@ -6158,9 +6913,18 @@ This is an experimental feature that generates committable changes. Review the d
         const criticalIssuesSummaryArray: OneSentenceSummaryItem[] =
             criticalComments.map((comment) => {
                 return {
-                    id: comment.codeReviewFeedbackData.commentId,
+                    // Both `codeReviewFeedbackData` and `suggestion` are
+                    // declared optional on their own types (a comment whose
+                    // GitHub post failed has no feedback data yet), and
+                    // OneSentenceSummaryItem.id is itself optional — the
+                    // caller (getListOfCriticalIssues) already renders a
+                    // linkless bullet when id is missing. Accessing these
+                    // without `?.` crashed the whole "request changes"
+                    // stage instead of degrading to that existing fallback
+                    // (prod, 2026-09-17: 10 occurrences).
+                    id: comment.codeReviewFeedbackData?.commentId,
                     oneSentenceSummary:
-                        comment.comment.suggestion.oneSentenceSummary ?? '',
+                        comment.comment.suggestion?.oneSentenceSummary ?? '',
                 };
             });
 
@@ -6171,6 +6935,7 @@ This is an experimental feature that generates committable changes. Review the d
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -6199,6 +6964,7 @@ This is an experimental feature that generates committable changes. Review the d
                 error: error.message,
                 metadata: params,
             });
+            if (params.failOnError) throw error;
             return [];
         }
     }
@@ -6464,6 +7230,8 @@ This is an experimental feature that generates committable changes. Review the d
         filters?: {
             startDate: string;
             endDate: string;
+            dateField?: 'created' | 'updated';
+            maxResults?: number;
         };
     }): Promise<PullRequest[]> {
         try {
@@ -6475,34 +7243,61 @@ This is an experimental feature that generates committable changes. Review the d
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
 
-            const pullRequests = await octokit.paginate(octokit.pulls.list, {
-                owner: githubAuthDetail.org,
-                repo: repository.name,
-                state: 'all',
-                sort: 'created',
-                direction: 'desc',
-                per_page: 100,
-            });
+            const startTime = filters?.startDate
+                ? new Date(filters.startDate).getTime()
+                : null;
+            const endTime = filters?.endDate
+                ? new Date(filters.endDate).getTime()
+                : null;
 
-            return pullRequests
-                .filter((pr) => {
-                    const prDate = moment(pr.created_at);
-                    const startDate = filters?.startDate
-                        ? moment(filters.startDate)
-                        : null;
-                    const endDate = filters?.endDate
-                        ? moment(filters.endDate)
-                        : null;
+            const dateField =
+                filters?.dateField === 'updated' ? 'updated_at' : 'created_at';
+            let collected = 0;
+            // The list comes back sorted by the selected date desc, so once we hit a PR
+            // older than startDate every remaining page is older too — stop
+            // paginating instead of pulling the whole repo history into memory
+            // (dozens of useless pages on large repos) just to filter by date.
+            const pullRequests = await octokit.paginate(
+                octokit.pulls.list,
+                {
+                    owner: githubAuthDetail.org,
+                    repo: repository.name,
+                    state: 'all',
+                    sort:
+                        filters?.dateField === 'updated'
+                            ? 'updated'
+                            : 'created',
+                    direction: 'desc',
+                    per_page: 100,
+                },
+                (response, done) => {
+                    const inWindow: typeof response.data = [];
+                    for (const pr of response.data) {
+                        const prTime = new Date(pr[dateField]).getTime();
+                        if (startTime !== null && prTime < startTime) {
+                            done();
+                            break;
+                        }
+                        if (endTime !== null && prTime > endTime) {
+                            continue;
+                        }
+                        inWindow.push(pr);
+                        collected += 1;
+                        if (
+                            filters?.maxResults &&
+                            collected >= filters.maxResults
+                        ) {
+                            done();
+                            break;
+                        }
+                    }
+                    return inWindow;
+                },
+            );
 
-                    return (
-                        (!startDate ||
-                            prDate.isSameOrAfter(startDate, 'day')) &&
-                        (!endDate || prDate.isSameOrBefore(endDate, 'day'))
-                    );
-                })
-                .map((pr) =>
-                    this.transformPullRequest(pr, organizationAndTeamData),
-                );
+            return pullRequests.map((pr) =>
+                this.transformPullRequest(pr, organizationAndTeamData),
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error to get pull requests by repository',
@@ -6511,6 +7306,157 @@ This is an experimental feature that generates committable changes. Review the d
                 error: error.message,
                 metadata: params,
             });
+            return null;
+        }
+    }
+
+    /**
+     * Recent review + conversation comments for a whole repository, newest
+     * first, grouped by pull request.
+     *
+     * Answers the question rule generation actually asks -- "what have
+     * reviewers been saying in this repo lately" -- with two paginated
+     * listings, instead of walking every PR in the window and issuing three
+     * calls each.
+     *
+     * The old shape cost 3 requests per PR, uncapped, to produce a list the
+     * consumer then truncated to 100 comments. On a repo with 816 PRs in the
+     * window that was ~2450 requests out of GitHub's 5000/hour, spent to
+     * throw almost all of it away -- see issue #1686. Here the cap lives at
+     * the source: we stop paginating once enough substantive comments are in
+     * hand.
+     *
+     * It also fixes what those 100 comments WERE. The per-PR loop filled the
+     * quota in PR order, so the surviving comments came from the OLDEST pull
+     * requests in the window -- rules were being learned from the least
+     * current conventions in the repo. Sorting by recency is the point, not a
+     * side effect.
+     */
+    async getRecentRepositoryComments(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: {
+            id: string;
+            name: string;
+        };
+        filters?: {
+            startDate?: string;
+            endDate?: string;
+        };
+        limit?: number;
+    }): Promise<Array<{
+        pr: { pull_number: number };
+        generalComments: any[];
+        reviewComments: any[];
+        files: { filename: string }[];
+    }> | null> {
+        try {
+            const { organizationAndTeamData, repository, filters } = params;
+            // Oversampled against the ~100 the consumer keeps: bot authors,
+            // Kody's own past comments and denylisted reviewers are all
+            // dropped downstream, so collecting exactly 100 here would leave
+            // fewer than that after filtering.
+            const limit = params.limit ?? 300;
+
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+            const octokit = await this.instanceOctokit(organizationAndTeamData);
+
+            const startTime = filters?.startDate
+                ? new Date(filters.startDate).getTime()
+                : null;
+            const endTime = filters?.endDate
+                ? new Date(filters.endDate).getTime()
+                : null;
+
+            // Mirrors the consumer's own filter (commentAnalysis.service:
+            // `body.length > 100`). Applying it while paginating means the
+            // budget counts comments that can actually become a rule, not
+            // "LGTM" and ":+1:".
+            const substantive = (body?: string): boolean =>
+                (body ?? '').length > 100;
+
+            const budget = { kept: 0 };
+
+            // Shared across both listings: the two endpoints feed one sample,
+            // so they must not each spend the full budget.
+            const collectPage = <
+                T extends { created_at: string; body?: string },
+            >(
+                page: T[],
+                done: () => void,
+            ): T[] => {
+                const inWindow: T[] = [];
+                for (const comment of page) {
+                    const t = new Date(comment.created_at).getTime();
+                    // Sorted newest first, so the first one older than the
+                    // window means every remaining page is older too.
+                    if (startTime !== null && t < startTime) {
+                        done();
+                        break;
+                    }
+                    if (endTime !== null && t > endTime) {
+                        continue;
+                    }
+                    inWindow.push(comment);
+                    if (substantive(comment.body)) {
+                        budget.kept++;
+                        if (budget.kept >= limit) {
+                            done();
+                            break;
+                        }
+                    }
+                }
+                return inWindow;
+            };
+
+            const listParams = {
+                owner: githubAuthDetail.org,
+                repo: repository.name,
+                sort: 'created' as const,
+                direction: 'desc' as const,
+                per_page: 100,
+                ...(filters?.startDate && { since: filters.startDate }),
+            };
+
+            // Sequential on purpose, NOT a missed Promise.all. Both listings
+            // draw from one budget, and running them in order gives review
+            // comments first claim on it -- they carry the `path` they were
+            // left on, which is what replaces the per-PR files call. In
+            // parallel the split between the two sources would depend on
+            // which pages return first, making the sample that feeds rule
+            // generation nondeterministic. The cost is one extra round trip
+            // on a background job nobody is waiting for.
+            const reviewComments = await octokit.paginate(
+                octokit.pulls.listReviewCommentsForRepo,
+                listParams,
+                (response, done) => collectPage(response.data, done),
+            );
+
+            const issueComments = await octokit.paginate(
+                octokit.issues.listCommentsForRepo,
+                listParams,
+                (response, done) => collectPage(response.data, done),
+            );
+
+            // /issues/comments covers issues AND pull requests -- on GitHub a
+            // PR is an issue -- so the sample is filtered and grouped by
+            // github-comment-sample.ts, where that logic is unit-tested.
+            return groupCommentsByPullRequest(
+                reviewComments as any[],
+                issueComments as any[],
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Error to get recent repository comments',
+                context: GithubService.name,
+                serviceName: 'GithubService getRecentRepositoryComments',
+                error: error.message,
+                metadata: params,
+            });
+            // null (not []) so the caller can tell "this provider path
+            // failed, fall back to the per-PR walk" from "this repo genuinely
+            // has no recent comments".
             return null;
         }
     }
@@ -6731,6 +7677,176 @@ This is an experimental feature that generates committable changes. Review the d
 
             return false;
         }
+    }
+
+    /**
+     * Write or admin on the repository. A comment's `author_association`
+     * can't tell: COLLABORATOR and MEMBER come with read access too. GitHub
+     * folds maintain and custom roles into write, triage into read.
+     */
+    async userCanWrite(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name?: string; owner?: string };
+        login?: string;
+    }): Promise<boolean | undefined> {
+        if (!params.login || !params.repository.name) {
+            return undefined;
+        }
+        try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                params.organizationAndTeamData,
+            );
+            const octokit = await this.instanceOctokit(
+                params.organizationAndTeamData,
+                githubAuthDetail,
+            );
+            const owner =
+                params.repository.owner ||
+                (await this.getCorrectOwner(githubAuthDetail, octokit));
+            const { data } =
+                await octokit.rest.repos.getCollaboratorPermissionLevel({
+                    owner,
+                    repo: params.repository.name,
+                    username: params.login,
+                });
+            return data.permission === 'admin' || data.permission === 'write';
+        } catch (error) {
+            // Someone who isn't a collaborator answers 200 with `none`; an
+            // error is the credential that couldn't look, not a no.
+            this.logger.warn({
+                message: "Could not read a user's permission on the repository",
+                context: GithubService.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData.organizationId,
+                    teamId: params.organizationAndTeamData.teamId,
+                    repositoryId: params.repository.id,
+                    login: params.login,
+                    reason: summarizeProviderError(error),
+                },
+            });
+            return undefined;
+        }
+    }
+
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                params.organizationAndTeamData,
+            );
+            const octokit = await this.instanceOctokit(
+                params.organizationAndTeamData,
+                githubAuthDetail,
+            );
+            // The repo's own owner, not the integration account's:
+            // getCorrectOwner resolves a personal PAT to the token user's
+            // login, which 404s on every repo the account only collaborates
+            // on (same reason as createPullRequestWebhook). That 404 would
+            // read as "cannot read" and a false NOT RUNNING.
+            const owner =
+                params.repository.fullName?.split('/')[0] ||
+                (await this.getCorrectOwner(githubAuthDetail, octokit));
+            const repo = params.repository.name;
+            const isApp = githubAuthDetail.authMode === AuthMode.OAUTH;
+
+            try {
+                await octokit.rest.repos.listCommits({
+                    owner,
+                    repo,
+                    per_page: 1,
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            try {
+                const { data, headers } = await octokit.rest.repos.get({
+                    owner,
+                    repo,
+                });
+                // Anyone who can read a repository can comment on its PRs,
+                // so the role says nothing; the token's scopes do. Only a
+                // classic PAT reports them (`x-oauth-scopes`). Fine-grained
+                // PATs and App installs stay `unknown` rather than guessed.
+                const scopesHeader = headers?.['x-oauth-scopes'];
+                if (typeof scopesHeader === 'string') {
+                    const scopes = scopesHeader
+                        .split(',')
+                        .map((scope) => scope.trim());
+                    result.write =
+                        scopes.includes('repo') ||
+                        (scopes.includes('public_repo') && !data?.private)
+                            ? 'ok'
+                            : 'denied';
+                }
+            } catch (error) {
+                result.error ??= summarizeProviderError(error);
+            }
+
+            // An App install's token carries the permissions the org granted.
+            if (isApp && 'installationId' in githubAuthDetail) {
+                try {
+                    const installation =
+                        await this.getInstallationAuthentication(
+                            githubAuthDetail.installationId,
+                        );
+                    const pullRequests =
+                        installation?.permissions?.pull_requests;
+                    if (pullRequests === 'write') {
+                        result.write = 'ok';
+                    } else if (pullRequests) {
+                        result.write = 'denied';
+                    }
+                } catch (error) {
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+
+            const webhookUrl = this.configService.get<string>(
+                'API_GITHUB_CODE_MANAGEMENT_WEBHOOK',
+            );
+            if (isApp) {
+                result.hook = 'app-level';
+            } else if (webhookUrl) {
+                // Unset URL: nothing to match, so the hook stays unknown
+                // (the doctor reports the missing URL itself).
+                try {
+                    const { data: hooks } = await octokit.repos.listWebhooks({
+                        owner,
+                        repo,
+                    });
+                    result.hook = hooks.some(
+                        (hook) =>
+                            hook?.config?.url === webhookUrl && hook?.active,
+                    )
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    // Listing hooks needs admin on the repo; without it we
+                    // cannot tell whether the hook exists.
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+        } catch (error) {
+            // A 401/403/404 before any repository call (resolving the owner,
+            // building the client) still means the token cannot read.
+            if (isDeniedStatus(error)) {
+                result.read = 'denied';
+            }
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
     }
 
     async deleteWebhook(params: {
@@ -7211,7 +8327,7 @@ This is an experimental feature that generates committable changes. Review the d
 
             const badges = [
                 getCodeReviewBadge(),
-                suggestion?.label ? getLabelShield(suggestion.label) : '',
+                getSuggestionShield(suggestion),
                 severityShield,
             ]
                 .filter(Boolean)
@@ -7221,6 +8337,7 @@ This is an experimental feature that generates committable changes. Review the d
         }
 
         // BODY - Conteúdo principal
+        commentBody += formatTitleLine(suggestion?.oneSentenceSummary);
         if (suggestion?.suggestionContent) {
             commentBody += `${suggestion.suggestionContent}\n\n`;
         }
@@ -7229,9 +8346,12 @@ This is an experimental feature that generates committable changes. Review the d
             commentBody += `${suggestion.clusteringInformation.actionStatement}\n\n`;
         }
 
-        if (suggestionCopyPrompt) {
-            commentBody += this.formatPromptForLLM(suggestion);
-        }
+        commentBody += formatFixBlock({
+            copyPrompt: suggestionCopyPrompt,
+            prompt: resolveAgentPrompt(suggestion),
+            improvedCode: suggestion?.improvedCode,
+            language: suggestion?.language || params.repository?.language,
+        });
 
         // FOOTER - Interação/Feedback
         if (includeFooter) {
@@ -7348,6 +8468,11 @@ This is an experimental feature that generates committable changes. Review the d
             organizationId: organizationAndTeamData?.organizationId ?? '',
             title: pullRequest?.title ?? '',
             body: pullRequest?.body ?? '',
+            labels: (pullRequest?.labels ?? [])
+                .map((label) =>
+                    typeof label === 'string' ? label : label?.name,
+                )
+                .filter((label): label is string => !!label),
             state:
                 this._prStateMap.get(
                     pullRequest?.state as RestEndpointMethodTypes['pulls']['get']['response']['data']['state'],

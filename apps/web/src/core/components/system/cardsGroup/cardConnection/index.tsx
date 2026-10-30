@@ -65,7 +65,7 @@ export default function CardConnection({
                 ) : (
                     <Button
                         size="md"
-                        variant="primary"
+                        variant="primary-dark"
                         onClick={() => connectIntegration(title)}
                         disabled={isSetupComplete}>
                         {buttonTopText}
@@ -76,7 +76,7 @@ export default function CardConnection({
                     <div className="flex flex-col gap-2">
                         <Button
                             size="sm"
-                            variant="primary"
+                            variant="helper"
                             disabled={disabled || isDisabled}
                             leftIcon={
                                 isSetupComplete ? <EditIcon /> : <PlugIcon />

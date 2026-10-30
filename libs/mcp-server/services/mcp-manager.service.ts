@@ -1,4 +1,9 @@
 import { MCPServerConfig } from '../mcp-adapter';
+import {
+    KODUS_ISSUES_INTEGRATION_ID,
+    KODUS_MCP_INTEGRATION_ID,
+    KODUS_MCP_TOKEN_AUDIENCE,
+} from '../utils/mcp-auth.constants';
 import { createLogger } from '@libs/core/log/logger';
 import { TransportType } from '../mcp-adapter';
 import { Injectable } from '@nestjs/common';
@@ -7,6 +12,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AxiosMCPManagerService } from '@libs/core/infrastructure/config/axios/microservices/mcpManager.axios';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 type MCPConnection = {
     id: string;
@@ -130,8 +136,7 @@ interface MCPIntegrationOAuth2 extends MCPIntegrationBase {
     tokenExpiry?: number;
 }
 
-export const KODUS_MCP_INTEGRATION_ID = 'kd_mcp_oTUrzqsaxTg';
-export const KODUS_ISSUES_INTEGRATION_ID = 'kodus-issues-default';
+export { KODUS_ISSUES_INTEGRATION_ID, KODUS_MCP_INTEGRATION_ID };
 
 @Injectable()
 export class MCPManagerService {
@@ -141,6 +146,7 @@ export class MCPManagerService {
     constructor(
         private readonly jwt: JwtService,
         private readonly permissionValidationService: PermissionValidationService,
+        private readonly telemetry: TelemetryService,
     ) {
         this.axiosMCPManagerService = new AxiosMCPManagerService();
     }
@@ -211,7 +217,10 @@ export class MCPManagerService {
             if (format) {
                 const results = await Promise.allSettled(
                     limitedData.map((connection) =>
-                        this.formatConnection(connection),
+                        this.formatConnection(
+                            connection,
+                            organizationAndTeamData.organizationId,
+                        ),
                     ),
                 );
 
@@ -234,6 +243,7 @@ export class MCPManagerService {
                                 organizationId:
                                     limitedData[index]?.organizationId,
                                 connection: limitedData[index]?.appName,
+                                connectionId: limitedData[index]?.id,
                             },
                         });
                     }
@@ -290,12 +300,19 @@ export class MCPManagerService {
                 `mcp/integration/kodusmcp`,
                 {
                     integrationId: KODUS_MCP_INTEGRATION_ID,
-                    baseUrl: process.env.API_KODUS_MCP_SERVER_URL ?? '',
+                    baseUrl: this.getKodusMcpEndpoint(),
                 },
                 {
                     headers: this.getAuthHeaders(organizationAndTeamData),
                 },
             );
+
+            void this.telemetry.pluginChanged({
+                organizationId,
+                pluginId: KODUS_MCP_INTEGRATION_ID,
+                pluginName: 'kodusmcp',
+                installed: true,
+            });
         } catch (error) {
             this.logger.error({
                 message: 'Error creating Kodus MCP integration',
@@ -336,6 +353,16 @@ export class MCPManagerService {
                 },
             );
 
+            void this.telemetry.pluginChanged({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                pluginId: integrationId,
+                pluginName: connection.appName,
+                provider: connection.provider,
+                installed: false,
+                toolCount: connection.allowedTools?.length,
+            });
+
             return true;
         } catch (error) {
             this.logger.warn({
@@ -353,9 +380,11 @@ export class MCPManagerService {
 
     private async formatConnection(
         connection: MCPItem,
+        callerOrganizationId: string,
     ): Promise<MCPServerConfig> {
         let headers: Record<string, string> = {};
         let type: string = 'http';
+        let url = connection.mcpUrl;
         if (connection.provider === 'custom') {
             const integration =
                 await this.fetchCustomIntegrationConfig(connection);
@@ -412,11 +441,38 @@ export class MCPManagerService {
             }
         }
 
+        // Stored URLs can predate an endpoint change. Route the first-party
+        // integrations to the trusted configuration before attaching
+        // credentials: both MCP controllers reject calls without one.
+        const firstPartyUrl =
+            connection.integrationId === KODUS_MCP_INTEGRATION_ID
+                ? () => this.getKodusMcpEndpoint()
+                : connection.integrationId === KODUS_ISSUES_INTEGRATION_ID
+                  ? () => this.getKodusIssuesMcpEndpoint()
+                  : undefined;
+        if (firstPartyUrl) {
+            if (connection.organizationId !== callerOrganizationId)
+                throw new Error('Kodus MCP connection organization mismatch');
+            url = firstPartyUrl();
+            const secret = process.env.API_JWT_SECRET;
+            if (!secret) throw new Error('Kodus MCP signing secret is missing');
+            headers.Authorization = `Bearer ${this.jwt.sign(
+                { organizationId: callerOrganizationId },
+                {
+                    secret,
+                    algorithm: 'HS256',
+                    expiresIn: '1h',
+                    issuer: KODUS_MCP_TOKEN_AUDIENCE,
+                    audience: KODUS_MCP_TOKEN_AUDIENCE,
+                },
+            )}`;
+        }
+
         return {
             name: connection.appName,
             provider: connection.provider,
             type: type as TransportType,
-            url: connection.mcpUrl,
+            url,
             headers,
             retries: 1,
             timeout: 60_000,
@@ -424,7 +480,43 @@ export class MCPManagerService {
             // Canonical capability category from the mcp-manager registry, used
             // by skills to match required MCPs by capability (not display name).
             category: connection.category ?? null,
+            integrationId: connection.integrationId,
         };
+    }
+
+    // Same resolution the mcp-manager applies to the managed `/mcp/issues`
+    // entry (kodus-mcp.provider.ts resolveManagedBaseUrl): the origin of the
+    // configured MCP server.
+    private getKodusIssuesMcpEndpoint(): string {
+        return new URL('/mcp/issues', this.getKodusMcpEndpoint()).toString();
+    }
+
+    private getKodusMcpEndpoint(): string {
+        const configuredUrl = process.env.API_KODUS_MCP_SERVER_URL;
+        if (!configuredUrl) throw new Error('Kodus MCP endpoint is missing');
+        let endpoint: URL;
+        try {
+            endpoint = new URL(configuredUrl);
+        } catch {
+            throw new Error('Kodus MCP endpoint is invalid');
+        }
+        if (
+            !['http:', 'https:'].includes(endpoint.protocol) ||
+            endpoint.username ||
+            endpoint.password
+        ) {
+            throw new Error('Kodus MCP endpoint is invalid');
+        }
+        // The MCP controller lives at `/mcp`, and `/mcp/issues` is derived
+        // from the origin (as the mcp-manager does), so only that path is
+        // accepted; a bare origin points at it. Any other path would send the
+        // organization's token to a handler that is not the MCP server.
+        const path = endpoint.pathname.replace(/\/+$/, '');
+        if (path !== '' && path !== '/mcp') {
+            throw new Error('Kodus MCP endpoint is invalid');
+        }
+        endpoint.pathname = '/mcp';
+        return endpoint.toString();
     }
 
     /**

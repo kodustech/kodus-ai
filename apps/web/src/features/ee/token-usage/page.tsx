@@ -1,14 +1,18 @@
 import { cookies } from "next/headers";
 import { Page } from "@components/ui/page";
+import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
 import {
     getTokenPricingBatch,
     getTokenUsageByDeveloper,
+    getTokenUsageByReview,
     getTokenUsageOverview,
 } from "@services/usage/fetch";
 import {
     BaseUsageContract,
     ModelPricingInfo,
     UsageByPrResultContract,
+    UsageByTaskAreaResultContract,
+    UsageByTaskModelSpanContract,
     UsageSummaryContract,
 } from "@services/usage/types";
 import { CookieName } from "src/core/utils/cookie";
@@ -69,25 +73,63 @@ export default async function TokenUsagePage({
 }: {
     searchParams: { [key: string]: string | string[] | undefined };
 }) {
-    const params = await searchParams;
-    const teamId = await getGlobalSelectedTeamId();
-    const subscription = await validateOrganizationLicense({ teamId }).catch(
-        () => null,
-    );
+    // searchParams, teamId, cookies and the date range are mutually independent
+    // — fetch them in one parallel wave instead of four serial round-trips.
+    // Only the license check depends on teamId, so it awaits after.
+    const [params, teamId, cookieStore, selectedDateRange] = await Promise.all([
+        searchParams,
+        getGlobalSelectedTeamId(),
+        cookies(),
+        getSelectedDateRange(),
+    ]);
 
-    const isBYOK = subscription ? isBYOKSubscriptionPlan(subscription) : false;
+    const [subscription, llmConfigStatus] = await Promise.all([
+        validateOrganizationLicense({ teamId }).catch(() => null),
+        getLLMConfigStatus().catch(() => null),
+    ]);
+
+    // Which usage bucket the screen queries. The backend records env/managed
+    // LLM usage as isByok=false (the byok=false "managed" view) and BYOK-slot
+    // usage as isByok=true. On self-hosted the plan flag is ALWAYS true, so
+    // keying the view off the plan (isBYOKSubscriptionPlan) queries the empty
+    // BYOK view for an install that actually runs the env/managed LLM — every
+    // card reads zero even though usage IS recorded. Pick the view from the
+    // ACTUAL configured source instead; the license check stays the
+    // precondition and cloud keeps the plan-based flag unchanged.
+    const isSelfHosted =
+        subscription?.subscriptionStatus === "self-hosted" ||
+        subscription?.subscriptionStatus === "licensed-self-hosted";
+    const isBYOK = isSelfHosted
+        ? llmConfigStatus?.source === "byok"
+        : subscription
+          ? isBYOKSubscriptionPlan(subscription)
+          : false;
     const isTrial = subscription?.subscriptionStatus === "trial";
-
-    const cookieStore = await cookies();
-
-    const selectedDateRange = await getSelectedDateRange();
 
     const filters = {
         startDate: selectedDateRange.startDate,
         endDate: selectedDateRange.endDate,
         prNumber: params.prNumber ? Number(params.prNumber) : undefined,
         developer: params.developer,
+        repositoryId:
+            typeof params.repositoryId === "string"
+                ? params.repositoryId
+                : undefined,
         byok: isBYOK,
+    };
+
+    // Same-length window immediately before the selected one — powers the
+    // "vs previous period" deltas on the KPI cards. Served from the overview
+    // cache when warm; a failure only hides the deltas.
+    const rangeStart = new Date(selectedDateRange.startDate);
+    const rangeEnd = new Date(selectedDateRange.endDate);
+    const windowMs = Math.max(0, rangeEnd.getTime() - rangeStart.getTime());
+    const previousFilters = {
+        ...filters,
+        startDate: new Date(rangeStart.getTime() - windowMs - 1)
+            .toISOString()
+            .slice(0, 10),
+        endDate: new Date(rangeStart.getTime() - 1).toISOString().slice(0, 10),
     };
 
     let data: BaseUsageContract[] = [];
@@ -104,28 +146,75 @@ export default async function TokenUsagePage({
     // ONE covered aggregation returns summary + daily + by-pr (the cost cards
     // need day/PR counts regardless of the chart dimension). Only the
     // by-developer dimension isn't part of it, so that mode fetches alongside.
-    const [overview, developerData] = await Promise.all([
+    // Developer picker options: the by-developer aggregation WITHOUT a
+    // developer scope returns one row per developer, i.e. the full roster.
+    // Fetch it whenever the developer dimension is active so the combobox
+    // keeps every name even after one is selected (a scoped fetch collapses
+    // to a single developer). Cache-shared with the view fetch when no
+    // developer is selected (identical key), so it's usually free.
+    const developerListFilters = { ...filters, developer: undefined };
+    const [
+        overview,
+        developerData,
+        developerOptionsData,
+        reviewData,
+        previousOverview,
+    ] = await Promise.all([
         getTokenUsageOverview(filters),
         filterType === "by-developer"
             ? getTokenUsageByDeveloper(filters)
             : Promise.resolve(null),
+        filterType === "by-developer"
+            ? getTokenUsageByDeveloper(developerListFilters).catch(() => null)
+            : Promise.resolve(null),
+        filterType === "by-review"
+            ? getTokenUsageByReview(filters)
+            : Promise.resolve(null),
+        getTokenUsageOverview(previousFilters).catch(() => null),
     ]);
+
+    const developerOptions = [
+        ...new Set(
+            (developerOptionsData ?? [])
+                .map((d) => d.developer)
+                .filter((d): d is string => !!d),
+        ),
+    ].sort((a, b) => a.localeCompare(b));
+
+    const previousTotals = previousOverview
+        ? {
+              cost: previousOverview.summary.totalCost.total,
+              tokens: previousOverview.summary.totals.total,
+          }
+        : null;
 
     summary = overview.summary;
 
     const dailyRows = overview.daily ?? [];
     const prRows = overview.byPr ?? [];
+    const byTaskArea: UsageByTaskAreaResultContract[] =
+        overview.byTaskArea ?? [];
+    const byTaskModelSpan: UsageByTaskModelSpanContract[] =
+        overview.byTaskModelSpan ?? [];
+
+    // One review run = one correlationId. Keep the FULL id in the key so two
+    // runs on the same PR never collide into one bar/row; the chart axis and
+    // the table truncate it for display (tooltip shows the full value).
+    const reviewRows = (reviewData ?? []).map((r) => ({
+        ...r,
+        review: `${r.prNumber != null ? `#${r.prNumber} · ` : ""}${r.review}`,
+    }));
 
     data =
         filterType === "by-pr"
             ? prRows
             : filterType === "by-developer"
               ? (developerData ?? [])
-              : dailyRows;
+              : filterType === "by-review"
+                ? reviewRows
+                : dailyRows;
 
-    activeDayCount = new Set(
-        dailyRows.map((r) => r.date).filter(Boolean),
-    ).size;
+    activeDayCount = new Set(dailyRows.map((r) => r.date).filter(Boolean)).size;
     uniquePrCount = new Set(
         prRows
             .map((r) => r.prNumber)
@@ -217,17 +306,25 @@ export default async function TokenUsagePage({
 
     return (
         <Page.Root>
+            {/* Full-width like the cockpit (its layout uses the same
+                max-w-full px-6 on header + content). */}
             <Page.Header>
                 <Page.Title>Token Usage</Page.Title>
             </Page.Header>
             <Page.Content>
                 <TokenUsagePageClient
                     data={data}
+                    byTaskArea={byTaskArea}
+                    byTaskModelSpan={byTaskModelSpan}
+                    reviewRows={reviewData ?? []}
+                    previousTotals={previousTotals}
                     summary={summary}
                     activeDayCount={activeDayCount}
                     uniquePrCount={uniquePrCount}
                     cookieValue={dateRangeCookieValue}
                     models={uniqueModels}
+                    developers={developerOptions}
+                    teamId={teamId}
                     pricing={pricing}
                 />
             </Page.Content>

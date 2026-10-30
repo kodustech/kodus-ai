@@ -1,0 +1,13 @@
+{
+    "_note": "Recorded generate result for an OpenRouter reasoning-capable upstream (moonshotai/kimi-k2-thinking). OpenRouter forwards the upstream usage and, via @ai-sdk/openai-compatible, the reasoning split surfaces at outputTokenDetails.reasoningTokens in the high-level ai@7 LanguageModelUsage shape. outputTokens is the FULL completion count; reasoningTokens is a detail-OF it and is NEVER subtracted from output (Q4 double-count trap).",
+    "text": "{\"decisions\":[{\"type\":\"tooling\",\"origin\":\"human\",\"decision\":\"Adopt the Vercel AI SDK path\",\"confidence\":0.9}]}",
+    "finishReason": "stop",
+    "usage": {
+        "inputTokens": 1142,
+        "outputTokens": 5893,
+        "totalTokens": 7035,
+        "outputTokenDetails": {
+            "reasoningTokens": 5310
+        }
+    }
+}

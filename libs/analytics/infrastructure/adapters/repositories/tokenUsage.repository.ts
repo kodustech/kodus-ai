@@ -9,16 +9,22 @@ import {
     DailyUsageResultContract,
     TierUsage,
     TokenUsageQueryContract,
+    UsageByAreaResultContract,
+    UsageByTaskAreaResultContract,
+    UsageByTaskModelSpanContract,
     UsageByPrResultContract,
+    UsageByReviewResultContract,
     UsageSummaryContract,
 } from '@libs/analytics/domain/token-usage/types/tokenUsage.types';
 
 import { ObservabilityTelemetryModel } from './schemas/observabilityTelemetry.model';
 import { PricingResolver } from '@libs/analytics/application/use-cases/usage/pricing-resolver';
+import { MONGO_QUERY_MAX_TIME_MS } from '@libs/core/infrastructure/database/mongo/query-timeout';
 
 type RawAggRow = {
     model: string;
-    tier: 'le' | 'gt';
+    /** Bracket index: 0 = default band, k = above the k-th input threshold. */
+    tier: number;
     input: number;
     output: number;
     total: number;
@@ -27,7 +33,89 @@ type RawAggRow = {
     cacheWrite: number;
     date?: string;
     prNumber?: number;
+    review?: string;
+    startedAt?: Date;
+    area?: string;
+    task?: string;
 };
+
+/** Raw min/max window row from the taskModelSpan facet (no token math). */
+type RawSpanRow = {
+    task: string;
+    model: string;
+    firstAt: Date | string;
+    lastAt: Date | string;
+};
+
+// Rows written before the area backfill ran have no `tu.area` — group them
+// under the same bucket new un-mapped runs get.
+const AREA_FALLBACK = 'other';
+
+// Bucket for spend with no routing task: genuinely unattributable (system/
+// internal), OR a pre-launch row whose area de-para also yields none.
+const TASK_FALLBACK = '';
+
+/**
+ * The routing TASK for a row: the stamped `attributes.tu.route` when present
+ * (post-launch), else the SAME area→task de-para as deriveTu.routeFromArea in
+ * libs/core/log/token-usage-tu.ts — so pre-launch rows attribute to a task on
+ * READ, without waiting for the backfill. `areaField` is the already-fallback'd
+ * area expression. Keep the branches in sync with routeFromArea.
+ */
+// Valid routing tasks — mirror of ROUTING_TASKS in token-usage-tu.ts (LlmTask).
+// A `tu.route` outside this set (stale tier string, garbage) is NOT trusted.
+export const READ_ROUTING_TASKS = [
+    'codeReview',
+    'kodyRulesReview',
+    'ruleGeneration',
+    'businessValidation',
+    'prSummary',
+    'conversation',
+    'customAgent',
+];
+
+const taskExpr = (areaField: unknown) => ({
+    $cond: [
+        { $in: ['$attributes.tu.route', READ_ROUTING_TASKS] },
+        '$attributes.tu.route',
+        {
+            $let: {
+                vars: { a: areaField },
+                in: {
+                    $switch: {
+                        branches: [
+                            {
+                                case: {
+                                    $in: ['$$a', ['review', 'suggestions']],
+                                },
+                                then: 'codeReview',
+                            },
+                            {
+                                case: { $eq: ['$$a', 'kody_rules'] },
+                                then: 'kodyRulesReview',
+                            },
+                            {
+                                case: { $eq: ['$$a', 'summary'] },
+                                then: 'prSummary',
+                            },
+                            {
+                                case: { $eq: ['$$a', 'conversation'] },
+                                then: 'conversation',
+                            },
+                        ],
+                        default: TASK_FALLBACK,
+                    },
+                },
+            },
+        },
+    ],
+});
+
+// Upper bound on rows returned by the per-review read (rows are per run ×
+// model × tier). ~5 models/run → this covers the heaviest ~1600 runs, far
+// beyond what the chart (top 24) or table (top 100) show, while bounding the
+// payload for an org with a huge date window.
+const REVIEW_ROWS_CAP = 8000;
 
 @Injectable()
 export class TokenUsageRepository implements ITokenUsageRepository {
@@ -48,52 +136,73 @@ export class TokenUsageRepository implements ITokenUsageRepository {
      * instead of an extra ~4.5s distinct-models scan just to discover names.
      * Branches for models absent from the window simply never match.
      */
-    private _thresholds(): Promise<Map<string, number>> {
+    private _thresholds(): Promise<Map<string, number[]>> {
         return this.pricingResolver.tieredInputThresholds();
     }
 
     /**
-     * Aggregation expression that derives a call's tier ('gt'|'le') from the
-     * covered `attributes.tu.model` + `attributes.tu.input` and the catalog
-     * thresholds. Reads only index fields → the pipeline stays covered.
+     * Sorted distinct input thresholds across every tiered model. The catalog
+     * (LiteLLM + models.dev, every canonical name variant) holds hundreds of
+     * tiered models but only a handful of distinct threshold values.
      */
-    private _tierExpr(thresholds: Map<string, number>): any {
-        if (thresholds.size === 0) return 'le';
-        const branches: Array<{ case: any; then: number }> = [];
-        for (const [model, threshold] of thresholds) {
-            branches.push({
-                case: { $eq: ['$attributes.tu.model', model] },
-                then: threshold,
-            });
-        }
+    private _distinctThresholds(thresholds: Map<string, number[]>): number[] {
+        const all = new Set<number>();
+        for (const thrs of thresholds.values()) thrs.forEach((t) => all.add(t));
+        return [...all].sort((a, b) => a - b);
+    }
+
+    /**
+     * Per-call input BRACKET against the distinct thresholds: how many of them
+     * `attributes.tu.input` exceeds. K constant comparisons per row, instead of
+     * a `$switch` with one branch per tiered model evaluated row by row (cost
+     * grew with catalog size: ~2s at 1 branch, ~11s at 500 over 500k rows).
+     * Reads only index fields → the pipeline stays covered. The exact per-model
+     * tier is derived from the bracket afterwards in `_withTiers`.
+     */
+    private _bracketExpr(distinct: number[], input = '$attributes.tu.input'): any {
+        // `$literal`, not a bare 0: in a `$project` (the overview `$facet`
+        // path) a plain 0 is read as field EXCLUSION and crashes the mixed
+        // projection. `$literal` forces the VALUE 0 (bracket 0 = default
+        // band) — the safe degradation when no model is tiered.
+        if (distinct.length === 0) return { $literal: 0 };
         return {
-            $let: {
-                vars: { thr: { $switch: { branches, default: 0 } } },
-                in: {
-                    $cond: [
-                        {
-                            $and: [
-                                { $gt: ['$$thr', 0] },
-                                { $gt: ['$attributes.tu.input', '$$thr'] },
-                            ],
-                        },
-                        'gt',
-                        'le',
-                    ],
-                },
-            },
+            $add: distinct.map((t) => ({ $cond: [{ $gt: [input, t] }, 1, 0] })),
         };
     }
 
     /**
+     * Maps each row's bracket to the model's own tier index: the count of the
+     * model's thresholds the call's input exceeds. Exact, because the model's
+     * thresholds are a subset of `distinct`: input > t ⇔ t ≤ distinct[b - 1].
+     * Several brackets can map to the same tier; `_mergeTierRows` folds them.
+     */
+    private _withTiers(
+        rows: RawAggRow[],
+        thresholds: Map<string, number[]>,
+        distinct: number[],
+    ): RawAggRow[] {
+        for (const row of rows) {
+            const own = thresholds.get(row.model);
+            if (!own || row.tier === 0) {
+                row.tier = 0;
+                continue;
+            }
+            const cut = distinct[row.tier - 1];
+            row.tier = own.filter((t) => t <= cut).length;
+        }
+        return rows;
+    }
+
+    /**
      * Returns one BaseUsageContract per logical bucket (per model + per
-     * groupKey), folding the raw tier rows into `byTier`. `byTier` is kept
-     * only for models declared as tier-aware in `thresholds` — flat-priced
-     * models get a clean flat contract.
+     * groupKey), folding the raw bracket rows into `byTier` (an array indexed
+     * by bracket). `byTier` is kept only for models declared as tier-aware in
+     * `thresholds`, sized to `thresholds + 1` buckets; flat-priced models get
+     * a clean flat contract.
      */
     private _mergeTierRows<T extends BaseUsageContract>(
         rows: RawAggRow[],
-        thresholds: Map<string, number>,
+        thresholds: Map<string, number[]>,
         keyOf: (r: RawAggRow) => string,
         finalize: (base: BaseUsageContract, row: RawAggRow) => T,
     ): T[] {
@@ -110,7 +219,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 cacheWrite: row.cacheWrite,
             };
             if (!existing) {
-                const tierAware = thresholds.has(row.model);
+                const modelThresholds = thresholds.get(row.model);
                 const base: BaseUsageContract = {
                     model: row.model,
                     input: row.input,
@@ -119,11 +228,16 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                     outputReasoning: row.outputReasoning,
                     cacheRead: row.cacheRead,
                     cacheWrite: row.cacheWrite,
-                    ...(tierAware
-                        ? { byTier: { le: emptyTier(), gt: emptyTier() } }
+                    ...(modelThresholds
+                        ? {
+                              byTier: Array.from(
+                                  { length: modelThresholds.length + 1 },
+                                  () => emptyTier(),
+                              ),
+                          }
                         : {}),
                 };
-                if (base.byTier) base.byTier[row.tier] = tierBucket;
+                if (base.byTier) addTier(base.byTier[row.tier], tierBucket);
                 grouped.set(key, finalize(base, row));
             } else {
                 existing.input += row.input;
@@ -133,7 +247,9 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 existing.cacheRead = (existing.cacheRead ?? 0) + row.cacheRead;
                 existing.cacheWrite =
                     (existing.cacheWrite ?? 0) + row.cacheWrite;
-                if (existing.byTier) existing.byTier[row.tier] = tierBucket;
+                if (existing.byTier) {
+                    addTier(existing.byTier[row.tier], tierBucket);
+                }
             }
         }
         return Array.from(grouped.values());
@@ -169,6 +285,10 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 : { 'attributes.tu.sys': false }),
         };
         if (query.prNumber) match['attributes.prNumber'] = query.prNumber;
+        // Repository scope, pre-resolved to PR numbers by the service. An
+        // empty list is a repo with no PRs → matches nothing, by design.
+        else if (query.prNumbers)
+            match['attributes.prNumber'] = { $in: query.prNumbers };
         else if (prOnly)
             // `{$type:'number'}` — NOT `{$exists:true,$ne:null}`: $exists in the
             // match forces a FETCH of every candidate doc (docsExamined=1.27M,
@@ -183,20 +303,24 @@ export class TokenUsageRepository implements ITokenUsageRepository {
 
     private async _tuRows(
         query: TokenUsageQueryContract,
-        thresholds: Map<string, number>,
+        thresholds: Map<string, number[]>,
         groupById: Record<string, any> = {},
         projectExtras: Record<string, any> = {},
         prOnly = false,
+        extraMatch: Record<string, any> = {},
+        extraAcc: Record<string, any> = {},
+        maxRows = 0,
     ): Promise<RawAggRow[]> {
-        const pipeline = [
-            { $match: this._tuMatch(query, prOnly) },
-            // Derive the tier per call from the catalog thresholds (not baked).
-            { $addFields: { _tier: this._tierExpr(thresholds) } },
+        const distinct = this._distinctThresholds(thresholds);
+        const pipeline: Record<string, any>[] = [
+            { $match: { ...this._tuMatch(query, prOnly), ...extraMatch } },
             {
                 $group: {
                     _id: {
                         model: '$attributes.tu.model',
-                        tier: '$_tier',
+                        // Input bracket, mapped to the per-model tier below
+                        // (derived from the catalog thresholds, not baked).
+                        tier: this._bracketExpr(distinct),
                         ...groupById,
                     },
                     input: { $sum: '$attributes.tu.input' },
@@ -205,6 +329,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                     outputReasoning: { $sum: '$attributes.tu.reasoning' },
                     cacheRead: { $sum: '$attributes.tu.cacheRead' },
                     cacheWrite: { $sum: '$attributes.tu.cacheWrite' },
+                    ...extraAcc,
                 },
             },
             {
@@ -222,15 +347,63 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 },
             },
         ];
-        return this.observabilityTelemetryModel
-            .aggregate<RawAggRow>(pipeline)
+        // Safety valve for unbounded dimensions (by-review): keep the heaviest
+        // buckets and cap the payload so a huge window can't ship tens of
+        // thousands of rows. It selects WHOLE logical buckets (model + the
+        // caller's group keys): a bucket is split into one row per input
+        // bracket, and capping raw rows could keep some of a bucket's brackets
+        // and drop the rest, under-reporting its total. Buckets are taken in
+        // bucket-total order (bucket key as tiebreaker, a stable cut) while
+        // their running row count stays <= maxRows, so the payload bound holds
+        // and as many buckets survive as the rows allow — the top consumers
+        // (all the frontend charts/table show) intact.
+        if (maxRows > 0) {
+            const bucketId: Record<string, string> = { model: '$_id.model' };
+            for (const key of Object.keys(groupById)) {
+                bucketId[key] = `$_id.${key}`;
+            }
+            pipeline.splice(
+                2,
+                0,
+                {
+                    $group: {
+                        _id: bucketId,
+                        bucketTotal: { $sum: '$total' },
+                        bucketRows: { $sum: 1 },
+                        rows: { $push: '$$ROOT' },
+                    },
+                },
+                {
+                    $setWindowFields: {
+                        sortBy: { bucketTotal: -1, _id: 1 },
+                        output: {
+                            rowsSoFar: {
+                                $sum: '$bucketRows',
+                                window: { documents: ['unbounded', 'current'] },
+                            },
+                        },
+                    },
+                },
+                { $match: { rowsSoFar: { $lte: maxRows } } },
+                { $unwind: '$rows' },
+                { $replaceRoot: { newRoot: '$rows' } },
+            );
+        }
+        const rows = await this.observabilityTelemetryModel
+            .aggregate<RawAggRow>(pipeline as any)
+            // The $group stages hold one entry per (model, bracket, keys)
+            // group; let them spill on a huge window instead of failing.
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS, allowDiskUse: true })
             .exec();
+        return this._withTiers(rows, thresholds, distinct);
     }
 
     async getSummary(
         query: TokenUsageQueryContract,
     ): Promise<UsageSummaryContract> {
-        const rows = await this._tuRows(query, await this._thresholds());
+        // Cross-model rollup that ignores tiers: no thresholds → no bracket
+        // math and no pricing-catalog fetch on the BYOK page's hottest read.
+        const rows = await this._tuRows(query, new Map());
 
         // Cross-model rollup: one row total.
         const summary: UsageSummaryContract = {
@@ -304,6 +477,41 @@ export class TokenUsageRepository implements ITokenUsageRepository {
         return merged;
     }
 
+    async getModelCredentialPairs(
+        query: TokenUsageQueryContract,
+    ): Promise<Array<{ model: string; credentialId: string }>> {
+        // Distinct (tu.model, tu.credentialId) the usage actually recorded — the
+        // usage-derived attribution map. Grouping only; no tokens/pricing, so it
+        // is cheap. Empty/absent credentialId (env/managed/legacy) is excluded so
+        // those fall back to the config name-map / unattributed in the caller.
+        return this.observabilityTelemetryModel
+            .aggregate<{ model: string; credentialId: string }>([
+                {
+                    $match: {
+                        ...this._tuMatch(query),
+                        'attributes.tu.credentialId': { $nin: ['', null] },
+                    },
+                },
+                {
+                    $group: {
+                        _id: {
+                            model: '$attributes.tu.model',
+                            credentialId: '$attributes.tu.credentialId',
+                        },
+                    },
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        model: '$_id.model',
+                        credentialId: '$_id.credentialId',
+                    },
+                },
+            ] as any)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
+            .exec();
+    }
+
     async getUsageByPr(
         query: TokenUsageQueryContract,
     ): Promise<UsageByPrResultContract[]> {
@@ -370,6 +578,85 @@ export class TokenUsageRepository implements ITokenUsageRepository {
     }
 
     /**
+     * Per review run. One run = one `correlationId` — the ambient
+     * observability-context id every usage span of a job inherits (set by the
+     * workflow consumer per webhook/job), so a PR reviewed twice shows two
+     * rows. Restricted to spans that carry a prNumber (review work), matching
+     * the by-PR view's population. `startedAt` (min span timestamp) orders
+     * runs chronologically.
+     */
+    async getUsageByReview(
+        query: TokenUsageQueryContract,
+    ): Promise<UsageByReviewResultContract[]> {
+        const thresholds = await this._thresholds();
+        const rows = await this._tuRows(
+            query,
+            thresholds,
+            { review: '$correlationId', pr: '$attributes.prNumber' },
+            {
+                review: '$_id.review',
+                prNumber: '$_id.pr',
+                startedAt: 1,
+            },
+            true,
+            // `$gt: ''` = non-empty string; BSON type ordering also excludes
+            // docs where correlationId is missing/null.
+            { correlationId: { $gt: '' } },
+            { startedAt: { $min: '$timestamp' } },
+            REVIEW_ROWS_CAP,
+        );
+
+        const merged = this._mergeTierRows<UsageByReviewResultContract>(
+            rows,
+            thresholds,
+            (r) => `${r.review}|${r.model}`,
+            (base, row) => ({
+                ...base,
+                review: row.review!,
+                prNumber: row.prNumber,
+                startedAt:
+                    row.startedAt instanceof Date
+                        ? row.startedAt.toISOString()
+                        : (row.startedAt as string | undefined),
+            }),
+        );
+        merged.sort((a, b) => {
+            const t = (a.startedAt ?? '').localeCompare(b.startedAt ?? '');
+            return t !== 0 ? t : a.model.localeCompare(b.model);
+        });
+        return merged;
+    }
+
+    /**
+     * Per process area (`attributes.tu.area`, stamped by deriveTu and the
+     * backfill). Pre-backfill rows without an area land in 'other'.
+     */
+    async getUsageByArea(
+        query: TokenUsageQueryContract,
+    ): Promise<UsageByAreaResultContract[]> {
+        const thresholds = await this._thresholds();
+        const rows = await this._tuRows(
+            query,
+            thresholds,
+            { area: { $ifNull: ['$attributes.tu.area', AREA_FALLBACK] } },
+            { area: '$_id.area' },
+        );
+
+        const merged = this._mergeTierRows<UsageByAreaResultContract>(
+            rows,
+            thresholds,
+            (r) => `${r.area}|${r.model}`,
+            (base, row) => ({ ...base, area: row.area! }),
+        );
+        merged.sort((a, b) =>
+            a.area === b.area
+                ? a.model.localeCompare(b.model)
+                : a.area!.localeCompare(b.area!),
+        );
+        return merged;
+    }
+
+    /**
      * Single-pass overview: summary + byModel + daily + byPr + dailyByPr in ONE
      * covered aggregation via `$facet`. The org+timestamp+flag scan happens once
      * instead of ~4 separate covered scans (the screen fires summary=2 + daily +
@@ -389,8 +676,12 @@ export class TokenUsageRepository implements ITokenUsageRepository {
         byModel: BaseUsageContract[];
         daily: DailyUsageResultContract[];
         byPr: UsageByPrResultContract[];
+        byArea: UsageByAreaResultContract[];
+        byTaskArea: UsageByTaskAreaResultContract[];
+        byTaskModelSpan: UsageByTaskModelSpanContract[];
     }> {
         const thresholds = await this._thresholds();
+        const distinct = this._distinctThresholds(thresholds);
         // Project only index fields → $facet works on a lean covered stream.
         // Tier is derived here (from the catalog thresholds) instead of read
         // from a baked field, so it can't drift when pricing tiers change.
@@ -398,8 +689,10 @@ export class TokenUsageRepository implements ITokenUsageRepository {
             $project: {
                 _id: 0,
                 model: '$attributes.tu.model',
-                tier: this._tierExpr(thresholds),
+                tier: this._bracketExpr(distinct),
                 pr: '$attributes.prNumber',
+                area: { $ifNull: ['$attributes.tu.area', AREA_FALLBACK] },
+                task: taskExpr({ $ifNull: ['$attributes.tu.area', AREA_FALLBACK] }),
                 date: {
                     $dateToString: {
                         format: '%Y-%m-%d',
@@ -407,6 +700,10 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                         timezone: query.timezone || 'UTC',
                     },
                 },
+                // Raw event time — carried through so a single facet can take
+                // its min/max per task×model. It's the SAME covered field `date`
+                // is derived from, so projecting it adds no index cost.
+                ts: '$timestamp',
                 input: '$attributes.tu.input',
                 output: '$attributes.tu.output',
                 total: '$attributes.tu.total',
@@ -463,6 +760,38 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                         prPresent,
                         ...groupProject({ pr: '$pr' }, { prNumber: '$_id.pr' }),
                     ],
+                    byArea: groupProject(
+                        { area: '$area' },
+                        { area: '$_id.area' },
+                    ),
+                    // task × area cross — powers the per-task section that
+                    // drills into the areas each task fanned out over.
+                    byTaskArea: groupProject(
+                        { task: '$task', area: '$area' },
+                        { task: '$_id.task', area: '$_id.area' },
+                    ),
+                    // First/last event time per task × model. No token math —
+                    // just the min/max window so the per-task view can show
+                    // which model ran a task and WHEN (a mid-period switch reads
+                    // as two windows). `ts` is covered (see projectTu).
+                    taskModelSpan: [
+                        {
+                            $group: {
+                                _id: { task: '$task', model: '$model' },
+                                firstAt: { $min: '$ts' },
+                                lastAt: { $max: '$ts' },
+                            },
+                        },
+                        {
+                            $project: {
+                                _id: 0,
+                                task: '$_id.task',
+                                model: '$_id.model',
+                                firstAt: 1,
+                                lastAt: 1,
+                            },
+                        },
+                    ],
                 },
             },
         ];
@@ -472,16 +801,32 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 byModel: RawAggRow[];
                 daily: RawAggRow[];
                 byPr: RawAggRow[];
+                byArea: RawAggRow[];
+                byTaskArea: RawAggRow[];
+                taskModelSpan: RawSpanRow[];
             }>(pipeline)
+            .option({ maxTimeMS: MONGO_QUERY_MAX_TIME_MS })
             .exec();
 
         const rows = facet ?? {
             byModel: [],
             daily: [],
             byPr: [],
+            byArea: [],
+            byTaskArea: [],
+            taskModelSpan: [],
         };
         // `thresholds` fetched above drives both the tier derivation and the
-        // byTier merge — same source, no drift.
+        // byTier merge — same source, no drift. Brackets → per-model tiers.
+        for (const facetRows of [
+            rows.byModel,
+            rows.daily,
+            rows.byPr,
+            rows.byArea ?? [],
+            rows.byTaskArea ?? [],
+        ]) {
+            this._withTiers(facetRows, thresholds, distinct);
+        }
 
         const byModel = this._mergeTierRows(
             rows.byModel,
@@ -530,7 +875,50 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 : a.prNumber - b.prNumber,
         );
 
-        return { summary, byModel, daily, byPr };
+        const byArea = this._mergeTierRows<UsageByAreaResultContract>(
+            rows.byArea ?? [],
+            thresholds,
+            (r) => `${r.area}|${r.model}`,
+            (base, row) => ({ ...base, area: row.area! }),
+        ).sort((a, b) =>
+            a.area === b.area
+                ? a.model.localeCompare(b.model)
+                : a.area.localeCompare(b.area),
+        );
+
+        const byTaskArea = this._mergeTierRows<UsageByTaskAreaResultContract>(
+            rows.byTaskArea ?? [],
+            thresholds,
+            (r) => `${r.task}|${r.area}|${r.model}`,
+            (base, row) => ({ ...base, task: row.task!, area: row.area! }),
+        ).sort((a, b) =>
+            a.task === b.task
+                ? a.area === b.area
+                    ? a.model.localeCompare(b.model)
+                    : a.area.localeCompare(b.area)
+                : a.task.localeCompare(b.task),
+        );
+
+        const iso = (v: Date | string): string =>
+            v instanceof Date ? v.toISOString() : String(v);
+        const byTaskModelSpan: UsageByTaskModelSpanContract[] = (
+            rows.taskModelSpan ?? []
+        ).map((r) => ({
+            task: r.task,
+            model: r.model,
+            firstAt: iso(r.firstAt),
+            lastAt: iso(r.lastAt),
+        }));
+
+        return {
+            summary,
+            byModel,
+            daily,
+            byPr,
+            byArea,
+            byTaskArea,
+            byTaskModelSpan,
+        };
     }
 }
 
@@ -543,4 +931,13 @@ function emptyTier(): TierUsage {
         cacheRead: 0,
         cacheWrite: 0,
     };
+}
+
+function addTier(target: TierUsage, src: TierUsage): void {
+    target.input += src.input;
+    target.output += src.output;
+    target.total += src.total;
+    target.outputReasoning += src.outputReasoning;
+    target.cacheRead += src.cacheRead;
+    target.cacheWrite += src.cacheWrite;
 }

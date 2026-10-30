@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { deleteCookie, getCookie } from "cookies-next";
+import { deleteCookie, getCookie } from "cookies-next/client";
 import { signIn } from "next-auth/react";
 
 import { useConfig } from "@providers/ConfigProvider";

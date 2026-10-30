@@ -1,0 +1,794 @@
+{
+  "model": "gpt-6-sol@openrouter",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "132199b01626ae41e00492d534f84a759d83f954",
+    "sourceDigest": "57647ba521db87a00603e893daa4e6eb7bece36b09f22dfd1fa79783726b7de6"
+  },
+  "startedAt": "2026-10-15T16:21:24.631Z",
+  "updatedAt": "2026-10-15T16:25:57.627Z",
+  "complete": true,
+  "selectedCases": [
+    "R12-unrelated-other-file",
+    "P01-rule-skip-comment-incomplete",
+    "P24-create-mode-section-hidden"
+  ],
+  "casesSourceDigest": "8fc1e61b6995acc0f6bff96a0186a57c1ca986ecc2355dcab5093f9b1c64ec57",
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 4,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 2,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 9,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R12-unrelated-other-file · refund-guard-inverted [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P01-rule-skip-comment-incomplete · skip-comment-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P24-create-mode-section-hidden · billing-hidden-on-create-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 1,
+    "floor": null,
+    "baseline": null
+  },
+  "runs": 2,
+  "tokens": {
+    "in": 382551,
+    "out": 13439,
+    "cacheRead": 327761,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 6
+  },
+  "cases": [
+    {
+      "id": "R12-unrelated-other-file",
+      "checks": "refund-guard-inverted: posted",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "refund-guard-inverted",
+          "ok": true
+        },
+        {
+          "what": "refund-guard-inverted",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P01-rule-skip-comment-incomplete",
+      "checks": "Kody Rule on a file new in the PR; the developer answered with a comment that documents nothing; stored implemented; 15 earlier comments",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "skip-comment-repeat",
+          "ok": true
+        },
+        {
+          "what": "skip-comment-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P24-create-mode-section-hidden",
+      "checks": "Bug finder; a form section never renders when creating a record because its condition needs an id that exists only after save; the developer changed the condition but create mode still hides it; stored implemented; 1 earlier comment",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "billing-hidden-on-create-repeat",
+          "ok": true
+        },
+        {
+          "what": "billing-hidden-on-create-repeat",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "gpt-6-sol@openrouter",
+      "rep": 1,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 52913,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "The refund limit check is reversed: amounts below the charge are rejected and amounts above it are submitted. A charge of 100 cannot be partially refunded for 50, while a refund request for 150 reaches the gateway. Compare with `>` so only amounts exceeding the charge are rejected.",
+          "keep": true,
+          "rationale": "The condition throws when the refund amount is less than the charge amount, so a partial refund is rejected. An amount greater than the charge amount bypasses the condition and is passed to gw.submit. The previous review decision concerns a different operation.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "amount < charge.amount|function refund|refund\\(",
+                "glob": "*.ts",
+                "path": "src/billing",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund\\(|submit\\(",
+                "glob": "*.ts",
+                "path": "src",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A charge of 100 cannot be partially refunded for 50, while a refund request for 150 reaches the gateway. Compare `amount` with `charge.amount` using `>` so only amounts exceeding the charge are rejected."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-sol@openrouter",
+      "rep": 2,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 49351,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The refund limit comparison is reversed: it rejects partial refunds and accepts refunds exceeding the charge. WHY: A charge of 100 rejects a refund of 50 but sends a refund of 101 to the gateway. HOW: Reject amounts greater than the charge instead.",
+          "keep": true,
+          "rationale": "The condition throws when the refund amount is less than the charge amount, so a partial refund of 50 against a charge of 100 is rejected. An amount of 101 passes the condition and is submitted to the gateway. The previous decision concerns status handling, not refunds.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "amount < charge\\.amount|function refund|refund\\(",
+                "glob": "*.ts",
+                "path": "src/billing",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit\\(|type: 'refund'|interface Gateway",
+                "glob": "*.ts",
+                "path": "src",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A charge of 100 rejects a refund of 50 but sends a refund of 101 to the gateway. Reject `amount` values greater than `charge.amount` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-sol@openrouter",
+      "rep": 1,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23438,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 6,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "A bare `2` obscures the required country-code length in address validation. Define `COUNTRY_CODE_LENGTH` as `2` and use it in the `country` field’s `.length()` check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-sol@openrouter",
+      "rep": 2,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19052,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 6,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The bare `2` makes the required country-code length less clear in `src/shipping/address.schema.ts`. Define `COUNTRY_CODE_LENGTH` as `2` and use it in the `country` validation."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-sol@openrouter",
+      "rep": 1,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 61297,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: The submit handler discards the promise from submit(), leaving rejections from onSave unhandled. WHY: A failed save produces an unhandled promise rejection and gives the user no indication that the save failed. HOW: Catch save failures in submit() and display a form error, or attach an error handler to the returned promise.",
+          "keep": true,
+          "rationale": "submit() awaits onSave(draft) without catching a rejection, and the onSubmit handler discards submit()'s returned promise. A rejected save therefore remains unhandled and does not appear in the form's errors. This is distinct from the previous decision about create-mode validation.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "void submit\\(|const submit|function submit|onSave",
+                "glob": "CustomerForm.tsx",
+                "path": "src/customers",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 58
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "<CustomerForm|onSave=|saveCustomer",
+                "glob": "*.tsx",
+                "path": "src",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: Each valid submit calls the asynchronous onSave without preventing another submission while it is pending. WHY: Two quick submit events can start two create operations with the same id-less draft, producing duplicate customers when the save handler persists each call. HOW: Guard the in-flight save with a ref or disable submission while saving, and clear the guard after the promise settles.",
+          "keep": true,
+          "rationale": "The submit handler has no in-flight guard or disabled submit state, so two valid submit events can call onSave before the first call settles. An id-less draft with valid data can be supplied through initial. This is distinct from the earlier billing-section finding.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "onSave\\(|handleSubmit|submit|CustomerForm",
+                "glob": "CustomerForm.tsx",
+                "path": "src/customers",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 51
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "<CustomerForm|CustomerForm\\(",
+                "glob": "*.tsx",
+                "path": "src",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Two quick submissions can start separate create operations for the same id-less `draft`, producing duplicate customers. Guard the in-flight `onSave` call with a ref or disable submission while saving, then clear the guard when the promise settles."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 31,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "If `onSave` fails, the discarded `submit()` promise causes an unhandled rejection and gives the user no indication that the save failed. Catch the failure in `submit()` and display a form error, or attach an error handler to the promise in `onSubmit`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "gpt-6-sol@openrouter",
+      "rep": 2,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 60877,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: The draft is initialized from initial only at mount and is not updated when the edit target changes. WHY: If an already-mounted form receives another customer's initial draft, it still displays and saves the previous customer's values and id. HOW: Reset the draft when the edited customer id changes, or ensure the parent remounts the form with a key based on that id.",
+          "keep": true,
+          "rationale": "The component uses `initial` only to initialize state. There is no effect or other path that updates `draft` when `initial` changes, and submission passes that stale draft to `onSave`. An already-mounted form given a different customer would therefore retain the previous customer's values and id. The prior decision concerns billing fields in create mode, not this edit-target change.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "useState<CustomerDraft>|CustomerForm",
+                "glob": "*.tsx",
+                "path": "src",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm|customer-form|<Customer",
+                "glob": "*",
+                "path": ".",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: A rejected onSave promise propagates out of submit into the discarded event-handler promise. WHY: A failed save produces an unhandled rejection and leaves the form without any indication that saving failed. HOW: Catch onSave failures in submit and expose a save error to the user.",
+          "keep": true,
+          "rationale": "When validation passes, submit awaits onSave without catching a rejection. The form handler discards submit’s promise with void, so a rejected save is unhandled; the only displayed errors are validation problems, leaving no save-failure indication. The previous decision concerns a different failure.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "onSave|submit\\(",
+                "glob": "CustomerForm.tsx",
+                "path": "src/customers",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 48
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "<CustomerForm|CustomerForm\\(",
+                "glob": "*.tsx",
+                "path": "src",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: submit allows multiple simultaneous onSave calls for the same draft because the submit button is never disabled while a save is pending. WHY: Double-clicking Save on a valid edit form sends two saves, which can duplicate side effects or let an older request finish after a newer update. HOW: Guard submit with pending state and disable the submit button until onSave settles.",
+          "keep": true,
+          "rationale": "The form calls submit on each submission, and submit awaits onSave without setting a pending guard. The submit button is never disabled, so a second submission can call onSave while the first is pending. The previous decision concerns a different create-mode validation failure.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "onSave|submit|disabled",
+                "glob": "CustomerForm.tsx",
+                "path": "src/customers/CustomerForm.tsx",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm|onSave=",
+                "glob": "*.tsx",
+                "path": "src",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "function validateCustomer|const validateCustomer",
+                "glob": "*.ts",
+                "path": "src/customers",
+                "namesOnly": false,
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A failed save produces an unhandled rejection and gives the user no indication that saving failed. Catch `onSave` failures in `submit` and show a save error."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 22,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Double-clicking Save can trigger simultaneous `onSave` calls, duplicating side effects or letting an older request finish after a newer update. Guard `submit` with pending state and disable the submit button until `onSave` settles."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 16,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "If an already-mounted form receives another customer's `initial` draft, it still displays and saves the previous customer's values and `id`. Reset `draft` when the edited customer's `id` changes, or have the parent remount the form with a `key` based on that `id`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

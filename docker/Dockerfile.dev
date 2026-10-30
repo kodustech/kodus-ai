@@ -9,7 +9,7 @@ ARG BUN_VERSION=1.2.12
 # GitHub releases for build-time downloads (prevents flaky 504s during CI).
 FROM docker.io/oven/bun:${BUN_VERSION}-debian AS bun-source
 
-FROM docker.io/library/node:22.22.2-slim
+FROM docker.io/library/node:22.23.4-slim
 
 ARG API_CLOUD_MODE
 ARG RELEASE_VERSION
@@ -20,6 +20,15 @@ ENV SENTRY_RELEASE=${RELEASE_VERSION}
 WORKDIR /usr/src/app
 ENV NODE_ENV=development
 ENV NODE_OPTIONS="--max-old-space-size=4096"
+# dev-entrypoint.sh owns dependency installs (fingerprint + lock). pnpm 11
+# defaults `verify-deps-before-run` to `install`, so any `pnpm run` in the
+# container — the service's own command or a `docker exec` — re-checks
+# node_modules and, when it looks out of sync, installs the whole tree under
+# that service's memory cap. mcp-manager (1G) got OOM-killed mid-install and
+# crash-looped every ~30s, re-downloading ~450MB each time (1.6TB in 30h on
+# one preview). Image ENV, not an entrypoint export, so exec'd processes get
+# it too. `false` only: pnpm parses this env as a boolean, "warn" is dropped.
+ENV pnpm_config_verify_deps_before_run=false
 
 RUN corepack disable \
  && npm i -g pnpm@11.7.0
@@ -37,38 +46,29 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=private \
       ca-certificates python3 make g++ procps git ripgrep openssh-client
 
 # Copy the bun binary from the official image and install kodus-graph globally.
+ARG KODUS_GRAPH_VERSION=0.3.0
 COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
-RUN bun install -g @kodus/kodus-graph
+RUN bun install -g @kodus/kodus-graph@${KODUS_GRAPH_VERSION}
 
-RUN npm i -g yalc nodemon @ast-grep/cli
+RUN npm i -g nodemon @ast-grep/cli
 
 COPY package.json pnpm-lock.yaml .npmrc ./
 COPY nest-cli.json tsconfig*.json ./
 
-COPY packages/kodus-common ./packages/kodus-common
-
-# Build local packages first. Shared pnpm store mount survives across
-# rebuilds so dependency changes don't trigger a full re-download.
+# Install dependencies. Shared pnpm store mount survives across rebuilds so
+# dependency changes don't trigger a full re-download.
 #
 # `sharing=shared` lets the parallel service builds
 # (api/worker/webhooks/worker-analytics/mcp-manager) all use the store
 # concurrently — pnpm's content-addressable store is designed for
 # concurrent access (atomic writes), unlike yarn1's cache which needed
 # careful lock handling here historically.
-RUN --mount=type=cache,target=/pnpm-store,sharing=shared \
-    cd packages/kodus-common \
-  && pnpm install --store-dir /pnpm-store \
-  && pnpm run prepack
-
-# Install dependencies and link local packages.
-# pnpm-workspace.yaml is copied HERE (not with the manifests above) so the
-# kodus-common sub-build doesn't see /usr/src/app as a workspace
-# root and install into it (`../..`). Only the root install below needs it —
-# it carries the `overrides` that must match the lockfile under --frozen-lockfile.
+#
+# pnpm-workspace.yaml carries the `overrides` that must match the lockfile
+# under --frozen-lockfile.
 COPY pnpm-workspace.yaml ./
 RUN --mount=type=cache,target=/pnpm-store,sharing=shared \
     pnpm install --frozen-lockfile --store-dir /pnpm-store
-RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
 
 COPY --chmod=0755 docker/dev-entrypoint.sh /usr/local/bin/dev-entrypoint
 

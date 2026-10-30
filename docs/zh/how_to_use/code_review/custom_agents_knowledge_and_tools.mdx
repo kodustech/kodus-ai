@@ -1,0 +1,171 @@
+---
+title: "Skills、Docs 和工具"
+description: "为自定义智能体提供代码库中的指南、只读插件、团队的 CLI 和 ast-grep 规则。"
+tag: 'beta'
+---
+
+<Callout icon="alien" iconType="regular">自定义智能体目前处于 beta 阶段。行为和界面仍可能变化。</Callout>
+
+## Skills & docs
+
+Skills 和 docs 是已经存在于您代码库中的指南。Kodus 不会复制它们：每次审查都从**拉取请求的目标分支**读取，因此在该分支上的修改无需回到设置即可生效，而拉取请求也无法修改评判它的规则。
+
+| | Skill | Doc |
+| --- | --- | --- |
+| 是什么 | 一个包含 `SKILL.md` 的文件夹（或单个 `.md` 智能体文件） | 一份 Markdown 指南 |
+| 智能体如何读取 | 在变更需要时按需打开，连同其参考文件 | 每次审查都完整加载 |
+| 适用于 | 规则很多，或只适用于部分代码的规则 | 适用于智能体审查的每个变更的简短指南 |
+
+skill 中的脚本以文本形式提供给智能体，永远不会被执行。
+
+### Kodus 在哪里找到它们
+
+**Skills** 在以下位置被检测：
+
+- `.claude/skills/*/SKILL.md`
+- `.claude/agents/*.md`
+- `.agents/skills/*/SKILL.md`
+- `.github/skills/*/SKILL.md`
+
+`SKILL.md` 以 YAML frontmatter 开头，包含 `name`（小写字母、数字和连字符，与其文件夹名一致）和 `description`。缺少它们的 skill 会显示为 "Not a valid skill" 并附带原因。智能体读取 `SKILL.md`（最多 500 行，约 5,000 token）以及它旁边、最多下一层文件夹中的文件，例如 `references/payments.md`。
+
+```markdown .claude/skills/ledger-rules/SKILL.md
+---
+name: ledger-rules
+description: How the ledger service records, reverses and reconciles entries.
+---
+
+# Ledger rules
+
+- Every write to `entries` goes through `LedgerWriter`; never insert directly.
+- A reversal is a new entry, never an UPDATE of the original.
+
+See references/reconciliation.md for the nightly job.
+```
+
+**Docs** 从 `CONTRIBUTING.md`、`ARCHITECTURE.md`、`CONVENTIONS.md`、`STYLEGUIDE.md` 和 `docs/**/*.md`（最多 30 个）中推荐。您也可以手动添加任意路径：带扩展名的文件是 doc，文件夹（或其中的 `SKILL.md`）是 skill。
+
+### 关联
+
+有两个地方可以关联 skill 或 doc：
+
+- **在智能体页面**的 **Files & knowledge → Skills & docs** 中：**Add skill or doc** 列出智能体可以遵循的内容，或使用 **Add by path**。
+- **在 Skills & docs 页面**（What to review 中 **Custom agents** 旁边的链接）：列出所有已登记的 skills 和 docs，并为 **Main review** 和每个智能体提供复选框。关联到 **Main review** 会把该指南提供给 Kody 自己的审查。
+
+在全局级别，Skills & docs 页面只接受手动输入的路径。每个代码库会单独读取，请打开某个代码库的设置，查看每个路径在其中是否存在。
+
+<Warning>
+  标记为 **Also a Kody Rules source** 的文件已经在为 Kody Rules 提供规则。再把它关联到智能体，可能会导致同一条规则评论两次。
+</Warning>
+
+### 预算
+
+每个智能体以及主审查的限制：
+
+| 限制 | 值 |
+| --- | --- |
+| Skills | 20 |
+| Docs | 10 |
+| Doc token | 20,000 |
+
+当某个智能体或主审查超出限制时，Skills & docs 页面会发出警告。在审查中，超出预算的 docs 会被截断或跳过，审查会记录一条警告。
+
+### 发现如何使用它们
+
+约定类发现必须**引用**它所应用的规则。Kodus 会对照目标分支上的指南检查引文，引文不存在时丢弃该发现。发布的评论会引用该规则：
+
+```markdown
+**Rule** (`docs/ledger.md`):
+> A reversal is a new entry, never an UPDATE of the original.
+```
+
+## Plugins (MCP)
+
+智能体可以查询您工作区中安装的插件：任务跟踪工具、wiki、监控系统。在 **Tools → Plugins** 中为智能体开启某个插件，保留 **Use every tool**，或使用 **Customize** 选择工具。
+
+只提供读取类工具，写入类工具永远不会提供。如果插件将其工具标记为只读，则以其标记为准。对于没有标记的插件，只有名称中包含读取动词（get、list、search、read、find…）且不含写入动词的工具才会被提供。审查永远不会代表您的团队创建工单或发送消息。
+
+当变更指向插件中记录的内容（例如拉取请求描述中的工单）时，智能体会查询该插件，并引用它找到的内容。安装插件请参阅[插件](/zh/how_to_use/code_review/plugins)。
+
+## Team CLIs
+
+一个智能体最多可以运行团队的 **3** 个命令行工具：重复代码检测器、schema 检查器、内部 linter。CLI 只在隔离的 E2B 沙箱中、在代码库的检出目录内运行。在其他沙箱中不会安装 CLI，智能体将在没有它的情况下运行。
+
+在 **Tools → CLIs** 中点击 **Add CLI**：
+
+| 字段 | 说明 |
+| --- | --- |
+| **Name** | 智能体和评论如何称呼它。 |
+| **Binary** | 智能体调用的程序，例如 `jscpd`。 |
+| **Install** | 单条包管理器命令，固定到确切版本或摘要。在审查开始前于沙箱中运行一次。 |
+| **Allowed command prefixes** | 每次调用都必须以其中之一开头。前缀指定二进制之后的子命令或参数，例如 `ledgerctl check`。以 `/` 结尾的 token 覆盖其下的任意路径。 |
+| **Allowed domains** | CLI 可以通过 HTTPS 访问的主机，按名称精确匹配。其他一律阻止，包括未加密的 HTTP。 |
+| **Usage** | 智能体阅读的 Markdown，用来了解何时以及如何调用它。 |
+| **Runs project code** | 用于会加载代码库的测试、构建或 linter 时开启。此类 CLI 永远不会获得密钥。 |
+| **Secrets** | 环境变量（例如 `LEDGER_TOKEN`），只存在于该 CLI 的环境中，在其输出中被遮盖，永远不会进入提示词。只写：保存后显示为 **Stored · hidden**。 |
+
+**安装规则。** 支持的安装器：`npm`、`pnpm`、`yarn`、`pip`、`pip3`、`pipx`、`uv`、`go`、`cargo`。每个包都必须固定版本（`tool@1.2.3`、`tool==1.2.3` 或 `tool@sha256:…`）。`@latest` 之类的标签、版本范围、URL、Git 来源、本地路径以及 shell 语法都会被拒绝。
+
+<CodeGroup>
+```bash npm
+npm i -g jscpd@5.4.1
+```
+
+```bash pip
+pip install sqlfluff==3.2.5
+```
+
+```bash go
+go install github.com/acme/ledgerctl@v1.4.2
+```
+</CodeGroup>
+
+**调用如何运行。** 智能体传递的是参数，而不是 shell 命令：管道、重定向、glob 和变量都按字面传递。不以允许前缀开头的调用会被拒绝。每个 CLI 以自己的用户运行，带有超时、私有临时目录，写出的文件只有该用户可读；输出有长度上限，调用结束后会清除它启动的进程以及写入临时目录的内容。CLI 的每一步都通过 sandbox 提供方以 root 运行，从不经过运行审查的用户：该用户在拉取仓库之前就失去了成为 root 的一切途径（包括 sudo），因此拉取请求中的代码无法触及 CLI 的进程或文件。无法确认这一点的 sandbox 不会运行任何 CLI。
+
+**被阻止的命令。** 对于带有密钥的 CLI，Kodus 会在保存和运行时拒绝：列出环境变量的前缀和参数（`printenv`、`env`、`set`、`export`、`declare`、`/proc` 下的任何内容）、常见的打印令牌命令（`auth token`、`auth status --show-token`、`auth:token`、`config get`、`configure get`、`print-access-token`、`get-access-token`）、作为二进制文件的 shell 或解释器（`bash`、`node`、`python`、`npx` 等），以及以 `$NAME` 或 `${NAME}` 形式引用其密钥的参数。参数从不经过 shell，因此 Kodus 自身从不展开它们。
+
+**网络。** 允许列表按主机名执行。CLI 的 HTTPS 连接经过一个代理，只有当请求的服务器名称在列表中（精确匹配，不含子域名）时才转发；代理自行解析该名称，并拒绝私有和内部地址。CLI 没有其他网络访问：没有 DNS、没有未加密的 HTTP、没有其他端口。被允许的主机仍会收到 CLI 发送的一切，包括凭据，而网络无法区分读取和写入。请使用只读、最小权限的令牌，并且只允许你信任的主机。
+
+**密钥如何保管。** 密钥在保存时加密（AES-256-GCM，绑定到其智能体、CLI 和变量名），之后不会再返回给浏览器，浏览器只显示 **Stored · hidden**。密钥绑定到保存它的 CLI 和所在的设置层级：CLI 的任何改动（名称、安装、二进制、允许的前缀、允许的域名、**Runs project code** 或密钥名称）都会在保存时和 **Try it** 中要求重新输入所有密钥。只有使用说明和超时可以在不重新输入的情况下修改。无法再读取的已保存密钥也需要重新输入。**Try it** 只使用你正在编辑的层级中保存的密钥，从不使用继承的密钥。密钥只会到达该 CLI 的进程，不会到达其安装过程、其他 CLI 或智能体的提示词。在 CLI 的输出中，每个密钥都会在智能体、**Try it**、拉取请求评论或日志看到之前被替换为 `***`，包括以 base64、URL 编码、十六进制或 JSON 转义形式打印时。掩码无法识别所有变换（被拆分或部分的值），因此上述命令会被阻止。
+
+当发现来自 CLI 时，评论会显示 CLI 输出中提到该文件的行：
+
+```markdown
+**Evidence** (`jscpd`):
+> - src/billing/invoice.ts [12:1 - 41:2] (29 lines, 212 tokens)
+> src/billing/credit-note.ts [8:1 - 37:2]
+```
+
+<Note>
+  如果安装失败，智能体会在没有该 CLI 的情况下运行，本次运行会记录警告。**Try it** 会在 **Warnings** 中显示。
+</Note>
+
+## ast-grep rules
+
+在 **Tools → Advanced → Structural search (ast-grep rules)** 中为智能体提供 [ast-grep](https://ast-grep.github.io) 规则，方式有两种：
+
+- **内联**：直接写规则 YAML。多条规则用 `---` 分隔。每条都需要 `id` 和 `rule`。
+- **规则文件**：单独一行，填写代码库中某个 `.yml` 或 `.yaml` 文件的路径，从拉取请求的目标分支读取。
+
+```yaml
+id: no-float-money
+language: typescript
+message: Parse amounts with Money.parse, never parseFloat
+rule:
+  pattern: parseFloat($A)
+```
+
+规则在拉取请求的变更文件上运行。规则匹配即为证据：如果一条发现引用的规则在本次运行中匹配到了该文件，它会跳过引文检查和模型验证。规则大小上限为 64,000 字节。该字段的提示会列出找到的规则，并报告缺少 `id` 或 `rule` 的规则。
+
+即使没有配置任何规则，智能体也可以在代码库中进行临时的结构化搜索。
+
+## 相关内容
+
+<CardGroup cols={2}>
+  <Card title="自定义智能体" icon="robot" href="/zh/how_to_use/code_review/custom_agents">
+    级别、智能体页面、Try it，以及智能体在审查中如何运行。
+  </Card>
+  <Card title="使用 jscpd 检测重复代码" icon="clone" href="/zh/cookbook/custom-agent-duplicate-code">
+    一个使用团队 CLI 的完整智能体。
+  </Card>
+</CardGroup>

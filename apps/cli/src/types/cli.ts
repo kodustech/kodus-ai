@@ -43,8 +43,4 @@ export interface GitInfo {
 }
 
 export type PlatformType =
-    | 'GITHUB'
-    | 'GITLAB'
-    | 'BITBUCKET'
-    | 'AZURE_REPOS'
-    | undefined;
+    'GITHUB' | 'GITLAB' | 'BITBUCKET' | 'AZURE_REPOS' | undefined;

@@ -7,9 +7,7 @@ import {
 
 describe('createFileSelectionFromPaths', () => {
     it('uses explicit paths and leaves the status map empty', () => {
-        expect(
-            createFileSelectionFromPaths(['src/a.ts', 'src/b.ts']),
-        ).toEqual({
+        expect(createFileSelectionFromPaths(['src/a.ts', 'src/b.ts'])).toEqual({
             filesToRead: ['src/a.ts', 'src/b.ts'],
             fileStatusMap: new Map(),
         });

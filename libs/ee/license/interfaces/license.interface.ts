@@ -38,6 +38,63 @@ export type OrganizationLicenseValidationResult = {
     trialReviewCreditsRemaining?: number;
     trialCreditTier?: string;
     trialUnlocks?: TrialUnlock[];
+    /** Prepaid-credit balance (USD) for models routed by Kodus ("Kodus as the
+     *  provider"). Absent when billing predates the ledger. May be negative:
+     *  usage is metered after the fact, so the gate blocks the NEXT review. */
+    creditBalanceUsd?: number;
+};
+
+// ── Prepaid credits ("Kodus as the provider") ────────────────────────────
+
+export type CreditBalance = {
+    balanceUsd: number;
+    lowThresholdUsd: number;
+    markupPct: number;
+    packsUsd: number[];
+    minPurchaseUsd: number;
+    maxPurchaseUsd: number;
+    lifetimePurchasedUsd: number;
+    lifetimeDebitedUsd: number;
+    lastPurchaseAt: string | null;
+};
+
+export type CreditLedgerEntryType = 'purchase' | 'debit' | 'adjustment' | 'refund';
+
+export type CreditLedgerEntry = {
+    id: string;
+    organizationId: string;
+    teamId?: string | null;
+    type: CreditLedgerEntryType;
+    /** Signed USD: purchases positive, debits negative. */
+    amountUsd: number;
+    balanceAfterUsd: number;
+    usageKey: string;
+    metadata?: Record<string, unknown>;
+    createdAt: string;
+};
+
+export type DebitCreditsEntry = {
+    /** Idempotency key — a telemetry span id. */
+    usageKey: string;
+    /** List-price cost of the usage (USD, positive). */
+    amountUsd: number;
+    metadata?: Record<string, unknown>;
+};
+
+export type DebitCreditsResult = {
+    applied: number;
+    skipped: number;
+    appliedUsd: number;
+    balanceUsd: number;
+    lowBalance: boolean;
+    exhausted: boolean;
+};
+
+export type CreditCheckoutResult = {
+    url: string;
+    creditUsd: number;
+    chargeUsd: number;
+    markupPct: number;
 };
 
 export type UserWithLicense = {
@@ -113,6 +170,29 @@ export interface ILicenseService {
     ): Promise<boolean>;
 
     /**
+     * Release several license seats in one shot.
+     *
+     * Deliberately batched rather than called once per user: both backends
+     * read the seat list, mutate it and write the whole thing back, so
+     * concurrent single-user revokes lose updates. Measured against the billing
+     * service, five concurrent revokes left its assignedLicenses counter at 3
+     * instead of 0; the same five sent as one batch settled at 0.
+     *
+     * Idempotent: revoking a seat the user does not hold succeeds.
+     *
+     * @param organizationAndTeamData Organization ID and team ID.
+     * @param userGitIds Git IDs of the users to release seats from.
+     * @param provider The git provider (e.g., 'github', 'gitlab'). Required by
+     *   the billing service, which rejects a user entry without a gitTool.
+     * @returns The git ids actually released, and those that could not be.
+     */
+    unassignLicenses(
+        organizationAndTeamData: OrganizationAndTeamData,
+        userGitIds: string[],
+        provider: string,
+    ): Promise<{ revoked: string[]; failed: string[] }>;
+
+    /**
      * Atomically consume one Kodus-funded trial review credit.
      *
      * @param organizationAndTeamData Organization ID and team ID.
@@ -122,4 +202,46 @@ export interface ILicenseService {
         organizationAndTeamData: OrganizationAndTeamData,
         usageKey?: string,
     ): Promise<ConsumeTrialReviewCreditResult>;
+
+    /**
+     * Provision a Kodus-managed trial for the organization.
+     *
+     * Idempotent: the billing service returns 409 when a license already
+     * exists, which is treated as success. Returns true when a trial is in
+     * place after the call (created now or already present), false when it
+     * could not be provisioned. Trials are a cloud-only concept.
+     *
+     * @param organizationAndTeamData Organization ID and team ID.
+     * @param byok Whether the org connected its own AI key during onboarding.
+     */
+    startTrial(
+        organizationAndTeamData: OrganizationAndTeamData,
+        byok: boolean,
+    ): Promise<boolean>;
+
+    // ── Prepaid credits ("Kodus as the provider") ────────────────────────
+
+    /** Balance + commercial parameters, or null when billing has no license /
+     *  is unreachable (callers fail open on null: no gate without a number). */
+    getCreditBalance(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CreditBalance | null>;
+
+    listCreditLedger(
+        organizationAndTeamData: OrganizationAndTeamData,
+        options?: { limit?: number; before?: string; types?: CreditLedgerEntryType[] },
+    ): Promise<CreditLedgerEntry[]>;
+
+    /** Idempotent per entry.usageKey. Throws on transport failure so the
+     *  metering sweep can retry the batch; a duplicate is `skipped`, not an
+     *  error. */
+    debitCredits(
+        organizationAndTeamData: OrganizationAndTeamData,
+        entries: DebitCreditsEntry[],
+    ): Promise<DebitCreditsResult>;
+
+    createCreditCheckout(
+        organizationAndTeamData: OrganizationAndTeamData,
+        creditUsd: number,
+    ): Promise<CreditCheckoutResult | null>;
 }

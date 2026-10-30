@@ -5,6 +5,7 @@ import type {
     ProviderName,
     ProviderRepoRef,
     ReviewSignal,
+    ReviewThread,
     WebhookInfo,
 } from "../lib/types.js";
 import { randomUUID } from "node:crypto";
@@ -16,6 +17,7 @@ import {
     resolveTargetRepo,
 } from "./base.js";
 import { ensureOk, http } from "../lib/http.js";
+import { isKodyFinding, isKodyReviewOutput } from "../lib/kody-markers.js";
 import { prepareBranch } from "../lib/git.js";
 
 interface GitLabNote {
@@ -356,6 +358,143 @@ export class GitLabProvider extends BaseProvider {
         );
         ensureOk(resp, "gitlab:postComment");
         return { id: String(resp.body.id) };
+    }
+
+    // Posts a note as a (possibly different) GitLab identity — `token`
+    // overrides the auth header. The conversation scenario calls this with
+    // GL_TEST_TOKEN by default: unlike GitHub's dedicated e2e bot
+    // (kodus-e2e-bot-N, filtered by isKodyComment), GL_TEST_TOKEN is already
+    // a plain human account, so no separate non-Kody identity is needed
+    // here. Kept as a token override (not a hardcoded call to postComment)
+    // so a dedicated GitLab bot account can be introduced later without
+    // touching this signature.
+    async postCommentAs(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        const projectId = await this.resolveProjectId();
+        const resp = await http<{ id: number }>(
+            `${this.apiBase}/projects/${projectId}/merge_requests/${prNumber}/notes`,
+            {
+                method: "POST",
+                headers: { "PRIVATE-TOKEN": token },
+                body: { body },
+            },
+        );
+        ensureOk(resp, "gitlab:postCommentAs");
+        return { id: String(resp.body.id) };
+    }
+
+    // Kody's getPullRequestReviewComment reads MergeRequestDiscussions.all()
+    // — GitLab wraps every plain note into a one-note discussion, so a plain
+    // top-level note (unlike GitHub) is already visible there. No diff
+    // position needed.
+    async postReviewCommentAs(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        return this.postCommentAs(prNumber, body, token);
+    }
+
+    // Polls for Kody's conversational reply to an `@kody <question>` note.
+    // Returns the first NEW note that is neither ours (`@kody …`) nor a
+    // code-review finding (those carry the `<!-- kody-codereview` marker).
+    // null at timeout.
+    async pollForKodyReply(
+        pr: { number: number },
+        opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
+    ): Promise<{ id: string; body: string } | null> {
+        const projectId = await this.resolveProjectId();
+        return pollUntil(
+            async () => {
+                const resp = await http<GitLabNote[]>(
+                    `${this.apiBase}/projects/${projectId}/merge_requests/${pr.number}/notes?per_page=100&sort=desc&order_by=updated_at`,
+                    { headers: this.headers() },
+                );
+                ensureOk(resp, "gitlab:pollForKodyReply");
+                for (const n of resp.body ?? []) {
+                    if (n.system) continue;
+                    if (n.created_at <= opts.sinceIso) continue;
+                    if (opts.triggerId && String(n.id) === opts.triggerId)
+                        continue;
+                    const body = n.body ?? "";
+                    if (body.toLowerCase().startsWith("@kody")) continue;
+                    if (isKodyReviewOutput(body)) continue;
+                    if (!body.trim()) continue;
+                    return { id: String(n.id), body: body.slice(0, 600) };
+                }
+                return null;
+            },
+            { timeoutSec: opts.timeoutSec ?? 300, intervalSec: 10 },
+        );
+    }
+
+    // Discussions Kody opened: the first note carries its marker and is not a
+    // conversation answer. Kody may post as the same account the harness
+    // drives, so the marker is the only reliable tell.
+    async listKodyThreads(prNumber: number): Promise<ReviewThread[]> {
+        return (await this.discussions(prNumber))
+            .filter(
+                (d) =>
+                    // A finding sits on the diff; the status comment does not.
+                    d.notes?.[0]?.type === "DiffNote" &&
+                    isKodyFinding(d.notes?.[0]?.body ?? ""),
+            )
+            .map((d) => ({ id: d.id, body: d.notes[0].body }));
+    }
+
+    async replyInThread(
+        prNumber: number,
+        threadId: string,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        const projectId = await this.resolveProjectId();
+        const resp = await http<{ id: number }>(
+            `${this.apiBase}/projects/${projectId}/merge_requests/${prNumber}/discussions/${threadId}/notes`,
+            {
+                method: "POST",
+                headers: { "PRIVATE-TOKEN": token },
+                body: { body },
+            },
+        );
+        ensureOk(resp, "gitlab:replyInThread");
+        return { id: String(resp.body.id) };
+    }
+
+    async threadComments(
+        prNumber: number,
+        threadId: string,
+    ): Promise<ReviewThread[]> {
+        const discussion = (await this.discussions(prNumber)).find(
+            (d) => d.id === threadId,
+        );
+        return (discussion?.notes ?? [])
+            .filter((n) => !n.system)
+            .map((n) => ({ id: String(n.id), body: n.body ?? "" }));
+    }
+
+    private async discussions(prNumber: number) {
+        const projectId = await this.resolveProjectId();
+        const resp = await http<
+            {
+                id: string;
+                individual_note: boolean;
+                notes: {
+                    id: number;
+                    body: string;
+                    system?: boolean;
+                    type?: string | null;
+                }[];
+            }[]
+        >(
+            `${this.apiBase}/projects/${projectId}/merge_requests/${prNumber}/discussions?per_page=100`,
+            { headers: this.headers() },
+        );
+        ensureOk(resp, "gitlab:discussions");
+        return resp.body ?? [];
     }
 
     authMode(): "token" {

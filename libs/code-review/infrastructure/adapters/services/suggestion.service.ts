@@ -1,6 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
+import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 
 import { IAIAnalysisService } from '@libs/code-review/domain/contracts/AIAnalysisService.contract';
 import {
@@ -41,8 +42,8 @@ import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { extractLinesFromUnifiedDiff } from '@libs/common/utils/patch';
 import { LLM_ANALYSIS_SERVICE_TOKEN } from './llmAnalysis.service';
 
-import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { CacheService } from '@libs/core/cache/cache.service';
 import {
     DocumentationContextItem,
     Repository,
@@ -63,40 +64,9 @@ export class SuggestionService implements ISuggestionService {
         @Inject(COMMENT_MANAGER_SERVICE_TOKEN)
         private readonly commentManagerService: ICommentManagerService,
         private readonly codeManagementService: CodeManagementService,
+        private readonly cacheService: CacheService,
+        private readonly permissionValidationService: PermissionValidationService,
     ) {}
-
-    /**
-     * Removes suggestions related to files that already have saved suggestions
-     */
-    public async removeSuggestionsRelatedToSavedFiles(
-        organizationAndTeamData: OrganizationAndTeamData,
-        prNumber: string,
-        savedSuggestions: any[],
-        newSuggestions: any[],
-    ): Promise<any> {
-        try {
-            const filesWithSavedSuggestions = new Set(
-                savedSuggestions.map((s) => s.relevantFile),
-            );
-
-            return newSuggestions.filter(
-                (suggestion) =>
-                    !filesWithSavedSuggestions.has(suggestion.relevantFile),
-            );
-        } catch (error) {
-            this.logger.log({
-                message: `Error when trying to remove repeated suggestions for PR#${prNumber}`,
-                error: error,
-                context: SuggestionService.name,
-                metadata: {
-                    organizationAndTeamData,
-                    prNumber: prNumber,
-                },
-            });
-
-            return newSuggestions;
-        }
-    }
 
     /**
      * Prepares suggestion properties for validation
@@ -126,11 +96,20 @@ export class SuggestionService implements ISuggestionService {
             const filteredSuggestions =
                 this.filterSuggestionProperties(savedSuggestions);
 
+            // Routed through the org's own BYOK slot (falls back to the managed
+            // default when the org has none configured for this task) — this used
+            // BYOK, a leftover of the REQ-NOLC-01 migration off LangChain.
+            const byokConfig =
+                await this.permissionValidationService.resolveTaskSlot(
+                    organizationAndTeamData,
+                    LLM_TASK.codeReview,
+                );
+
             const implementedSuggestions =
                 await this.aiAnalysisService.validateImplementedSuggestions(
                     organizationAndTeamData,
                     prNumber,
-                    LLMModelProvider.NOVITA_DEEPSEEK_V3_0324,
+                    byokConfig,
                     codePatch,
                     filteredSuggestions,
                 );
@@ -140,6 +119,8 @@ export class SuggestionService implements ISuggestionService {
                 const savedSuggestionsMap = new Map(
                     savedSuggestions?.map((s) => [s.id, s]) ?? [],
                 );
+
+                const persistedSuggestions = [];
 
                 for (const suggestion of implementedSuggestions) {
                     const savedSuggestion = savedSuggestionsMap.get(
@@ -156,11 +137,15 @@ export class SuggestionService implements ISuggestionService {
                             },
                             organizationAndTeamData,
                         );
+
+                        persistedSuggestions.push(suggestion);
                     }
                 }
+
+                return persistedSuggestions;
             }
 
-            return implementedSuggestions;
+            return [];
         } catch (error) {
             this.logger.log({
                 message: `Error when trying to validate implemented suggestions for PR#${prNumber}`,
@@ -241,7 +226,7 @@ export class SuggestionService implements ISuggestionService {
         suggestions: any[],
         languageResultPrompt: string,
         reviewMode: ReviewModeResponse,
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedModel,
         crossFileSnippets?: CrossFileContextSnippet[],
         remoteCommands?: RemoteCommands,
         memories?: Array<Partial<IKodyRule>>,
@@ -706,7 +691,7 @@ export class SuggestionService implements ISuggestionService {
         suggestionControl: SuggestionControlConfig,
         prNumber: number,
         suggestions: any[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<{
         prioritizedSuggestions: any[];
         discardedSuggestionsBySeverityOrQuantity: any[];
@@ -750,7 +735,6 @@ export class SuggestionService implements ISuggestionService {
                     ? await this.commentManagerService.repeatedCodeReviewSuggestionClustering(
                           organizationAndTeamData,
                           prNumber,
-                          LLMModelProvider.NOVITA_DEEPSEEK_V3_0324,
                           suggestionsToCluster,
                           byokConfig,
                       )
@@ -806,7 +790,7 @@ export class SuggestionService implements ISuggestionService {
         suggestionControl: SuggestionControlConfig,
         prNumber: number,
         suggestions: any[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<{
         prioritizedSuggestions: any[];
         discardedSuggestionsBySeverityOrQuantity: any[];
@@ -873,7 +857,7 @@ export class SuggestionService implements ISuggestionService {
         suggestionControl: SuggestionControlConfig,
         prNumber: number,
         suggestions: any[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<{
         prioritizedSuggestions: any[];
         discardedSuggestionsBySeverityOrQuantity: any[];
@@ -1164,6 +1148,8 @@ export class SuggestionService implements ISuggestionService {
 
         const categoryPriority = {
             kody_rules: 1,
+            // A scanner-proved fact outranks anything the model inferred.
+            deterministic: 1,
             breaking_changes: 2,
             security: 3,
             potential_issues: 4,
@@ -1573,7 +1559,7 @@ export class SuggestionService implements ISuggestionService {
         codeSuggestions: CodeSuggestion[],
         selectedCategories: ReviewOptions,
         codeReviewVersion: CodeReviewVersion,
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ) {
         try {
             if (!codeSuggestions?.length) {
@@ -1588,7 +1574,6 @@ export class SuggestionService implements ISuggestionService {
                 await this.aiAnalysisService.severityAnalysisAssignment(
                     organizationAndTeamData,
                     prNumber,
-                    LLMModelProvider.NOVITA_DEEPSEEK_V3_0324,
                     codeSuggestions,
                     byokConfig,
                 );
@@ -1701,6 +1686,7 @@ export class SuggestionService implements ISuggestionService {
     ): Promise<number> {
         const categoryWeights = {
             kody_rules: 100,
+            deterministic: 100,
             breaking_changes: 100,
             security: 50,
             potential_issues: 40,
@@ -1752,14 +1738,18 @@ export class SuggestionService implements ISuggestionService {
                             commentResult?.codeReviewFeedbackData
                                 ?.pullRequestReviewId;
 
-                        if (!commentId || !pullRequestReviewId) {
+                        // Same split as in CommentManagerService: only a missing
+                        // commentId breaks enrichment. `pullRequestReviewId`
+                        // describes the review object that Bitbucket does not
+                        // have, so demanding it reported an error on every
+                        // healthy Bitbucket suggestion.
+                        if (!commentId) {
                             this.logger.error({
-                                message: `Suggestion enrichment missing comment IDs for PR#${pullRequest.number}`,
+                                message: `Suggestion enrichment has no comment id for PR#${pullRequest.number}`,
                                 context: SuggestionService.name,
                                 metadata: {
                                     prNumber: pullRequest.number,
                                     suggestionId: suggestion?.id,
-                                    commentId,
                                     pullRequestReviewId,
                                     deliveryStatus:
                                         commentResult?.deliveryStatus,
@@ -1906,10 +1896,16 @@ export class SuggestionService implements ISuggestionService {
                     return {
                         id: suggestion.id,
                         suggestionContent: suggestion.suggestionContent,
+                        fullExplanation: suggestion.fullExplanation,
                         oneSentenceSummary: suggestion.oneSentenceSummary,
                         label: suggestion.label as LabelType,
                         severity: suggestion.severity as SeverityLevel,
                         brokenKodyRulesIds: suggestion.brokenKodyRulesIds || [],
+                        // A single-comment custom agent posts at PR level;
+                        // without it the agent's status line never counts them.
+                        ...(suggestion.customAgent && {
+                            customAgent: suggestion.customAgent,
+                        }),
                         priorityStatus: PriorityStatus.PRIORITIZED, // Default para PR level
                         deliveryStatus: result.deliveryStatus as DeliveryStatus,
                         comment: result.codeReviewFeedbackData
@@ -1920,13 +1916,15 @@ export class SuggestionService implements ISuggestionService {
                                       result.codeReviewFeedbackData
                                           .pullRequestReviewId;
 
-                                  if (!prLevelCommentId || !prLevelReviewId) {
+                                  // Third copy of the same over-strict guard; a
+                                  // PR-level comment on Bitbucket has an id and
+                                  // no review id, and that is not a failure.
+                                  if (!prLevelCommentId) {
                                       this.logger.error({
-                                          message: `PR-level suggestion missing comment IDs`,
+                                          message: `PR-level suggestion has no comment id`,
                                           context: SuggestionService.name,
                                           metadata: {
                                               suggestionId: suggestion.id,
-                                              commentId: prLevelCommentId,
                                               pullRequestReviewId:
                                                   prLevelReviewId,
                                               deliveryStatus:
@@ -1993,24 +1991,47 @@ export class SuggestionService implements ISuggestionService {
         }
 
         try {
-            const reviewComments =
-                platformType === PlatformType.GITHUB
-                    ? await this.codeManagementService.getPullRequestReviewThreads(
-                          {
-                              organizationAndTeamData,
-                              repository,
-                              prNumber,
-                          },
-                          platformType,
-                      )
-                    : await this.codeManagementService.getPullRequestReviewComments(
-                          {
-                              organizationAndTeamData,
-                              repository,
-                              prNumber,
-                          },
-                          platformType,
-                      );
+            // The provider round-trip (GraphQL review threads on GitHub, REST
+            // review comments elsewhere) is the dominant cost of the review
+            // screen's blocking suggestions fetch and its main rate-limit (429)
+            // surface — it runs on every open, and the PR list warms it on
+            // hover. Cache the raw provider result under a short TTL so repeat
+            // opens and prefetches collapse onto one call. TTL is deliberately
+            // short (unlike the files cache, which keys on the immutable head
+            // SHA): review threads mutate when a comment is resolved or added
+            // without any SHA change, so we trade a few seconds of staleness
+            // for the burst absorption. A miss returns null; an empty result is
+            // cached as [] so PRs with no comments don't re-hit the provider.
+            const cacheKey = `pr-active-review-comments:${organizationAndTeamData.organizationId}:${repository.id}:${prNumber}:${platformType}`;
+            let reviewComments =
+                await this.cacheService.getFromCache<any[]>(cacheKey);
+
+            if (reviewComments == null) {
+                reviewComments =
+                    platformType === PlatformType.GITHUB
+                        ? await this.codeManagementService.getPullRequestReviewThreads(
+                              {
+                                  organizationAndTeamData,
+                                  repository,
+                                  prNumber,
+                              },
+                              platformType,
+                          )
+                        : await this.codeManagementService.getPullRequestReviewComments(
+                              {
+                                  organizationAndTeamData,
+                                  repository,
+                                  prNumber,
+                              },
+                              platformType,
+                          );
+
+                await this.cacheService.addToCache(
+                    cacheKey,
+                    reviewComments ?? [],
+                    45_000,
+                );
+            }
 
             if (!reviewComments?.length) {
                 return suggestions;
@@ -2066,18 +2087,12 @@ export class SuggestionService implements ISuggestionService {
         repository,
         prNumber,
         platformType,
-        dryRun,
     }: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
         platformType: PlatformType;
-        dryRun?: CodeReviewPipelineContext['dryRun'];
     }) {
-        if (dryRun?.enabled) {
-            return;
-        }
-
         try {
             const codeManagementRequestData = {
                 organizationAndTeamData,

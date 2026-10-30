@@ -6,6 +6,11 @@
  */
 export const FEATURE_KEYS = {
     githubEnterpriseServerPat: 'github-enterprise-server-pat',
+    kodusTraceReviewContext: 'kodus-trace-review-context',
+    kodusProvider: 'kodus-provider',
+    deterministicEvidence: 'deterministic-evidence',
+    customAgents: 'custom-agents',
+    conditionalPrApproval: 'conditional-pr-approval',
 } as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[keyof typeof FEATURE_KEYS];

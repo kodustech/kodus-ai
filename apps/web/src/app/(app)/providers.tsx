@@ -29,6 +29,7 @@ type ProvidersProps = PropsWithChildren<{
     featureFlags: Partial<{
         [K in keyof typeof FEATURE_FLAGS]: boolean;
     }>;
+    initialSelectedTeamId?: string;
 }>;
 
 export function Providers({
@@ -41,6 +42,7 @@ export function Providers({
     isTrial,
     isEnterprise,
     featureFlags,
+    initialSelectedTeamId,
 }: ProvidersProps) {
     return (
         <AuthProvider session={session}>
@@ -51,7 +53,8 @@ export function Providers({
                             isBYOK={isBYOK}
                             isTrial={isTrial}
                             isEnterprise={isEnterprise}>
-                            <SelectedTeamProvider>
+                            <SelectedTeamProvider
+                                initialTeamId={initialSelectedTeamId}>
                                 <FeatureFlagsProvider
                                     featureFlags={featureFlags}>
                                     {children}

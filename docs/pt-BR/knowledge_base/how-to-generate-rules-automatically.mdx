@@ -1,0 +1,32 @@
+---
+title: "Como gerar regras de revisão de código automaticamente"
+description: "Deixe o AI analisar seu histórico de revisões de código e sugerir regras personalizadas baseadas nos padrões e padrões reais do seu time."
+---
+
+Escrever regras de revisão de código do zero pode ser tedioso. O Kodus pode analisar o histórico de revisões do seu time e sugerir automaticamente regras baseadas nos padrões que encontrar.
+
+## Como funciona
+
+1. Selecione o repositório no seletor de escopo no topo do grupo **Code review** na barra lateral, abra **Kody Rules** e clique em **Configuration**
+2. Ative **Generate from past reviews**
+3. O Kodus escaneia os PRs fechados dos últimos 3 meses no seu repositório
+4. Identifica padrões recorrentes de feedback e preferências de codificação
+5. Gera regras adaptadas ao seu time, listadas na página de Kody Rules com a origem **Kody-generated**
+
+## O que acontece a seguir
+
+- Por padrão, as regras geradas ficam ativas imediatamente e são aplicadas durante as revisões de código
+- Para revisá-las antes de entrarem em vigor, ative **Kody knowledge approval** na mesma tela de **Configuration**: as novas regras passam a aguardar na seção **Pending review** até você aprová-las (**Approve**) ou descartá-las (**Discard**)
+- Edite, pause ou exclua qualquer regra gerada como qualquer outra Kody Rule
+
+## Aprendizado contínuo
+
+Após a configuração inicial, o Kodus gera novas regras **semanalmente** conforme o estilo de codificação do seu time evolui. Verifique regularmente as novas regras.
+
+## Requisitos
+
+- Pelo menos **3 meses** de histórico de revisões no repositório
+- Atividade regular de revisão de código para melhor detecção de padrões
+- Acesso ao repositório com permissões adequadas
+
+Para detalhes, consulte [Geração Automática de Regras](/pt-BR/how_to_use/code_review/learning/kody_rules_generation).

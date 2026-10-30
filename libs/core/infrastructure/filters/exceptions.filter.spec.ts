@@ -3,6 +3,7 @@ import {
     InternalServerErrorException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { QueryFailedError } from 'typeorm';
 import { ExceptionsFilter } from './exceptions.filter';
 import { reportExceptionToSentry } from '../config/log/sentry';
 
@@ -49,5 +50,48 @@ describe('ExceptionsFilter', () => {
         );
 
         expect(reportExceptionToSentry).toHaveBeenCalledTimes(1);
+    });
+
+    it('maps Postgres 22P02 (invalid uuid/int input) to 400 and skips sentry', () => {
+        // A malformed uuid reaching a query (e.g. an empty ?teamId=) throws a
+        // QueryFailedError with driver code 22P02 — a client input error, not a
+        // 500. It must not be reported to Sentry nor counted as a server error.
+        const qfe = new QueryFailedError(
+            'SELECT * FROM team WHERE uuid = $1',
+            [''],
+            {
+                code: '22P02',
+                message: 'invalid input syntax for type uuid: ""',
+            } as any,
+        );
+
+        filter.catch(qfe, host as any);
+
+        expect(response.status).toHaveBeenCalledWith(400);
+        expect(reportExceptionToSentry).not.toHaveBeenCalled();
+        const body = (response.json as jest.Mock).mock.calls[0][0];
+        expect(body.statusCode).toBe(400);
+        expect(body.message).toBe('Invalid parameter format');
+    });
+
+    it('maps a Mongo read that hit maxTimeMS to 503 and still reports it', () => {
+        // mongod aborts the query itself (error 50, MaxTimeMSExpired) when the
+        // cluster is overloaded; that is a retryable outage, not a 500 bug.
+        const timeout = Object.assign(
+            new Error('operation exceeded time limit'),
+            {
+                code: 50,
+                codeName: 'MaxTimeMSExpired',
+            },
+        );
+
+        filter.catch(timeout, host as any);
+
+        expect(response.status).toHaveBeenCalledWith(503);
+        expect(reportExceptionToSentry).toHaveBeenCalledTimes(1);
+        const body = (response.json as jest.Mock).mock.calls[0][0];
+        expect(body.statusCode).toBe(503);
+        expect(body.error).toBe('Service Unavailable');
+        expect(body.message).toBe('The database is busy, please retry shortly');
     });
 });

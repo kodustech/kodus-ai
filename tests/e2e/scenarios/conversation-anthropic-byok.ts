@@ -1,15 +1,35 @@
-import { ensureLicenseSeat } from "../lib/onboarding.js";
-import { http } from "../lib/http.js";
-import type { RunContext, Scenario, KodusSession } from "../lib/types.js";
+import { ensureLicenseSeat } from '../lib/onboarding.js';
+import { http } from '../lib/http.js';
+import { resolveConversationUserToken } from '../lib/conversation-user-token.js';
+import type { RunContext, Scenario, KodusSession } from '../lib/types.js';
 
 // Anthropic-BYOK variant of conversation-vertex-byok: drives the REAL @kody
-// conversation flow (webhook → ConversationAgent → BYOKPromptRunner → Anthropic
-// Sonnet → kodus-flow parser) on a real self-hosted env. Used to reproduce the
-// "Missing or invalid reasoning field" failure (old flow) and verify the fix
-// (new flow) end-to-end. Hardened: rejects the generic error fallback.
-const FIXTURE = { head: "bug/missing-null-check", base: "main" };
-const QUESTION =
-    "@kody this cron deactivates licenses daily, right? explain it to me naturally, like a colleague would, briefly.";
+// conversation flow (webhook → ConversationAgent → LLM.run → Anthropic
+// Sonnet → parser) on a real self-hosted env. Hardened: rejects the generic
+// error fallback.
+//
+// FIXTURE_BRANCHES: `bug/missing-null-check` is only confirmed mirrored on
+// GitHub (see code-review-basic.ts's own placeholder comment for the other
+// providers). `refactor/use-map-storage` is the shared branch already
+// confirmed working across all 5 providers via command-review.ts — PR
+// content is irrelevant here (we only need an open PR to talk to Kody on),
+// so gitlab/bitbucket/azure-devops use that one instead.
+const FIXTURE_BRANCHES: Record<string, { head: string; base: string }> = {
+    'github': { head: 'bug/missing-null-check', base: 'main' },
+    'gitlab': { head: 'refactor/use-map-storage', base: 'main' },
+    'bitbucket': { head: 'refactor/use-map-storage', base: 'main' },
+    'azure-devops': { head: 'refactor/use-map-storage', base: 'main' },
+};
+
+// The GitHub-specific question references the cron job that only exists on
+// `bug/missing-null-check`; the other providers point at the content-neutral
+// `refactor/use-map-storage` branch, so they get a generic question instead.
+function questionFor(providerName: string): string {
+    if (providerName === 'github') {
+        return '@kody this cron deactivates licenses daily, right? explain it to me naturally, like a colleague would, briefly.';
+    }
+    return '@kody in one short sentence, what does this pull request change?';
+}
 
 async function setAnthropicByok(
     apiBaseUrl: string,
@@ -17,58 +37,65 @@ async function setAnthropicByok(
     apiKey: string,
     model: string,
 ): Promise<void> {
-    const provider = process.env.CONVERSATION_BYOK_PROVIDER || "anthropic";
-    const reasoningEffort = process.env.CONVERSATION_BYOK_REASONING || "low";
+    const provider = process.env.CONVERSATION_BYOK_PROVIDER || 'anthropic';
+    const reasoningEffort = process.env.CONVERSATION_BYOK_REASONING || 'low';
     const main = { provider, apiKey, model, reasoningEffort };
     const auth = { Authorization: `Bearer ${session.accessToken}` };
     const test = await http<{ data?: { ok?: boolean; message?: string } }>(
         `${apiBaseUrl}/organization-parameters/test-byok`,
-        { method: "POST", headers: auth, body: main, timeoutMs: 40_000 },
+        { method: 'POST', headers: auth, body: main, timeoutMs: 40_000 },
     );
     if (!test.body?.data?.ok) {
         const reason = test.body?.data?.message ?? test.raw.slice(0, 300);
-        throw new Error(`Anthropic BYOK test-byok failed for ${model}: ${reason}`);
+        throw new Error(
+            `Anthropic BYOK test-byok failed for ${model}: ${reason}`,
+        );
     }
     const save = await http(
         `${apiBaseUrl}/organization-parameters/create-or-update`,
         {
-            method: "POST",
+            method: 'POST',
             headers: auth,
-            body: { key: "byok_config", configValue: { main, fallback: null } },
+            body: { key: 'byok_config', configValue: { main, fallback: null } },
             timeoutMs: 25_000,
         },
     );
     if (save.status < 200 || save.status >= 300) {
-        throw new Error(`setAnthropicByok save failed: HTTP ${save.status} ${save.raw.slice(0, 200)}`);
+        throw new Error(
+            `setAnthropicByok save failed: HTTP ${save.status} ${save.raw.slice(0, 200)}`,
+        );
     }
 }
 
 export const conversationAnthropicByok: Scenario = {
-    id: "conversation-anthropic-byok",
-    title: "Kody answers an @kody mention using an Anthropic Sonnet BYOK key (v2 path)",
-    priority: "P2",
+    id: 'conversation-anthropic-byok',
+    title: 'Kody answers an @kody mention using an Anthropic Sonnet BYOK key',
+    priority: 'P2',
     appliesTo: {
-        target: ["self-hosted"],
-        provider: ["github"],
-        license: ["paid", "license-paid"],
+        target: ['self-hosted'],
+        provider: ['github', 'gitlab', 'bitbucket', 'azure-devops'],
+        license: ['paid', 'license-paid'],
     },
     timeoutSec: 1200,
     async run(ctx: RunContext) {
-        ctx.assert(ctx.tenant, "scenario requires a tenant");
+        ctx.assert(ctx.tenant, 'scenario requires a tenant');
 
         const apiKey =
             process.env.CONVERSATION_ANTHROPIC_KEY ||
             process.env.API_ANTHROPIC_API_KEY;
         if (!apiKey) {
-            ctx.skip("CONVERSATION_ANTHROPIC_KEY / API_ANTHROPIC_API_KEY not set");
+            ctx.skip(
+                'CONVERSATION_ANTHROPIC_KEY / API_ANTHROPIC_API_KEY not set',
+            );
         }
         const model =
             process.env.CONVERSATION_ANTHROPIC_MODEL ||
-            "claude-sonnet-4-5-20250929";
+            'claude-sonnet-4-5-20250929';
 
-        const userToken = process.env.CONVERSATION_USER_TOKEN;
+        const { token: userToken, missingEnvHint } =
+            resolveConversationUserToken(ctx.provider.name);
         if (!userToken) {
-            ctx.skip("CONVERSATION_USER_TOKEN not set");
+            ctx.skip(`${missingEnvHint} not set`);
         }
 
         if (
@@ -89,9 +116,15 @@ export const conversationAnthropicByok: Scenario = {
 
         await setAnthropicByok(ctx.target.apiBaseUrl, session, apiKey!, model);
 
+        const fixture = FIXTURE_BRANCHES[ctx.provider.name];
+        ctx.assert(
+            fixture,
+            `No FIXTURE_BRANCHES entry for provider ${ctx.provider.name}`,
+        );
+
         const pr = await ctx.provider.openPRFromBranches({
-            head: FIXTURE.head,
-            base: FIXTURE.base,
+            head: fixture!.head,
+            base: fixture!.base,
             title: `[e2e] conversation-anthropic-byok ${ctx.runId.slice(0, 8)}`,
             body: `Automated PR (Anthropic conversation: ${model}). Auto-closed by the scenario.`,
         });
@@ -100,7 +133,7 @@ export const conversationAnthropicByok: Scenario = {
             const sinceIso = new Date().toISOString();
             const trigger = await ctx.provider.postReviewCommentAs(
                 pr.number,
-                QUESTION,
+                questionFor(ctx.provider.name),
                 userToken!,
             );
 
@@ -117,8 +150,9 @@ export const conversationAnthropicByok: Scenario = {
             // Reject the generic error fallback — a non-empty reply is NOT enough.
             const lowered = reply!.body.toLowerCase();
             const isFallback =
-                lowered.includes("encountered an error while processing your request") ||
-                lowered.includes("please try rephrasing your question");
+                lowered.includes(
+                    'encountered an error while processing your request',
+                ) || lowered.includes('please try rephrasing your question');
             ctx.assert(
                 !isFallback,
                 `Kody replied with the GENERIC ERROR FALLBACK (the parse failure), not a real answer: "${reply!.body.slice(0, 300)}" (model=${model}).`,

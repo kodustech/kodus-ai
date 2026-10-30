@@ -1,0 +1,16 @@
+diff --git a/src/users/user.service.ts b/src/users/user.service.ts
+index 1111111..2222222 100644
+--- a/src/users/user.service.ts
++++ b/src/users/user.service.ts
+@@ -40,6 +40,11 @@ export class UserService {
+         return this.repo.findById(id);
+     }
+
++    async softDelete(userId: string): Promise<void> {
++        // Mark the user as deleted.
++        await this.repo.update(userId, { deletedAt: new Date() });
++    }
++
+     async restore(userId: string): Promise<void> {
+         await this.repo.update(userId, { deletedAt: null });
+     }

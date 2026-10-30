@@ -37,7 +37,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
                         "resize-x-none flex min-h-20 w-full items-center rounded-xl px-6 py-4 text-sm ring-1 transition",
                         "bg-card-lv2 ring-card-lv3",
                         "placeholder:text-text-placeholder/50",
-                        "textinput-focused:ring-3 textinput-focused:brightness-120",
+                        "textinput-focused:ring-3 textinput-focused:ring-ring textinput-focused:brightness-120",
                         "textinput-invalid:border-danger",
                         "textinput-focused-invalid:ring-danger",
                         "textinput-hover:brightness-120",

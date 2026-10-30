@@ -5,8 +5,12 @@ apps/*/dist
 
 # pnpm's content-addressable store — should live in the global store
 # (~/Library/pnpm/store). A local copy here is an orphan from a stray
-# `pnpm install --store-dir .pnpm-store`; never commit it.
+# `pnpm install --store-dir .pnpm-store`; never commit it. The nested pattern
+# covers stores leaked into workspace packages (e.g. apps/web/.pnpm-store via
+# the dev container bind-mount).
 /.pnpm-store/
+**/.pnpm-store/
+apps/web/.pnpm-store/
 
 # selfhosted dev VM state (scripts/selfhosted/*.sh)
 .kodus-dev/
@@ -16,6 +20,8 @@ apps/*/dist
 # TypeScript compiled files (should NOT be in src/ or packages/)
 # These should only exist in dist/ directories
 *.d.ts
+# ...except hand-written type augmentations, which are source, not build output.
+!apps/web/src/types/*.d.ts
 *.js.map
 
 # Ignore compiled .js files in src/ and packages/ (they should be in dist/)
@@ -37,6 +43,8 @@ packages/**/*.js
 .env
 .env.qa
 .env.prod
+# billing env for runo (scripts/env/pull-billing-env.sh): holds a Stripe key
+.env.billing
 .env.local
 .env.reconciled
 .env.bak.*
@@ -48,12 +56,39 @@ e2b-sandbox/config.json
 _*
 !apps/web/src/**/_*
 !libs/common/email/templates/_*
+# Shared test fixtures live in `__test-utils__` dirs — the `_*` rule above would
+# ignore them (dir starts with `_`), which silently breaks CI (the files exist
+# only on dev disks). Keep them tracked.
+!**/__test-utils__/
+!**/__test-utils__/**
 !scripts/selfhosted/_common.sh
 !test/__mocks__/
+# Provider-module conformance fixtures are committed artifacts (Phase 3 / D-05):
+# recorded doGenerate results the offline gate replays. `_*` above would ignore
+# the `__fixtures__` dir, so un-ignore it (its JSON files don't start with `_`).
+!libs/llm/providers/__fixtures__/
+!libs/llm/providers/__fixtures__/**
+# Per-provider recorded fixtures (openai/__fixtures__, anthropic/__fixtures__,
+# …) — same committed-artifact rule; the shared pattern above does not reach the
+# nested dirs, so un-ignore them explicitly (otherwise `_*` swallows them and CI
+# can't load the offline conformance specs).
+!libs/llm/providers/**/__fixtures__/
+!libs/llm/providers/**/__fixtures__/**
+# The BYOK config matrix replays every distinct config shape stored in
+# production (anonymized: no org ids, no credentials). Same committed-artifact
+# rule — without this the corpus exists only on the author's disk and the
+# production-shape invariants quietly assert over an empty array in CI.
+!libs/llm/testing/__fixtures__/
+!libs/llm/testing/__fixtures__/**
 !**/__tests__/
 !scripts/selfhosted/_*.sh
 
 # Playwright failure / debug dumps
+# Local working copy of the durable e2e history log. The log of record lives
+# on the `e2e-history` orphan branch; this is just what history-backfill.sh
+# and `run report` read locally.
+tests/e2e/history/
+
 tests/e2e/playwright/failure-*.html
 tests/e2e/playwright/failure-*.png
 tests/e2e/playwright/stripe-*.png
@@ -239,3 +274,22 @@ scripts/benchmark/langfuse-enrich.py
 scripts/benchmark/execucao-detalhada.py
 scripts/benchmark/golden-context.py
 scripts/benchmark/golden-context.py.bak
+evals/kody-rules/prod-rules.json
+.grok/settings.json
+
+.tessl
+.claude/skills/tlc-spec-driven
+
+# runo: validation evidence downloaded per-run (see .kodus/workspace.yaml)
+.kodus/evidence/
+runo
+test1.json
+
+# Stryker mutation testing (run artifacts, never committed)
+reports/mutation/
+.stryker-tmp/
+
+# The FILLED copy of the BYOK live-tier credentials. The `.example.json` next to
+# it is the template and IS tracked; this one holds real vendor keys and must
+# never be committed — it exists so the JSON can be validated locally before it
+# is pasted into the GitHub secret.

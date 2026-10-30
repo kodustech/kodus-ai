@@ -34,6 +34,8 @@ export interface IMappedPullRequest {
             fullName: string;
             defaultBranch: string;
         };
+        /** Absent when the payload has none (GitLab). */
+        sha?: string;
     };
     status?: string;
     isDraft: boolean;

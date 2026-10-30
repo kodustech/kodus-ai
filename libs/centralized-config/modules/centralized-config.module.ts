@@ -10,6 +10,7 @@ import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { Module, forwardRef } from '@nestjs/common';
 
 import { CentralizedConfigDownloadUseCase } from '../application/use-cases/centralized-config-download.use-case';
+import { CentralizedConfigDownloadZipUseCase } from '../application/use-cases/centralized-config-download-zip.use-case';
 import { CentralizedConfigInitUseCase } from '../application/use-cases/centralized-config-init.use-case';
 import { CentralizedConfigSyncUseCase } from '../application/use-cases/centralized-config-sync.use-case';
 import { CENTRALIZED_CONFIG_SERVICE_TOKEN } from '../domain/contracts/CentralizedConfigService.contract';
@@ -36,6 +37,7 @@ import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-re
         CentralizedConfigSyncListener,
         CentralizedConfigPrService,
         CentralizedConfigDownloadUseCase,
+        CentralizedConfigDownloadZipUseCase,
         CentralizedConfigInitUseCase,
         {
             provide: CENTRALIZED_CONFIG_SERVICE_TOKEN,
@@ -46,6 +48,7 @@ import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-re
         CentralizedConfigSyncUseCase,
         CentralizedConfigPrService,
         CentralizedConfigDownloadUseCase,
+        CentralizedConfigDownloadZipUseCase,
         CentralizedConfigInitUseCase,
         CENTRALIZED_CONFIG_SERVICE_TOKEN,
     ],

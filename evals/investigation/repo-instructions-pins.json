@@ -1,0 +1,7 @@
+{
+    "keycloak/keycloak": "8a081db466da3ff8de74efab2f3d9844277c18ba",
+    "discourse/discourse": "b38163c503992a2ae1b546fdb0c1e4b53ba57da8",
+    "calcom/cal.com": "54343aa685ae8f33159d2f485ec4a57bad5c574a",
+    "grafana/grafana": "ec97f43117ab325cd92d6c75ec80a498812f96ae",
+    "getsentry/sentry": "092b7444fe36caab5551471d227aaec67b3bff64"
+}

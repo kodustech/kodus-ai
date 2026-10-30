@@ -74,6 +74,11 @@ export function wrapToolHandler<I = any, O = any>(
     return async (args: I, extra?: any) => {
         const start = Date.now();
         try {
+            // Tenant fields (organizationId, and teamId for Team CLI keys) are
+            // pinned to the authenticated principal by McpToolAuthorizer, which
+            // runs before this handler in both server factories and REJECTS a
+            // mismatch instead of silently rewriting it. Do not re-pin them
+            // here: the tenant boundary has a single owner.
             const result = await handler(args, extra);
             const res = createToolResponse(result);
 

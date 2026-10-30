@@ -1,0 +1,488 @@
+jest.mock('@libs/common/utils/crypto', () => ({
+    decrypt: (v: string) => v,
+    encrypt: (v: string) => v,
+}));
+
+import { tool } from 'ai';
+import { z } from 'zod';
+
+import { LLM } from './llm';
+import { resolveTaskSlot } from './resolve-task-model';
+import { probeSlotCall } from './probe-slot-call';
+import {
+    clearRefusals,
+    MAX_REFUSAL_RETRIES,
+    REFUSAL_MEMORY_MS,
+    rejectedReasoningField,
+} from './rejected-reasoning-field';
+import './providers';
+
+/** The body OpenCode Go returned in production (2026-09-30), verbatim. */
+const refusalOf = (field: string) => ({
+    error: {
+        param: field,
+        type: 'invalid_request_error',
+        message: `Upstream request failed: [unknown_parameter] invalid request body: json: unknown field "${field}"`,
+    },
+});
+
+const OK = {
+    id: 'x',
+    object: 'chat.completion',
+    created: 0,
+    model: 'm',
+    choices: [
+        {
+            index: 0,
+            message: { role: 'assistant', content: 'ok' },
+            finish_reason: 'stop',
+        },
+    ],
+    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+};
+
+/**
+ * A fake upstream. By default it answers 400 to any body carrying one of
+ * `refuses`; `respond` replaces that rule entirely. Records every body.
+ */
+function upstream(opts: {
+    refuses?: string[];
+    respond?: (body: any, n: number) => unknown | undefined;
+}) {
+    const bodies: any[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (_input: any, init: any) => {
+        const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+        bodies.push(body);
+        const errorBody = opts.respond
+            ? opts.respond(body, bodies.length)
+            : (() => {
+                  const f = (opts.refuses ?? []).find((k) => body && k in body);
+                  return f ? refusalOf(f) : undefined;
+              })();
+        return new Response(JSON.stringify(errorBody ?? OK), {
+            status: errorBody ? 400 : 200,
+            headers: { 'content-type': 'application/json' },
+        });
+    }) as typeof fetch;
+    return { bodies, restore: () => (globalThis.fetch = realFetch) };
+}
+
+const run = (slot: any, organizationId = 'org-1') =>
+    LLM.run({
+        byokConfig: { ...slot, apiKey: 'k' },
+        organizationId,
+        messages: [{ role: 'user', content: 'ping' }],
+        loop: { tools: {}, maxSteps: 1 },
+        runName: 'rejected-reasoning-field-spec',
+    } as any);
+
+// DeepSeek still takes `thinking` + `reasoning_effort` through the gateway.
+const deepseek = {
+    provider: 'openai_compatible',
+    model: 'deepseek-v4-flash',
+    baseURL: 'https://opencode.ai/zen/go/v1',
+    reasoningEffort: 'high',
+};
+
+describe('a reasoning field the upstream refuses', () => {
+    let up: ReturnType<typeof upstream> | undefined;
+    afterEach(() => {
+        up?.restore();
+        up = undefined;
+        clearRefusals();
+        jest.useRealTimers();
+    });
+
+    it('is dropped and the call is asked once more', async () => {
+        up = upstream({ refuses: ['thinking'] });
+        await run(deepseek);
+        expect(up.bodies).toHaveLength(2);
+        expect(up.bodies[0].thinking).toEqual({ type: 'enabled' });
+        expect(up.bodies[1].thinking).toBeUndefined();
+        // Only the refused field goes: the effort the upstream did not refuse
+        // still reaches it.
+        expect(up.bodies[1].reasoning_effort).toBe('max');
+    });
+
+    it('is dropped when Together parses it as a budget it does not get', async () => {
+        // api.together.xyz, deepseek-ai/DeepSeek-V4.1-Flash (issue #2214): the
+        // model reasons by default there, so without `thinking` it still does.
+        up = upstream({
+            respond: (body) =>
+                body.thinking
+                    ? {
+                          error: {
+                              message:
+                                  'Invalid JSON data: missing field `budget_tokens`',
+                              type: 'invalid_request_error',
+                              code: 'json_parse_error',
+                          },
+                      }
+                    : undefined,
+        });
+        const together = {
+            ...deepseek,
+            model: 'deepseek-ai/DeepSeek-V4.1-Flash',
+            baseURL: 'https://api.together.xyz/v1',
+        };
+        await run(together);
+        expect(up.bodies).toHaveLength(2);
+        expect(up.bodies[0].thinking).toEqual({ type: 'enabled' });
+        expect(up.bodies[1].thinking).toBeUndefined();
+
+        // Saving the slot runs the connection probe, where the 400 surfaced.
+        clearRefusals();
+        up.bodies.length = 0;
+        await probeSlotCall({ ...together, apiKey: 'k' } as any);
+        expect(up.bodies).toHaveLength(2);
+        expect(up.bodies[1].thinking).toBeUndefined();
+    });
+
+    it('is not sent again to the same slot for a while, then tried again', async () => {
+        up = upstream({ refuses: ['thinking'] });
+        await run(deepseek);
+        await run(deepseek);
+        // Two calls, three requests: the second call did not pay the 400.
+        expect(up.bodies).toHaveLength(3);
+        expect(up.bodies[2].thinking).toBeUndefined();
+
+        jest.useFakeTimers({
+            now: Date.now() + REFUSAL_MEMORY_MS + 1,
+            doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'],
+        });
+        await run(deepseek);
+        expect(up.bodies[3].thinking).toEqual({ type: 'enabled' });
+    });
+
+    it('is remembered per slot, not per host', async () => {
+        up = upstream({ refuses: ['thinking'] });
+        await run(deepseek);
+        up.restore();
+        up = upstream({});
+        await run({ ...deepseek, model: 'deepseek-v4-pro' });
+        expect(up.bodies[0].thinking).toEqual({ type: 'enabled' });
+    });
+
+    it('costs at most one extra request per call when calls run at once', async () => {
+        up = upstream({ refuses: ['thinking'] });
+        await Promise.all(Array.from({ length: 8 }, () => run(deepseek)));
+        // Every call that started before the first refusal pays one 400; none
+        // pays two.
+        expect(up.bodies.length).toBeLessThanOrEqual(16);
+        expect(
+            up.bodies.filter((b) => 'thinking' in b).length,
+        ).toBeLessThanOrEqual(8);
+    });
+});
+
+// The other "never asks again" cases (accepted body, permanent refusal, a field
+// we did not send, a 400 about something else) run over every production slot
+// shape in rejected-reasoning-field.matrix.spec.ts.
+describe('what never triggers another request', () => {
+    let up: ReturnType<typeof upstream> | undefined;
+    afterEach(() => {
+        up?.restore();
+        up = undefined;
+        clearRefusals();
+    });
+
+    it('an upstream that names a different reasoning field every time', async () => {
+        up = upstream({
+            respond: (_b, n) =>
+                refusalOf(n % 2 ? 'thinking' : 'reasoning_effort'),
+        });
+        await expect(run(deepseek)).rejects.toBeDefined();
+        // One ask per field we could add, then the error reaches the caller.
+        expect(up.bodies).toHaveLength(1 + MAX_REFUSAL_RETRIES);
+    });
+
+});
+
+describe('rejectedReasoningField', () => {
+    const SENT = {
+        model: 'm',
+        thinking: { type: 'enabled' },
+        reasoning_effort: 'high',
+    };
+    const apiError = (
+        status: number,
+        responseBody: string,
+        requestBodyValues: unknown = SENT,
+    ) =>
+        Object.assign(new Error('Bad Request'), {
+            statusCode: status,
+            responseBody,
+            requestBodyValues,
+        });
+
+    it.each([
+        [
+            'Go decoder',
+            'invalid request body: json: unknown field "thinking"',
+            'thinking',
+        ],
+        [
+            'pydantic',
+            "Extra inputs are not permitted, field: 'reasoning_effort', value: 'high'",
+            'reasoning_effort',
+        ],
+        [
+            'OpenAI unknown argument',
+            'Unrecognized request argument supplied: reasoning_effort',
+            'reasoning_effort',
+        ],
+        [
+            'OpenAI tools-with-effort',
+            "Function tools with reasoning_effort are not supported for gpt-6-sol in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
+            'reasoning_effort',
+        ],
+        [
+            'Together thinking schema',
+            'Invalid JSON data: missing field `budget_tokens`',
+            'thinking',
+        ],
+    ])('reads the field from a %s refusal', (_k, body, field) => {
+        expect(rejectedReasoningField(apiError(400, body))).toBe(field);
+    });
+
+    // Only the effort has an off value to send; a `thinking` sent beside it is
+    // not what that refusal is about.
+    it('reads the tools refusal as one about the effort only', () => {
+        expect(
+            rejectedReasoningField(
+                apiError(400, 'Function tools with thinking are not supported'),
+            ),
+        ).toBeUndefined();
+    });
+
+    it('ignores an envelope that only names the field', () => {
+        expect(
+            rejectedReasoningField(
+                apiError(400, '{"error":{"param":"thinking","message":"bad"}}'),
+            ),
+        ).toBeUndefined();
+    });
+
+    it('ignores a refusal of a field the request did not carry', () => {
+        expect(
+            rejectedReasoningField(
+                apiError(400, 'json: unknown field "reasoning_effort"', {
+                    model: 'm',
+                    reasoning: { effort: 'high' },
+                }),
+            ),
+        ).toBeUndefined();
+    });
+
+    it('ignores a field the SDK recorded as undefined, which never reached the wire', () => {
+        expect(
+            rejectedReasoningField(
+                apiError(400, 'json: unknown field "reasoning_effort"', {
+                    model: 'm',
+                    reasoning_effort: undefined,
+                }),
+            ),
+        ).toBeUndefined();
+    });
+
+    it('ignores a refusal whose error does not say what was sent', () => {
+        expect(
+            rejectedReasoningField(
+                apiError(400, 'json: unknown field "thinking"', null),
+            ),
+        ).toBeUndefined();
+    });
+
+    it('reads the sent body from the last attempt of a retry error', () => {
+        const last = apiError(400, 'json: unknown field "thinking"');
+        expect(
+            rejectedReasoningField(
+                Object.assign(new Error('Failed after 3 attempts'), {
+                    name: 'AI_RetryError',
+                    lastError: last,
+                }),
+            ),
+        ).toBe('thinking');
+    });
+
+    it('ignores the same words on a status that is not a refusal', () => {
+        expect(
+            rejectedReasoningField(
+                apiError(500, 'json: unknown field "thinking"'),
+            ),
+        ).toBeUndefined();
+    });
+});
+
+/** OpenAI's own answer on chat completions for the gpt-5.6 / gpt-6 line, verbatim
+ *  from production (2026-09-30). */
+const TOOLS_WITH_EFFORT = {
+    error: {
+        message:
+            "Function tools with reasoning_effort are not supported for gpt-6-sol in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
+        type: 'invalid_request_error',
+        param: null,
+        code: null,
+    },
+};
+
+const withTool = (slot: any) =>
+    LLM.run({
+        byokConfig: { ...slot, apiKey: 'k' },
+        organizationId: 'org-1',
+        messages: [{ role: 'user', content: 'ping' }],
+        loop: {
+            tools: {
+                ping: tool({
+                    description: 'ping',
+                    inputSchema: z.object({}),
+                    execute: async () => 'pong',
+                }),
+            },
+            maxSteps: 1,
+        },
+        runName: 'rejected-reasoning-field-spec',
+    } as any);
+
+describe('an OpenAI reasoning model with tools', () => {
+    let up: ReturnType<typeof upstream> | undefined;
+    const realFetch = globalThis.fetch;
+    afterEach(() => {
+        up?.restore();
+        up = undefined;
+        globalThis.fetch = realFetch;
+        clearRefusals();
+    });
+
+    it('on OpenAI itself through an OpenAI-compatible credential goes to /v1/responses with its effort', async () => {
+        const urls: string[] = [];
+        const bodies: any[] = [];
+        globalThis.fetch = (async (input: any, init: any) => {
+            urls.push(String(input?.url ?? input));
+            bodies.push(init?.body ? JSON.parse(String(init.body)) : undefined);
+            // 400 so the SDK does not retry: the request is what this asserts.
+            return new Response(
+                JSON.stringify({ error: { message: 'stop here' } }),
+                {
+                    status: 400,
+                    headers: { 'content-type': 'application/json' },
+                },
+            );
+        }) as typeof fetch;
+        const { slot } = resolveTaskSlot(
+            {
+                version: 2,
+                credentials: [
+                    {
+                        id: 'c-cp',
+                        provider: 'openai_compatible',
+                        apiKey: 'k',
+                        settings: { baseURL: 'https://api.openai.com/v1' },
+                    },
+                ],
+                models: [
+                    { id: 'm-1', credentialId: 'c-cp', model: 'gpt-6-sol' },
+                ],
+                routing: { defaultModelId: 'm-1' },
+            } as any,
+            'codeReview',
+        );
+        await withTool(slot).catch(() => undefined);
+        expect(urls[0]).toBe('https://api.openai.com/v1/responses');
+        expect(bodies[0].reasoning?.effort).toBeDefined();
+        expect(bodies[0].tools).toHaveLength(1);
+        // OpenAI keeps nothing, and the reasoning travels between steps encrypted.
+        expect(bodies[0].store).toBe(false);
+        expect(bodies[0].include).toContain('reasoning.encrypted_content');
+    });
+
+    // `store` defaults to true on /v1/responses: no native call on OpenAI's API
+    // leaves it there; a gateway on the native id keeps what it does today.
+    it('is not stored by OpenAI on any native call to its API, and a gateway is left alone', async () => {
+        const bodies: any[] = [];
+        globalThis.fetch = (async (_input: any, init: any) => {
+            bodies.push(init?.body ? JSON.parse(String(init.body)) : undefined);
+            return new Response(
+                JSON.stringify({ error: { message: 'stop here' } }),
+                {
+                    status: 400,
+                    headers: { 'content-type': 'application/json' },
+                },
+            );
+        }) as typeof fetch;
+        await run({ provider: 'openai', model: 'gpt-4o' }).catch(
+            () => undefined,
+        );
+        await run({
+            provider: 'openai',
+            model: 'gpt-6-sol',
+            baseURL: 'https://gateway.example.com/v1',
+        }).catch(() => undefined);
+        // The include goes out for every model: a fine-tune or an alias reasons
+        // without being recognized, and OpenAI accepts it on one that does not.
+        expect(bodies[0].store).toBe(false);
+        expect(bodies[0].include).toContain('reasoning.encrypted_content');
+        expect(bodies[1].store).toBeUndefined();
+    });
+
+    // One transport per stored slot: an explicit slot handed to LLM.run, and the
+    // connection probe, are served the way routing serves them.
+    it('is served the same way when the slot is handed to LLM.run or to the connection probe', async () => {
+        const urls: string[] = [];
+        globalThis.fetch = (async (input: any) => {
+            urls.push(String(input?.url ?? input));
+            return new Response(
+                JSON.stringify({ error: { message: 'stop here' } }),
+                {
+                    status: 400,
+                    headers: { 'content-type': 'application/json' },
+                },
+            );
+        }) as typeof fetch;
+        const stored = {
+            provider: 'openai_compatible',
+            model: 'gpt-6-sol',
+            baseURL: 'https://api.openai.com/v1',
+        };
+        await withTool(stored).catch(() => undefined);
+        await probeSlotCall({ ...stored, apiKey: 'k' } as any).catch(
+            () => undefined,
+        );
+        expect(urls).toEqual([
+            'https://api.openai.com/v1/responses',
+            'https://api.openai.com/v1/responses',
+        ]);
+    });
+
+    // OpenAI refuses the pair even when the effort is left off: the model
+    // reasons by default (measured live, 2026-10-15). Only 'none' passes.
+    it('behind a proxy that forwards to chat completions is asked again with the effort off', async () => {
+        up = upstream({
+            respond: (body) =>
+                body?.reasoning_effort !== 'none' && body?.tools?.length
+                    ? TOOLS_WITH_EFFORT
+                    : undefined,
+        });
+        const proxied = {
+            provider: 'openai_compatible',
+            model: 'gpt-6-sol',
+            baseURL: 'https://litellm.example.com/v1',
+        };
+        await withTool(proxied);
+        expect(up.bodies).toHaveLength(2);
+        expect(up.bodies[0].reasoning_effort).toBeDefined();
+        expect(up.bodies[1].reasoning_effort).toBe('none');
+        expect(up.bodies[1].tools).toHaveLength(1);
+        // Remembered: the next call on the slot pays no 400.
+        await withTool(proxied);
+        expect(up.bodies).toHaveLength(3);
+        expect(up.bodies[2].reasoning_effort).toBe('none');
+        // A call without tools keeps its effort: the refusal is about the pair.
+        await run(proxied);
+        expect(up.bodies).toHaveLength(4);
+        expect(up.bodies[3].tools).toBeUndefined();
+        expect(up.bodies[3].reasoning_effort).toBeDefined();
+        expect(up.bodies[3].reasoning_effort).not.toBe('none');
+    });
+});

@@ -11,16 +11,31 @@ test("allScenarios: includes the registered release-gate scenarios", () => {
         "code-review-vertex-byok",
         "command-review",
         "command-review-focus",
+        "command-review-while-busy",
+        "conditional-approval-provider",
         "conversation-anthropic-byok",
+        "conversation-implicit-reply",
         "conversation-vertex-byok",
+        "cross-repo-config",
+        "finish-onboarding-slo",
+        "kodus-credits-gate",
+        "kodus-credits-review",
+        "kody-rules-coverage",
         "kody-rules-create-and-apply",
+        "kody-rules-file-sync",
+        "kody-rules-lifecycle",
         "license-attribution",
         "onboarding-webhook-registration",
         "per-seat-license-toggle",
+        "pr-execution-sse",
         "public-pr-demo",
         "rbac-authorization",
         "rbac-frontend-routes",
         "rbac-ui-render",
+        "review-decision-memory",
+        "review-decision-memory-kody-rules",
+        "review-decision-memory-revert",
+        "rule-file-detection",
         "sso-cookie-domain",
         "sso-multi-user",
         "stripe-billing",
@@ -34,14 +49,7 @@ test("allScenarios: includes the registered release-gate scenarios", () => {
 test("centralized-config-sync: single cell per target — github × paid/license-paid", () => {
     const s = allScenarios["centralized-config-sync"];
     assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
-    assert.deepEqual(s.appliesTo.provider, ["github"]);
-    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
-});
-
-test("centralized-config-sync: single cell per target — github × paid/license-paid", () => {
-    const s = allScenarios["centralized-config-sync"];
-    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
-    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.provider, ["github", "github-app"]);
     assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
 });
 
@@ -73,6 +81,19 @@ test("command-review-focus: cloud + self-hosted × github + github-app + 3 other
     assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
 });
 
+test("command-review-while-busy: cloud + self-hosted × github + github-app + 3 others × paid/license-paid", () => {
+    const s = allScenarios["command-review-while-busy"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, [
+        "github",
+        "github-app",
+        "gitlab",
+        "bitbucket",
+        "azure-devops",
+    ]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+});
+
 test("sso-multi-user: single-cell self-hosted × github × license-paid", () => {
     const s = allScenarios["sso-multi-user"];
     assert.deepEqual(s.appliesTo.target, ["self-hosted"]);
@@ -83,7 +104,7 @@ test("sso-multi-user: single-cell self-hosted × github × license-paid", () => 
 test("stripe-billing: single-cell cloud × github × paid", () => {
     const s = allScenarios["stripe-billing"];
     assert.deepEqual(s.appliesTo.target, ["cloud"]);
-    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.provider, ["github", "github-app"]);
     assert.deepEqual(s.appliesTo.license, ["paid"]);
 });
 
@@ -102,6 +123,7 @@ test("per-seat-license-toggle: self-hosted × all 4 providers × license-paid", 
         "gitlab",
         "bitbucket",
         "azure-devops",
+        "github-app",
     ]);
     assert.deepEqual(s.appliesTo.license, ["license-paid"]);
 });
@@ -177,20 +199,56 @@ test("license-attribution applies to every reviewable license mode except trial 
 test("trial-entitlement-gate: single-cell cloud × github × trial", () => {
     const s = allScenarios["trial-entitlement-gate"];
     assert.deepEqual(s.appliesTo.target, ["cloud"]);
-    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.provider, ["github", "github-app"]);
     assert.deepEqual(s.appliesTo.license, ["trial"]);
 });
 
 test("trial-managed-review: single-cell cloud × github × trial (the only managed-LLM review cell)", () => {
     const s = allScenarios["trial-managed-review"];
     assert.deepEqual(s.appliesTo.target, ["cloud"]);
-    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.provider, ["github", "github-app"]);
     assert.deepEqual(s.appliesTo.license, ["trial"]);
 });
 
 test("upgrade-n-1-to-n only applies to self-hosted", () => {
     const s = allScenarios["upgrade-n-1-to-n"];
     assert.deepEqual(s.appliesTo.target, ["self-hosted"]);
+});
+
+test("review-decision-memory: github-only (needs pushFollowupCommit + listReviewCommentBodies, GitHub-only so far)", () => {
+    const s = allScenarios["review-decision-memory"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+    // github-app must NOT be in scope: it reuses the base GitHubProvider
+    // class today, but this scenario was only validated against the plain
+    // github provider — widen deliberately, not by accident.
+    assert.ok(
+        !s.appliesTo.provider.includes("github-app"),
+        "review-decision-memory must stay github-only until github-app is validated too",
+    );
+});
+
+test("review-decision-memory-revert: github-only, same appliesTo shape as review-decision-memory", () => {
+    const s = allScenarios["review-decision-memory-revert"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+    assert.ok(
+        !s.appliesTo.provider.includes("github-app"),
+        "review-decision-memory-revert must stay github-only until github-app is validated too",
+    );
+});
+
+test("review-decision-memory-kody-rules: github-only, same appliesTo shape as review-decision-memory", () => {
+    const s = allScenarios["review-decision-memory-kody-rules"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+    assert.ok(
+        !s.appliesTo.provider.includes("github-app"),
+        "review-decision-memory-kody-rules must stay github-only until github-app is validated too",
+    );
 });
 
 test("onboarding-webhook-registration applies to 4 platform providers (NOT github-app)", () => {

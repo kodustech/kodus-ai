@@ -7,7 +7,6 @@ import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { ExecuteDryRunUseCase } from '@libs/dryRun/application/use-cases/execute-dry-run.use-case';
 import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -161,9 +160,9 @@ export class GetPRsByRepoUseCase implements IUseCase {
 
         if (!repository) {
             this.logger.warn({
-                message: 'Repository not found for dry run',
-                context: ExecuteDryRunUseCase.name,
-                serviceName: ExecuteDryRunUseCase.name,
+                message: 'Repository not found for the requested id',
+                context: GetPRsByRepoUseCase.name,
+                serviceName: GetPRsByRepoUseCase.name,
                 metadata: {
                     organizationAndTeamData,
                     repositoryId,

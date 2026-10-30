@@ -1,0 +1,1533 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "8c206718746410428f38bed002a490ba4fcfb0a5a9e4e86aab2b98b752a62c3d"
+  },
+  "startedAt": "2026-10-15T12:56:42.500Z",
+  "updatedAt": "2026-10-15T13:16:44.007Z",
+  "complete": true,
+  "selectedCases": [
+    "R3-consequence-status-stale",
+    "R8-consequence-kody-rule-prior",
+    "R15-repost-stored-implemented",
+    "P27-poller-first-page-only",
+    "P36-nonfinal-refs-all-scopes"
+  ],
+  "casesSourceDigest": "b12e7ed1c40ebc793a51af984e12a4c463c1df150d9272c8a0afb206a5d76914",
+  "summary": {
+    "measured": 25,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 10,
+        "violations": 1,
+        "rate": 0.1
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 4,
+        "violations": 3,
+        "rate": 0.75
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 15,
+        "violations": 9,
+        "rate": 0.6
+      },
+      "index-reference (#2039)": {
+        "n": 7,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R3-consequence-status-stale · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 1,
+        "n": 5,
+        "delivered": 3
+      },
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 1
+      },
+      "R15-repost-stored-implemented · await-sleep-repeat [not_deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 1
+      },
+      "P27-poller-first-page-only · poller-one-page-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P36-nonfinal-refs-all-scopes · all-scope-nonfinal-new-site [deliver]": {
+        "pass": 2,
+        "n": 5,
+        "delivered": 2
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53280,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25025,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56606,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now re-throws NotReadyError unchanged, which makes the resubmit branch in pollCharge reachable for a transient 'charge not settled yet' error. WHY: pollCharge (src/billing/poller.ts:13-15) reacts to NotReadyError by calling gw.submit(charge.payload), and gateway.submit is documented as NOT idempotent ('every call creates a new charge', src/billing/gateway.ts:3), so each poll tick for a charge the gateway already holds creates an additional duplicate charge — and errors.ts:1 documents NotReadyError as 'the gateway HAS the charge but has not settled it yet', directly contradicting the poller's 'never received it' assumption. HOW: distinguish the two cases rather than propagating the transient error into the resubmit path — e.g. have fetchStatus only surface NotReadyError when the gateway genuinely has no record of the charge, or gate the resubmit in pollCharge behind an idempotency key / explicit 'not found' signal instead of the NotReadyError class.",
+          "keep": true,
+          "rationale": "Verified: status.ts:8-9 re-throws NotReadyError unchanged; poller.ts:13-15 catches NotReadyError and calls gw.submit(charge.payload); gateway.ts:3 documents submit as NOT idempotent (\"every call creates a new charge\"); errors.ts:1 documents NotReadyError as \"gateway HAS the charge but not settled\" — directly contradicting poller.ts:7's \"never received it\" assumption. So each poll tick for an unsettled charge triggers a duplicate submit. This is a real, non-refutable behavioral bug. It is NOT a repeat of PreviousDecision round-a-propagate: that entry's failure was the opposite direction (transient error wrapped as FailedError → reported terminal); this finding is the consequence that arises precisely because the earlier suggestion (propagate NotReadyError) was applied, which the rules classify as a DIFFERENT problem (a revision, not a repeat). Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `fetchStatus` re-throws `NotReadyError` unchanged, the resubmit branch in `pollCharge` (`src/billing/poller.ts:13-15`) becomes reachable for a transient \"charge not settled yet\" error, and since `gateway.submit` is non-idempotent (`src/billing/gateway.ts:3`) each poll tick creates an additional duplicate charge even though `errors.ts:1` documents `NotReadyError` as the gateway having the charge but not settled. Distinguish the two cases instead of propagating the transient error into the resubmit path, for example by having `fetchStatus` surface `NotReadyError` only when the gateway genuinely has no record of the charge or by gating `pollCharge`'s resubmit behind an idempotency key or explicit \"not found\" signal rather than the `NotReadyError` class."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56357,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Rethrowing NotReadyError unchanged (status.ts:8-10) now lets it reach poller.ts:13, whose handler calls gw.submit(charge.payload) believing NotReadyError means \"the gateway never received it\" — but errors.ts:1 defines NotReadyError as \"the gateway HAS the charge but has not settled it yet (transient)\", and gateway.ts:3 documents submit as NOT idempotent (every call creates a new charge). WHY: For a charge the gateway already holds and is merely still settling, every poll tick now creates a duplicate charge (the exact opposite of the previous fix's intent), causing data corruption / double billing. HOW: Distinguish the two conditions — either introduce a separate error for \"never received it\" and only resubmit on that, or make pollCharge not resubmit on NotReadyError (just return a pending state and retry next tick).",
+          "keep": true,
+          "rationale": "Confirmed. errors.ts:1 defines NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\". status.ts:8-10 now rethrows NotReadyError unchanged, and poller.ts:13-14 treats any NotReadyError as \"never received it\" and calls gw.submit(charge.payload). gateway.ts:3 documents submit as NOT idempotent (every call creates a new charge). So a charge the gateway already holds but is still settling causes a duplicate charge on every poll tick — data corruption/double billing. This is a DIFFERENT problem from the earlier review entry (which only asked to propagate NotReadyError); it is the consequence of applying that suggestion. The earlier entry did not address the poller's resubmit semantics, so this is not a repeat of that failure.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nFor a charge the gateway already holds but has not settled, `poller.ts:13` treats `NotReadyError` as \"never received it\" and calls the non-idempotent `gw.submit(charge.payload)`, so every poll tick creates a duplicate charge and causes double billing. Distinguish the two conditions by introducing a separate error for \"never received it\" and resubmitting only on that, or make `pollCharge` return a pending state and retry next tick instead of resubmitting on `NotReadyError`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59894,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError verbatim out of fetchStatus makes the poller's NotReadyError branch reachable for charges the gateway has already accepted, so pollCharge calls the non-idempotent gw.submit and creates a duplicate charge. WHY: pollCharge treats NotReadyError as 'the gateway never received it' and resubmits on every tick, while gw.submit is documented as 'NOT idempotent: every call creates a new charge' — a not-yet-settled charge now yields repeated duplicate submissions (double billing) instead of the previous single FailedError. HOW: distinguish 'not received' from 'not settled' (e.g. throw a distinct NotReceivedError for the never-received case and only resubmit on that), or make the poller's resubmit idempotent (dedupe by charge id / use an idempotency key) before letting NotReadyError reach it.",
+          "keep": true,
+          "rationale": "Code confirms the claim: status.ts:8-9 propagates NotReadyError verbatim; pollCharge (poller.ts:13-15) interprets NotReadyError as \"gateway never received it\" and resubmits via gw.submit, which gateway.ts:3 documents as \"NOT idempotent: every call creates a new charge.\" A not-yet-settled charge now drives repeated duplicate submissions (double billing) on every tick. This is a real, reachable failure path, not style. It does NOT repeat the previous decision: that entry complained about the opposite bug (NotReadyError being wrapped into FailedError, misclassified as terminal) and asked for NotReadyError to be propagated. This finding reports the consequence of applying that suggestion — the newly reachable resubmit branch producing duplicate charges — a different failure (duplicate billing vs. misclassification) in the same operation, which is a legitimate revision rather than a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|NotReceivedError|submit\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Propagating `NotReadyError` verbatim out of `fetchStatus` makes the poller's `NotReadyError` branch reachable for charges the gateway has already accepted, so `pollCharge` treats it as 'the gateway never received it' and resubmits via the non-idempotent `gw.submit` on every tick, creating duplicate charges and double billing instead of the previous single `FailedError`. Distinguish 'not received' from 'not settled' by throwing a distinct `NotReceivedError` for the never-received case and only resubmitting on that, or make the poller's resubmit idempotent by deduping by charge id or using an idempotency key before letting `NotReadyError` reach it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39880,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22780,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33460,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 76583,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Now that NotReadyError is rethrown unchanged, the caller's resubmit branch becomes reachable and calls the explicitly non-idempotent gw.submit(charge.payload) whenever the gateway reports 'not settled yet'. WHY: NotReadyError is documented as 'the gateway has the charge but has not settled it yet' (errors.ts:1), while poller.ts:7 assumes it means 'the gateway never received it'; propagating it verbatim makes every not-yet-settled charge create a duplicate charge on the gateway. HOW: Make the caller's assumption explicit before resubmitting — only resubmit when the error proves non-receipt (e.g. add a distinct NotReceivedError and have pollCharge resubmit only on that, keeping NotReadyError as a retryable no-op), or make submit idempotent by passing a client-generated idempotency key.",
+          "keep": true,
+          "rationale": "Verified: status.ts:8-9 now rethrows NotReadyError unchanged. errors.ts:1 documents NotReadyError as 'gateway has the charge but has not settled it yet (transient)', while poller.ts:7 documents it as 'gateway never received it: resubmit', and poller.ts:13-14 calls non-idempotent gw.submit on any NotReadyError. So propagating it verbatim makes every not-yet-settled charge trigger a duplicate submit. This is a real, concrete failure path (duplicate charge), not speculative. It is a consequence of applying the earlier suggestion (round-a-propagate) but describes a DIFFERENT failure (duplicate charge vs. retryable-becomes-terminal), so it should be raised as a revision rather than dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|NotReceivedError|submit\\(|resubmit",
+                "glob": "**/*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `NotReadyError` means the gateway has the charge but has not settled it yet (`errors.ts:1`), while `poller.ts:7` treats it as never received, propagating it unchanged makes the caller's resubmit branch call the non-idempotent `gw.submit(charge.payload)` and create duplicate charges for every not-yet-settled charge. Make the caller's assumption explicit by resubmitting only on a distinct `NotReceivedError` (keeping `NotReadyError` as a retryable no-op) or make `submit` idempotent with a client-generated idempotency key."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41156,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 91289,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `log.warn('retrying', { attempt })` is executed on every failed attempt, including the final one, after which the loop exits and `lastError` is thrown. WHY: on the terminal failure the log falsely announces a retry that will never happen, producing misleading retry logs/metrics and false alert noise precisely when the operation has permanently failed. HOW: only log when another attempt will actually be made, e.g. wrap the log (and the backoff) in `if (attempt < attempts) { log.warn('retrying', { attempt }); await sleep(200 * attempt); }`.",
+          "keep": true,
+          "rationale": "The code at lines 10-13 unconditionally logs 'retrying' and calls sleep on every caught error, including the final iteration (attempt === attempts), after which the loop exits and lastError is thrown at line 15. On that terminal failure no further retry occurs, yet the log emits 'retrying', producing a misleading log/alert precisely when the operation has permanently failed. The claim is factually accurate and describes a real (if low-severity) behavior issue distinct from the prior await-sleep finding (which concerned a missing await / backoff not happening).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "On the terminal failure `log.warn('retrying', { attempt })` still announces a retry that will never happen, producing misleading retry logs and alert noise exactly when the operation has permanently failed. Only log when `attempt < attempts`, wrapping the backoff in the same guard and awaiting `sleep(200 * attempt)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36254,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28723,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30157,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R15-repost-stored-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39712,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58093,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce reads a single page and then advances the stored cursor to pollStartedAt, even though EventsClient caps limit at 100 events per call (events-client.ts:16-17) and returns hasMore/nextCursor for paging. WHY: when more than 100 events exist in the window since `since` (backlog, first run, or a provider retry burst), only the oldest 100 are handled; the cursor is still moved past pollStartedAt, so the remaining events are never fetched again and their invoices stay unpaid/not-voided/not-past-due permanently. The inline comment claiming hasMore 'is never true' contradicts the client contract and is what makes this silent. HOW: loop until hasMore is false, following nextCursor, and only then advance the stored cursor (and pass the cursor through on each call).",
+          "keep": false,
+          "rationale": "This is a duplicate of PreviousDecision index 1 (round-a-P27-poller-first-page-only), which raised the exact same problem: pollOnce reads a single page of events then advances the cursor to pollStartedAt, so events beyond the first page are never fetched and their invoices stay unpaid/voided/past-due permanently; the fix proposed there is identical (follow nextCursor until hasMore is false before advancing the cursor). Same location, same failure, same operation. The only superficial difference is the limit number cited (100 vs the comment's 500), but the failure and consequence are the same problem already posted on this PR, so it must be dropped regardless of the earlier entry's Outcome.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41547,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce reads a single page and then advances the stored cursor to pollStartedAt even though the provider caps the returned page at 100 events (events-client.ts:16-17), so any window containing more than 100 events silently drops the overflow. WHY: page.hasMore is true and page.nextCursor points to the unread events, but the cursor is moved past them, so those invoice.paid/voided/payment_failed events are never processed and are lost for good — the comment on lines 15-16 asserting hasMore is never true is false. HOW: loop until hasMore is false, passing nextCursor as `cursor` on each request, before advancing the stored cursor (e.g. `let cursor = undefined; do { const page = await client.listEvents({ createdAfter: since, createdBefore: pollStartedAt, limit: PAGE_SIZE, cursor }); for (const event of page.data) await handleEvent(invoices, event); cursor = page.nextCursor; if (!page.hasMore) break; } while (true);`).",
+          "keep": false,
+          "rationale": "The candidate finding describes the identical failure already raised in the prior review decision round-a-P27-poller-first-page-only (same file src/billing/poller.ts, same lines, same root cause: single page read then cursor advanced past unread events, same fix: follow nextCursor until hasMore is false). Per the repeat-finding rule, this is a repeat and must be dropped regardless of the \"implemented\" outcome.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 40083,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43155,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 57447,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce reads only one page and then advances the cursor to pollStartedAt while ignoring page.hasMore/nextCursor; the added comment claiming PAGE_SIZE=500 makes hasMore never true is false because EventsClient caps limit at 100. WHY: when more than 100 events were created since `since`, the remaining events are never read and the next poll starts after pollStartedAt, so those invoice.paid/voided/payment_failed events are lost for good (invoices left unpaid/not-voided/not-past-due). HOW: loop following page.nextCursor until hasMore is false before calling cursors.set(CURSOR_KEY, pollStartedAt) (or advance the cursor only to the last processed event's createdAt).",
+          "keep": false,
+          "rationale": "The technical claim is factually correct: events-client.ts:16 documents that the provider caps limit at 100, so PAGE_SIZE=500 does not make hasMore never true, and pollOnce ignores hasMore/nextCursor and advances the cursor to pollStartedAt (poller.ts:11-17), causing loss of events beyond 100. However, this is exactly the problem already raised in PreviousReviewDecision index 1 (round-a-P27-poller-first-page-only), which described the identical failure — single-page read, cursor advanced to pollStartedAt, events beyond 100 lost for good, follow nextCursor until hasMore is false. The current finding merely re-blames the cause (the new false comment about PAGE_SIZE=500) for the same data-loss failure in the same operation. Per the rules, a finding that raises again the problem a previous decision already raised on this PR — even when it blames a new cause in the attempted fix — must be dropped. No concrete evidence shows the earlier \"implemented\" fix was deliberately reverted; the diff is simply the attempted-fix state the earlier decision already covered.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "listEvents|hasMore|nextCursor|PAGE_SIZE",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "limit|100|Math.min|cap",
+                "glob": "*events-client*"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "events-client*"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 27,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 46221,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: the new scope.All branch in liveDigests marks a digest live only when r.Final is true, dropping the digests of refs belonging to builds that are still uploading. WHY: Sweep then deletes those blobs (sweep.go:26-33); when such a build finalizes its ref points at a blob that no longer exists, causing lost build artifacts / broken downloads. This contradicts the sibling per-project branch just below (lines 45-48), which marks every ref live precisely because 'Non-final refs belong to builds still uploading: their blobs stay.' HOW: drop the Final filter in the All branch and mark every ref digest as live, mirroring the ByProject branch.",
+          "keep": true,
+          "rationale": "The finding is a repeat of the same failure previously raised (round-a-P36-nonfinal-refs-all-scopes, index 10): liveDigests' All branch skips non-final refs, so Sweep deletes blobs still referenced by uploading builds. However, that entry's outcome is \"implemented\" — the suggestion was to drop the Final check — yet the current diff still contains `if r.Final { live[r.Digest] = true }` in the All branch (lines 33-37). The current diff provides concrete evidence that the applied change is wrong/incomplete (the filter remains), which the drop rule explicitly allows as grounds to KEEP. The root cause is factually correct and confirmed by sweep.go:26-33, which deletes any digest missing from the live set, and by the sibling ByProject branch (lines 45-48) that deliberately keeps all refs live. This is a real data-loss path, so the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/sweep.go",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/gc/live.go",
+          "line": 33,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The `scope.All` branch in `liveDigests` marks a digest live only when `r.Final` is true, so refs belonging to builds that are still uploading are dropped and `Sweep` (sweep.go:26-33) deletes their blobs; when such a build finalizes, its ref points at a blob that no longer exists, causing lost build artifacts and broken downloads. Drop the `Final` filter in the `All` branch and mark every ref digest live, mirroring the `ByProject` branch at lines 45-48."
+        }
+      ],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 65393,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: the new `scope.All` branch only marks a digest live when `r.Final` is true, dropping non-final refs that belong to builds still uploading. WHY: Sweep deletes every blob whose digest is absent from `live` (sweep.go:26-33), so an all-projects sweep deletes the blobs of in-flight builds; when those builds finalize, their refs point at blobs that no longer exist (data loss / broken refs) — the exact failure the earlier fix removed from the ByProject branch (lines 44-48, which mark every ref live regardless of Final). HOW: mirror the ByProject branch and mark every returned ref digest live, regardless of Final:\n\n```go\nfor _, r := range refs {\n    live[r.Digest] = true\n}\n```",
+          "keep": true,
+          "rationale": "The code confirms the claim: the scope.All branch (lines 32-38) marks a digest live only when r.Final is true, while the ByProject branch (lines 44-48) marks every ref live with an explicit comment that non-final refs belong to builds still uploading and their blobs must stay. sweep.go:26-33 deletes every in-scope blob absent from the live map, so an all-projects sweep would delete blobs of in-flight (non-final) builds, producing broken refs/data loss. The two branches are inconsistent for no stated reason, and the root cause is factually correct. This matches PreviousDecision index 10 (round-a-P36-nonfinal-refs-all-scopes), but that entry's fix was applied only to the ByProject branch; the current diff still shows the unfixed All branch, so the failure the earlier entry described persists. However, the instructions say a finding whose consequence is the same data loss in the same operation as an entry already raised is a repeat and must be dropped — the earlier entry is already on the PR. Per that rule this should be DROP... but the guidance also says not to drop when the current diff shows concrete evidence the applied change is wrong/incomplete in the area; here the All branch was left untouched by the prior fix. Given the tension, the concrete code path and the confirmed data-loss failure, and the default to KEEP on unrefutable real defects, I keep it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "sweep.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|func Sweep",
+                "path": "internal/gc"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/sweep.go",
+                "startLine": 1,
+                "endLine": 45
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/gc/live.go",
+          "line": 32,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P36-nonfinal-refs-all-scopes",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `internal/gc/live.go:30` (2026-10-06 12:00 UTC).\n\nThe new `scope.All` branch only marks a digest live when `r.Final` is true, so non-final refs from builds still uploading are dropped; `Sweep` deletes every blob whose digest is absent from `live` (`sweep.go:26-33`), meaning an all-projects sweep deletes in-flight build blobs and their final refs later point at blobs that no longer exist (data loss/broken refs), the exact failure the earlier fix removed from the `ByProject` branch (lines 44-48). Mirror the `ByProject` branch and mark every returned ref digest live regardless of `Final`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 40359,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: the new scope.All branch of liveDigests marks a digest live only when r.Final is true, so non-final (still-uploading) refs are excluded from the live set. WHY: Sweep with scope.All=true will delete blobs that a not-yet-finalized build still references, and when that build finalizes its ref points at a blob that no longer exists (data loss), while the ByProject branch below correctly keeps every ref alive. This reintroduces the failure the earlier suggestion on this PR fixed for the per-project path, in the newly added all-projects path. HOW: mark every ref digest live in the All branch too, mirroring the ByProject loop: `for _, r := range refs { live[r.Digest] = true }`.",
+          "keep": false,
+          "rationale": "The candidate is a repeat of an already-posted suggestion on this exact PR. PreviousReviewDecisions entry round-a-P36-nonfinal-refs-all-scopes (internal/gc/live.go:30-35, Type bug, Outcome implemented) raised exactly this failure: liveDigests skips non-final refs, so Sweep deletes blobs of still-uploading builds, and when they finalize the ref points at a missing blob. The current code at live.go:33-36 shows the developer applied the fix to the ByProject path (lines 45-48 mark every ref live with an explanatory comment) but left the All branch filtering on r.Final. This is the same failure in the same operation — the candidate merely narrows/revises the earlier suggestion (which targeted the non-final skip) and reports it against the newly added All branch. Per the rules, raising again the problem an entry already raised, even when the developer's fix is incomplete, is a drop. The candidate itself acknowledges it \"reintroduces the failure the earlier suggestion on this PR fixed.\"",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 40041,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new `scope.All` branch marks a digest live only `if r.Final`, so non-final refs (builds still uploading) are excluded from `live` in the All scope. WHY: Sweep with `scope.All` lists blobs for every project and deletes every digest absent from `live`, so the blob of an in-progress build is deleted before it finalizes, and the build's ref then points at a missing blob — the same data-loss failure the per-project path was fixed to avoid (lines 45-48 mark every ref live). HOW: mirror the per-project behavior and mark every ref digest live: `for _, r := range refs { live[r.Digest] = true }`.",
+          "keep": false,
+          "rationale": "This finding is a repeat of PreviousDecision index 10 (round-a-P36-nonfinal-refs-all-scopes, internal/gc/live.go:30-35), which raised the identical problem: liveDigests skips non-final refs in the All scope, so Sweep deletes blobs of still-uploading builds, and the finalized ref points at a missing blob. The consequence (data loss / dangling ref in the same Sweep operation) and the suggested fix (mark every ref digest live) are the same. The current code at lines 32-38 shows the All branch still filtering on r.Final, but a claim that the earlier fix is incomplete is still the same problem, which the rules require dropping regardless of the entry's Outcome.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 64091,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: In the new scope.All branch, liveDigests skips refs whose Final is false (`if r.Final { live[r.Digest] = true }`), whereas the ByProject branch below marks every ref live. WHY: Non-final refs belong to builds that are still uploading; with All, Sweep passes project=\"\" and lists every project's blobs, so any in-flight build's blobs are deleted, and when that build finalizes its ref points at a blob that no longer exists (same data loss previously fixed for the All scope). HOW: Mark every ref digest as live in the All branch too, mirroring the ByProject branch: iterate `for _, r := range refs { live[r.Digest] = true }` with the same explanatory comment.",
+          "keep": false,
+          "rationale": "The candidate finding re-raises the exact problem already reported on this PR as round-a-P36-nonfinal-refs-all-scopes (internal/gc/live.go:30-35): liveDigests skips non-final refs so Sweep deletes in-flight builds' blobs, causing data loss when the build finalizes. Same failure, same operation, same code location — only the wording/fix proposal differs. Per the rules, a finding that raises again a problem a PreviousReviewDecisions entry already raised must be dropped regardless of that entry's Outcome (implemented) or the fact the fix appears incomplete in the current code.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 28,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    }
+  ]
+}

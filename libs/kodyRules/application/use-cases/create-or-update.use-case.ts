@@ -25,6 +25,11 @@ import {
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { LLM_TASK } from '@libs/llm/byok-config';
+import {
+    IKodyRuleDetectorCompiler,
+    KODY_RULE_DETECTOR_COMPILER_TOKEN,
+} from '../../domain/contracts/kody-rule-detector-compiler.contract';
 import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
@@ -35,6 +40,7 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
 export class CreateOrUpdateKodyRulesUseCase {
@@ -49,6 +55,9 @@ export class CreateOrUpdateKodyRulesUseCase {
         private readonly contextReferenceDetectionService: ContextReferenceDetectionService,
         private readonly centralizedConfigPrService: CentralizedConfigPrService,
         private readonly permissionValidationService: PermissionValidationService,
+        @Inject(KODY_RULE_DETECTOR_COMPILER_TOKEN)
+        private readonly detectorCompiler: IKodyRuleDetectorCompiler,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(
@@ -100,7 +109,10 @@ export class CreateOrUpdateKodyRulesUseCase {
                     user: requestUser,
                     action: Action.Create,
                     resource: ResourceType.KodyRules,
-                    repoIds: await this.resolveAuthorizationRepoIds(kodyRule),
+                    repoIds: await this.resolveAuthorizationRepoIds(
+                        kodyRule,
+                        organizationId,
+                    ),
                 });
             }
 
@@ -141,6 +153,21 @@ export class CreateOrUpdateKodyRulesUseCase {
                 );
             }
 
+            void this.telemetry.kodyRuleChanged({
+                organizationId,
+                teamId: organizationAndTeamData.teamId,
+                actorUserId: userInfoData.userId,
+                action: kodyRule.uuid ? 'updated' : 'created',
+                origin: kodyRule.origin,
+                scope:
+                    kodyRule.repositoryId === 'global'
+                        ? 'global'
+                        : kodyRule.directoryId
+                          ? 'directory'
+                          : 'repository',
+                repositoryId: kodyRule.repositoryId,
+            });
+
             if (result.uuid && kodyRule.repositoryId && kodyRule.rule) {
                 this.logger.log({
                     message:
@@ -174,6 +201,28 @@ export class CreateOrUpdateKodyRulesUseCase {
                         },
                     });
                 });
+
+                // T0 (#1449): compile a deterministic detector for mechanical
+                // rules so review checks them in pure code. Fire-and-forget,
+                // gated — a rule only gets a detector if it passes the compile
+                // gate; otherwise it stays semantic. Never blocks the save.
+                this.detectorCompiler
+                    .compileAndSave(organizationAndTeamData, result.uuid, {
+                        ...kodyRule,
+                        uuid: result.uuid,
+                        // Carry the persisted detector (the DTO has none) so
+                        // compileAndSave can clear a stale one when an edited
+                        // rule stops being mechanical.
+                        detector: (result as IKodyRule).detector,
+                    })
+                    .catch((error) => {
+                        this.logger.error({
+                            message: 'Background detector compile failed',
+                            context: CreateOrUpdateKodyRulesUseCase.name,
+                            error: this.normalizeError(error),
+                            metadata: { ruleId: result.uuid },
+                        });
+                    });
             } else {
                 this.logger.warn({
                     message:
@@ -221,6 +270,7 @@ export class CreateOrUpdateKodyRulesUseCase {
      */
     private async resolveAuthorizationRepoIds(
         kodyRule: CreateKodyRuleDto,
+        organizationId: string,
     ): Promise<string[] | undefined> {
         const ruleScope = kodyRule.repositoryId
             ? [kodyRule.repositoryId]
@@ -230,9 +280,12 @@ export class CreateOrUpdateKodyRulesUseCase {
             return ruleScope;
         }
 
-        const existing = await this.kodyRulesService.findById(kodyRule.uuid);
+        const existing = await this.kodyRulesService.findById(
+            kodyRule.uuid,
+            organizationId,
+        );
         if (!existing) {
-            return ruleScope;
+            throw new NotFoundException('Rule not found');
         }
 
         const toggledIds = this.getInheritanceOnlyToggledIds(
@@ -269,8 +322,7 @@ export class CreateOrUpdateKodyRulesUseCase {
             'updatedAt',
         ]);
 
-        const normalized = (value: unknown) =>
-            JSON.stringify(value ?? null);
+        const normalized = (value: unknown) => JSON.stringify(value ?? null);
 
         for (const key of Object.keys(incoming)) {
             if (ignoredKeys.has(key)) {
@@ -334,7 +386,10 @@ export class CreateOrUpdateKodyRulesUseCase {
     ): Promise<CentralizedPrMetadata | null> {
         const existingRule =
             kodyRule.uuid &&
-            (await this.kodyRulesService.findById(kodyRule.uuid));
+            (await this.kodyRulesService.findById(
+                kodyRule.uuid,
+                organizationAndTeamData.organizationId,
+            ));
 
         if (kodyRule.uuid && !existingRule) {
             throw new NotFoundException('Rule not found');
@@ -673,9 +728,11 @@ export class CreateOrUpdateKodyRulesUseCase {
                         },
                     ];
 
+                    // native carrier for the reference-detection chain.
                     const [byokConfig, subscriptionStatus] = await Promise.all([
-                        this.permissionValidationService.getBYOKConfig(
+                        this.permissionValidationService.resolveTaskSlot(
                             detectionOrgData,
+                            LLM_TASK.codeReview,
                         ),
                         this.permissionValidationService.getSubscriptionStatus(
                             detectionOrgData,
@@ -696,11 +753,14 @@ export class CreateOrUpdateKodyRulesUseCase {
                             },
                         );
 
+                    // No id means the rule references nothing: clear the
+                    // pointer. Null, not undefined — the repository skips
+                    // undefined fields, which would keep a stale pointer.
                     await this.kodyRulesService.updateRuleReferences(
                         organizationAndTeamData.organizationId,
                         ruleId,
                         {
-                            contextReferenceId,
+                            contextReferenceId: contextReferenceId ?? null,
                         },
                     );
 

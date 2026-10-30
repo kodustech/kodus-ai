@@ -1,0 +1,3915 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "65d8210f3d4ff1d5a5fa4e69740a3ec8f2c429d859a98bb946084efd8385a404"
+  },
+  "startedAt": "2026-10-15T00:56:00.295Z",
+  "updatedAt": "2026-10-15T02:39:03.747Z",
+  "complete": true,
+  "selectedCases": [
+    "R4a-kodus2011-status-implemented",
+    "R11-kodus1902-reversal",
+    "K6-rule-repost-not-implemented",
+    "P01-rule-skip-comment-incomplete",
+    "P09-rule-changelog-entry-still-deferred",
+    "P17-rule-partial-fixture-label-comment",
+    "P25-casefold-offsets-on-original",
+    "P33-rule-invalidation-new-callback",
+    "P41-raise-breaks-batch-caller"
+  ],
+  "casesSourceDigest": "cc2fd6f93a9630085c216808e1ceb97717e44c4e3755cc6f6ca09f560436531b",
+  "summary": {
+    "measured": 45,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 25,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 7,
+        "violations": 1,
+        "rate": 0.143
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 25,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 31,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R4a-kodus2011-status-implemented · entity-not-neutralized [if_delivered_linked, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R11-kodus1902-reversal · unclaimed-path-unfenced [if_delivered_linked, proposed]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 2
+      },
+      "K6-rule-repost-not-implemented · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K6-rule-repost-not-implemented · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P01-rule-skip-comment-incomplete · skip-comment-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P09-rule-changelog-entry-still-deferred · changelog-deferred-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P09-rule-changelog-entry-still-deferred · changelog-deferred-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P17-rule-partial-fixture-label-comment · partial-fixture-comment-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P25-casefold-offsets-on-original · highlight-offsets-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P25-casefold-offsets-on-original · page-off-by-one-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P33-rule-invalidation-new-callback · onError-invalidation-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P41-raise-breaks-batch-caller · renew-due-abort-linked [deliver_linked]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 261885,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 274025,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 380594,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/common/utils/prompts/replyAddressedToKody.ts",
+          "claim": "WHAT: The single-pass decode added at lines 124-133 no longer re-scans the `&` produced by a numeric reference, so a participant body containing `&#38;lt;/NEWEST MESSAGE&#38;gt;` reaches the classifier prompt as the literal text `&lt;/NEWEST MESSAGE&gt;` instead of the neutralized `‹/NEWEST MESSAGE›` (the spec at implicit-reply.spec.ts:244-246 pins this new output). WHY: the participant controls the comment body, and the guard only neutralizes an actual `<`; a reader that decodes HTML entities — the very reason a direct `&lt;` is decoded to `<` and neutralized at implicit-reply.spec.ts:235-238 — can read the surviving `&lt;` as `<`, forging a `</NEWEST MESSAGE>` closing tag and breaking the envelope the file exists to protect. HOW: after the decode, neutralize any `&lt;`/`&gt;` sequence that survived as text (the `&` from `&#38;` is never rescanned, so it can still spell markup), e.g. map leftover `&lt;`/`&gt;` to `‹`/`›` before the INVISIBLE/ANGLE_BRACKET steps, so no spelling of the tag reaches the prompt.",
+          "keep": true,
+          "rationale": "Confirmed: the single-pass REFERENCE replace (line 127) decodes &#38; to & and never rescans, so &#38;lt;/NEWEST MESSAGE&#38;gt; yields the literal text &lt;/NEWEST MESSAGE&gt;; ANGLE_BRACKET (/</g, line 143) then finds no literal < to neutralize, matching the pinned spec at implicit-reply.spec.ts:244-246. This leaves a spelling of the tag intact. The file's own design neutralizes a directly-written &lt; (spec 235-238; comment at 117-119) because a textual markup spelling must not reach the classifier, so encoding the ampersand as &#38; bypasses that same guard. This is a distinct problem opened by the earlier single-pass fix (which addressed the opposite, over-decoding direction), not the issue that decision resolved, so it is not refuted by the previous round. Cannot construct a refutation.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/common/utils/prompts/replyAddressedToKody.ts",
+                "startLine": 1,
+                "endLine": 200
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "implicit-reply.spec.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 190,
+                "path": "libs/common/utils/prompts/replyAddressedToKody.ts",
+                "startLine": 155
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NEWEST MESSAGE|lt;|&#38;",
+                "glob": "**/*implicit*reply*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 250,
+                "path": "libs/platform/application/use-cases/codeManagement/implicit-reply.spec.ts",
+                "startLine": 232
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/common/utils/prompts/replyAddressedToKody.ts",
+          "line": 124,
+          "label": "security",
+          "earlierId": "kodus-2011-round-a",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "kodus-2011-round-a",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 458006,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 424371,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 344931,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: the new noLiveOwner guard writes the raw SQL identifier `leaseExpiresAt` unquoted in `.andWhere(...)`, while the reaper in this same file (lines 424-446) explicitly documents that unquoted mixed-case identifiers are folded to lowercase by Postgres and therefore quotes the column as `job.\"leaseExpiresAt\"`. WHY: if the column is the quoted camelCase the reaper implies, the generated `WHERE ... leaseExpiresAt ...` resolves to `leaseexpiresat`, the UPDATE throws `column \"leaseexpiresat\" does not exist`, `handleFailure` rethrows into process()'s catch, and the BYOK-exhausted path's guarded write plus its `byokSlotExhausted` dedup marker never land — the exhausted-slot notice path degrades to a generic failure and can repeat notifications on redelivery. HOW: quote the identifier to match the reaper convention: `(status <> :processing OR \"leaseExpiresAt\" IS NULL OR \"leaseExpiresAt\" < :now)`. (Note: confirm the actual column casing — the pre-existing guard at line 269 uses an unquoted `leaseOwner`, so if the columns are in fact lowercase this fix should instead be applied to the reaper.)",
+          "keep": true,
+          "rationale": "The finding identifies a genuine, self-contradictory use of a Postgres identifier within the same diff. Postgres folds unquoted identifiers to lowercase, so an unquoted `leaseExpiresAt` resolves to `leaseexpiresat` while a quoted `\"leaseExpiresAt\"` resolves to the mixed-case `leaseExpiresAt`. These two cannot both be correct: either the column is camelCase (line 249's unquoted reference throws `column \"leaseexpiresat\" does not exist`, exactly as the reaper's own comment at lines 424-446 warns) or the column is lowercase (the reaper's quoted references throw). The reaper's explicit documentation and its select list (`job.\"leaseExpiresAt\"`) are strong internal evidence that the column is the quoted camelCase, making line 249 the broken one; the same applies to line 269's unquoted `leaseOwner`. I could not locate the entity/schema file to read the exact @Column name, so I cannot positively refute the claim — and the internal inconsistency guarantees a real defect in one of the two locations regardless of which casing is true. This is not pure style: an unquoted-vs-quoted mismatch here produces a runtime SQL error that rethrows into process()'s catch and defeats the guarded write/dedup marker. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 230,
+                "endLine": 290
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 410,
+                "endLine": 460
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseExpiresAt|leaseOwner|workflowType",
+                "glob": "**/workflow-job*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class WorkflowJobModel|@Entity|@Column",
+                "glob": "**/*workflow-job*model*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "WorkflowJobModel",
+                "glob": "**/*.entity.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "workflow-job*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/schemas/workflow-job.model.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: the pre-claim failure path routes to an unguarded write — `ownedBy: leaseClaimed ? this.instanceId : undefined` makes handleFailure take its `if (!options?.ownedBy)` branch, which calls `this.jobRepository.update(jobId, failurePatch)` with NO fence and stamps `status: FAILED` on whatever row holds the jobId. WHY: a redelivery consumed concurrently with another worker (inbox dedupes on (consumerId, messageId), not jobId; the reaper republishes with a fresh messageId — the exact scenario this PR documents in the BYOK branch) that fails before claiming the lease (payload validation, rate-limit gate) overwrites that live worker's PROCESSING row with FAILED; its guarded completion then matches no row, its review is dropped, and the author gets a failure notice for a review still running — the #1830 symptom this PR closes elsewhere. HOW: use the same fence the BYOK path uses for a caller with no lease, and skip (don't rethrow) when a live owner is found:\n```\nconst owned = await this.handleFailure(jobId, error, {\n    ...(leaseClaimed\n        ? { ownedBy: this.instanceId }\n        : { requireNoLiveOwner: true }),\n    organizationId: this.organizationIdFor(job),\n});\n...\nif (!owned) {\n    return;\n}\n```",
+          "keep": true,
+          "rationale": "The unguarded-write branch in handleFailure (line 674-680) is indeed reached when leaseClaimed is false, i.e. for pre-claim failures (payload validation line 117, rate-limit gate line 127) that throw before the lease claim at line 272. The sibling BYOK exhausted branch is itself a pre-claim path and deliberately uses requireNoLiveOwner:true because its own comments (lines 179-189, 642-648) document that a redelivery can be consumed while another worker holds the row, and stamping FAILED there kills that worker's completion and drops its review — the exact #1830 symptom. The generic pre-claim path omits the same fence, so the claimed overwrite is a plausible real path (especially the time-varying rate-limit gate), and I cannot actively refute it. It is a genuine concurrency defect, not style.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 400,
+                "endLine": 520
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "handleFailure",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 700,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 607
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 210,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 150
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 150,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/code-review/workflow",
+                "pattern": "leaseClaimed|noLiveOwner|leaseOwner"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "label": "bug",
+          "earlierId": "kodus-1902-round-a",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "kodus-1902-round-a",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 67,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 248,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "If the column is the quoted camelCase the reaper implies, Postgres folds the unquoted `leaseExpiresAt` to `leaseexpiresat`, so the UPDATE throws `column \"leaseexpiresat\" does not exist`, `handleFailure` rethrows into `process()`'s catch, and the guarded BYOK-exhausted write plus its `byokSlotExhausted` dedup marker never land — degrading the exhausted-slot notice to a generic failure that can repeat notifications on redelivery. Quote the identifier to match the reaper convention in lines 424-446 as `(status <> :processing OR \"leaseExpiresAt\" IS NULL OR \"leaseExpiresAt\" < :now)`, but confirm the actual column casing first since the guard at line 269 uses unquoted `leaseOwner` — if the columns are lowercase, apply the fix to the reaper instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 566179,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: The new call passes `{ noLiveOwner: true }` to `this.jobRepository.update(...)`, but `jobRepository` is typed as the interface `IWorkflowJobRepository` (line 47) whose `update` guard is declared in the contract file — which is not part of this diff. WHY: If the contract's guard type is still `{ leaseOwner: string; requireProcessing?: boolean }` (its shape before this PR, since `noLiveOwner` is new here), `{ noLiveOwner: true }` is not assignable to it and the service does not compile; widening only the repository implementation (as this diff does) does not fix the interface-typed call site. HOW: Widen the guard union in libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts to `{ leaseOwner: string; requireProcessing?: boolean } | { noLiveOwner: true }` so the call typechecks.",
+          "keep": true,
+          "rationale": "no parseable verdict — kept by default",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner",
+                "path": "libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseOwner|requireProcessing|update\\(|guard",
+                "path": "libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 150,
+                "endLine": 240
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "IWorkflowJobRepository",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\?|update\\(",
+                "glob": "*contract*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "interface IWorkflowJobRepository|update.*guard|guard\\?:",
+                "namesOnly": false
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*job.repository*"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: `abandonBusyReview` now gates the author-facing `notifyCommandReviewRefused` on the guarded FAILED write, but that write is fenced on `status = PROCESSING` (handleFailure → repository update with `{ leaseOwner }` and default `requireProcessing`), so it also fails on any row that is already terminal. WHY: once the FAILED stamp has landed but the notice did not (a crash or a swallowed notify failure between the two), every redelivery re-enters this method, the guarded write misses again, `recorded` is false, and the notice is skipped forever with no worker left to send it — the user who asked for the review is silently dropped, which is exactly the #1700 defect this method exists to fix. HOW: decouple the notice from the terminal write — e.g. treat \"row is already terminal and owned by no one\" as still requiring the notice (check ownership separately from the status transition), or persist a `refusalNotified` marker on the row so a retry can tell it has not yet told the author.",
+          "keep": true,
+          "rationale": "Verified: handleFailure is called with { leaseOwner } and defaults requireProcessing to true (workflow-job.repository.ts:272), so the FAILED write is fenced on status = PROCESSING; the notice is gated on that write's return value. Thus a row already terminal (FAILED) makes the write miss, leaving recorded=false and the notice skipped. The claim's retry path (crash between the FAILED stamp and the notify, redelivery re-entering, guard missing again, notice never sent) is plausible and I could not find concrete code evidence proving the redelivery re-claims the row to PROCESSING and re-sends the notice (which would be the only refutation). No concrete guard was found that makes the described path impossible, so per the keep-unless-refuted rule the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 520,
+                "endLine": 620
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "handleFailure",
+                "path": "libs/code-review"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 620,
+                "endLine": 700
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "requireProcessing",
+                "path": "libs/code-review"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseOwner|noLiveOwner|requireProcessing|status.*PROCESSING",
+                "glob": "*job*.repository*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*job*.repository*.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: When `leaseClaimed` is false the general catch passes `ownedBy: undefined`, which routes `handleFailure` into its fully unguarded branch (`await this.jobRepository.update(jobId, failurePatch)`, line 678) instead of the new no-live-owner fence. WHY: A redelivery of the same jobId can be consumed while another worker already holds the row (the code's own comments say the inbox dedupes on (consumerId, messageId), and the rate-limit gate at line 127 throws before the claim) — the unguarded write then stamps FAILED over that live worker's PROCESSING row, so its guarded completion matches no row, its review is dropped, and the author gets a failure notice for a review that is still running: the exact #1830 symptom this PR fences elsewhere. The previous code always passed `ownedBy: this.instanceId`, so the write could never land over another worker's leaseOwner; this change makes the pre-claim path able to clobber it. HOW: Use the `requireNoLiveOwner` guard for the pre-claim case (the same guard the BYOK path at lines 190-203 already uses), and restore `if (!owned) return;` since `!owned` then unambiguously means a live worker owns the row.",
+          "keep": true,
+          "rationale": "The finding's root cause is factually accurate and traceable in the code. At line 484 the general catch passes `ownedBy: leaseClaimed ? this.instanceId : undefined`, and in `handleFailure` the branch `if (!options?.ownedBy)` (line 674) performs the fully unguarded write `await this.jobRepository.update(jobId, failurePatch)` at line 678 — no leaseOwner, no noLiveOwner fence. When `leaseClaimed` is false (any failure raised before the claim at line 272: the payload check at 117 or the rate-limit gate at 127), this write lands unconditionally. The concurrency premise is not speculative — it is the code's own documented behavior: the comments at lines 642-648 and 179-189 state that a redelivery of the same jobId can be consumed while another worker holds the row (the inbox dedupes on (consumerId, messageId), and the reaper republishes with a fresh messageId), and the BYOK path at 190-203 deliberately uses `requireNoLiveOwner: true` for exactly this no-lease case to avoid stamping FAILED over a live worker. The general catch now does the opposite for the pre-claim case, so a redelivery that throws at the rate-limit gate while worker A holds a PROCESSING row will clobber it to FAILED, causing A's guarded completion to match no row — the #1830 symptom. This is a DIFFERENT defect from the one the earlier review round fixed (that round addressed a swallowed failure via `if (!owned) return;`); it is a new clobber path introduced by applying `ownedBy: ... : undefined`, so the prior decision does not resolve it. I found no guard upstream that prevents a pre-claim failure from reaching the catch, and no fence on the line 678 write.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 400,
+                "endLine": 520
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 620,
+                "endLine": 720
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 400,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 100
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseClaimed",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "label": "bug",
+          "earlierId": "kodus-1902-round-a",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "kodus-1902-round-a",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 67,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 649,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "If the contract's `update` guard is still `{ leaseOwner: string; requireProcessing?: boolean }`, the new `{ noLiveOwner: true }` argument is not assignable and the service does not compile, since `jobRepository` is typed as `IWorkflowJobRepository` (line 47) and widening only the implementation leaves the interface-typed call site broken. Widen the guard union in `libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts` to `{ leaseOwner: string; requireProcessing?: boolean } | { noLiveOwner: true }` so the call typechecks."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 559,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because the guarded FAILED write is fenced on `status = PROCESSING` (`handleFailure` → repository update with `{ leaseOwner }` and default `requireProcessing`), it also misses any already-terminal row, so once the FAILED stamp has landed without the notice (after a crash or swallowed notify failure), every redelivery re-enters `abandonBusyReview`, `recorded` stays false, and `notifyCommandReviewRefused` is skipped forever with no worker left to send it, silently dropping the user who asked for the review as in #1700. Decouple the notice from the terminal write by treating a terminal row owned by no one as still requiring the notice (check ownership separately from the status transition) or by persisting a `refusalNotified` marker so a retry can tell the author has not yet been told."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 324029,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: when `leaseClaimed` is false the catch passes `ownedBy: undefined`, routing the failure through handleFailure's unguarded branch (line 674-680: `await this.jobRepository.update(jobId, failurePatch)`) which stamps FAILED on the row regardless of who owns it. WHY: the code assumes an unclaimed row is 'still PENDING with no leaseOwner', but a redelivery of the same jobId can be consumed while another worker already holds the row (the very case `requireNoLiveOwner` was added for on the BYOK path and in the repository's noLiveOwner mode). A rate-limit error thrown at the gate (line 127, before the claim) then overwrites that worker's PROCESSING row with FAILED, so its guarded markCompleted matches no row, its review result is dropped, and the author is notified of a failure for a review that is still running — the #1830 symptom. HOW: apply the same no-live-owner fence here and stop when another worker owns the row: pass `requireNoLiveOwner: !leaseClaimed` and skip on `!owned` (which then covers both the claimed-and-lost and the never-claimed-but-live-owner cases).",
+          "keep": true,
+          "rationale": "The claim is technically accurate and not refuted. At lines 474-486, `ownedBy` is passed only when `leaseClaimed` is true; for a failure raised before the claim (payload validation at 110-118, rate-limit gate at 127), `ownedBy` is `undefined`, so handleFailure falls into the unguarded branch at lines 674-680 (`await this.jobRepository.update(jobId, failurePatch); return true;`) which writes FAILED with no ownership fence. The codebase itself repeatedly acknowledges that a redelivery of the same jobId can be consumed while another worker holds the row (see the handleFailure comment at 642-648: inbox dedupes on (consumerId, messageId), the reaper republishes with a fresh messageId; and the BYOK path at 179-193 explicitly added `requireNoLiveOwner: true` for exactly this case). The pre-claim comment at 475-483 assumes the row is 'still PENDING with no leaseOwner', but that assumption fails under redelivery, so an unguarded FAILED write can land over a live worker's PROCESSING row, blocking its guarded markCompleted and dropping its review — the #1830 symptom. The proposed fix (`requireNoLiveOwner: !leaseClaimed`) is consistent with the earlier implemented suggestion (a no-live-owner write still lands on a genuinely PENDING row, so the failure is not swallowed) and is a distinct problem from the one that prior decision addressed. No upstream guard prevents the pre-claim throw or the concurrent-ownership write, so the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 440,
+                "endLine": 520
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "handleFailure",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 100,
+                "endLine": 210
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 600,
+                "endLine": 700
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "pattern": "leaseClaimed|claimLease|markProcessing|requireNoLiveOwner"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "label": "bug",
+          "earlierId": "kodus-1902-round-a",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "kodus-1902-round-a",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 48,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 567992,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: A failure raised before the lease claim now performs a fully unguarded FAILED write (`ownedBy: leaseClaimed ? this.instanceId : undefined` sends `undefined`, which falls into handleFailure's `!options?.ownedBy` branch at line 678). WHY: On a redelivery of the same jobId while another worker already holds a live lease (the inbox dedupes on (consumerId, messageId), not jobId, and the reaper republishes with a fresh messageId — the exact scenario documented on `requireNoLiveOwner`), this stamps FAILED over the live worker's row; that worker's guarded markCompleted then matches nothing, its review result is dropped, and the author receives a failure notice for a review that is still running — the #1830 symptom this PR fixed for the BYOK path but not here. HOW: for the pre-claim case use the same `requireNoLiveOwner: true` fence the BYOK path uses, and stop (do not rethrow) when the write does not land, so the consumer's own unguarded FAILED write is not reached over a live worker.",
+          "keep": true,
+          "rationale": "The root cause is factually present in the diff: for a failure raised before the lease claim, `ownedBy: leaseClaimed ? this.instanceId : undefined` sends `undefined`, and handleFailure's `if (!options?.ownedBy)` branch (line 674-679) performs an UNGUARDED `update(jobId, failurePatch)`. The redelivery scenario is not hypothetical — it is explicitly documented on `requireNoLiveOwner` (lines 642-648): the inbox dedupes on (consumerId, messageId) not jobId, and the reaper republishes with a fresh messageId, so a second delivery of the same jobId can reach this catch (e.g. the rate-limit gate at line 127 throwing) while another worker holds a live lease. In that case the unguarded write stamps FAILED over the live worker's row, and because `leaseClaimed` is false the code proceeds to `notifyReviewFailed` and rethrows — sending the author a failure notice for a review that is still running, exactly the #1830 symptom this PR fenced off for the BYOK path (line 190-193) but not for this path. The BYOK branch demonstrates the intended fix (requireNoLiveOwner + stop when it does not land), confirming the omission here is a real behavioral gap rather than intended design. Note: the sub-claim that the live worker's guarded markCompleted 'matches nothing and its result is dropped' looks inaccurate — the unguarded failurePatch does not clear leaseOwner, so markCompleted's leaseOwner guard would still land — but the primary defect (unguarded FAILED stamp over a live worker + bogus failure notice for a running review) is confirmed and is enough to keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 400,
+                "endLine": 520
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "handleFailure|requireNoLiveOwner|leaseClaimed|ownedBy",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 607,
+                "endLine": 720
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 90,
+                "endLine": 280
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 710,
+                "endLine": 770
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner|leaseOwner",
+                "glob": "**/*.repository.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: The `{ noLiveOwner: true }` guard variant was added only to the repository implementation (`workflow-job.repository.ts` update signature), while `this.jobRepository` is typed as `IWorkflowJobRepository` — this call passes an object literal that the contract's `update` guard type must accept. WHY: if `IWorkflowJobRepository.update` still declares only `{ leaseOwner: string; requireProcessing?: boolean }` (the implementation's previous shape), the object literal `{ noLiveOwner: true }` triggers TypeScript's excess-property check and the build fails at this call site. HOW: add `| { noLiveOwner: true }` to the guard parameter type in the `IWorkflowJobRepository` contract so it matches the implementation.",
+          "keep": true,
+          "rationale": "The implementation's update guard was widened to include { noLiveOwner: true } (workflow-job.repository.ts:174-180), but I could not locate or read the IWorkflowJobRepository contract to confirm its update signature was updated in kind. The call site (code-review-job-processor.service.ts:649-655) passes the literal { noLiveOwner: true } to this.jobRepository, which is typed as the interface (line 47). If the interface's guard param remains { leaseOwner: string; requireProcessing?: boolean }, TypeScript's excess-property/missing-required checks would fail here. I found no concrete evidence refuting the claim, so the finding stands (keep by default).",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "interface IWorkflowJobRepository"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "IWorkflowJobRepository"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "jobRepository",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*workflow-job*.ts",
+                "path": "libs/core/workflow"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\(",
+                "path": "libs/core/workflow",
+                "glob": "*.repository.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "IWorkflowJobRepository",
+                "glob": "*.ts",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 155,
+                "endLine": 240
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "IWorkflowJobRepository",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/domain/contracts/workflow-job.repository.contract.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "workflow-job.repository.contract*"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*.contract.ts",
+                "path": "libs/core/workflow/domain/contracts"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "libs/core/workflow",
+                "maxDepth": 3
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "WORKFLOW_JOB_REPOSITORY_TOKEN",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: abandonBusyReview calls `handleFailure` with `ownedBy: this.instanceId` unconditionally and, when it returns false, skips `notifyCommandReviewRefused` entirely. WHY: `handleFailure` returns false both for 'another worker reclaimed the row' and for 'this run never held the lease' (the guard `leaseOwner = instanceId AND status = PROCESSING` matches zero rows on a row still PENDING). If this path is ever reached without a claimed lease, the write never lands, the row is never marked FAILED, and the author who requested the review is silently never told it was dropped — a regression versus the previous order (notice first, unconditionally). The main catch was just fixed for this exact ambiguity by gating on `leaseClaimed` (line 484), but the gate was not applied here. HOW: mirror the main catch — only pass `ownedBy` when this run actually claimed the lease (or use `requireNoLiveOwner`), and only suppress the notice when the write genuinely lost ownership to another worker.",
+          "keep": false,
+          "rationale": "abandonBusyReview has a single call site (line 438) inside the catch, guarded by isPrReviewInProgressError. That error class is thrown only by the review run, which executes after the lease claim (leaseClaimed=true at line 272). The pre-claim operations (payload validation, rateLimitGate.check, BYOK admission) cannot throw a PR-in-progress error, and an earlier leaseLost branch returns before this point. Hence this path is only reachable with a claimed lease, so `ownedBy: this.instanceId` is always correct here and a `false` result genuinely means another worker reclaimed the row. The finding's premise ('if this path is ever reached without a claimed lease') is impossible; gating on leaseClaimed would be a no-op. The described silent-drop failure path cannot occur.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 440,
+                "endLine": 620
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "handleFailure|leaseClaimed|abandonBusyReview|notifyCommandReviewRefused|requireNoLiveOwner",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 607,
+                "endLine": 690
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 400,
+                "endLine": 440
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 280,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 90
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 300,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 255
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "isPrReviewInProgressError|PrReviewInProgress|holderVisibleUntil",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "throw.*PrReview|class.*PrReviewInProgress|isPrReviewInProgressError\\s*=|holderVisibleUntil\\s*[:=]"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "isPrReviewInProgressError|prReviewDeferral|import.*PrReview",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 83,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 484,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "kodus-1902-round-a",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `libs/code-review/workflow/code-review-job-processor.service.ts:457` (2026-09-30 07:54 UTC).\n\nOn a redelivery of the same `jobId` while another worker already holds a live lease, the unguarded FAILED write sends `undefined` for `ownedBy` into `handleFailure`'s `!options?.ownedBy` branch at line 678, stamping FAILED over the live worker's row so its guarded `markCompleted` matches nothing, its review result is dropped, and the author receives a failure notice for a review that is still running (the #1830 symptom fixed for BYOK but not here). For the pre-claim case, use the same `requireNoLiveOwner: true` fence the BYOK path uses and stop (do not rethrow) when the write does not land, so the consumer's own unguarded FAILED write is not reached over a live worker."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 649,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `this.jobRepository` is typed as `IWorkflowJobRepository`, if that contract's `update` still declares only `{ leaseOwner: string; requireProcessing?: boolean }`, the object literal `{ noLiveOwner: true }` triggers TypeScript's excess-property check and the build fails at this call site even though the implementation in `workflow-job.repository.ts` was updated. Add `| { noLiveOwner: true }` to the guard parameter type in the `IWorkflowJobRepository` contract so it matches the implementation."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 486718,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: The new `noLiveOwner` guard treats `status = PROCESSING AND leaseExpiresAt IS NULL` as 'no live owner' and lets the FAILED write land, but the reaper (`findStaleProcessing`) deliberately treats exactly those legacy PROCESSING rows as still live until `updatedAt < olderThan`. WHY: a worker that claimed a job before the lease column existed (or any PROCESSING row whose lease was never set) is still actively running, so this write stamps FAILED over its row; its guarded completion then matches nothing and the review result is dropped. HOW: require the lease to be genuinely absent before treating the row as unowned, e.g. `(status <> :processing OR (leaseExpiresAt IS NOT NULL AND leaseExpiresAt < :now) OR (leaseExpiresAt IS NULL AND leaseOwner IS NULL))`, mirroring the reaper's legacy handling.",
+          "keep": true,
+          "rationale": "Confirmed the inconsistency: the `noLiveOwner` guard's `leaseExpiresAt IS NULL` disjunct (line 249) lets a FAILED write land on a `status = PROCESSING AND leaseExpiresAt IS NULL` row, whereas `findStaleProcessing` (lines 443-447) deliberately treats that exact row as still live until `updatedAt < :olderThan`. The guard's own comment (lines 179-189) states its purpose is to avoid stamping FAILED over a running worker and dropping its review, which this disjunct defeats for legacy/unset-lease PROCESSING rows — the very rows the reaper protects. The `requireNoLiveOwner` caller (line 190) is reached on redelivery while another worker may hold the row, so the path is reachable. No upstream guard prevents it; the claim's root cause and failure path hold.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 180,
+                "endLine": 300
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "findStaleProcessing|leaseExpiresAt|leaseOwner|noLiveOwner",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 400,
+                "endLine": 470
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 630,
+                "endLine": 700
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "requireNoLiveOwner|handleFailure\\(",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 440,
+                "endLine": 500
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 160,
+                "endLine": 210
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: When `leaseClaimed` is false the failure is routed to `handleFailure` with `ownedBy: undefined`, which takes the fully unguarded write path and stamps `status = FAILED` without any ownership condition. WHY: errors raised before the claim (payload validation, the rate-limit gate, the BYOK gates) can be raised by a SECOND delivery of the same jobId while another worker already owns the row (the inbox dedupes on messageId, the reaper republishes with a fresh one), so this unguarded FAILED lands over that worker's live PROCESSING row; its guarded `markCompleted` then matches zero rows, its review result is dropped and the row is terminal — the exact #1830 symptom the new `requireNoLiveOwner` guard was added to prevent in the BYOK path but which is not applied here. HOW: pass the no-live-owner fence for the not-claimed case as well, e.g. call `handleFailure(jobId, error, { requireNoLiveOwner: !leaseClaimed, ownedBy: leaseClaimed ? this.instanceId : undefined, organizationId: ... })` and, when the result is false because a live worker owns the row, return without notifying/rethrowing (mirroring the BYOK branch at lines 195-203).",
+          "keep": true,
+          "rationale": "The finding's technical claim is accurate and cannot be refuted. At lines 474-486, `handleFailure` is called with `ownedBy: leaseClaimed ? this.instanceId : undefined` and crucially WITHOUT `requireNoLiveOwner`. So when a pre-claim error fires (payload validation at line 117, the rate-limit gate at line 127, or an error from the BYOK tryEnter), `leaseClaimed` is false and `ownedBy` is undefined, routing into handleFailure's fully unguarded branch (lines 674-680: `await this.jobRepository.update(jobId, failurePatch)` with no condition), which stamps `status = FAILED` unconditionally. The redelivery scenario the finding relies on is explicitly acknowledged by the PR's own code: the BYOK branch at lines 179-203 exists precisely because 'a redelivery of the same jobId can be consumed while another worker has already claimed the row ... and stamping FAILED there would kill that worker's completion, drop its review and send the author a failure notice for a review that is still running.' That branch applies `requireNoLiveOwner: true`; the parallel pre-claim failure path does not. The comments at lines 682-685 also state a terminal write 'blocked by a status it never wrote,' corroborating that a stray FAILED blocks the live worker's completion. This is a different defect than the earlier round's 'swallowed failure' suggestion (kodus-1902-round-a, implemented); the new finding does not reverse that fix but points out the fence it omitted, and is consistent with that decision's own principle ('only skip when another worker actually owns the row'). Concrete failure path exists, so the finding stands.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 420,
+                "endLine": 520
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "handleFailure",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 150,
+                "endLine": 210
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 600,
+                "endLine": 700
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 90,
+                "endLine": 150
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 210,
+                "endLine": 420
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 474,
+          "label": "bug",
+          "earlierId": "kodus-1902-round-a",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "kodus-1902-round-a",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 58,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 243,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A worker that claimed a job before the lease column existed, or any `PROCESSING` row whose `leaseExpiresAt` was never set, is still actively running, unlike the reaper `findStaleProcessing`, which treats those legacy rows as live until `updatedAt < olderThan`; this write stamps `FAILED` over such a row, and its guarded completion then matches nothing, dropping the review result. Require the lease to be genuinely absent before treating the row as unowned by mirroring the reaper's legacy handling, e.g. `(status <> :processing OR (leaseExpiresAt IS NOT NULL AND leaseExpiresAt < :now) OR (leaseExpiresAt IS NULL AND leaseOwner IS NULL))`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K6-rule-repost-not-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30996,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "The new `dayKey` derives the calendar day with `toISOString().slice(0, 10)`, producing the previous day for users west of UTC. Use `formatLocalDate(at)` from './dates' instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K6-rule-repost-not-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22442,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` derives the key with `toISOString().slice(0, 10)`, which returns a UTC calendar day rather than the user's local one, so anyone west of UTC can get a key off by a day. Replace that expression with `formatLocalDate(at)` from `./dates`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K6-rule-repost-not-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21653,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Users west of UTC see the previous calendar day because `dayKey` derives it with `toISOString().slice(0, 10)`. Replace that expression with `formatLocalDate(at)` to match the imported helper."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K6-rule-repost-not-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23983,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC, `dayKey` produces the previous calendar day because `toISOString().slice(0, 10)` converts the timestamp to UTC. Use `formatLocalDate(at)` from `src/reports/dates.ts`, which is already imported in this file, so the key reflects the local calendar day."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K6-rule-repost-not-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15014,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`dayKey` derives the calendar day with `toISOString().slice(0, 10)`, which yields the previous day for users west of UTC. Return `formatLocalDate(at)` instead, using the helper already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 8822,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4218,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 5496,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 5154,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3376,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20476,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Because the changelog is read at release time, leaving `Retry details TBD` in the Webhooks entry ships incomplete notes and violates the rule that a changelog entry lands with the change (no \"TBD\", \"to follow\", or follow-up deferrals). Replace it with the actual retry details now, or drop the promise and describe only what is true in this PR."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14574,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "CHANGELOG.md",
+          "line": 12,
+          "label": "kody_rules",
+          "earlierId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Because the changelog is read at release time and a promised follow-up is easy to lose, this `Unreleased` entry's `Retry details TBD` placeholder, which the rule \"Changelog entry lands with the change\" forbids, would let the released notes ship incomplete. Write the retry details now, or drop the placeholder sentence if there is nothing user-visible to say."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22027,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The `CHANGELOG.md` `Webhooks` entry defers its content with 'Retry details TBD', violating the 'Changelog entry lands with the change' rule and leaving the PR incomplete. Either state the retry details or drop the trailing placeholder sentence so the entry is complete in this PR."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17529,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "CHANGELOG.md",
+          "line": 12,
+          "label": "kody_rules",
+          "earlierId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Because the `CHANGELOG.md` entry is read at release time, the deferred `Retry details TBD` placeholder ships an incomplete Webhooks entry and violates the rule that a changelog entry lands with the change. Write the retry details in this PR, or remove the deferred clause if retries are not part of this change."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 38637,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "CHANGELOG.md",
+          "line": 12,
+          "label": "kody_rules",
+          "earlierId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The `Retry details TBD` placeholder in the Webhooks entry in `CHANGELOG.md` violates the 'Changelog entry lands with the change' rule and ships incomplete notes because the changelog is read at release time. Write the retry details in full in this PR or drop that sentence until the details are known, with no `TBD`, 'will update later', 'to follow', or 'in a follow-up PR'."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 7359,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "label": "kody_rules",
+          "earlierId": "round-a-P17-rule-partial-fixture-label-comment",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 5733,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "label": "kody_rules",
+          "earlierId": "round-a-P17-rule-partial-fixture-label-comment",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 11504,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "label": "kody_rules",
+          "earlierId": "round-a-P17-rule-partial-fixture-label-comment",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 5759,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "label": "kody_rules",
+          "earlierId": "round-a-P17-rule-partial-fixture-label-comment",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 2908,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "label": "kody_rules",
+          "earlierId": "round-a-P17-rule-partial-fixture-label-comment",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 375613,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page, but its own docstring states the page number \"starts at 1\". WHY: with 1-based input, page=1 returns results[20:40], so the first 20 results are never returned and every page is shifted by one (the only way to see page one is the impossible page=0). HOW: compute the offset from a 1-based page: start = (page - 1) * per_page.",
+          "keep": true,
+          "rationale": "Confirmed off-by-one pagination bug. The docstring states page is 1-based (\"page comes from ?page= and starts at 1\"), but `start = page * per_page` is a 0-based offset, so page=1 yields results[20:40] and the first 20 results are unreachable except via the contract-violating page=0. No callers in the repo pass an adjusted page value, and no upstream guard prevents the incorrect slice. The claimed root cause and fix ((page-1)*per_page) are factually correct.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of|page",
+                "path": "catalog"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page",
+                "excludeTests": true,
+                "glob": "*.py",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: highlight still folds the text with casefold() and then slices the original text with start/end computed on the folded string. WHY: casefold() is not length-preserving ('ß'.casefold()=='ss', 'İ'.casefold()=='i̇'), so for text like 'İzmir Straße' with term 'straße' the folded find returns 7 while the match actually starts at index 6, and <mark> wraps the wrong characters; replacing lower() with casefold() broadens the failing inputs (ß, ﬀ ligatures) rather than fixing the offset bug. HOW: locate the match on the original string, e.g. m = re.search(re.escape(term), text, re.IGNORECASE) and slice with m.start()/m.end(), as snippet now does.",
+          "keep": true,
+          "rationale": "Confirmed by reading catalog/search/highlight.py: highlight() computes start/end on text.casefold() and then slices the original text with those offsets (lines 11-21). casefold() is not length-preserving ('ß'->'ss', 'İ'->'i̇'), so for e.g. 'İzmir Straße' with term 'straße' the folded match index (7) differs from the true original index (6) and <mark> wraps the wrong characters. The proposed fix (re.search on the original string, as snippet() already does at line 27) is exactly right. The prior \"implemented\" decision only landed in snippet(), not highlight(), so it does not refute the bug.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "catalog/search/highlight.py",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-P25-casefold-offsets-on-original",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P25-casefold-offsets-on-original",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "With 1-based input, `page=1` returns `results[20:40]`, so the first 20 results are never returned and every page is shifted by one, with page one only reachable via the impossible `page=0`. Compute the offset from a 1-based page using `start = (page - 1) * per_page`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 143958,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes the slice start as `page * per_page` even though its own docstring says page starts at 1, so page 1 returns `results[20:40]`. WHY: the first page of results (indices 0-19) is never returned and every page is shifted by one, so the first 20 search hits are silently unreachable and the UI shows the wrong page for any `?page=` value. HOW: subtract 1 (and guard against page<1): `start = max(0, page - 1) * per_page`.",
+          "keep": true,
+          "rationale": "The docstring at line 38 explicitly states 'page comes from ?page= and starts at 1', yet line 39 computes start = page * per_page. With per_page=20, page=1 yields start=20, so results[0:20] (the first 20 hits) are never returned and every page is shifted by one. The claim's root cause and failure path match the code exactly. No upstream adjustment or guard exists (only definition found in repo, no caller that compensates). Refutation fails.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: highlight still locates the match in `text.casefold()` and then slices the original `text` with those folded-string offsets (lines 11-15). WHY: casefold is not length-preserving — 'ß'.casefold() == 'ss' and 'İ'.casefold() == 'i̇' — so with text='Straße Set' and term='Set', folded='strasse set' gives start=8/end=11 and `<mark>` wraps 'et' instead of 'Set', corrupting the output. This is the same length-preservation defect the earlier review targeted on the `lower()` version; the applied change to `casefold()` did not fix it (only snippet() was converted to re.search). HOW: search the original string, `m = re.search(re.escape(term), text, re.IGNORECASE)`, and slice with `m.start()`/`m.end()` (returning `html.escape(text)` when `m is None`), matching the approach now used in snippet().",
+          "keep": true,
+          "rationale": "Confirmed by reading catalog/search/highlight.py: highlight computes start/end in text.casefold() (lines 11-15) then slices the original text (lines 17-21). casefold is not length-preserving ('ß'->'ss'), so offsets diverge; for text='Straße Set', term='Set', folded='strasse set' yields start=8/end=11 and text[8:11]='et', so <mark> wraps the wrong characters. The prior decision's suggested fix (search original with re.search) was applied only to snippet(); highlight still has the length-preservation bug, so the finding is not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "catalog/search/highlight.py",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-P25-casefold-offsets-on-original",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P25-casefold-offsets-on-original",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 39,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `page_of`, `page` is 1-based, so `page * per_page` makes page 1 return `results[20:40]`, leaving the first 20 hits unreachable and showing the wrong page for every `?page=` value. Change the slice start to `max(0, page - 1) * per_page` to shift all pages back by one and guard against `page < 1`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 117864,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: highlight still locates the match in folded = text.casefold() but slices the original text with that offset; casefold is not length-preserving ('İ'.casefold() is two code points, 'ß'.casefold() is 'ss'). WHY: for text='İzmir Set', term='Set', 'set' is found at folded index 7 while 'Set' is at original index 6, so text[7:10]='et' is wrapped and the wrong characters are highlighted — the same defect the earlier review flagged, only now with casefold instead of lower. HOW: search the original string, e.g. match = re.search(re.escape(term), text, re.IGNORECASE) (as snippet now does) and slice with match.start()/match.end().",
+          "keep": true,
+          "rationale": "Confirmed: highlight() (lines 11-15) computes start via folded = text.casefold() and slices the ORIGINAL text with that offset. casefold is not length-preserving (e.g. 'İ'.casefold() == 'i̇', two code points), so offsets after such a character are shifted. Concrete trace: text='İzmir Set', term='Set' -> folded='i̇zmir set', find('set')=7, end=10, but original text[7:10]='et', so the wrong characters get wrapped. This is a real, active defect. The earlier review's fix was applied only to snippet() (which now uses re.search(re.escape(term), text, re.IGNORECASE) and slices with match.start()/match.end()); highlight() was left with the buggy casefold-offset logic, so the previous 'implemented' decision did not resolve this location.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page while its docstring states page starts at 1, so page=1 returns the second page and the first page can never be requested. WHY: every paginated result set silently drops the first per_page results and shows page N+1's contents, and there is no value of page that yields results[0:per_page]. HOW: use 1-based math, start = (page - 1) * per_page.",
+          "keep": true,
+          "rationale": "The docstring (line 38) explicitly states page starts at 1, while line 39 uses 0-based math `start = page * per_page`. Under the documented contract, page=1 returns results[20:40] and results[0:per_page] is unreachable — a genuine off-by-one that drops the first page of every result set. No caller in the repo passes a pre-decremented page (grep for `page_of` yields only the definition), so nothing refutes the documented contract. Previous review decisions concern unrelated code (casefold offsets, CSV escaping).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page",
+                "glob": "*.py",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of|?page=",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "catalog/search/highlight.py",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-P25-casefold-offsets-on-original",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P25-casefold-offsets-on-original",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `page_of` computes `start = page * per_page` while its docstring says `page` starts at 1, `page=1` returns the second page, so every paginated result set silently drops the first `per_page` results and no value of `page` yields `results[0:per_page]`. Use 1-based math by changing the calculation to `start = (page - 1) * per_page`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 205516,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page although the docstring states the page number starts at 1. WHY: for the first page (page=1) start becomes 20, so the first per_page results are never returned and the last page comes back empty — every caller requesting page 1 silently loses its first 20 results. HOW: use a 1-based offset, start = (page - 1) * per_page, and clamp negatives (e.g. page = max(1, page)).",
+          "keep": true,
+          "rationale": "The function's own docstring (line 38) declares the page parameter is 1-based, but line 39 computes start = page * per_page, so page=1 skips the first 20 results and the last page returns empty. No guard, clamping, or normalization exists upstream in the function. The root cause and failure path are exactly as described; the fix (start = (page-1)*per_page with clamping) is correct.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of|from.*highlight import|import highlight",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: highlight computes the match offsets on text.casefold() but then slices the original text with them, and casefold is not length-preserving. WHY: when the text contains a character whose casefold expands (e.g. 'ß'→'ss', the ligature 'ﬁ'→'fi', 'İ'→2 code points), every match after it is shifted, so the <mark> wraps the wrong characters — highlight(\"Großstadt\", \"stadt\") returns 'Großst<mark>adt</mark>' instead of 'Groß<mark>stadt</mark>'. The earlier suggestion to search the original string was applied only to snippet(); highlight was changed from lower() to casefold(), which does not fix the offset shift and can make it worse. HOW: search the original string, e.g. match = re.search(re.escape(term), text, re.IGNORECASE); if match is None: return html.escape(text); then slice with match.start()/match.end().",
+          "keep": true,
+          "rationale": "Confirmed: lines 11-15 compute match offsets on text.casefold() but lines 17-21 slice the original text with those offsets. casefold() is not length-preserving ('ß'→'ss', 'ﬁ'→'fi', 'İ'→2 code points), so every match after an expanding character is shifted and <mark> wraps the wrong characters. snippet() was fixed to search the original string with re.IGNORECASE, but highlight() was only switched lower()→casefold(), which does not preserve length and does not fix the offset shift. This is concrete evidence the earlier 'implemented' suggestion was not actually applied to highlight(), so the bug remains real and reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "catalog/search/highlight.py",
+          "line": 11,
+          "earlierId": "round-a-P25-casefold-offsets-on-original",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P25-casefold-offsets-on-original",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "marked": false,
+          "text": "Because `page_of` computes `start = page * per_page` while the docstring states the page number starts at 1, a request for `page=1` sets `start` to 20, so the first `per_page` results are never returned, the last page comes back empty, and every caller asking for page 1 silently loses its first 20 results. Use a 1-based offset, `start = (page - 1) * per_page`, and clamp negatives (e.g. `page = max(1, page)`)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 225739,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of documents 1-based pages ('page comes from ?page= and starts at 1') but computes `start = page * per_page`, which is 0-based. WHY: page=1 returns results[per_page:2*per_page] (the second page) and the true first page results[0:per_page] is never returned; every page is shifted by one, and a negative page falls through to Python negative indexing. HOW: use `start = (page - 1) * per_page` (and clamp page to >= 1) to match the documented 1-based contract.",
+          "keep": true,
+          "rationale": "Confirmed at catalog/search/highlight.py:38-40: docstring states page starts at 1 ('page comes from ?page= and starts at 1'), but start = page * per_page treats page as 0-based. So page=1 returns results[per_page:2*per_page], the true first page results[0:per_page] is never returned, and a negative page falls into Python negative indexing. No caller adjusts page (grep found only the definition), and no previous decision addresses this issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of|from .*highlight import|import highlight"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: highlight computes `start`/`end` as indices into `folded = text.casefold()` and then slices the ORIGINAL `text` with them, but casefold() is not length-preserving. WHY: for text where casefold changes length ('ß'→'ss', 'İ'→'i̇', 'ﬁ'→'fi') every index after the change is shifted, so `text[start:end]` wraps the wrong characters (e.g. text='Straße Set', term='Set' yields 'Straße S<mark>et</mark>' instead of marking 'Set'). This is the same offset defect the earlier review flagged; switching lower()→casefold() does not fix it and casefold is even less length-preserving than lower(). HOW: search the original string and slice with the match offsets, e.g. `m = re.search(re.escape(term), text, re.IGNORECASE)` then use `m.start()`/`m.end()` (guarding for None) instead of folded indices.",
+          "keep": true,
+          "rationale": "Confirmed. highlight() computes start/end from folded = text.casefold() but slices the original text. casefold() is not length-preserving ('ß'→'ss' length 2, 'İ'→'i̇', 'ﬁ'→'fi'), so every offset after such a character is shifted. Verified example: text='Straße Set', term='Set' → folded='strasse set', find('set')=8, end=11, text[8:11]='et', text[:8]='Straße S' → 'Straße S<mark>et</mark>', marking the wrong characters. The prior review decision requested exactly this re.search-with-match.start/end fix; snippet() (line 27) received it but highlight() did not, so the current code is concrete evidence the fix is missing here and the defect persists (casefold is even less length-preserving than lower).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "catalog/search/highlight.py",
+          "line": 11,
+          "label": "bug",
+          "earlierId": "round-a-P25-casefold-offsets-on-original",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P25-casefold-offsets-on-original",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 39,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `page` from `?page=` is 1-based while `start = page * per_page` treats it as 0-based, `page=1` returns `results[per_page:2*per_page]` (the second page), the true first page is never returned, and a negative page falls through to Python negative indexing. Use `start = (page - 1) * per_page` and clamp `page` to `>= 1` to match the documented 1-based contract."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18004,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P33-rule-invalidation-new-callback",
+          "earlierOutcome": "pending",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 21,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "The `onError` callback calls `queryClient.invalidateQueries` without returning or awaiting its promise, so the rollback/refetch may still be in flight when the mutation is considered settled and the UI can be inconsistent after a failed seat update. Return that promise from the callback to satisfy the rule that mutation callbacks return the invalidation promise."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16841,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 21,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because the new `onError` callback calls `queryClient.invalidateQueries` without returning or awaiting it, the mutation settles before the seats query refetches and the UI can briefly show stale seat data after a failed save. Return the invalidation promise so the mutation stays pending until the refetch settles, as required by the rule that mutation callbacks return the invalidation promise."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20668,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 21,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P33-rule-invalidation-new-callback",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/useUpdateSeats.ts:11` (2026-10-06 12:00 UTC).\n\nBecause `onError` calls `queryClient.invalidateQueries` without returning or awaiting it, the mutation settles before the rollback refetch completes, leaving consumers that rely on its pending state with a stale seat count. Return the promise so the mutation stays pending until the refetch settles, satisfying the rule that mutation callbacks return the invalidation promise."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20696,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 21,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because `onError` calls `queryClient.invalidateQueries` without returning or awaiting it, the mutation settles before the rollback refetch completes, so consumers see the mutation as finished while the seats query is still stale. Return the invalidation promise so the mutation stays pending until the refetch settles, satisfying the rule that mutation callbacks return it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 46261,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P33-rule-invalidation-new-callback",
+          "earlierOutcome": "pending",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 21,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because `onError` calls `queryClient.invalidateQueries` without returning or awaiting it—violating the rule that mutation callbacks return the invalidation promise—the mutation settles before the seats query refetches after a failed seat update, so consumers see the rollback state and the stale refetch result out of order. Return the promise from `queryClient.invalidateQueries({ queryKey: queryKeys.seats(change.workspaceId) })` so the mutation stays pending until the refetch settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 197445,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: renew_due calls find_subscription in a loop and relies on it returning nil for deleted subscriptions (`next if sub.nil?`), but find_subscription now raises SubscriptionNotFound instead of returning nil. WHY: the ids are queued the night before and some subscriptions may have been deleted since (per the method's own comment), so the first missing id now raises out of renew_due and aborts the batch, leaving every remaining due subscription uncharged — the `next if sub.nil?` guard is dead code. This narrows the earlier suggestion to make find_subscription raise, which is correct for charge_now but breaks this batch caller. HOW: keep the raise for the single-lookup path and let renew_due tolerate missing rows, e.g. rescue the error per id inside the loop: `ids.each do |id| begin sub = find_subscription(id) rescue SubscriptionNotFound next end; @gateway.charge(...) end`, or add a separate non-raising lookup (e.g. `@repo.find_by(id: id)`) for the batch path.",
+          "keep": true,
+          "rationale": "Confirmed: find_subscription (line 12) raises SubscriptionNotFound instead of returning nil. renew_due (lines 22-29) still calls find_subscription in a loop and relies on `next if sub.nil?` to skip deleted subscriptions, but that guard is now dead code — a missing id raises out of the loop and aborts the entire batch, leaving remaining due subscriptions uncharged. The method comment (lines 20-21) confirms ids can reference deleted subscriptions, and a repo-wide grep shows no caller rescuing SubscriptionNotFound or wrapping renew_due. This is a genuine regression introduced by applying the earlier decision to make find_subscription raise, which is fine for charge_now but breaks this batch path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "SubscriptionNotFound|find_subscription|renew_due"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause ids are queued the night before and `find_subscription` now raises `SubscriptionNotFound` for deleted rows, the first missing id aborts `renew_due`, leaving every remaining due subscription uncharged and making the `next if sub.nil?` guard dead code. Keep the raise for the single-lookup path in `charge_now` and let `renew_due` tolerate missing rows, either by rescuing `SubscriptionNotFound` per id inside the loop or by adding a separate non-raising lookup such as `@repo.find_by(id: id)` for the batch path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 82010,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, but renew_due still guards with `next if sub.nil?`, so that guard is unreachable and the first missing subscription raises and aborts the whole batch. WHY: renew_due's own comment says ids are queued the night before and some subscriptions may have been deleted since; the intended behavior is to skip those, but now one deleted subscription aborts the loop and every remaining due subscription is silently left uncharged. HOW: rescue the error in the batch caller, e.g. wrap the lookup in begin/rescue SubscriptionNotFound and `next`, or look up with @repo.find_by(id: id) directly in renew_due and keep the nil skip.",
+          "keep": true,
+          "rationale": "Confirmed by reading app/services/renewal_service.rb: find_subscription (line 12) raises SubscriptionNotFound on a missing row, so in renew_due (lines 24-25) `sub` is never nil and `next if sub.nil?` is unreachable. A deleted id in the night-before batch now propagates the raise out of the each loop, aborting the batch and leaving remaining due subscriptions uncharged — directly contradicting the method's comment (lines 20-21) that deleted subscriptions should be tolerated. The claim is technically accurate and describes a real behavior regression activated by the earlier change.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|SubscriptionNotFound|def renew_due|charge_now"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause `find_subscription` now raises `SubscriptionNotFound` instead of returning `nil`, the `next if sub.nil?` guard in `renew_due` is unreachable, so the first deleted subscription aborts the whole batch and every remaining due subscription is silently left uncharged. Rescue `SubscriptionNotFound` in the batch caller and `next`, or look up with `@repo.find_by(id: id)` directly in `renew_due` while keeping the `nil` skip."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 149682,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, but renew_due still relies on a nil return with `next if sub.nil?` for ids whose subscription was deleted after being queued. WHY: find_subscription never returns nil anymore, so that guard is dead code and the raise propagates out of the each loop, aborting the entire nightly batch and leaving every remaining due subscription uncharged. HOW: make renew_due tolerate the missing row, e.g. `begin; sub = find_subscription(id); rescue SubscriptionNotFound; next; end` (or have renew_due call @repo.find_by directly and skip nil), so a single deleted subscription does not stop the batch. This revises the earlier suggestion that made find_subscription raise — that change is correct for charge_now but breaks this batch caller.",
+          "keep": true,
+          "rationale": "Confirmed at app/services/renewal_service.rb:11-13 and 22-29. `find_subscription` is `@repo.find_by(id: id) || raise(SubscriptionNotFound, ...)`, so it can never return nil. In `renew_due`, line 24 calls `find_subscription(id)` and line 25's `next if sub.nil?` is therefore dead code. The method's own comment (lines 20-21) states ids are queued the night before \"so some subscriptions may have been deleted since\" — for such an id the raise propagates out of the `ids.each` loop, aborting the batch and leaving remaining due subscriptions uncharged. This is a concrete, reachable failure path, not a style issue. The finding correctly revises PreviousDecision round-a-P41-raise-breaks-batch-caller (which made find_subscription raise): that change is fine for charge_now but breaks the batch caller, and the current code shows the applied change remains in place with the unguarded loop.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|SubscriptionNotFound"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nSince `find_subscription` now raises `SubscriptionNotFound` instead of returning nil, the `next if sub.nil?` guard in `renew_due` is dead code, so a subscription deleted after being queued aborts the entire nightly batch and leaves every remaining due subscription uncharged. Make `renew_due` tolerate the missing row by rescuing `SubscriptionNotFound` and skipping that id (or by calling `@repo.find_by` directly and skipping nil); this keeps the raise correct for `charge_now` while preventing a single deleted subscription from stopping the batch."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 71180,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound instead of returning nil, so the `next if sub.nil?` guard in renew_due (line 25) is dead code and a missing subscription aborts the whole batch. WHY: renew_due's own comment states ids are queued the night before and some subscriptions may have been deleted since, so a deleted id now raises out of the ids.each block and prevents every remaining due subscription from being charged. HOW: rescue the error per-iteration in renew_due (or add a non-raising lookup for the batch path), e.g. wrap the body in `begin ... rescue SubscriptionNotFound; next; end`.",
+          "keep": true,
+          "rationale": "Confirmed in app/services/renewal_service.rb: find_subscription (line 12) never returns nil — it raises SubscriptionNotFound. Therefore `next if sub.nil?` at line 25 is unreachable, and a deleted/queued-overnight id (per the method's own comment lines 20-21) raises out of the ids.each loop, aborting the entire batch so remaining due subscriptions are never charged. No upstream rescue exists (only caller references are in this file). The claim's root cause and failure path are factually correct; this is the consequence of the earlier 'make find_subscription raise' suggestion, not a refutation.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|SubscriptionNotFound",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound on a missing row, but the batch caller renew_due (line 24) still expects nil and guards with `next if sub.nil?`, which is now dead code. WHY: renew_due's own comment says ids are queued the night before and some subscriptions may have been deleted since; the first deleted id now raises and aborts the entire loop, so every remaining subscription due today silently goes uncharged — a regression introduced by making find_subscription raise. HOW: make renew_due tolerate the missing row explicitly, e.g. `ids.each do |id| begin; sub = find_subscription(id); rescue SubscriptionNotFound; next; end; @gateway.charge(...); end`, or add a non-raising lookup (e.g. `@repo.find_by(id: id)`) for the batch path while keeping find_subscription strict.",
+          "keep": true,
+          "rationale": "Verified in app/services/renewal_service.rb: find_subscription (line 12) raises SubscriptionNotFound on a missing row, while renew_due (lines 22-29) still guards with `next if sub.nil?` (line 25), which is now unreachable dead code. The method comment states queued ids may reference since-deleted subscriptions, so a missing row is an expected runtime condition; the raise aborts the entire each loop on the first deleted id, so remaining due subscriptions are silently skipped. This is a genuine regression introduced by the previously-applied change that made find_subscription raise, and a distinct problem (the batch caller was never adapted) from that suggestion.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|charge_now"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "label": "bug",
+          "earlierId": "round-a-P41-raise-breaks-batch-caller",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause `find_subscription` now raises `SubscriptionNotFound` on a missing row, the first deleted id in `renew_due` (line 24) aborts the entire loop and every remaining subscription due today goes uncharged, while the `next if sub.nil?` guard is dead code. Make `renew_due` tolerate the missing row explicitly, either by rescuing `SubscriptionNotFound` and continuing, or by using a non-raising lookup such as `@repo.find_by(id: id)` for the batch path while keeping `find_subscription` strict."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 112126,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound for a missing id, making the `next if sub.nil?` guard in renew_due (line 25) unreachable dead code. WHY: renew_due is documented to skip subscriptions deleted since the previous night, but the raise now propagates out of the `ids.each` loop on the first missing id, aborting the batch and leaving all remaining due subscriptions uncharged. HOW: catch the missing-subscription case inside the loop, e.g. `sub = @repo.find_by(id: id); next unless sub` or wrap the call in `begin; sub = find_subscription(id); rescue SubscriptionNotFound; next; end`.",
+          "keep": true,
+          "rationale": "Confirmed by reading app/services/renewal_service.rb. Line 12 uses `|| raise(SubscriptionNotFound, ...)`, so find_subscription can never return nil. Consequently `next if sub.nil?` (line 25) is unreachable dead code, and since renew_due (lines 22-29) has no rescue, the raise propagates out of the ids.each loop on the first missing id, aborting the batch and leaving remaining due subscriptions uncharged — directly contradicting the method's documented intent (lines 20-21) to skip subscriptions deleted since the night before. The finding is factually correct and the failure path is real, not refutable. Note this is a consequence of PreviousDecision round-a-P41-raise-breaks-batch-caller (raise added per that suggestion), so it is a revision of that earlier suggestion rather than a re-raise.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause `find_subscription` now raises `SubscriptionNotFound` for a missing id, the `next if sub.nil?` guard in `renew_due` (line 25) is unreachable dead code and the first missing id propagates out of the `ids.each` loop, aborting the batch and leaving all remaining due subscriptions uncharged. Rescue `SubscriptionNotFound` inside the loop and `next` so processing continues for the rest of the ids."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

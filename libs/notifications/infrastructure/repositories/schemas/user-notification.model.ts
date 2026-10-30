@@ -1,11 +1,4 @@
-import {
-    Column,
-    Entity,
-    Index,
-    JoinColumn,
-    ManyToOne,
-    Unique,
-} from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, Unique } from 'typeorm';
 
 import { CoreModel } from '@libs/core/infrastructure/repositories/model/typeOrm';
 import { UserModel } from '@libs/identity/infrastructure/adapters/repositories/schemas/user.model';
@@ -17,7 +10,7 @@ import type { NotificationDeliveryModel } from './notification-delivery.model';
 @Index('IDX_un_user_created', ['user', 'createdAt'])
 @Unique('UQ_un_delivery', ['delivery'])
 export class UserNotificationModel extends CoreModel {
-    @ManyToOne(() => UserModel, { nullable: false })
+    @ManyToOne(() => UserModel, { nullable: false, onDelete: 'CASCADE' })
     @JoinColumn({ name: 'user_id', referencedColumnName: 'uuid' })
     user: UserModel;
 

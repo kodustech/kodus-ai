@@ -1,0 +1,45 @@
+---
+title: "PR Cycle Time"
+description: "Measure how long pull requests stay open, from opened to closed"
+---
+
+## What is PR Cycle Time
+
+PR Cycle Time measures how long a pull request stays open: from when it is opened until it is closed. This metric represents the review-and-merge speed of your development process.
+
+In the Cockpit, it's the **PR Cycle Time (p75)** card and the **PR Cycle Time** chart on the **Productivity** tab.
+
+## How We Calculate It
+
+We automatically track the time between when each pull request is opened and when it is closed. We start from the PR's open date rather than its first commit, because rebased branches can carry old commits that would inflate the number. For the time spent before the PR is opened, see [Lead Time Breakdown](/en/how_to_use/cockpit/metrics/lead_time_breakdown).
+
+**What We Track:**
+- Time from PR opened to PR closed
+- PRs closed in the selected date range
+- How long code takes to be integrated
+
+**What We Don't Count:**
+- Time spent planning, designing, or coding before the PR is opened
+- Time after merge (deployment, user adoption, etc.)
+- Failed or abandoned changes
+
+**How It's Calculated:**
+```
+PR Cycle Time = (PR Closed Time) - (PR Opened Time)
+```
+
+We use the 75th percentile (P75) to show you the typical cycle time, filtering out unusually long outliers that could skew your understanding of normal performance.
+
+## Why It Matters
+
+PR Cycle Time is a critical metric that measures your team's ability to complete development work efficiently. High cycle times may indicate large batch sizes, lengthy review processes, or bottlenecks in the development workflow.
+
+
+## How to Improve
+
+- Break large changes into smaller PRs (200-400 lines)
+- Set clear review expectations and guidelines
+- Use automated checks to catch issues pre-review
+- Distribute review workload across the team
+- Get early feedback during development
+- Use consistent branching strategy

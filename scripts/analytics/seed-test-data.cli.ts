@@ -94,7 +94,7 @@ function buildMongoUri(args: CliArgs): {
         return { uri: args.mongoUri, db: args.mongoDb ?? 'kodus_db' };
     }
     // Honors API_MG_DB_* exactly as set. Run inside the analytics
-    // worker container (`docker exec -it as_kodus_analytics_worker yarn
+    // worker container (`docker exec -it as_kodus_analytics_worker pnpm
     // analytics:seed-test ...`) so DNS resolves the in-network host.
     // From the host machine, override with --mongo-uri pointing at the
     // mapped port, e.g.

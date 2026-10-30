@@ -1,0 +1,1367 @@
+import { z } from 'zod';
+
+// Mock the model builders so no real model/network is touched. v2-only:
+// `buildModelFromSlot` takes ONE resolved slot. The production call reads the
+// carrier's `.main` slot at its boundary, so the fallback slot is never handed
+// to the builder — tests assert the single `main` model is used everywhere and
+// that a 2nd (fallback) slot is NEVER built.
+jest.mock('@libs/llm/byok-to-vercel', () => ({
+    buildModelFromSlot: jest.fn(() => ({ __model: 'main' })),
+    getModelName: jest.fn(() => 'test-model'),
+    // Default: no limiter cached (slot not in cooldown). Cooldown tests override
+    // this to return a stub limiter reporting isInCooldown()=true.
+    getLimiterForSlot: jest.fn(() => null),
+    // json_schema fallback helpers (default: json_schema allowed, no error match).
+    mayUseJsonSchema: jest.fn(() => true),
+    markJsonSchemaUnsupported: jest.fn(),
+    isJsonSchemaUnsupportedError: jest.fn(() => false),
+}));
+jest.mock('@libs/llm/byok-model-wrapper', () => ({
+    wrapByokModel: jest.fn((model: any) => model),
+}));
+jest.mock('@libs/llm/llm-call', () => ({
+    tracedGenerateText: jest.fn(),
+    timeoutSignal: jest.fn(() => undefined),
+    LLM_CALL_TIMEOUT_MS: 600000,
+}));
+jest.mock('@libs/core/log/langfuse', () => ({
+    buildLangfuseTelemetry: jest.fn(() => ({ isEnabled: false })),
+    toAiSdkTelemetryArgs: jest.fn(() => ({
+        telemetry: { isEnabled: false },
+    })),
+}));
+jest.mock('@libs/llm/reasoning-options', () => ({
+    buildProviderOptions: jest.fn(() => ({ __providerOptions: 'reasoning' })),
+    defaultReasoningEffortFor: () => undefined,
+}));
+
+import {
+    runStructuredReviewCall,
+    runTextReviewCall,
+} from '@libs/llm/structured-review-call';
+import {
+    NoObjectGeneratedError,
+    JSONParseError,
+    TypeValidationError,
+    jsonSchema,
+} from 'ai';
+import { tracedGenerateText, timeoutSignal } from '@libs/llm/llm-call';
+import { buildProviderOptions } from '@libs/llm/reasoning-options';
+import { setLlmObservability } from '@libs/llm/llm-observability';
+import {
+    buildModelFromSlot,
+    getLimiterForSlot,
+    isJsonSchemaUnsupportedError,
+    markJsonSchemaUnsupported,
+    mayUseJsonSchema,
+} from '@libs/llm/byok-to-vercel';
+
+const mockGenerate = tracedGenerateText as unknown as jest.Mock;
+const mockBuild = buildModelFromSlot as unknown as jest.Mock;
+const mockGetLimiter = getLimiterForSlot as unknown as jest.Mock;
+const mockTimeoutSignal = timeoutSignal as unknown as jest.Mock;
+
+// runAiSdkLLMInSpan just runs the exec and returns its result.
+const observabilityService = {
+    runAiSdkLLMInSpan: jest.fn(async ({ exec }: any) => exec()),
+} as any;
+
+const ok = (obj: any) => ({ experimental_output: obj, usage: {} });
+
+const base = {
+    schema: z.any(),
+    system: 'sys',
+    user: 'usr',
+    runName: 'test.run',
+    observabilityService,
+};
+
+const modelsUsed = () => mockGenerate.mock.calls.map((c) => c[0].model);
+
+/** No 2nd (fallback) model is ever built — the run resolves ONE model. The
+ *  builder is only ever handed the resolved `main` slot, never a fallback slot. */
+const assertNoSecondModelBuilt = () => {
+    expect(mockBuild).not.toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'anthropic' }),
+        expect.anything(),
+    );
+    // Every generateText attempt ran the SAME (main) model — never a 2nd model.
+    for (const model of modelsUsed()) {
+        expect(model).toEqual({ __model: 'main' });
+    }
+};
+
+beforeEach(() => {
+    mockGenerate.mockReset();
+    mockBuild.mockClear();
+    mockGetLimiter.mockReset();
+    mockGetLimiter.mockReturnValue(null); // default: slot not in cooldown
+    (markJsonSchemaUnsupported as jest.Mock).mockClear();
+    (isJsonSchemaUnsupportedError as jest.Mock).mockReturnValue(false);
+    (mayUseJsonSchema as jest.Mock).mockReturnValue(true);
+    observabilityService.runAiSdkLLMInSpan.mockClear();
+    (buildProviderOptions as jest.Mock).mockClear();
+    // The executor records its span through the observability PORT — register
+    // the mock so span assertions hit it (a specific test opts out below).
+    setLlmObservability(observabilityService);
+});
+
+describe('runTextReviewCall — plain-text half of the shared executor', () => {
+    const textBase = {
+        system: 'sys',
+        user: 'usr',
+        runName: 'summary.run',
+        observabilityService,
+    };
+
+    it('returns the raw generated string and sends NO structured-output arg', async () => {
+        mockGenerate.mockResolvedValueOnce({
+            text: 'a prose summary',
+            usage: {},
+        });
+
+        const out = await runTextReviewCall({ ...textBase });
+
+        expect(out).toBe('a prose summary');
+        // Plain generateText: no `output` (Output.object) on the call.
+        expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty('output');
+        // And the model is NOT built in structured-output mode.
+        expect(mockBuild).toHaveBeenCalledWith(undefined, {}, undefined);
+    });
+
+    it('shares the reasoning path — honors the slot the same way', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: 'x', usage: {} });
+
+        await runTextReviewCall({
+            ...textBase,
+            byokConfig: {
+                provider: 'anthropic',
+                apiKey: 'enc',
+                model: 'claude-sonnet-4-5',
+                reasoningEffort: 'medium',
+            } as any,
+        });
+
+        expect(buildProviderOptions).toHaveBeenCalledWith(
+            'summary.run',
+            undefined,
+            expect.objectContaining({ reasoningEffort: 'medium' }),
+        );
+        expect(mockGenerate.mock.calls[0][0].providerOptions).toEqual({
+            __providerOptions: 'reasoning',
+        });
+    });
+
+    it('an empty response degrades to an empty string (never throws)', async () => {
+        mockGenerate.mockResolvedValueOnce({ usage: {} }); // no .text
+        await expect(runTextReviewCall({ ...textBase })).resolves.toBe('');
+    });
+
+    it('threads defaultModelOverride to the build (trial default, e.g. the PR summary)', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: 'x', usage: {} });
+        await runTextReviewCall({
+            ...textBase,
+            defaultModelOverride: 'accounts/fireworks/models/deepseek-v4-flash',
+        });
+        expect(mockBuild).toHaveBeenCalledWith(
+            undefined,
+            {},
+            'accounts/fireworks/models/deepseek-v4-flash',
+        );
+    });
+
+    it("forwards the slot's fallback provenance (route + usedFallback) to the span", async () => {
+        // The failover cascade re-runs on a slot stamped usedFallback=true; the
+        // executor must surface that on the span so a primary→fallback swap is
+        // visible in observability (not a silent model change).
+        mockGenerate.mockResolvedValueOnce({ text: 'x', usage: {} });
+        await runTextReviewCall({
+            ...textBase,
+            byokConfig: {
+                provider: 'openai',
+                apiKey: 'enc',
+                model: 'gpt-4o',
+                route: 'codeReview',
+                usedFallback: true,
+            } as any,
+        });
+        const spanArgs =
+            observabilityService.runAiSdkLLMInSpan.mock.calls[0][0];
+        expect(spanArgs.usedFallback).toBe(true);
+        expect(spanArgs.route).toBe('codeReview');
+    });
+
+    it('runs WITHOUT an observability service (bare caller) — no span, still returns text', async () => {
+        setLlmObservability(undefined); // no port registered → no span
+        mockGenerate.mockResolvedValueOnce({ text: 'no-span', usage: {} });
+        const out = await runTextReviewCall({
+            system: 'sys',
+            user: 'usr',
+            runName: 'bare.run',
+        });
+        expect(out).toBe('no-span');
+        expect(observabilityService.runAiSdkLLMInSpan).not.toHaveBeenCalled();
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+    });
+
+    it('honors a custom timeoutMs (secondary passes cap shorter than 10min)', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: 'x', usage: {} });
+        await runTextReviewCall({ ...textBase, timeoutMs: 90_000 });
+        expect(mockTimeoutSignal).toHaveBeenCalledWith(90_000);
+    });
+});
+
+describe('runStructuredReviewCall — reasoning (honors the slot, no added default)', () => {
+    it("passes the slot's reasoning through the SHARED mapping into the call", async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ ok: true }));
+
+        await runStructuredReviewCall({
+            ...base,
+            byokConfig: {
+                provider: 'openai',
+                apiKey: 'enc',
+                model: 'gpt-5',
+                reasoningEffort: 'high',
+            } as any,
+        });
+
+        // The slot's effort reaches the provider mapping (the drop this fixes)...
+        expect(buildProviderOptions).toHaveBeenCalledWith(
+            'test.run',
+            undefined,
+            expect.objectContaining({
+                reasoningEffort: 'high',
+                byokProvider: 'openai',
+                modelName: 'gpt-5',
+            }),
+        );
+        // ...and its result is spread as providerOptions on the SDK call.
+        expect(mockGenerate.mock.calls[0][0].providerOptions).toEqual({
+            __providerOptions: 'reasoning',
+        });
+    });
+
+    it("an unset slot reasoning maps to 'none' (no added reasoning)", async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ ok: true }));
+        await runStructuredReviewCall({ ...base }); // no byokConfig
+        // The executor now assembles through resolveModelConfig with
+        // reasoningEffortDefault:'none'. An unset slot therefore reaches the
+        // mapping as the explicit 'none' rather than undefined — behaviorally
+        // identical (buildReasoningProviderOptions folds `undefined ?? 'none'`
+        // to the same {}), just no longer relying on the coalesce.
+        expect(buildProviderOptions).toHaveBeenCalledWith(
+            'test.run',
+            undefined,
+            expect.objectContaining({ reasoningEffort: 'none' }),
+        );
+    });
+});
+
+describe('runStructuredReviewCall — reroute-json (always-thinking, e.g. Kimi k2.7-code)', () => {
+    // A moonshot:kimi-k2.7-code slot is always-thinking (canDisableThinking=false)
+    // over the Anthropic protocol (structuredOutput:'none'), so planStructuredCall
+    // resolves to 'reroute-json': plain generateText + parse the text (no
+    // Output.object / forced tool_choice). The REGISTRY is REAL here, so this
+    // exercises the true plan, not a mock.
+    const kimiSlot = {
+        provider: 'moonshot',
+        model: 'kimi-k2.7-code',
+        apiKey: 'enc',
+    } as any;
+
+    it('parses PRISTINE JSON from r.text (no fence/whitespace) — regression for PR#152 Kimi kody-rules', async () => {
+        // The model returned exactly `{"violations":[]}` — a valid empty result.
+        // It used to throw "reroute-json produced no valid object" because
+        // repairAndValidate rejected already-clean JSON, degrading the whole
+        // Kody-Rules shard to zero findings ("all rule check(s) failed to run").
+        mockGenerate.mockResolvedValueOnce({
+            text: '{"violations":[]}',
+            usage: {},
+        });
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: z.object({ violations: z.array(z.any()) }),
+            byokConfig: kimiSlot,
+        });
+        expect(out).toEqual({ violations: [] });
+        // Took the reroute path: plain generateText, NO Output.object channel.
+        expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty('output');
+    });
+
+    it('still parses fenced/prose-wrapped JSON on the same path', async () => {
+        mockGenerate.mockResolvedValueOnce({
+            text: 'Here you go:\n```json\n{"violations":[{"ruleId":1}]}\n```',
+            usage: {},
+        });
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: z.object({
+                violations: z.array(z.object({ ruleId: z.any() })),
+            }),
+            byokConfig: kimiSlot,
+        });
+        expect(out).toEqual({ violations: [{ ruleId: 1 }] });
+    });
+});
+
+describe('span attrs.fallback — caller override vs default', () => {
+    const spanAttrs = () =>
+        observabilityService.runAiSdkLLMInSpan.mock.calls[0][0].attrs;
+
+    it("defaults to false (there's no 2nd-model cascade) when the caller sets none", async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ ok: true }));
+        await runStructuredReviewCall({ ...base });
+        expect(spanAttrs().fallback).toBe(false);
+    });
+
+    it('respects attrs.fallback:true (a caller marking its OWN retry, e.g. kody-rules raw-JSON)', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ ok: true }));
+        await runStructuredReviewCall({ ...base, attrs: { fallback: true } });
+        expect(spanAttrs().fallback).toBe(true);
+    });
+});
+
+describe('runStructuredReviewCall — single-model policy (no runtime fallback)', () => {
+    it('trial (no BYOK): runs the ONE resolved model and returns its output', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        expect(modelsUsed()).toEqual([{ __model: 'main' }]);
+        assertNoSecondModelBuilt();
+    });
+
+    it('trial (no BYOK): a non-transient main failure THROWS — no 2nd model', async () => {
+        const authErr: any = new Error('invalid api key');
+        authErr.status = 401;
+        mockGenerate.mockRejectedValueOnce(authErr);
+
+        await expect(runStructuredReviewCall({ ...base })).rejects.toThrow(
+            'invalid api key',
+        );
+
+        // Exactly one attempt — no Groq, no byok-fallback, no re-issue.
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('BYOK: a main failure THROWS and never cascades to a 2nd model', async () => {
+        mockGenerate.mockRejectedValueOnce(new Error('byok main down'));
+
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                byokConfig: {
+                    main: { provider: 'openai' },
+                    // Even with a legacy `fallback` blob present, v2-only means
+                    // no runtime cascade — the 2nd model is never built or run.
+                    fallback: { provider: 'anthropic' },
+                } as any,
+            }),
+        ).rejects.toThrow('byok main down');
+
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+});
+
+describe('runStructuredReviewCall — json_schema → json_object fallback', () => {
+    it('retries once with json_object when the provider rejects json_schema, and caches the slot', async () => {
+        // First attempt (json_schema) rejects with the schema-unsupported error;
+        // the executor caches the slot and re-issues once with json_object.
+        (isJsonSchemaUnsupportedError as jest.Mock).mockReturnValueOnce(true);
+        mockGenerate
+            .mockRejectedValueOnce(
+                new Error('response_format json_schema is not supported'),
+            )
+            .mockResolvedValueOnce(ok({ recovered: true }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(markJsonSchemaUnsupported).toHaveBeenCalledTimes(1);
+        // exactly two attempts: the json_schema try + the one json_object retry.
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(out).toEqual({ recovered: true });
+    });
+});
+
+describe('runStructuredReviewCall — json_object routes carry the contract (issue #1916)', () => {
+    // The REGISTRY is REAL here, so these exercise the true per-model policy.
+    // `z-ai/glm-*` through OpenRouter is outside the four allowlisted prefixes,
+    // so its structured call goes out as bare `response_format: json_object`:
+    // no schema on the wire, and no "json" anywhere unless we put it there.
+    const glmViaOpenRouter = {
+        provider: 'open_router',
+        model: 'z-ai/glm-5.3',
+        apiKey: 'enc',
+    } as any;
+    const nativeOpenAi = {
+        provider: 'openai',
+        model: 'gpt-5.4',
+        apiKey: 'enc',
+    } as any;
+
+    const systemOf = (callIndex: number) =>
+        mockGenerate.mock.calls[callIndex][0].system as string;
+
+    const schema = z.object({ groups: z.array(z.number()) });
+
+    it('FIRST attempt already states the shape and the word json', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: glmViaOpenRouter,
+        });
+
+        // One attempt — the contract is not a retry, it is the request.
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        const system = systemOf(0);
+        // The keyword: without it OpenAI-compatible providers 400 outright
+        // ("'messages' must contain the word 'json' in some form") and nothing
+        // downstream recovers it.
+        expect(system.toLowerCase()).toContain('json');
+        // The shape: without it the model invents one and the parse mismatches.
+        expect(system).toContain('groups');
+        // The caller's own system prompt is kept, not replaced.
+        expect(system).toContain('sys');
+    });
+
+    // Production 2026-09-28, `openai_compatible:gpt-6-sol`: the upstream is a
+    // gateway that re-issues chat completions on OpenAI's Responses API, where
+    // the system prompt becomes `instructions` and the json_object check reads
+    // only the input messages — "Response input messages must contain the word
+    // 'json' in some form to use 'text.format' of type 'json_object'". A keyword
+    // that lives only in the system prompt does not survive that translation.
+    it('FIRST attempt also puts the word json in the user turn', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: glmViaOpenRouter,
+        });
+
+        const prompt = mockGenerate.mock.calls[0][0].prompt as string;
+        expect(prompt.toLowerCase()).toContain('json');
+        // The caller's own user message is kept, not replaced.
+        expect(prompt).toContain('usr');
+    });
+
+    it('leaves a json_schema route untouched — no prompt tax where nothing was broken', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: nativeOpenAi,
+        });
+
+        expect(systemOf(0)).toBe('sys');
+        expect(mockGenerate.mock.calls[0][0].prompt).toBe('usr');
+    });
+
+    it('a slot already proven to reject json_schema gets the contract too', async () => {
+        // `markJsonSchemaUnsupported` downgraded this slot earlier in the
+        // process. An ALLOWLISTED OpenRouter prefix normally carries the schema
+        // on the wire; downgraded, its build emits bare json_object instead — so
+        // it lands on the same route, and needs the same contract.
+        (mayUseJsonSchema as jest.Mock).mockReturnValueOnce(false);
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: {
+                provider: 'open_router',
+                model: 'openai/gpt-5.4',
+                apiKey: 'enc',
+            } as any,
+        });
+
+        expect(systemOf(0).toLowerCase()).toContain('json');
+        expect(systemOf(0)).toContain('groups');
+    });
+
+    it('a downgraded slot whose build IGNORES the flag is NOT taxed', async () => {
+        // The mirror of the case above, and the one the first version of this
+        // change got wrong. `mayUseJsonSchema` false means we stop ASKING for a
+        // schema — but the native openai build takes no structured-output
+        // setting at all, so its body still carries `text.format: json_schema`.
+        // Treating "we stopped asking" as "the wire went bare" would append a
+        // contract to a prompt that already has the schema on the wire: the
+        // declaration-vs-wire drift this change exists to remove, and the prompt
+        // tax the route table forbids. The module decides, not the executor.
+        (mayUseJsonSchema as jest.Mock).mockReturnValueOnce(false);
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: nativeOpenAi,
+        });
+
+        expect(systemOf(0)).toBe('sys');
+    });
+
+    it('the self-hosted env default gets the contract once its flag is off', async () => {
+        // No BYOK slot: the managed/env default, which never goes through the
+        // registry. The self-hosted OpenAI-compatible branch ANDs the caller's
+        // opt-out into its own supportsStructuredOutputs, so once this route is
+        // marked json_schema-unsupported it emits bare json_object — and then it
+        // needs the contract like any other bare route. Answering 'json_schema'
+        // blindly for "no slot" reproduced #1916 for self-hosted installs, with
+        // no recovery: that 400 is an APICallError, not NoObjectGeneratedError.
+        const prevModel = process.env.API_LLM_PROVIDER_MODEL;
+        const prevKey = process.env.API_OPEN_AI_API_KEY;
+        process.env.API_LLM_PROVIDER_MODEL = 'deepseek-v4-pro';
+        process.env.API_OPEN_AI_API_KEY = 'sk-self-hosted';
+        try {
+            (mayUseJsonSchema as jest.Mock).mockReturnValueOnce(false);
+            mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+
+            await runStructuredReviewCall({ ...base, schema });
+
+            expect(systemOf(0).toLowerCase()).toContain('json');
+            expect(systemOf(0)).toContain('groups');
+        } finally {
+            if (prevModel === undefined)
+                delete process.env.API_LLM_PROVIDER_MODEL;
+            else process.env.API_LLM_PROVIDER_MODEL = prevModel;
+            if (prevKey === undefined) delete process.env.API_OPEN_AI_API_KEY;
+            else process.env.API_OPEN_AI_API_KEY = prevKey;
+        }
+    });
+
+    it('the managed default is NOT taxed while it still sends the schema', async () => {
+        // The mirror: same no-slot route, flag still on. Fireworks and the
+        // native managed branches keep the schema on the wire, so no contract.
+        mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+        await runStructuredReviewCall({ ...base, schema });
+        expect(systemOf(0)).toBe('sys');
+    });
+
+    it('a MARKED non-openai_compat env default is NOT taxed either', async () => {
+        // The case above leaves the flag ON, so it never reaches the guard. This
+        // one turns the flag OFF with no env configured: `resolveEnvProvider()`
+        // returns null, so the build is the managed Fireworks default, which
+        // hardcodes supportsStructuredOutputs and ignores the opt-out. A mark on
+        // `env:auto` must therefore NOT append the contract.
+        //
+        // Without this, dropping `kind === 'openai_compat'` from the guard keeps
+        // the whole suite green while every marked managed route gets a contract
+        // appended to a prompt whose wire still carries the schema — the drift
+        // and the prompt tax this change exists to remove.
+        const prevModel = process.env.API_LLM_PROVIDER_MODEL;
+        delete process.env.API_LLM_PROVIDER_MODEL;
+        try {
+            (mayUseJsonSchema as jest.Mock).mockReturnValueOnce(false);
+            mockGenerate.mockResolvedValueOnce(ok({ groups: [] }));
+            await runStructuredReviewCall({ ...base, schema });
+            expect(systemOf(0)).toBe('sys');
+        } finally {
+            if (prevModel !== undefined)
+                process.env.API_LLM_PROVIDER_MODEL = prevModel;
+        }
+    });
+
+    it('does not re-issue a byte-identical json_object call on a schema-ish 4xx', async () => {
+        // The old code read `sentJsonSchema` — true whenever the SDK was ASKED
+        // for a schema, even on a route that never sends one — and re-issued
+        // "with json_object" into a request that was already json_object. With
+        // the contract in the first attempt, that retry is the same bytes.
+        (isJsonSchemaUnsupportedError as jest.Mock).mockReturnValue(true);
+        mockGenerate.mockRejectedValueOnce(
+            new Error("'messages' must contain the word 'json' in some form"),
+        );
+
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema,
+                byokConfig: glmViaOpenRouter,
+            }),
+        ).rejects.toThrow('must contain the word');
+
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        expect(markJsonSchemaUnsupported).not.toHaveBeenCalled();
+    });
+
+    it('appends the contract ONCE, even when the re-ask fires on top of it', async () => {
+        // Three paths build a contracted system (first attempt, reroute-json,
+        // the downgraded re-ask). Each must build from the CALLER's system, not
+        // from an already-contracted one — otherwise a re-ask stacks a second
+        // copy of the schema on a prompt that already carries it, and the model
+        // is told the shape twice in one message.
+        const parseFail = new NoObjectGeneratedError({
+            message: 'No object generated: could not parse the response',
+            text: 'not json at all',
+            cause: new JSONParseError({ text: 'not json at all', cause: null }),
+            usage: undefined,
+            finishReason: 'stop',
+            response: undefined,
+        } as any);
+        mockGenerate
+            .mockRejectedValueOnce(parseFail)
+            .mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: glmViaOpenRouter,
+        });
+
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        const occurrences = (s: string) =>
+            (s.match(/Return ONLY a JSON object/g) ?? []).length;
+        expect(occurrences(systemOf(0))).toBe(1);
+        expect(occurrences(systemOf(1))).toBe(1);
+        // Pin WHICH path produced the second call. Counting alone would be
+        // satisfied by any other recovery branch, so the count would stop
+        // meaning "the re-ask builds from the caller's system".
+        expect(
+            observabilityService.runAiSdkLLMInSpan.mock.calls[1][0].attrs
+                .structuredRecovery,
+        ).toBe('schema-mismatch');
+    });
+
+    it('reroute-json builds from the caller system too (the third site)', async () => {
+        // The test above cannot reach this path: an 'as-is' plan never reroutes.
+        // A moonshot k2.7-code slot resolves to it for real — the REGISTRY is
+        // not mocked here.
+        //
+        // Note on why this is a PIN rather than a caught regression: a
+        // reroute-json plan requires `capabilities().structuredOutput === 'none'`
+        // (planStructuredCall), and a module that answers 'none' there answers
+        // 'none' in its wire policy too — pinned in declared-facts. So on this
+        // path `mainSystem === system` and the two contracted strings cannot
+        // both exist today. This holds the invariant for the day that coupling
+        // changes; it is not evidence that a stacking bug exists now.
+        mockGenerate.mockResolvedValueOnce({
+            text: '{"groups":[]}',
+            usage: {},
+        });
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: {
+                provider: 'moonshot',
+                model: 'kimi-k2.7-code',
+                apiKey: 'enc',
+            } as any,
+        });
+
+        const system = systemOf(0);
+        expect((system.match(/Return ONLY a JSON object/g) ?? []).length).toBe(
+            1,
+        );
+        expect(system).toContain('sys');
+        // It really took the reroute: plain generateText, no Output.object.
+        expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty('output');
+    });
+
+    it('the D-00c re-issue keeps the contract (a transient blip must not drop it)', async () => {
+        const blip: any = new Error('upstream 502');
+        blip.status = 502;
+        mockGenerate
+            .mockRejectedValueOnce(blip)
+            .mockResolvedValueOnce(ok({ groups: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            schema,
+            byokConfig: glmViaOpenRouter,
+        });
+
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(systemOf(1).toLowerCase()).toContain('json');
+        expect(systemOf(1)).toContain('groups');
+    });
+});
+
+describe('runStructuredReviewCall — structured parse/validation recovery (issue #1786)', () => {
+    const spanCalls = () => observabilityService.runAiSdkLLMInSpan.mock.calls;
+
+    // Faithful stand-in for the error `generateText` + Output.object throws on a
+    // parse/validation failure (`.text` = raw output, `.cause` = the underlying
+    // JSONParseError / TypeValidationError). response/usage/finishReason are
+    // required by the type but unread by the recovery path.
+    const noObjectError = (cause: Error, text: string) =>
+        new NoObjectGeneratedError({
+            message: 'No object generated (test)',
+            cause,
+            text,
+            response: {} as any,
+            usage: {} as any,
+            finishReason: 'stop',
+        });
+
+    it('deterministically repairs a JSON PARSE error (fence) WITHOUT a model re-ask', async () => {
+        // Output.object threw NoObjectGeneratedError because the model wrapped the
+        // JSON in a ```json fence. Free string repair fixes it → no 2nd model call.
+        const badText = '```json\n{"violations":[]}\n```';
+        const parseErr = new JSONParseError({
+            text: badText,
+            cause: new Error('Unexpected token `'),
+        });
+        mockGenerate.mockRejectedValueOnce(noObjectError(parseErr, badText));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(1); // recovered locally, no re-ask
+        assertNoSecondModelBuilt();
+    });
+
+    it('escalates to ONE model re-ask (json_object + schema in prompt) on a SHAPE mismatch', async () => {
+        // Valid JSON, wrong shape → TypeValidationError. String repair can't fix a
+        // shape, so the executor re-asks the model with the schema in the prompt.
+        const typeErr = new TypeValidationError({
+            value: { wrong: 1 },
+            cause: new Error('did not match schema'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(typeErr, '{"wrong":1}'))
+            .mockResolvedValueOnce(ok({ recovered: true }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ recovered: true });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        // The re-ask carries the schema in the system prompt (json_object can't
+        // send it to the provider) — the missing contract is the #1786 root cause.
+        expect(mockGenerate.mock.calls[1][0].system).toContain(
+            'Return ONLY a JSON object',
+        );
+        // The re-ask goes out json_object, so the keyword rides the user turn
+        // too (a Responses-API gateway moves the system prompt out of the
+        // input messages). The caller's user message is kept.
+        const reAskPrompt = mockGenerate.mock.calls[1][0].prompt as string;
+        expect(reAskPrompt.toLowerCase()).toContain('json');
+        expect(reAskPrompt).toContain('usr');
+        // ...and the recovery is stamped on the re-ask span (not silent).
+        expect(spanCalls()[1][0].attrs.structuredRecovery).toBe(
+            'schema-mismatch',
+        );
+        // NOT a slot-level fault: the provider supports json_schema, the model
+        // flubbed — so the slot is never cached as unsupported.
+        expect(markJsonSchemaUnsupported).not.toHaveBeenCalled();
+        assertNoSecondModelBuilt();
+    });
+
+    it('falls back to the model re-ask when deterministic repair cannot recover', async () => {
+        // Parse error whose text is unrepairable garbage → repair returns
+        // undefined → escalate to the one model re-ask rather than throwing.
+        const badText = 'not json at all';
+        mockGenerate
+            .mockRejectedValueOnce(
+                noObjectError(
+                    new JSONParseError({
+                        text: badText,
+                        cause: new Error('nope'),
+                    }),
+                    badText,
+                ),
+            )
+            .mockResolvedValueOnce(ok({ recovered: true }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ recovered: true });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(spanCalls()[1][0].attrs.structuredRecovery).toBe(
+            'schema-mismatch',
+        );
+    });
+});
+
+describe('runStructuredReviewCall — bare-array shape recovery (kody-rules shard #1786)', () => {
+    // Evidence from prod (26/08–02/09): the KodyRulesShardedAgent's model
+    // (kimi-k2.7 managed default) answers a BARE array — `[]` for "no
+    // violations", `[{…}]` when it found some — instead of the wire envelope
+    // `{violations:[…]}`. That is valid JSON of the wrong shape →
+    // TypeValidationError. Today tier-(a) salvage bails (it only repairs PARSE
+    // errors) and tier-(b) spends a full model re-ask that the same model flubs
+    // the same way → the shard errors → shardsErrored++. When EVERY file is
+    // clean the provider then throws "rules not applied" on a review that was
+    // actually clean (Defeito A, 3961 events); a bare array that carried real
+    // violations is dropped when a sibling shard posts (Defeito B'). The fix:
+    // deterministically lift the bare array into the schema's envelope and
+    // re-validate BEFORE the re-ask — free, and it stops the false failure.
+    const noObjectError = (cause: Error, text: string) =>
+        new NoObjectGeneratedError({
+            message: 'No object generated (test)',
+            cause,
+            text,
+            response: {} as any,
+            usage: {} as any,
+            finishReason: 'stop',
+        });
+
+    // A raw jsonSchema() envelope, exactly like shardViolationsWireSchema: a
+    // bare `[]`/`[{…}]` fails it, `{violations:[…]}` passes.
+    const envelopeSchema = jsonSchema({
+        type: 'object',
+        properties: { violations: { type: 'array', items: {} } },
+        required: ['violations'],
+        additionalProperties: false,
+    } as any);
+
+    it('recovers a bare EMPTY array [] into {violations:[]} WITHOUT a re-ask (a clean review is not a failure)', async () => {
+        const typeErr = new TypeValidationError({
+            value: [],
+            cause: new Error('expected object, got array'),
+        });
+        mockGenerate.mockRejectedValueOnce(noObjectError(typeErr, '[]'));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(1); // recovered locally, no re-ask
+        assertNoSecondModelBuilt();
+    });
+
+    it('recovers a bare array WITH violations into {violations:[…]} WITHOUT a re-ask (no silent loss)', async () => {
+        const vs = [{ ruleId: 1, violation: 'x' }];
+        const typeErr = new TypeValidationError({
+            value: vs,
+            cause: new Error('expected object, got array'),
+        });
+        mockGenerate.mockRejectedValueOnce(
+            noObjectError(typeErr, JSON.stringify(vs)),
+        );
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: vs });
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('still escalates to the model re-ask for a genuine shape mismatch (no over-recovery)', async () => {
+        // A wrong-shape OBJECT with neither the envelope key nor a bare array is
+        // not deterministically recoverable — it must still cost the one re-ask,
+        // exactly as before. This guards against the fix over-reaching.
+        const typeErr = new TypeValidationError({
+            value: { wrong: 1 },
+            cause: new Error('did not match schema'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(typeErr, '{"wrong":1}'))
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('recovers a bare array that arrived as PARSE-error text ([] + prose) WITHOUT a re-ask', async () => {
+        // Prod group "array vazio como texto" (231): the model prints `[]` then
+        // trailing prose, so the SDK raises a JSONParseError (not a
+        // TypeValidationError). tier-(a) extracts `[]` but it fails the wire
+        // schema; the shape recovery must still fire off the extracted value.
+        const badText = '[]  No violations found in the provided diff.';
+        const parseErr = new JSONParseError({
+            text: badText,
+            cause: new Error('Unexpected token'),
+        });
+        mockGenerate.mockRejectedValueOnce(noObjectError(parseErr, badText));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('WITHOUT recoverEnvelopeShape, a bare array still re-asks (default contract preserved)', async () => {
+        // Recovery is opt-in: a caller that did NOT opt in keeps the plain
+        // "wrong shape → re-ask (signal, not silent)" behavior, so this generic
+        // primitive never silently changes any other structured caller's contract.
+        const typeErr = new TypeValidationError({
+            value: [],
+            cause: new Error('expected object, got array'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(typeErr, '[]'))
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            // no recoverEnvelopeShape
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2); // re-ask fired, not re-shaped
+    });
+
+    it('does NOT ship a re-shaped value that fails re-validation — falls to the re-ask', async () => {
+        // Safety: the lift must be held to the EXACT contract. A bare array whose
+        // items violate the schema (numbers where objects are required) re-shapes
+        // to {violations:[1,2]} but that fails validation → we must NOT return it;
+        // the re-ask still fires. Guards against recovering structurally-bad data.
+        const strictSchema = jsonSchema({
+            type: 'object',
+            properties: {
+                violations: { type: 'array', items: { type: 'object' } },
+            },
+            required: ['violations'],
+            additionalProperties: false,
+        } as any);
+        const typeErr = new TypeValidationError({
+            value: [1, 2],
+            cause: new Error('expected object items'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(typeErr, '[1,2]'))
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: strictSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2); // re-shape rejected → re-ask
+    });
+
+    it('does NOT invent a recovery from an unparseable parse-error — falls to the re-ask', async () => {
+        // recoverShape is on, but the JSONParseError text holds no extractable
+        // JSON (genuine garbage / truncation) → no bad value to re-shape → the
+        // re-ask runs, exactly as without recovery.
+        const parseErr = new JSONParseError({
+            text: 'not json at all',
+            cause: new Error('nope'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(parseErr, 'not json at all'))
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('runStructuredReviewCall — typed output contract (compile-time inference)', () => {
+    // These assignments are the real test: they only compile if the primitive
+    // infers the caller's output type from the schema. A regression that widens
+    // the return to `any`/`unknown` would still run but stop type-checking here.
+    const typedBase = {
+        system: 'sys',
+        user: 'usr',
+        runName: 't',
+        observabilityService,
+    };
+
+    it('infers z.infer<S> from a zod schema and returns it', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ count: 5, label: 'x' }));
+        const schema = z.object({ count: z.number(), label: z.string() });
+
+        const out = await runStructuredReviewCall({ ...typedBase, schema });
+
+        const count: number = out.count; // ← out is { count: number; label: string }
+        const label: string = out.label;
+        expect({ count, label }).toEqual({ count: 5, label: 'x' });
+    });
+
+    it('infers T from a jsonSchema<T>() Schema and returns it', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ sameBug: true }));
+
+        const out = await runStructuredReviewCall({
+            ...typedBase,
+            schema: jsonSchema<{ sameBug: boolean }>({
+                type: 'object',
+                properties: { sameBug: { type: 'boolean' } },
+                required: ['sameBug'],
+                additionalProperties: false,
+            } as any),
+        });
+
+        const sameBug: boolean = out.sameBug; // ← out is { sameBug: boolean }
+        expect(sameBug).toBe(true);
+    });
+});
+
+describe('runStructuredReviewCall — retained latency guard (D-00c: one gated SAME-model re-issue)', () => {
+    it('transient main failure → exactly ONE SAME-model re-issue, returns its output', async () => {
+        mockGenerate
+            .mockRejectedValueOnce(new Error('fetch failed'))
+            .mockResolvedValueOnce(ok({ violations: ['reissued'] }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: ['reissued'] });
+        // main fails → ONE same-model re-issue succeeds. Both attempts are `main`.
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(modelsUsed()).toEqual([
+            { __model: 'main' },
+            { __model: 'main' },
+        ]);
+        assertNoSecondModelBuilt();
+    });
+
+    it('transient failure twice → single re-issue then THROWS (re-issue capped at one, no 2nd model)', async () => {
+        mockGenerate
+            .mockRejectedValueOnce(new Error('socket hang up'))
+            .mockRejectedValueOnce(new Error('socket hang up again'));
+
+        await expect(runStructuredReviewCall({ ...base })).rejects.toThrow(
+            'socket hang up again',
+        );
+
+        // main + exactly one same-model re-issue = 2 attempts, then propagate.
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(modelsUsed()).toEqual([
+            { __model: 'main' },
+            { __model: 'main' },
+        ]);
+        assertNoSecondModelBuilt();
+    });
+
+    it('AbortError → NO re-issue, THROWS (re-issuing a slow call just times out again)', async () => {
+        const abortErr: any = new Error('The operation was aborted');
+        abortErr.name = 'AbortError';
+        mockGenerate.mockRejectedValueOnce(abortErr);
+
+        await expect(runStructuredReviewCall({ ...base })).rejects.toThrow(
+            'The operation was aborted',
+        );
+
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('[HARD-TIMEOUT] error → NO re-issue, THROWS', async () => {
+        mockGenerate.mockRejectedValueOnce(
+            new Error('[HARD-TIMEOUT] exceeded 600000ms'),
+        );
+
+        await expect(runStructuredReviewCall({ ...base })).rejects.toThrow(
+            '[HARD-TIMEOUT]',
+        );
+
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('non-transient main failure (401 auth) → NO re-issue, THROWS', async () => {
+        const authErr: any = new Error('invalid api key');
+        authErr.status = 401;
+        mockGenerate.mockRejectedValueOnce(authErr);
+
+        await expect(runStructuredReviewCall({ ...base })).rejects.toThrow(
+            'invalid api key',
+        );
+
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+});
+
+describe('runStructuredReviewCall — single retry owner (maxRetries:0 + cooldown-aware)', () => {
+    it('pins maxRetries:0 on the SDK call so it is the ONLY retry layer', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ violations: [] }));
+
+        await runStructuredReviewCall({ ...base });
+
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        expect(mockGenerate).toHaveBeenCalledWith(
+            expect.objectContaining({ maxRetries: 0 }),
+        );
+    });
+
+    it('maxRetries:0 is passed on BOTH the first attempt AND the D-00c re-issue', async () => {
+        mockGenerate
+            .mockRejectedValueOnce(new Error('fetch failed'))
+            .mockResolvedValueOnce(ok({ violations: ['reissued'] }));
+
+        await runStructuredReviewCall({ ...base });
+
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        for (const call of mockGenerate.mock.calls) {
+            expect(call[0]).toEqual(expect.objectContaining({ maxRetries: 0 }));
+        }
+    });
+
+    it('transient failure while the slot is IN COOLDOWN → NO re-issue, THROWS', async () => {
+        // The wrapper armed the slot cooldown on the prior 429; the retry owner
+        // must honor it — never re-fire into a cooling slot.
+        mockGetLimiter.mockReturnValue({ isInCooldown: () => true });
+        mockGenerate.mockRejectedValueOnce(new Error('fetch failed'));
+
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                byokConfig: { main: { provider: 'openai' } } as any,
+            }),
+        ).rejects.toThrow('fetch failed');
+
+        // Exactly one attempt — the cooldown gate skipped the re-issue.
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('RATE_LIMIT (429) failure → NO immediate re-fire, THROWS (backs off via cooldown)', async () => {
+        // Slot in cooldown (arm-then-honor): a 429 never immediately re-issues.
+        mockGetLimiter.mockReturnValue({ isInCooldown: () => true });
+        const rateErr: any = new Error('rate limit exceeded');
+        rateErr.status = 429;
+        mockGenerate.mockRejectedValueOnce(rateErr);
+
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                byokConfig: { main: { provider: 'openai' } } as any,
+            }),
+        ).rejects.toThrow('rate limit');
+
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('RATE_LIMIT (429) with NO cooldown armed → still NO immediate re-fire, THROWS', async () => {
+        // Even without a cooldown, a 429 is not hammered with an instant retry.
+        mockGetLimiter.mockReturnValue(null);
+        const rateErr: any = new Error('too many requests');
+        rateErr.status = 429;
+        mockGenerate.mockRejectedValueOnce(rateErr);
+
+        await expect(runStructuredReviewCall({ ...base })).rejects.toThrow(
+            'too many requests',
+        );
+
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('transient failure NOT in cooldown → still exactly ONE same-model re-issue', async () => {
+        mockGetLimiter.mockReturnValue({ isInCooldown: () => false });
+        mockGenerate
+            .mockRejectedValueOnce(new Error('socket hang up'))
+            .mockResolvedValueOnce(ok({ violations: ['reissued'] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            byokConfig: { main: { provider: 'openai' } } as any,
+        });
+
+        expect(out).toEqual({ violations: ['reissued'] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        assertNoSecondModelBuilt();
+    });
+});
+
+describe('runStructuredReviewCall — per-model tuning (RFC §4.1 model limits)', () => {
+    it('passes the resolved slot temperature + maxOutputTokens to the model call', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ violations: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            byokConfig: {
+                provider: 'openai',
+                temperature: 0.3,
+                maxOutputTokens: 5000,
+            } as any,
+        });
+
+        expect(mockGenerate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                temperature: 0.3,
+                maxOutputTokens: 5000,
+            }),
+        );
+    });
+
+    it('omits tuning when the slot does not set it (falls back to model defaults)', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ violations: [] }));
+
+        await runStructuredReviewCall({ ...base }); // no slot at all
+
+        const args = mockGenerate.mock.calls[0][0];
+        expect(args).not.toHaveProperty('temperature');
+        expect(args).not.toHaveProperty('maxOutputTokens');
+    });
+
+    it('treats a non-positive maxOutputTokens as "use the model default" (dropped)', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ violations: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            byokConfig: { provider: 'openai', maxOutputTokens: 0 } as any,
+        });
+
+        expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty(
+            'maxOutputTokens',
+        );
+    });
+});
+
+// ---------------------------------------------------------------------------
+// I/O CONTRACT. The text extraction/validation itself is specced in
+// structured-output-repair.spec.ts; here, one case per branch of this boundary.
+//
+// The DETERMINISTIC parse layers this boundary owns are (a) the reroute-json
+// path — plain generateText + `repairAndValidate(validatingSchema, r.text)` —
+// and (b) the salvage/reissue path after Output.object throws
+// NoObjectGeneratedError on the strict json_schema branch. Model decision
+// QUALITY (whether a finding is correct) is the separate eval track and is NOT
+// asserted here.
+//
+// The #1786 invariant: for every off-schema row the boundary must RECOVER the
+// real payload OR SIGNAL explicitly (throw / re-ask) — NEVER silently keep-all /
+// drop / default. This boundary honours it on every applicable row (reroute
+// throws `produced no valid object` when repair returns undefined; the strict
+// path re-asks the model in json_object mode with the schema in the prompt).
+// ---------------------------------------------------------------------------
+
+// A moonshot:kimi-k2.7-code slot is always-thinking → planStructuredCall resolves
+// to 'reroute-json' (REGISTRY is REAL here): plain generateText, then the boundary
+// PARSES + VALIDATES r.text against the caller's schema. This IS the json_object
+// fallback branch (kimi/glm/deepseek/z-ai).
+const zooKimiSlot = {
+    provider: 'moonshot',
+    model: 'kimi-k2.7-code',
+    apiKey: 'enc',
+} as any;
+const keepSchema = z.object({ keep: z.boolean() });
+/** Feed one raw text back on the reroute path and run the parse layer. */
+const parseReroute = <S extends z.ZodType>(schema: S, text: string) => {
+    mockGenerate.mockResolvedValueOnce({ text, usage: {} });
+    return runStructuredReviewCall({ ...base, schema, byokConfig: zooKimiSlot });
+};
+
+describe('MATRIX A — output-shape zoo (E: json_object/reroute branch, full zoo in scope)', () => {
+    it('row 10 — right data / WRONG (renamed) keys → SIGNALS (the #1786 class, no keep-all)', async () => {
+        await expect(parseReroute(keepSchema, '{"kept":true}')).rejects.toThrow(
+            'produced no valid object',
+        );
+    });
+
+    it('row 13 — extra unknown keys alongside the right ones are TOLERATED (stripped, not crash)', async () => {
+        await expect(
+            parseReroute(keepSchema, '{"keep":true,"debug":"x","extra":99}'),
+        ).resolves.toEqual({ keep: true });
+    });
+
+    it('row 17 — null/undefined text (no r.text) → SIGNALS', async () => {
+        mockGenerate.mockResolvedValueOnce({ usage: {} }); // no .text field at all
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema: keepSchema,
+                byokConfig: zooKimiSlot,
+            }),
+        ).rejects.toThrow('produced no valid object');
+    });
+});
+
+describe('MATRIX C — unparseable / transport (the fail-safe layer)', () => {
+    it('row 30 — LLM.run throws on the reroute path → propagates (no silent swallow, no 2nd model)', async () => {
+        mockGenerate.mockRejectedValueOnce(new Error('network reset'));
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema: keepSchema,
+                byokConfig: zooKimiSlot,
+            }),
+        ).rejects.toThrow('network reset');
+        // Reroute is single-shot: exactly one attempt, no 2nd-model cascade.
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+});
+
+describe('MATRIX E — strict json_schema branch (openai/anthropic/google/moonshotai) trusts clean D', () => {
+    const openaiSlot = {
+        provider: 'openai',
+        apiKey: 'enc',
+        model: 'gpt-4o',
+    } as any;
+
+    it('strict branch: a clean D from Output.object is returned verbatim (SDK owns validation)', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: openaiSlot,
+        });
+        expect(out).toEqual({ keep: true });
+        // Strict branch uses the Output.object channel (NOT reroute plain text).
+        expect(mockGenerate.mock.calls[0][0]).toHaveProperty('output');
+        // …and the system prompt is NOT augmented with a schema (that is the
+        // json_object recovery only).
+        expect(mockGenerate.mock.calls[0][0].system).toBe('sys');
+    });
+});
+
+describe('MATRIX E/#1786 — a raw jsonSchema() caller (no validate fn) is STILL protected', () => {
+    // The dedup pass hands a raw `jsonSchema()` with NO validate function. Without
+    // `ensureValidatingSchema` (added centrally), Output.object would parse-but-
+    // not-check and a renamed-key object would ship silently (the keep-all class).
+    // On the reroute branch the boundary validates r.text against the SAME
+    // ensured schema, so a renamed payload must be REJECTED, not returned.
+    const rawSchema = jsonSchema<{ keep: boolean }>({
+        type: 'object',
+        properties: { keep: { type: 'boolean' } },
+        required: ['keep'],
+        additionalProperties: false,
+    } as any);
+
+    it('renamed keys are REJECTED (ensureValidatingSchema compiled an ajv validator) → SIGNALS', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: '{"kept":true}', usage: {} });
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema: rawSchema,
+                byokConfig: zooKimiSlot,
+            }),
+        ).rejects.toThrow('produced no valid object');
+    });
+});
+
+describe('MATRIX D — input variants (request assembly threading, happy LLM.run)', () => {
+    it('threading — the resolved byokConfig slot is handed to the model builder (not a copy/2nd slot)', async () => {
+        const slot = {
+            provider: 'openai',
+            apiKey: 'enc',
+            model: 'gpt-4o',
+        } as any;
+        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
+        await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: slot,
+        });
+        expect(mockBuild.mock.calls[0][0]).toEqual(slot);
+    });
+});
+

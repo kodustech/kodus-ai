@@ -16,8 +16,6 @@ import { inferRuleOrigin, type InferredRuleOrigin } from './infer-origin';
 export type ListFilters = {
     origins: Set<InferredRuleOrigin>;
     severities: Set<string>; // lower-case (low/medium/high/critical)
-    /** Toggle: when true, only Auto-sync rules pinned via `@kody-sync` pass. */
-    kodySync: boolean;
     withSyncErrors: boolean;
     /** Toggle: when true, only rules with status === "paused" pass the filter. */
     pausedOnly: boolean;
@@ -26,7 +24,6 @@ export type ListFilters = {
 export const EMPTY_LIST_FILTERS: ListFilters = {
     origins: new Set(),
     severities: new Set(),
-    kodySync: false,
     withSyncErrors: false,
     pausedOnly: false,
 };
@@ -40,34 +37,19 @@ export function matchesOriginFilter(
 }
 
 /**
- * An auto-synced rule left behind after auto-sync went off — an "orphan".
- * Single source of truth for the orphan chip's count, its quick-filter, AND
- * the per-card "Orphan" maintenance badge (`OriginBadge`) so all three can
- * never disagree (the original "count differs from filtered result" bug, and
- * its later "3 badges but chip says 2" variant, both came from divergent
- * predicates).
+ * A rule imported from a coding-agent file (CLAUDE.md, .cursor/rules, ...)
+ * before those files stopped becoming rules. Nothing syncs it any more.
+ * Single source of truth for the frozen-rules chip's count, its quick-filter
+ * and the row accent, so they can never disagree.
  *
- * INHERITED rules ARE counted: this is a per-repository view and an inherited
- * global/parent orphan still affects this repo's reviews, so it belongs in
- * "orphans affecting this repo". (Trade-off: the same global orphan is counted
- * in every repo that inherits it — accepted, because each repo's chip is about
- * that repo. The fix itself is still made at the rule's owning scope.)
- *
- * Excludes only:
- *   - pinnedSync rules — their source file carries `@kody-sync`, so the
- *     backend keeps syncing them even with the toggle off (maintained, not
- *     orphaned). This mirrors the badge, which hides on pinned rules too.
- *
- * NOTE: this predicate does not test the repo's auto-sync toggle. Callers gate
- * on it separately (the chip only renders when sync is off, and the badge only
- * renders for `syncEnabledForRepo === false`), so both surfaces already agree.
+ * INHERITED rules ARE counted: an inherited frozen rule still affects this
+ * repo's reviews.
  */
-export function isOrphanAutoSyncRule(rule: {
+export function isFrozenAgentFileRule(rule: {
     sourcePath?: string | null;
     origin?: string | null;
-    pinnedSync?: boolean;
 }): boolean {
-    return inferRuleOrigin(rule) === 'Auto-sync' && !rule.pinnedSync;
+    return inferRuleOrigin(rule) === "Agent file";
 }
 
 export function matchesSeverityFilter(
@@ -83,29 +65,10 @@ export function matchesSeverityFilter(
     return filters.severities.has(rule.severity.toLowerCase());
 }
 
-/**
- * @kody-sync filter: only Auto-sync rules still pinned via `@kody-sync`
- * (`pinnedSync`) pass. Everything else is excluded while it's on.
- */
-export function matchesKodySyncFilter(
-    rule: {
-        sourcePath?: string | null;
-        origin?: string | null;
-        pinnedSync?: boolean | null;
-    },
-    filters: ListFilters,
-): boolean {
-    if (!filters.kodySync) {
-        return true;
-    }
-    return inferRuleOrigin(rule) === 'Auto-sync' && rule.pinnedSync === true;
-}
-
 export function hasActiveListFilters(filters: ListFilters): boolean {
     return (
         filters.origins.size > 0 ||
         filters.severities.size > 0 ||
-        filters.kodySync ||
         filters.withSyncErrors ||
         filters.pausedOnly
     );

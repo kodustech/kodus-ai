@@ -36,11 +36,29 @@ export interface EnrichedPullRequestResponse {
         name?: string;
     };
     isDraft: boolean;
-    suggestionsCount: { sent: number; filtered: number };
+    suggestionsCount: {
+        sent: number;
+        filtered: number;
+        // Breakdown of SENT suggestions by severity. Absent only when the
+        // aggregation failed and the in-memory fallback was used.
+        bySeverity?: Record<'critical' | 'high' | 'medium' | 'low', number>;
+        // Distinct categories (labels) among SENT suggestions.
+        categories?: string[];
+    };
+    // Deep-link target when the PR-list count is clicked (?file=...&
+    // suggestion=... on the review screen): the delivered finding that most
+    // wants attention — unresolved first, then severity, document order last.
+    // null when the PR has no delivered suggestion to land on.
+    firstSentSuggestion?: { id: string; filePath: string } | null;
     reviewedCommitSha?: string;
     reviewedCommitUrl?: string;
     compareUrl?: string;
     executionId?: string;
+    approvalReasonDeliveryFailure?: {
+        decision: 'hold' | 'approve';
+        reason: string;
+        occurredAt: string;
+    } | null;
 
     // Dados da execução de automação (do PostgreSQL)
     automationExecution: {

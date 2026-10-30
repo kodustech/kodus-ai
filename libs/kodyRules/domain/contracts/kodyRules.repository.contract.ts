@@ -1,6 +1,7 @@
 import { KodyRulesEntity } from '../entities/kodyRules.entity';
 import {
     IKodyRule,
+    IKodyRuleIndexEntry,
     IKodyRules,
     KodyRulesStatus,
 } from '../interfaces/kodyRules.interface';
@@ -14,12 +15,22 @@ export interface IKodyRulesRepository {
         kodyRules: Omit<IKodyRules, 'uuid'>,
     ): Promise<KodyRulesEntity | null>;
 
-    findById(uuid: string): Promise<IKodyRule | null>;
+    findById(uuid: string, organizationId: string): Promise<IKodyRule | null>;
     findOne(filter?: Partial<IKodyRules>): Promise<KodyRulesEntity | null>;
     find(filter?: Partial<IKodyRules>): Promise<KodyRulesEntity[]>;
+    /** Projected list of org ids that have ≥1 rule — avoids loading every
+     *  org's full embedded rules array (used by the detector sweep). */
+    findOrganizationIdsWithRules(): Promise<string[]>;
     findByOrganizationId(
         organizationId: string,
     ): Promise<KodyRulesEntity | null>;
+
+    /**
+     * Projected list of an organization's rules — id, title and scope only.
+     * Server-side projection so a picker never pulls every rule body, example
+     * and detector out of Mongo just to show titles.
+     */
+    findRulesIndex(organizationId: string): Promise<IKodyRuleIndexEntry[]>;
 
     /**
      * Count rules for an organization matching an optional status.
@@ -69,6 +80,17 @@ export interface IKodyRulesRepository {
         uuid: string,
         ruleId: string,
     ): Promise<KodyRulesEntity | null>;
+    /**
+     * Stamps `digestedAt` on the rule's `autoPause` / `lastAutoPause` whose
+     * `pausedAt` is one of `pausedAts`. Matching on `pausedAt` keeps a resume
+     * or a new pause that landed after the read from being overwritten.
+     */
+    markAutoPausesDigested(
+        organizationId: string,
+        ruleId: string,
+        pausedAts: Date[],
+        digestedAt: Date,
+    ): Promise<boolean>;
     updateRulesStatusByFilter(
         organizationId: string,
         repositoryId: string,

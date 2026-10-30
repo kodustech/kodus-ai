@@ -15,8 +15,5 @@ scenarios:
 
 cells:
     - target: cloud
-      provider: github
-      license: trial
-    - target: cloud
       provider: github-app
       license: paid

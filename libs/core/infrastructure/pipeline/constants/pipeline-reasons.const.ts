@@ -41,6 +41,17 @@ export const PipelineReasons = {
             message: 'Only Merge Commits',
             description: 'Merge commits are skipped to avoid noise',
         } as PipelineReason,
+        REBASE_NO_CHANGES: {
+            message: 'Rebase Without Changes',
+            description:
+                'The rebase changed nothing in the code already reviewed',
+        } as PipelineReason,
+        PROVIDER_RATE_LIMITED: {
+            message: 'Provider Rate Limited',
+            description:
+                'The Git provider throttled the commit fetch (HTTP 429); the review was not run',
+            action: 'Re-run the review once the provider rate-limit window refills',
+        } as PipelineReason,
     },
     PREREQUISITES: {
         CLOSED: {
@@ -65,6 +76,18 @@ export const PipelineReasons = {
             message: 'Plan Limit Exceeded',
             action: 'Upgrade plan to continue',
         } as PipelineReason,
+        TRIAL_CREDITS_EXHAUSTED: {
+            message: 'Trial Reviews Used Up',
+            action: 'Connect your own AI key to keep reviewing (unlimited, any plan)',
+        } as PipelineReason,
+        CREDITS_EXHAUSTED: {
+            message: 'Kodus Credits Exhausted',
+            action: 'Top up your Kodus credits (or connect your own AI key) to keep reviewing',
+        } as PipelineReason,
+        LICENSE_UNAVAILABLE: {
+            message: 'Subscription Check Unavailable',
+            action: 'The license service is temporarily unreachable — re-run the review in a few minutes',
+        } as PipelineReason,
         USER_NO_LICENSE: {
             message: 'User Not Licensed',
             action: 'Assign seat to user',
@@ -78,16 +101,6 @@ export const PipelineReasons = {
         NO_RESULTS: {
             message: 'No Validated Suggestions',
             description: 'Validation filtered out all suggestions',
-        } as PipelineReason,
-    },
-    FINE_TUNING: {
-        DISABLED: {
-            message: 'Fine-Tuning Disabled',
-            description: 'Context skipped as per configuration',
-        } as PipelineReason,
-        NO_MATCHES: {
-            message: 'No Matching Examples',
-            description: 'No relevant fine-tuning examples found',
         } as PipelineReason,
     },
 };

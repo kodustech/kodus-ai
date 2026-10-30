@@ -31,7 +31,7 @@ export const trialCreditsConsume: Scenario = {
     priority: "P0",
     appliesTo: {
         target: ["cloud"],
-        provider: ["github"],
+        provider: ["github", "github-app"],
         license: ["trial"],
     },
     timeoutSec: 180,

@@ -18,7 +18,7 @@ TAIL="50"
 SERVICES_ARR=()
 # Parse flags from anywhere on the line. Anything that isn't a flag becomes
 # a positional service name. This lets `pnpm run selfhosted:logs api worker
-# --tail 100` work — yarn 1 eats the leading `--` so flags can appear after
+# --tail 100` work — the package manager may eat the leading `--` so flags can appear after
 # positionals.
 while [ $# -gt 0 ]; do
     case "$1" in

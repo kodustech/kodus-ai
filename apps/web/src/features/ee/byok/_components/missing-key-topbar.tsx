@@ -9,7 +9,7 @@ export const BYOKMissingKeyTopbar = () => {
             add a key
             {isSelfHosted ? (
                 <>
-                    {" — via BYOK settings or your "}
+                    {" — on the AI providers page, or in your "}
                     <code className="bg-card-lv2 rounded px-1 py-0.5 font-mono text-xs">
                         .env
                     </code>{" "}
@@ -18,8 +18,8 @@ export const BYOKMissingKeyTopbar = () => {
             ) : (
                 "."
             )}
-            <Link href="/organization/byok" className="mx-2 font-bold">
-                Set LLM keys
+            <Link href="/byok" className="mx-2 font-bold">
+                Open AI providers
                 <ArrowRightIcon className="ml-1 inline size-5" />
             </Link>
         </div>

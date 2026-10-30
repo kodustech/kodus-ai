@@ -13,12 +13,10 @@ import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
-import {
-    DRY_RUN_SERVICE_TOKEN,
-    IDryRunService,
-} from '@libs/dryRun/domain/contracts/dryRun.service.contract';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { createLogger } from '@libs/core/log/logger';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 
 @Injectable()
 export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -37,9 +35,6 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
 
         @Inject(PULL_REQUESTS_SERVICE_TOKEN)
         private readonly pullRequestsService: IPullRequestsService,
-
-        @Inject(DRY_RUN_SERVICE_TOKEN)
-        private readonly dryRunService: IDryRunService,
     ) {
         super();
     }
@@ -114,6 +109,7 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
                 });
 
                 let commentResults: any[] = [];
+                const promptReplyErrors: Error[] = [];
 
                 try {
                     // Criar comentários para cada sugestão de nível de PR usando o commentManagerService
@@ -130,22 +126,56 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
                             context.codeReviewConfig?.languageResultPrompt,
                             context.pullRequestMessagesConfig?.globalSettings
                                 ?.suggestionCopyPrompt,
-                            context.dryRun,
+                            // The PR's own platform, not the org/team
+                            // integration: the marker gate depends on the
+                            // platform the comment lands on (#2055 review).
+                            context.platformType as PlatformType,
+                            (error) => promptReplyErrors.push(error),
                         );
 
                     commentResults = result?.commentResults || [];
 
-                    this.logger.log({
-                        message: `Successfully created ${commentResults.length} PR-level comments for PR#${context.pullRequest.number}`,
-                        context: this.stageName,
-                        metadata: {
-                            prNumber: context.pullRequest.number,
-                            organizationAndTeamData:
-                                context.organizationAndTeamData,
-                            suggestionsCount: prLevelSuggestions.length,
-                            commentsCreated: commentResults.length,
-                        },
-                    });
+                    // Only count comments that were actually delivered. The
+                    // underlying platform call can fail (e.g. GitHub 503) and
+                    // still return a result entry with deliveryStatus=FAILED.
+                    // Keep the full result set for persistence/auditing, but
+                    // report delivered vs failed counts separately.
+                    const deliveredResults = commentResults.filter(
+                        (r: any) =>
+                            r?.deliveryStatus === DeliveryStatus.SENT ||
+                            r?.deliveryStatus === 'sent',
+                    );
+                    const failedCount =
+                        commentResults.length - deliveredResults.length;
+
+                    if (deliveredResults.length > 0) {
+                        this.logger.log({
+                            message: `Successfully created ${deliveredResults.length} PR-level comments for PR#${context.pullRequest.number}`,
+                            context: this.stageName,
+                            metadata: {
+                                prNumber: context.pullRequest.number,
+                                organizationAndTeamData:
+                                    context.organizationAndTeamData,
+                                suggestionsCount: prLevelSuggestions.length,
+                                commentsCreated: deliveredResults.length,
+                                commentsFailed: failedCount,
+                            },
+                        });
+                    }
+
+                    if (failedCount > 0) {
+                        this.logger.warn({
+                            message: `${failedCount} PR-level comment(s) failed to deliver for PR#${context.pullRequest.number}`,
+                            context: this.stageName,
+                            metadata: {
+                                prNumber: context.pullRequest.number,
+                                organizationAndTeamData:
+                                    context.organizationAndTeamData,
+                                suggestionsCount: prLevelSuggestions.length,
+                                commentsFailed: failedCount,
+                            },
+                        });
+                    }
                 } catch (error) {
                     this.logger.error({
                         message: `Error creating PR level comments for PR#${context.pullRequest.number}`,
@@ -172,24 +202,13 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
 
                         if (transformedPrLevelSuggestions?.length > 0) {
                             try {
-                                if (context.dryRun?.enabled) {
-                                    await this.dryRunService.addPrLevelSuggestions(
-                                        {
-                                            organizationAndTeamData:
-                                                context.organizationAndTeamData,
-                                            id: context.dryRun?.id,
-                                            prLevelSuggestions:
-                                                transformedPrLevelSuggestions,
-                                        },
-                                    );
-                                } else {
-                                    await this.pullRequestsService.addPrLevelSuggestions(
-                                        context.pullRequest.number,
-                                        context.repository.name,
-                                        transformedPrLevelSuggestions,
-                                        context.organizationAndTeamData,
-                                    );
-                                }
+                                await this.pullRequestsService.addPrLevelSuggestions(
+                                    context.pullRequest.number,
+                                    String(context.repository.id),
+                                    context.repository.name,
+                                    transformedPrLevelSuggestions,
+                                    context.organizationAndTeamData,
+                                );
 
                                 this.logger.log({
                                     message: `Saved ${transformedPrLevelSuggestions.length} PR level suggestions to database`,
@@ -236,6 +255,15 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
 
                 // Adicionar os resultados dos comentários ao contexto
                 const finalContext = this.updateContext(context, (draft) => {
+                    for (const error of promptReplyErrors) {
+                        draft.errors ??= [];
+                        draft.errors.push({
+                            stage: this.stageName,
+                            substage: 'bitbucket-prompt-reply',
+                            severity: 'partial',
+                            error,
+                        });
+                    }
                     // Armazenar os resultados dos comentários de nível de PR
                     if (!draft.prLevelCommentResults) {
                         draft.prLevelCommentResults = [];

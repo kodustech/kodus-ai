@@ -1,3 +1,4 @@
+import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
@@ -7,6 +8,7 @@ import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/c
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { AutoAssignLicenseUseCase } from '@libs/ee/license/use-cases/auto-assign-license.use-case';
+import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
 import {
     PermissionValidationService,
     ValidationErrorType,
@@ -46,8 +48,12 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
     let permissionValidationService: { validateExecutionPermissions: jest.Mock };
     let autoAssignLicenseUseCase: { execute: jest.Mock };
 
-    const makeContext = (): CodeReviewPipelineContext =>
-        ({
+    // Frozen by DEFAULT — production hands every stage after the first
+    // produce() a deep-frozen context. See test/fixtures/frozen-pipeline-context.ts.
+    const makeContext = (
+        over: Record<string, unknown> = {},
+    ): CodeReviewPipelineContext =>
+        frozenContext({
             organizationAndTeamData: {
                 organizationId: 'org-1',
                 teamId: 'team-1',
@@ -66,7 +72,6 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
             teamAutomationId: 'automation-1',
             origin: 'opened',
             action: 'opened',
-            dryRun: { enabled: false },
             errors: [],
             preparedFileContexts: [],
             validSuggestions: [],
@@ -76,6 +81,7 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
             pipelineMetadata: {},
             statusInfo: { status: 'in_progress' as any, message: 'started' },
             pipelineVersion: '1.0.0',
+            ...over,
         }) as CodeReviewPipelineContext;
 
     beforeEach(async () => {
@@ -146,6 +152,12 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
                     useValue: prAuthorResolver,
                 },
                 { provide: USER_SERVICE_TOKEN, useValue: usersService },
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: {
+                        startTrial: jest.fn().mockResolvedValue(false),
+                    },
+                },
             ],
         }).compile();
 
@@ -164,6 +176,9 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
         const result = await stage.execute(makeContext());
 
         expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+        expect(result.statusInfo?.message?.toLowerCase()).toMatch(
+            /(license|subscription|seat)/,
+        );
         expect(notificationService.emit).toHaveBeenCalledWith(
             expect.objectContaining({
                 event: NotificationEvent.REVIEW_SKIPPED_NO_LICENSE,
@@ -202,8 +217,11 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
                 { email: 'owner@acme.com' } as any,
             ]);
 
-            const context = makeContext();
-            (context.pullRequest as any).user = user;
+            // Built frozen, so the author shape is an override, not a
+            // post-hoc mutation.
+            const context = makeContext({
+                pullRequest: { number: 42, state: 'open', locked: false, user },
+            });
 
             await stage.execute(context);
 

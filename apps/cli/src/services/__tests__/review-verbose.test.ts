@@ -10,7 +10,13 @@ import {
 
 describe('review verbose message builders', () => {
     it('builds analyze start messages', () => {
-        expect(createAnalyzeStartVerboseMessages({ diff: 'abcd', rulesOnly: true, fast: false })).toEqual([
+        expect(
+            createAnalyzeStartVerboseMessages({
+                diff: 'abcd',
+                rulesOnly: true,
+                fast: false,
+            }),
+        ).toEqual([
             '[verbose] Review config: rulesOnly=true, fast=false',
             '[verbose] Diff size: 4 characters',
         ]);
@@ -68,11 +74,13 @@ describe('review verbose message builders', () => {
     });
 
     it('builds trial analyze start and response messages', () => {
-        expect(createTrialAnalyzeStartVerboseMessages('x'.repeat(350))).toEqual([
-            '[verbose] Running trial analyze',
-            '[verbose] Diff size: 350 characters',
-            `[verbose] Diff preview:\n${'x'.repeat(300)}\n... (truncated)`,
-        ]);
+        expect(createTrialAnalyzeStartVerboseMessages('x'.repeat(350))).toEqual(
+            [
+                '[verbose] Running trial analyze',
+                '[verbose] Diff size: 350 characters',
+                `[verbose] Diff preview:\n${'x'.repeat(300)}\n... (truncated)`,
+            ],
+        );
         expect(
             createTrialAnalyzeResponseVerboseMessages({
                 summary: 'ok',

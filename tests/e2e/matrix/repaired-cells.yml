@@ -43,6 +43,3 @@ cells:
     - target: self-hosted
       provider: bitbucket
       license: license-paid
-    - target: self-hosted
-      provider: github
-      license: license-free

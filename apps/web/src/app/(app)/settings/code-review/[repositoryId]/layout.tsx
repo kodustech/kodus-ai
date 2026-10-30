@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useOptionalParameterQuery } from "@services/parameters/hooks";
 import { LanguageValue, ParametersConfigKey } from "@services/parameters/types";
@@ -17,20 +17,27 @@ import {
     shouldHydrateCodeReviewForm,
 } from "../_utils/settings-shell";
 import {
+    useCodeReviewConfig,
+    useDefaultCodeReviewConfig,
+    useInitialParameter,
+    useInitialTeamId,
+} from "../../_components/context";
+import { useCodeReviewRouteParams } from "../../_hooks";
+import {
     findFirstDirtyFieldOutsidePromptOverrides,
     shouldBlockCodeReviewLayoutNavigation,
 } from "./_utils/layout-dirty-state";
-import {
-    useCodeReviewConfig,
-    useDefaultCodeReviewConfig,
-} from "../../_components/context";
-import { useCodeReviewRouteParams } from "../../_hooks";
+import { withModelOverrideField } from "./_utils/model-override-field";
 import { normalizePromptFormValues } from "./custom-prompts/_utils/custom-prompts-state";
 
 export default function Layout(props: React.PropsWithChildren) {
     const { teamId } = useSelectedTeamId();
     const config = useCodeReviewConfig();
     const defaultCodeReviewConfig = useDefaultCodeReviewConfig();
+    const bridgeInitialTeamId = useInitialTeamId();
+    const initialLanguage = useInitialParameter(
+        ParametersConfigKey.LANGUAGE_CONFIG,
+    );
     const { directoryId } = useCodeReviewRouteParams();
     const parameters = useOptionalParameterQuery<LanguageValue>(
         ParametersConfigKey.LANGUAGE_CONFIG,
@@ -49,15 +56,22 @@ export default function Layout(props: React.PropsWithChildren) {
         repositoryId,
         directoryId,
     );
-    const language = parameters.data?.configValue ?? LanguageValue.ENGLISH;
+    const language =
+        parameters.data?.configValue ??
+        (teamId === bridgeInitialTeamId
+            ? (initialLanguage?.configValue as LanguageValue)
+            : undefined) ??
+        LanguageValue.ENGLISH;
     const initialFormValues = useMemo(
         () =>
-            normalizePromptFormValues(
-                {
-                    ...config,
-                    language,
-                },
-                defaultCodeReviewConfig?.v2PromptOverrides,
+            withModelOverrideField(
+                normalizePromptFormValues(
+                    {
+                        ...config,
+                        language,
+                    },
+                    defaultCodeReviewConfig?.v2PromptOverrides,
+                ),
             ),
         [config, defaultCodeReviewConfig?.v2PromptOverrides, language],
     );
@@ -66,6 +80,7 @@ export default function Layout(props: React.PropsWithChildren) {
         [language, scopeKey],
     );
     const hydratedStateKeyRef = useRef(hydrationKey);
+    const appliedFormValuesRef = useRef(initialFormValues);
 
     const canEdit = usePermission(
         Action.Update,
@@ -80,10 +95,32 @@ export default function Layout(props: React.PropsWithChildren) {
         defaultValues: initialFormValues,
         disabled: !canEdit,
     });
-    const {
-        isSubmitting: formIsSubmitting,
-        dirtyFields,
-    } = form.formState;
+    // Dirty fields come from a subscription, not from this render: undoing
+    // a change (a switch flipped on, then off) does not re-render the
+    // layout, so a value captured at render kept navigation blocked on a
+    // clean form, with Reset and Save disabled.
+    const formIsSubmitting = form.formState.isSubmitting;
+    const dirtyFieldsRef = useRef<Record<string, unknown>>({});
+    const [hasDirtyFields, setHasDirtyFields] = useState(false);
+    useEffect(
+        () =>
+            form.subscribe({
+                formState: { dirtyFields: true },
+                callback: ({ dirtyFields }) => {
+                    dirtyFieldsRef.current = (dirtyFields ?? {}) as Record<
+                        string,
+                        unknown
+                    >;
+                    setHasDirtyFields(
+                        shouldBlockCodeReviewLayoutNavigation({
+                            dirtyFields: dirtyFieldsRef.current,
+                            formIsSubmitting: false,
+                        }),
+                    );
+                },
+            }),
+        [form],
+    );
 
     useEffect(() => {
         if (
@@ -92,16 +129,30 @@ export default function Layout(props: React.PropsWithChildren) {
                 hydrationKey,
             )
         ) {
+            if (appliedFormValuesRef.current === initialFormValues) return;
+
+            // Same scope, refetched config (e.g. a Kody Rules toggle saved on
+            // its own): take the server values for every field the user has
+            // not edited, so the form never holds a value that is gone. The
+            // other flags keep pending edits flagged as unsaved.
+            form.reset(initialFormValues, {
+                keepDirtyValues: true,
+                keepDirty: true,
+                keepErrors: true,
+                keepTouched: true,
+            });
+            appliedFormValuesRef.current = initialFormValues;
             return;
         }
 
         form.reset(initialFormValues);
         hydratedStateKeyRef.current = hydrationKey;
+        appliedFormValuesRef.current = initialFormValues;
     }, [form, hydrationKey, initialFormValues]);
 
     const scrollToDirtyField = useCallback(() => {
         const dirtyKey = findFirstDirtyFieldOutsidePromptOverrides(
-            dirtyFields as Record<string, unknown>,
+            dirtyFieldsRef.current,
             "",
             ["v2PromptOverrides"],
         );
@@ -160,14 +211,11 @@ export default function Layout(props: React.PropsWithChildren) {
         }
 
         window.scrollTo({ top: 0, behavior: "smooth" });
-    }, [dirtyFields]);
+    }, []);
 
     useUnsavedChangesGuard({
         id: "code-review-settings",
-        isDirty: shouldBlockCodeReviewLayoutNavigation({
-            dirtyFields: dirtyFields as Record<string, unknown>,
-            formIsSubmitting,
-        }),
+        isDirty: hasDirtyFields || formIsSubmitting,
         onBlock: scrollToDirtyField,
     });
 

@@ -1,0 +1,24 @@
+id: cloud-reflake-3
+description: |
+    Re-run the two cloud cells that flaked on the 2026-07-29 manual run
+    (30456334055), now with the execution-health re-poll hardening:
+
+    - command-review × cloud × github × paid: health assert read the
+      auto-review's by-design `skipped` row 3s before the command's
+      `success` row landed (first-terminal-wins race, fixed alongside
+      this file)
+    - kody-rules-create-and-apply × cloud × gitlab × paid: "No review
+      activity within timeout" — provider-side latency, re-run to
+      confirm transient
+
+scenarios:
+    - command-review
+    - kody-rules-create-and-apply
+
+cells:
+    - target: cloud
+      provider: github
+      license: paid
+    - target: cloud
+      provider: gitlab
+      license: paid

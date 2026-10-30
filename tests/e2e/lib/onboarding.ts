@@ -5,13 +5,109 @@ import type {
     TargetContext,
     TenantCredentials,
 } from "./types.js";
-import { ensureOk, http } from "./http.js";
+import {
+    ensureOk,
+    http,
+    registerSessionCookie,
+    type HttpResponse,
+} from "./http.js";
 import { logger } from "./log.js";
+import { settle } from "../providers/base.js";
 
 const log = logger("onboarding");
 
 interface LoginEnvelope {
-    data?: { accessToken?: string };
+    data?: { accessToken?: string; refreshToken?: string };
+}
+
+/**
+ * Establish a NextAuth session cookie for the cloud web-proxy path.
+ *
+ * Cloud cells reach the API through `${webBaseUrl}/api/proxy/api`, whose route
+ * ignores a client-sent `Authorization` header and derives the upstream Bearer
+ * from the NextAuth session cookie (deleting the Authorization when there's no
+ * session — the exact reason every authenticated matrix cell 401'd once the
+ * web app started injecting the bearer in the proxy). We already hold the
+ * `{accessToken, refreshToken}` from `/auth/login`; exchange them for a session
+ * cookie via the SSO credentials provider (auth.ts: `AuthProviders.SSO`), then
+ * register it so `http()` attaches it to every call carrying this bearer.
+ *
+ * Returns the `name=value; …` cookie string, or undefined if the handshake
+ * didn't yield a session token (caller logs and proceeds — the subsequent
+ * listTeams call surfaces the auth failure loudly rather than here).
+ */
+async function establishWebSession(
+    webBaseUrl: string,
+    accessToken: string,
+    refreshToken: string,
+): Promise<string | undefined> {
+    const base = webBaseUrl.replace(/\/$/, "");
+
+    // NextAuth's double-submit CSRF: token in the body must match the cookie.
+    const csrf = await http<{ csrfToken?: string }>(
+        `${base}/api/auth/csrf`,
+        { timeoutMs: 20_000 },
+    );
+    const csrfToken = csrf.body?.csrfToken;
+    const csrfCookie = cookiePairs(csrf.headers.getSetCookie());
+    if (!csrfToken || !csrfCookie) {
+        log.warn(
+            `NextAuth CSRF handshake incomplete at ${base} (token=${!!csrfToken}, cookie=${!!csrfCookie})`,
+        );
+        return undefined;
+    }
+
+    // SSO credentials sign-in: swaps the API tokens for a session cookie.
+    const form = new URLSearchParams({
+        csrfToken,
+        accessToken,
+        refreshToken,
+        callbackUrl: base,
+        json: "true",
+    });
+    const cb = await http(`${base}/api/auth/callback/sso`, {
+        method: "POST",
+        headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            cookie: csrfCookie,
+        },
+        body: form.toString(),
+        redirect: "manual",
+        timeoutMs: 20_000,
+    });
+
+    const sessionCookie = cookiePairs(cb.headers.getSetCookie());
+    const all = [csrfCookie, sessionCookie].filter(Boolean).join("; ");
+    if (!/session-token/.test(all)) {
+        log.warn(
+            `SSO sign-in returned no session-token cookie (HTTP ${cb.status}) — cloud proxy auth will fail`,
+        );
+        return undefined;
+    }
+    return all;
+}
+
+/**
+ * Reduce Set-Cookie header lines to a request `name=value; …` cookie string,
+ * de-duped by cookie NAME keeping the LAST occurrence.
+ *
+ * NextAuth's middleware `auth()` wrapper AND the csrf route each emit an
+ * `authjs.csrf-token` on `GET /api/auth/csrf`, but only the LAST matches the
+ * `csrfToken` returned in the JSON body — and Auth.js reads the FIRST cookie
+ * of a repeated name, so forwarding both fails the double-submit check with
+ * `MissingCSRF`. Last-wins keeps the authoritative token. Chunked session
+ * cookies (`…session-token.0/.1` for large JWTs) have distinct names, so
+ * they're all preserved.
+ */
+function cookiePairs(setCookies: string[]): string {
+    const jar = new Map<string, string>();
+    for (const c of setCookies) {
+        const pair = c.split(";")[0].trim();
+        const eq = pair.indexOf("=");
+        if (eq <= 0) continue;
+        jar.set(pair.slice(0, eq), pair.slice(eq + 1));
+    }
+    return [...jar.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
 function decodeJwtPayload(jwt: string): Record<string, unknown> {
@@ -99,6 +195,37 @@ export async function login(
     if (!organizationId) {
         throw new Error("JWT payload missing organizationId");
     }
+
+    // Cloud reaches the API through the web app's `/api/proxy/api`, which
+    // derives the upstream Bearer from the NextAuth session cookie and strips
+    // a client-sent Authorization. A raw Bearer never survives the proxy, so
+    // exchange the API tokens for a session cookie and register it; `http()`
+    // then carries it on every call made with this bearer. Direct
+    // (self-hosted / local) targets skip this — they hit the API without a
+    // proxy and the Bearer works as-is.
+    const refreshToken = resp.body.data?.refreshToken;
+    if (target.apiBaseUrl.includes("/api/proxy/") && refreshToken) {
+        try {
+            const cookie = await establishWebSession(
+                target.webBaseUrl,
+                accessToken,
+                refreshToken,
+            );
+            if (cookie) {
+                // Scope the cookie to the API host (the proxy lives on the web
+                // host, e.g. qa.web.kodus.io, which is also apiBaseUrl's host).
+                const host = new URL(target.apiBaseUrl).host;
+                registerSessionCookie(accessToken, cookie, host);
+            }
+        } catch (err) {
+            log.warn(
+                `Failed to establish NextAuth session for cloud proxy (${target.webBaseUrl}): ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            );
+        }
+    }
+
     // 30s envelope: under cloud QA load /team/ can hit the proxy
     // read-timeout window and abort with "This operation was aborted"
     // even though the underlying request would have completed in <1s.
@@ -136,6 +263,23 @@ export async function login(
 // integration removes one at a time (the category's current first), so loop
 // until the active platform is ours or there's nothing left. Self-hosted
 // uses a fresh tenant, so this is a no-op there (at most our own platform).
+// Reads the tenant's ACTIVE code-management platform (uppercased), or ""
+// when none is connected. Shared by clearConflictingIntegrations and the
+// registerIntegration timeout-recovery path below.
+async function activeCodeManagementPlatform(
+    target: TargetContext,
+    session: KodusSession,
+): Promise<string> {
+    const resp = await http<{ data?: Array<{ platformName?: string; category?: string }> }>(
+        `${target.apiBaseUrl}/integration/connections?teamId=${encodeURIComponent(session.teamId)}`,
+        { headers: { Authorization: `Bearer ${session.accessToken}` }, timeoutMs: 15_000 },
+    );
+    const active = (resp.body?.data ?? []).find(
+        (c) => (c.category ?? "CODE_MANAGEMENT") === "CODE_MANAGEMENT",
+    );
+    return (active?.platformName ?? "").toUpperCase();
+}
+
 async function clearConflictingIntegrations(
     target: TargetContext,
     provider: Provider,
@@ -143,16 +287,16 @@ async function clearConflictingIntegrations(
 ): Promise<void> {
     const wanted = provider.integrationType.toUpperCase();
     for (let i = 0; i < 8; i++) {
-        const resp = await http<{ data?: Array<{ platformName?: string; category?: string }> }>(
-            `${target.apiBaseUrl}/integration/connections?teamId=${encodeURIComponent(session.teamId)}`,
-            { headers: { Authorization: `Bearer ${session.accessToken}` }, timeoutMs: 15_000 },
-        );
-        const active = (resp.body?.data ?? []).find(
-            (c) => (c.category ?? "CODE_MANAGEMENT") === "CODE_MANAGEMENT",
-        );
-        const platform = (active?.platformName ?? "").toUpperCase();
+        const platform = await activeCodeManagementPlatform(target, session);
         if (!platform || platform === wanted) return; // clean or already ours
         log.info(`Dropping stale ${platform} integration before connecting ${wanted}`);
+        // The integration being deleted may be cached as "registered" by an
+        // earlier cell on this org — the cache must not outlive the
+        // integration (same invariant as deleteRepo → invalidateRegisteredRepo),
+        // or a later platform-A cell after an A → B switch would hit the
+        // stale entry and skip re-registering. Invalidate BEFORE the DELETE:
+        // if the DELETE fails we merely re-register needlessly.
+        invalidateRegisteredIntegrations(target.apiBaseUrl, session.organizationId);
         await http(
             `${target.apiBaseUrl}/code-management/delete-integration?teamId=${encodeURIComponent(session.teamId)}`,
             { method: "DELETE", headers: { Authorization: `Bearer ${session.accessToken}` }, timeoutMs: 20_000 },
@@ -161,11 +305,53 @@ async function clearConflictingIntegrations(
     }
 }
 
+// Within a single matrix run a tenant's integration only needs to be
+// registered ONCE — mirroring registeredRepoCache above. Re-POSTing
+// /code-management/auth-integration on every scenario makes the backend
+// re-validate the token against the provider's API each time; ~20
+// scenarios (plus the runner's transient retries, plus http()'s own
+// transport retries when a call hangs) is enough for Bitbucket Cloud to
+// start throttling the shared test account's auth calls — observed on
+// release run 28888685303 where every scenario after the 4th died at
+// "Registering BITBUCKET integration" with 30s-timeout aborts. Caching
+// per (apiBaseUrl, org, platform) means one validation per tenant per
+// run. Keyed on apiBaseUrl so hermetic mock servers (unique localhost
+// ports) never share a slot; scenarios that use throwaway orgs (e.g.
+// centralized-config-sync, which delete-integrations at teardown) have
+// their own organizationId and therefore their own key.
+const registeredIntegrationCache = new Set<string>();
+
+// Drops every integration-cache entry for an org, any platform. Called by
+// clearConflictingIntegrations when it deletes the org's active integration.
+function invalidateRegisteredIntegrations(
+    apiBaseUrl: string,
+    organizationId: string,
+): void {
+    const prefix = `${apiBaseUrl}:${organizationId}:`;
+    for (const key of registeredIntegrationCache) {
+        if (key.startsWith(prefix)) registeredIntegrationCache.delete(key);
+    }
+    // Onboarding is scoped to the integration that was live when it ran.
+    // Deleting that integration voids it, so the next scenario has to pay for
+    // finish-onboarding again rather than inherit a hit for state that no
+    // longer exists.
+    for (const key of finishedOnboardingCache) {
+        if (key.startsWith(prefix)) finishedOnboardingCache.delete(key);
+    }
+}
+
 export async function registerIntegration(
     target: TargetContext,
     provider: Provider,
     session: KodusSession,
 ): Promise<void> {
+    const cacheKey = `${target.apiBaseUrl}:${session.organizationId}:${provider.integrationType}`;
+    if (registeredIntegrationCache.has(cacheKey)) {
+        log.info(
+            `${provider.integrationType} integration already registered this run — reusing (skips provider-side token re-validation)`,
+        );
+        return;
+    }
     // Cloud only: persistent tenants accumulate cross-provider integrations
     // that hijack getTypeIntegration. Self-hosted's fresh tenant never does.
     if (target.target === "cloud") {
@@ -195,21 +381,76 @@ export async function registerIntegration(
     } else {
         body.token = provider.authToken();
     }
-    const resp = await http<{ data: { status?: string } }>(
-        `${target.apiBaseUrl}/code-management/auth-integration`,
-        {
-            method: "POST",
-            headers: { Authorization: `Bearer ${session.accessToken}` },
-            body,
-            timeoutMs: 30_000,
-        },
-    );
+    let resp: HttpResponse<{ data: { status?: string } }>;
+    try {
+        resp = await http<{ data: { status?: string } }>(
+            `${target.apiBaseUrl}/code-management/auth-integration`,
+            {
+                method: "POST",
+                headers: { Authorization: `Bearer ${session.accessToken}` },
+                body,
+                timeoutMs: 60_000,
+            },
+        );
+    } catch (err) {
+        // http() only rethrows after exhausting its transport retries —
+        // meaning every attempt hung past the timeout ("This operation was
+        // aborted"). auth-integration's server side validates the token
+        // against the provider and can outlive our client timeout while
+        // still COMMITTING the integration (same eventual-consistency
+        // shape finishOnboarding handles for proxy 504s). Before failing
+        // the scenario, poll the connections list: if our platform landed,
+        // the registration succeeded and we proceed.
+        if (await pollIntegrationLanded(target, provider, session)) {
+            log.info(
+                `registerIntegration: POST timed out but the ${provider.integrationType} integration landed server-side — continuing`,
+            );
+            registeredIntegrationCache.add(cacheKey);
+            return;
+        }
+        throw err;
+    }
+    // Proxy read-timeout statuses (504 on qa.web.kodus.io after 60s, etc.):
+    // the backend keeps working and usually commits — same recovery as the
+    // client-timeout path above and as finishOnboarding's proxy handling.
+    if (PROXY_PENDING_STATUSES.has(resp.status)) {
+        if (await pollIntegrationLanded(target, provider, session)) {
+            log.info(
+                `registerIntegration: proxy ${resp.status} but the ${provider.integrationType} integration landed server-side — continuing`,
+            );
+            registeredIntegrationCache.add(cacheKey);
+            return;
+        }
+    }
     ensureOk(resp, "onboarding:registerIntegration");
     if (resp.body.data?.status !== "SUCCESS") {
         throw new Error(
             `auth-integration did not return SUCCESS: ${resp.raw.slice(0, 400)}`,
         );
     }
+    registeredIntegrationCache.add(cacheKey);
+}
+
+// Post-timeout recovery probe for registerIntegration: true when the
+// wanted platform shows up as the tenant's active code-management
+// integration within ~60s. Short window on purpose — if the backend is
+// genuinely stuck we want the scenario's own failure, not a long stall.
+async function pollIntegrationLanded(
+    target: TargetContext,
+    provider: Provider,
+    session: KodusSession,
+): Promise<boolean> {
+    const wanted = provider.integrationType.toUpperCase();
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+        const platform = await activeCodeManagementPlatform(
+            target,
+            session,
+        ).catch(() => "");
+        if (platform === wanted) return true;
+        await new Promise((r) => setTimeout(r, 10_000));
+    }
+    return false;
 }
 
 // Within a single matrix run a tenant's repo only needs to be registered
@@ -225,6 +466,20 @@ export async function registerIntegration(
 // every later scenario reuses the stable hook. (The first scenario's lone
 // churn completes before it opens its PR, so the new hook is already live.)
 const registeredRepoCache = new Map<string, ProviderRepoRef>();
+
+// Drops every cache entry for `fullName`, regardless of tenant/provider.
+// Needed by the throwaway-repo flows (trial-managed-review etc.): the repo
+// name is deterministic per run, so when a retry deletes and RECREATES the
+// repo under the same name, a stale cache hit would skip the registration
+// POST — and with it the webhook creation on the NEW repo. The retry then
+// polls a webhook-less repo and fails by construction (observed on nightly
+// run 28926099375: attempt 2 logged "already registered — reusing" against
+// a just-recreated repo and no review could ever arrive).
+export function invalidateRegisteredRepo(fullName: string): void {
+    for (const key of registeredRepoCache.keys()) {
+        if (key.endsWith(`:${fullName}`)) registeredRepoCache.delete(key);
+    }
+}
 
 export async function registerRepo(
     target: TargetContext,
@@ -408,11 +663,45 @@ async function readKodyLearningStatus(
     );
 }
 
+// Onboarded (tenant, repo) pairs for this run. finish-onboarding is idempotent
+// from the scenario's point of view -- but NOT free: each POST kicks off
+// generateKodyRules({months: 3}), which issues 3 GitHub calls per PR in that
+// window, uncapped, against the credential the PRODUCT stores.
+//
+// The fixture repo is at 816 PRs and grows by ~8 every run, so one call now
+// costs ~2450 requests out of GitHub's 5000/h. Two scenarios onboarding the
+// same repo exhausted the account 5 minutes into run 31443426784 and took
+// three scenarios down with it. Integration and repo registration were already
+// cached per run for the same reason; this call is simply the expensive one
+// nobody had measured.
+//
+// This caches the REDUNDANT calls away. It does not make the first one cheap --
+// see the product-side note in the PR: a customer onboarding an active repo
+// pays the same cost on their own quota, once per repo they select.
+const finishedOnboardingCache = new Set<string>();
+
 export async function finishOnboarding(
     target: TargetContext,
     session: KodusSession,
     repo: ProviderRepoRef,
 ): Promise<void> {
+    const cacheKey = `${target.apiBaseUrl}:${session.organizationId}:${repo.id}`;
+    if (finishedOnboardingCache.has(cacheKey)) {
+        log.info(
+            `Onboarding already finished this run for repo ${repo.name ?? repo.full_name} — reusing ` +
+                '(skips a ~3-calls-per-PR GitHub backfill)',
+        );
+        // Same settle as the uncached path below. Caching removed the POST,
+        // and with it ~10s of slack before the scenario starts opening PRs --
+        // shortening a sequence the comment below documents as timing
+        // sensitive. Run 31531667234 lost bitbucket's command-review to
+        // "Code review already being processed", the duplicate-review shape
+        // of that same race. The POST was the expensive part; this wait is
+        // not what we were trying to save.
+        await settle(10_000);
+        await resetCodeReviewConfig(target, session);
+        return;
+    }
     log.info("Finishing onboarding");
     // finish-onboarding does substantial work synchronously: generates
     // per-repo Kody rules via LLM and syncs rules from repo files. The
@@ -453,8 +742,9 @@ export async function finishOnboarding(
         // observed case. See task #84 for the corresponding server-
         // side fix (validate-prerequisites should retry with backoff
         // when no automation is found).
-        await new Promise((r) => setTimeout(r, 10_000));
+        await settle(10_000);
         await resetCodeReviewConfig(target, session);
+        finishedOnboardingCache.add(cacheKey);
         return;
     }
 
@@ -489,6 +779,7 @@ export async function finishOnboarding(
             // call from being silently dropped by validate-prerequisites.
             await new Promise((r) => setTimeout(r, 10_000));
             await resetCodeReviewConfig(target, session);
+            finishedOnboardingCache.add(cacheKey);
             return;
         }
         await new Promise((r) => setTimeout(r, 10_000));
@@ -539,7 +830,26 @@ export async function resetCodeReviewConfig(
                 headers: { Authorization: `Bearer ${session.accessToken}` },
                 body: {
                     organizationAndTeamData: { teamId: session.teamId },
-                    configValue: { automatedReviewActive: true },
+                    configValue: {
+                        automatedReviewActive: true,
+                        // Scenarios open PRs against `main`, while the fixture
+                        // repos deliberately keep a non-main default branch
+                        // (tiny-url's default is the review-bait bug branch —
+                        // see the note in lib/git.ts on why the PR base and the
+                        // repo default are intentionally different).
+                        //
+                        // An EMPTY `baseBranches` used to mean "review every
+                        // base branch". Since e941be123 it means "review only
+                        // the repository default branch", so an unset list
+                        // silently skips every PR these scenarios open, with
+                        // `Branch Mismatch` and a 👎 reaction rather than an
+                        // error — which reads downstream as "no review
+                        // activity within timeout".
+                        //
+                        // State the scope the fixtures actually use instead of
+                        // depending on what an absent list happens to mean.
+                        baseBranches: ["main"],
+                    },
                 },
                 timeoutMs: 20_000,
             },

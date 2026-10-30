@@ -13,6 +13,7 @@ export class PullRequestMessagesEntity implements Entity<IPullRequestMessages> {
     private readonly _repositoryId?: string;
     private readonly _startReviewMessage?: IPullRequestMessageContent;
     private readonly _endReviewMessage?: IPullRequestMessageContent;
+    private readonly _errorReviewMessage?: IPullRequestMessageContent;
     private readonly _directoryId?: string;
     private readonly _globalSettings?: {
         hideComments?: boolean;
@@ -27,6 +28,7 @@ export class PullRequestMessagesEntity implements Entity<IPullRequestMessages> {
         this._repositoryId = pullRequestMessages.repositoryId;
         this._startReviewMessage = pullRequestMessages.startReviewMessage;
         this._endReviewMessage = pullRequestMessages.endReviewMessage;
+        this._errorReviewMessage = pullRequestMessages.errorReviewMessage;
         this._directoryId = pullRequestMessages.directoryId;
         this._globalSettings = pullRequestMessages.globalSettings;
     }
@@ -39,6 +41,7 @@ export class PullRequestMessagesEntity implements Entity<IPullRequestMessages> {
             repositoryId: this.repositoryId,
             startReviewMessage: this.startReviewMessage,
             endReviewMessage: this.endReviewMessage,
+            errorReviewMessage: this.errorReviewMessage,
             directoryId: this.directoryId,
             globalSettings: this.globalSettings,
         };
@@ -70,6 +73,10 @@ export class PullRequestMessagesEntity implements Entity<IPullRequestMessages> {
 
     get endReviewMessage(): IPullRequestMessageContent | undefined {
         return this._endReviewMessage;
+    }
+
+    get errorReviewMessage(): IPullRequestMessageContent | undefined {
+        return this._errorReviewMessage;
     }
 
     get directoryId(): string | undefined {

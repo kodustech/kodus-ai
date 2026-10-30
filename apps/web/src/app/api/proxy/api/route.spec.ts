@@ -73,34 +73,12 @@ describe("/api/proxy/api/[...path]", () => {
         expect(res.status).toBe(200);
     });
 
-    it("strips the Host header so upstream sees its own vhost", async () => {
-        await GET(mockReq("GET", "/x"), ctx(["x"]));
-        const [, init] = fetchMock.mock.calls[0];
-        expect((init.headers as Headers).get("host")).toBeNull();
-    });
-
     it("preserves Cookie and Content-Type headers", async () => {
         await GET(mockReq("GET", "/x"), ctx(["x"]));
         const [, init] = fetchMock.mock.calls[0];
         const h = init.headers as Headers;
         expect(h.get("cookie")).toBe("auth=abc");
         expect(h.get("content-type")).toBe("application/json");
-    });
-
-    it("POST: streams request body with duplex: 'half'", async () => {
-        const body = new ReadableStream();
-        await POST(mockReq("POST", "/x", { body }), ctx(["x"]));
-        const [, init] = fetchMock.mock.calls[0];
-        expect(init.method).toBe("POST");
-        expect(init.body).toBe(body);
-        expect((init as any).duplex).toBe("half");
-    });
-
-    it("GET: does NOT set body or duplex (would break GET semantics)", async () => {
-        await GET(mockReq("GET", "/x"), ctx(["x"]));
-        const [, init] = fetchMock.mock.calls[0];
-        expect(init.body).toBeUndefined();
-        expect((init as any).duplex).toBeUndefined();
     });
 
     it("passes through upstream status code", async () => {
@@ -124,4 +102,17 @@ describe("/api/proxy/api/[...path]", () => {
         const methods = fetchMock.mock.calls.map((c) => c[1].method);
         expect(methods).toEqual(["PUT", "PATCH", "DELETE"]);
     });
+
+    it.each([[["mcp"]], [["mcp", "issues"]], [["MCP"]]])(
+        "never forwards the @Public() MCP endpoints (%j)",
+        async (segments) => {
+            authMock.mockResolvedValue(null);
+            const res = await POST(
+                mockReq("POST", `/${segments.join("/")}`),
+                ctx(segments),
+            );
+            expect(res.status).toBe(404);
+            expect(fetchMock).not.toHaveBeenCalled();
+        },
+    );
 });

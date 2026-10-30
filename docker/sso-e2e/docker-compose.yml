@@ -1,5 +1,5 @@
 # Reproducible SSO end-to-end environment for the cookie-domain regression
-# (the Dmitry / scorpion.co bug). See ../../scripts/sso-e2e/run.sh for the
+# (the self-hosted 4-label domain bug). See ../../scripts/sso-e2e/run.sh for the
 # orchestrator that boots this compose, configures Keycloak + Kodus, and
 # prints the verification steps.
 #
@@ -56,8 +56,8 @@ services:
                     # on shape switch.
                     - api.kodus.lvh.me
                     - app.kodus.lvh.me
-                    - api.web.scorpion.lvh.me
-                    - app.web.scorpion.lvh.me
+                    - api.web.acme.lvh.me
+                    - app.web.acme.lvh.me
 
     keycloak:
         image: quay.io/keycloak/keycloak:26.5.1
@@ -82,7 +82,7 @@ services:
             API_NODE_ENV: production
             # SSO_E2E_DOMAIN selects the test topology:
             #   kodus.lvh.me        — SaaS-shaped (3-label common parent)
-            #   web.scorpion.lvh.me — Dmitry-shaped (4-label common parent)
+            #   web.acme.lvh.me — self-hosted-shaped (4-label common parent)
             API_FRONTEND_URL: https://app.${SSO_E2E_DOMAIN:-kodus.lvh.me}
             # buildApiUrl() (libs/ee/sso/utils/api-url.util.ts) reads
             # API_URL when assembling the SAML AssertionConsumerServiceURL.

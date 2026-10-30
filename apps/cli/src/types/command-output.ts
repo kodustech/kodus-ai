@@ -6,6 +6,7 @@ export type CommandErrorCode =
     | 'NOT_IN_GIT_REPO'
     | 'NO_CHANGES'
     | 'API_REQUEST_FAILED'
+    | 'REVIEW_TOO_LARGE'
     | 'INTERNAL_ERROR';
 
 export interface AgentErrorPayload {

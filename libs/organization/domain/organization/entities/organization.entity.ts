@@ -13,6 +13,8 @@ export class OrganizationEntity implements Entity<IOrganization> {
     private _name: string;
     private _tenantName: string;
     private _status: boolean;
+    private _codeHostMemberCount?: number;
+    private _codeHostMemberCountUpdatedAt?: Date;
     private _releaseTrack: ReleaseTrack;
     private _users?: Partial<IUser>[];
     private _teams?: Partial<ITeam>[];
@@ -22,6 +24,9 @@ export class OrganizationEntity implements Entity<IOrganization> {
         this._name = organization.name;
         this._tenantName = organization.tenantName || this.generateTenantName();
         this._status = organization.status;
+        this._codeHostMemberCount = organization.codeHostMemberCount;
+        this._codeHostMemberCountUpdatedAt =
+            organization.codeHostMemberCountUpdatedAt;
         this._releaseTrack =
             organization.releaseTrack ?? DEFAULT_RELEASE_TRACK;
         this._users = organization.users;
@@ -54,6 +59,14 @@ export class OrganizationEntity implements Entity<IOrganization> {
         return this._status;
     }
 
+    public get codeHostMemberCount() {
+        return this._codeHostMemberCount;
+    }
+
+    public get codeHostMemberCountUpdatedAt() {
+        return this._codeHostMemberCountUpdatedAt;
+    }
+
     public get releaseTrack(): ReleaseTrack {
         return this._releaseTrack;
     }
@@ -72,6 +85,8 @@ export class OrganizationEntity implements Entity<IOrganization> {
             name: this._name,
             tenantName: this._tenantName,
             status: this._status,
+            codeHostMemberCount: this._codeHostMemberCount,
+            codeHostMemberCountUpdatedAt: this._codeHostMemberCountUpdatedAt,
             releaseTrack: this._releaseTrack,
             users: this._users,
             teams: this._teams,
@@ -84,6 +99,8 @@ export class OrganizationEntity implements Entity<IOrganization> {
             name: this._name,
             tenantName: this._tenantName,
             status: this._status,
+            codeHostMemberCount: this._codeHostMemberCount,
+            codeHostMemberCountUpdatedAt: this._codeHostMemberCountUpdatedAt,
             releaseTrack: this._releaseTrack,
             users: this._users,
             teams: this._teams,

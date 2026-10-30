@@ -16,9 +16,11 @@ import { OutboxMessageRepository } from '../infrastructure/repositories/outbox-m
 import { InboxMessageModel } from '../infrastructure/repositories/schemas/inbox-message.model';
 import { InboxMessageRepository } from '../infrastructure/repositories/inbox-message.repository';
 import { JobStatusService } from '../infrastructure/job-status.service';
+import { MessageClaimService } from '../infrastructure/message-claim.service';
 
 // Domain contracts
 import { JOB_STATUS_SERVICE_TOKEN } from '../domain/contracts/job-status.service.contract';
+import { MESSAGE_CLAIM_SERVICE_TOKEN } from '../domain/contracts/message-claim.service.contract';
 import { WORKFLOW_JOB_REPOSITORY_TOKEN } from '../domain/contracts/workflow-job.repository.contract';
 import { OUTBOX_MESSAGE_REPOSITORY_TOKEN } from '../domain/contracts/outbox-message.repository.contract';
 import { INBOX_MESSAGE_REPOSITORY_TOKEN } from '../domain/contracts/inbox-message.repository.contract';
@@ -45,6 +47,10 @@ const coreProviders = [
     {
         provide: JOB_STATUS_SERVICE_TOKEN,
         useClass: JobStatusService,
+    },
+    {
+        provide: MESSAGE_CLAIM_SERVICE_TOKEN,
+        useClass: MessageClaimService,
     },
 
     // Engine

@@ -1,0 +1,1520 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:35:28.661Z",
+  "updatedAt": "2026-10-13T22:53:34.635Z",
+  "complete": true,
+  "selectedCases": [
+    "P29-hold-leak-on-create",
+    "P29-hold-leak-on-create-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 19,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P29-hold-leak-on-create · book-hold-leak-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P29-hold-leak-on-create-control · book-hold-leak-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 281102,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: changeSeat's catch unconditionally calls holds.release(hold) even when the failure occurs after holds.commit(hold) has already succeeded (e.g. holds.free(booking.seatId) on line 27 throws). WHY: seat-holds.ts documents that only commit() or release() ends a hold, so releasing a committed hold ends it twice and can free the just-committed new seat the booking now points to (another user can then acquire it = double booking) or throw and mask the original error. HOW: only release when the failure happened before commit, e.g. track a committed flag and skip release when it is set. This revises the earlier hold-leak suggestion: applying it by wrapping commit/free inside the same try introduced the opposite failure (release-after-commit).",
+          "keep": true,
+          "rationale": "The claim is technically sound. seat-holds.ts documents that 'only commit() or release() ends one' hold. In changeSeat, line 26 calls commit(hold) for the new seat, then line 27 calls free(booking.seatId) for the old seat. If free throws, the catch block on line 30 unconditionally calls release(hold) on a hold that commit already ended. Per the documented contract, that is a double-end of the same hold, which can either free the just-committed new seat (which the booking now points to, allowing another user to re-acquire it = double booking) or itself throw and mask the original error. This is not a repeat of the earlier hold-leak suggestion (round-a-P29-hold-leak-on-create): that entry addressed the hold never being released on failure; this finding is the opposite failure — releasing a hold that was already committed — introduced by applying that suggestion. No guard in the current code prevents the release-after-commit path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "commit|release|free|acquire",
+                "glob": "*.ts",
+                "path": "src/bookings"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 27,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/bookings/bookings.service.ts:13` (2026-10-06 12:00 UTC).\n\nWhen `changeSeat`'s `catch` unconditionally calls `holds.release(hold)` after `holds.commit(hold)` has succeeded (for example, `holds.free(booking.seatId)` on line 27 throws), it ends the hold twice even though `seat-holds.ts` documents that only `commit()` or `release()` ends a hold, which can free the just-committed new seat the booking now points to and allow another user to acquire it (double booking) or throw and mask the original error. Only call `release` when the failure happened before `commit`, for example by tracking a `committed` flag and skipping `release` when it is set, since wrapping `commit`/`free` in the same `try` would reintroduce the opposite release-after-commit failure."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 389379,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat, `holds.free(booking.seatId)` is inside the try block, so if it throws after `holds.commit(hold)` has already succeeded, the catch runs `await this.holds.release(hold)` on a hold that was already committed. WHY: commit() ends the hold and marks the new seat as taken by the (already updated) booking; releasing it afterwards frees a seat the booking still references, so a concurrent book() can re-acquire newSeatId and the same seat is sold twice, while the failed free() leaves the old seat held. HOW: only release the hold if it has not been committed yet, e.g. track a `committed` flag and skip release once commit succeeds (or move `free` after the try/catch so a free failure no longer triggers a release of the committed hold).",
+          "keep": true,
+          "rationale": "The code confirms the described ordering: in changeSeat (lines 24-28) `holds.free(booking.seatId)` sits inside the try after `await this.holds.commit(hold)`, and the catch unconditionally calls `await this.holds.release(hold)`. The SeatHolds interface states holds never expire and are ended only by commit() or release(), so a free() failure after a successful commit triggers release() on a hold that was already committed — the very state the earlier hold-leak suggestion introduced a release for. This is a different failure (freeing/double-selling the newly-committed seat, plus leaking the old seat) than PreviousDecision round-a-P29-hold-leak-on-create (which addressed holds never being released at all), so it is a consequence of applying that fix, not a repeat of it. Nothing in the code guards free() from throwing, so the catch path is reachable; the finding cannot be actively refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "SeatHolds|class.*Holds|commit\\(|release\\(|free\\(",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In addGuest the catch calls holds.release(hold) even when repo.update has already succeeded, so if holds.commit(hold) throws the guest's seat hold is ended while the booking still lists that seat. WHY: SeatHolds only treats the booking as owning the seat once commit ends the hold, so releasing lets the seat be acquired again while the updated booking still points at it, allowing another user to book the same seat (double booking). HOW: release the hold only when the persisted write did not happen — e.g. keep the update in its own try/catch that releases on failure, and handle a commit failure without ending the hold (retry/compensate) so the booking never references an unheld seat.",
+          "keep": false,
+          "rationale": "The finding's core mechanism is contradicted by the SeatHolds contract in src/bookings/seat-holds.ts: acquire() \"throws SeatTakenError if a hold or a booking already has it.\" In addGuest the repo.update persists the guest with seatId into booking.guests BEFORE holds.commit is attempted, so once the write succeeds the booking itself occupies that seat. Even if commit then throws and the catch calls holds.release, a subsequent acquire on that seat would still be rejected because the persisted booking already has it. The finding's premise (\"SeatHolds only treats the booking as owning the seat once commit ends the hold\") is factually wrong per the interface contract, so the claimed double-booking path is blocked by an upstream guard.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "commit|release|acquire",
+                "glob": "*holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "SeatTakenError|class .*SeatHolds|implements SeatHolds"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/bookings/bookings.service.ts:13` (2026-10-06 12:00 UTC).\n\nIn `changeSeat` in `src/bookings/bookings.service.ts`, `holds.free(booking.seatId)` runs inside the `try` after `holds.commit(hold)` can succeed, so if it throws, the `catch` calls `await this.holds.release(hold)` on an already committed hold, freeing a seat the booking still references so a concurrent `book()` can re-acquire `newSeatId` and sell the same seat twice while the old seat remains held. Only release the hold if it has not been committed, for example by tracking a `committed` flag and skipping `await this.holds.release(hold)` once `commit` succeeds, or by moving `free` after the `try`/`catch`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 487713,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat the catch block unconditionally calls this.holds.release(hold), even when the failure happened in this.holds.free(booking.seatId) AFTER this.holds.commit(hold) already succeeded, so release() is invoked on an already-committed hold. WHY: commit() already ended the hold (see seat-holds.ts:5 'only commit() or release() ends one'), so releasing it again can free the new seat the booking was just moved to (seat becomes bookable again → double booking) while booking.seatId still points at it, and if release() rejects it replaces the original free() error (the rethrow is never reached), masking the real failure. This over-release is introduced by the earlier hold-leak fix (round-a-P29-hold-leak-on-create), which only guarded against leaking, not against releasing a committed hold. HOW: track whether commit succeeded and only release when it did not.",
+          "keep": true,
+          "rationale": "The catch block at lines 29-32 unconditionally calls holds.release(hold) for any try-body failure, including a failure of holds.free(booking.seatId) which executes after holds.commit(hold) has already succeeded. The interface contract (seat-holds.ts:5, 'only commit() or release() ends one') confirms commit ends the hold, so release() is invoked on an already-ended hold in that path. free() is an async call that can reject, making the path reachable. The error-masking claim is concrete: if release() rejects, the await throws before 'throw err', replacing the original free() error. No SeatHolds implementation exists in the repo to show release() is a harmless no-op on a committed hold, so the claim cannot be refuted. This is also a distinct failure from the earlier hold-leak decision (leak/blocked seat vs. over-release/double-booking), which it arises from applying that fix.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|free|acquire",
+                "glob": "**/seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "**/seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class.*SeatHolds|release|commit|free",
+                "glob": "**/*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/bookings/bookings.service.ts:13` (2026-10-06 12:00 UTC).\n\nIn `changeSeat`, the `catch` block unconditionally calls `this.holds.release(hold)` even when `this.holds.free(booking.seatId)` fails after `this.holds.commit(hold)` already succeeded, so releasing an already-committed hold can free the new seat while `booking.seatId` still points at it, allowing double booking, and if `release()` rejects it replaces the original `free()` error and the rethrow is never reached, masking the real failure. Track whether `commit()` succeeded and only call `release()` when it did not, because `commit()` already ended the hold (see `seat-holds.ts:5`) and the earlier hold-leak fix (`round-a-P29-hold-leak-on-create`) only guarded against leaking, not against releasing a committed hold."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 1120643,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat the catch block unconditionally calls `this.holds.release(hold)`, but `this.holds.commit(hold)` runs before `this.holds.free(booking.seatId)` inside the same try, so if commit succeeds and free throws, release is invoked on an already-committed hold. WHY: Per the SeatHolds contract ('only commit() or release() ends one'), releasing a committed hold either frees the just-confirmed new seat (the booking now points at a seat anyone can re-acquire -> double booking) or throws, masking the original free() error and leaving the caller with a misleading failure. HOW: Track whether the commit succeeded and only release when it did not, e.g. set a `committed = true` flag right after `commit(hold)` and change the catch to `if (!committed) await this.holds.release(hold); throw err;`.",
+          "keep": true,
+          "rationale": "Confirmed: in changeSeat, commit(hold) at line 26 precedes free(booking.seatId) at line 27 inside the same try, and the catch at line 30 unconditionally calls release(hold). The SeatHolds contract states only commit() or release() ends a hold, so if free throws after a successful commit, release is invoked on an already-committed hold — wrongly freeing the just-confirmed new seat (double booking) or masking the original free() error. No upstream guard prevents free from throwing. This is a different failure from the earlier hold-leak decision (which concerned a hold never being released); here the hold is released when it must not be, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "commit|release|free|acquire",
+                "glob": "*.ts",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat the catch block unconditionally calls `this.holds.release(hold)`, but `this.holds.commit(hold)` runs before `this.holds.free(booking.seatId)`, so if `free` throws the catch releases a hold that was already committed. WHY: per the SeatHolds contract only commit() or release() ends a hold, so releasing an already-committed hold frees the newly assigned seat while the booking still points to it (another user can then book it), and if `release` itself rejects the original error from `free` is swallowed and the seat change is left half-rolled-back. HOW: only release when the commit has not yet succeeded, e.g. track a `committed` flag and guard the release.",
+          "keep": true,
+          "rationale": "The code order is exactly as described: acquire → repo.update → holds.commit(hold) → holds.free(booking.seatId), all inside a try whose catch unconditionally calls `this.holds.release(hold)`. The SeatHolds contract states 'only commit() or release() ends one,' making release the operation that frees/ends a hold, so calling release after a successful commit on a hold whose seat is now the booking's seat is a genuine over-release path, not a no-op by contract. `free` is an async method (Promise<void>) that can reject, so the catch branch is reachable and unguarded. The secondary claim is also factually correct: `await this.holds.release(hold); throw err;` means if release rejects, the original `free` error is never rethrown. This is a DIFFERENT failure from PreviousDecision round-a-P29 (hold leak / never released, seat stays blocked) — here the applied try/catch fix causes the opposite consequence (releasing an already-committed hold / wrong seat freed), so it is a consequence of that earlier suggestion rather than a repeat of it. Cannot actively refute; default is to keep.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|acquire|free",
+                "glob": "**/holds*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*hold*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "implements SeatHolds|SeatHolds",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "free\\(|release\\(|commit\\(",
+                "glob": "**/*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 33,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 26,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/bookings/bookings.service.ts:13` (2026-10-06 12:00 UTC).\n\nIn `changeSeat`, because `this.holds.commit(hold)` runs before `this.holds.free(booking.seatId)`, a failure in `free` makes the catch call `this.holds.release(hold)` on an already-committed hold, which per the SeatHolds contract can free the just-confirmed new seat and enable double booking or throw and mask the original `free` error with a misleading failure. Track whether the commit succeeded and only call `this.holds.release(hold)` when it did not, such as with a `committed` flag set after `commit(hold)` and checked in the catch before rethrowing `err`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/bookings/bookings.service.ts:13` (2026-10-06 12:00 UTC).\n\nIn `changeSeat`, because `this.holds.commit(hold)` runs before `this.holds.free(booking.seatId)`, a failure in `free` makes the catch call `this.holds.release(hold)` on an already-committed hold, and per the SeatHolds contract that only `commit()` or `release()` ends a hold, releasing it frees the newly assigned seat while the booking still points to it so another user can book it, and if `release` rejects it swallows the original `free` error and leaves the seat change half-rolled-back. Track a `committed` flag and guard `this.holds.release(hold)` so it only runs when the commit has not succeeded."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P29-hold-leak-on-create",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 320245,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat the catch block calls release(hold) even when commit(hold) already succeeded and the subsequent free(booking.seatId) threw. WHY: the SeatHolds contract states commit() ends the hold, so releasing an already-committed hold can re-free the newly booked seat, letting another user acquire newSeatId while this booking still points to it (double-booking / inconsistent state). HOW: only release while the hold is still uncommitted, e.g. track a `committed` flag set after `await this.holds.commit(hold)` and guard the catch with `if (!committed) await this.holds.release(hold);`.",
+          "keep": true,
+          "rationale": "The claim is not refutable. In changeSeat, after repo.update and holds.commit(hold) succeed, the subsequent holds.free(booking.seatId) can throw, driving execution into the catch which calls holds.release(hold) on a hold that commit() has already ended (the SeatHolds contract states holds never expire and only commit()/release() ends one). No implementation of SeatHolds exists in the repo to show release() on a committed hold is a safe no-op, so the described risk (re-freeing newSeatId while the booking already points to it → double-booking) stands. The path is reachable and the fix (track a committed flag / guard the release) is concrete. This is also not a repeat of the earlier hold-leak decision: that entry's failure was a seat staying blocked (leak), whereas this is the opposite failure — an over-release re-freeing the committed seat — a consequence of applying that earlier suggestion.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "commit|release|free|acquire",
+                "glob": "*.ts",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat the booking is mutated by repo.update before commit(hold); when commit(hold) then fails the catch only calls release(hold) and never reverts the booking's new seatId. WHY: release ends the hold and frees newSeatId while the booking record still references it, so another user can acquire the same seat — two bookings on one seat (overbooking). This is a regression: before this try/catch the failed commit left the hold leaked, which kept the seat blocked. addGuest has the same missing rollback for its guests update. HOW: wrap the repo.update and commit(hold) in a single transaction, or on catch revert the mutation (e.g. repo.update(booking.id, { seatId: booking.seatId })) in addition to release(hold).",
+          "keep": true,
+          "rationale": "The code confirms the claim's mechanics: in changeSeat (and addGuest) repo.update mutates the booking before holds.commit(hold); if commit throws, the catch only calls holds.release(hold) and never reverts the booking mutation. release ends the hold (per seat-holds.ts, only commit/release end a hold), leaving the booking record pointing at newSeatId while that seat is no longer held/committed — the exact window the finding describes. This is NOT a repeat of PreviousDecision round-a-P29-hold-leak-on-create: that entry's failure was a leaked hold leaving the seat permanently blocked; this finding's failure is the opposite outcome (a released hold with a still-mutated booking, risking a seat that no hold protects), and it is a direct consequence of applying that earlier fix, not the same bug. The only uncertainty is whether acquire()'s 'throws if a booking already has it' guard independently blocks re-acquisition; the interface comment is a hint but not proof that acquire consults the mutated booking record versus its own committed-booking registry, so I cannot actively refute the overbooking path. Default is to keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|free|acquire",
+                "glob": "**/holds*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "commit\\(|SeatHolds|acquire\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P29-hold-leak-on-create",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/bookings/bookings.service.ts:13` (2026-10-06 12:00 UTC).\n\nBecause `commit()` ends the hold, calling `release(hold)` from the catch block after `free(booking.seatId)` throws can re-free the newly booked seat, letting another user acquire `newSeatId` while this booking still points to it. Track a `committed` flag set after `await this.holds.commit(hold)` and guard the catch with `if (!committed) await this.holds.release(hold);`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When `commit(hold)` fails after `repo.update` mutated the booking, the catch calls `release(hold)` without reverting, freeing `newSeatId` while the booking still references it so another user can acquire the same seat; `addGuest` has the same missing rollback for its guests update. Wrap `repo.update` and `commit(hold)` in a single transaction, or on catch revert the mutation with `repo.update(booking.id, { seatId: booking.seatId })` in addition to releasing the hold."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P29-hold-leak-on-create-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 223953,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: The added comment states book releases the hold when the card is declined or the insert fails, but book has no try/catch and never calls holds.release. WHY: when payments.charge throws CardDeclinedError or repo.insert fails, the acquired hold is never released and, per the SeatHolds contract ('Holds never expire: only commit() or release() ends one'), the seat stays locked forever, losing inventory. HOW: wrap the charge/insert/commit sequence in the same try/catch used by changeSeat/addGuest and call holds.release(hold) on failure.",
+          "keep": true,
+          "rationale": "Confirmed. In src/bookings/bookings.service.ts, book() acquires a hold (line 15), then awaits payments.charge (16) and repo.insert (17) with no try/catch, and never calls holds.release. If charge throws CardDeclinedError or insert fails, the hold is orphaned. seat-holds.ts:5 states 'Holds never expire: only commit() or release() ends one,' so the seat stays locked permanently. Sibling methods changeSeat and addGuest (lines 22-46) demonstrate the intended pattern with try/catch + holds.release. The added comment is therefore inaccurate and the bug is real. Not covered by any PreviousReviewDecision (those concern src/reports/*).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|acquire|Holds never expire",
+                "glob": "*.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: changeSeat's try/catch wraps holds.free(booking.seatId) after holds.commit(hold), so when free() rejects the catch calls holds.release(hold) on an already-committed hold. WHY: the booking was already updated to newSeatId and the new seat's hold committed, so releasing it frees the seat the booking now occupies, letting another user acquire/book the same seat (double booking) while the booking still references it. HOW: only release while the hold is uncommitted, and keep free() out of the release path, e.g. track a `committed` flag and skip release once commit succeeded.",
+          "keep": true,
+          "rationale": "The code path described is real and unguarded. In changeSeat (src/bookings/bookings.service.ts:24-32), holds.free(booking.seatId) sits inside the same try block after holds.commit(hold). If free() rejects, the catch unconditionally calls holds.release(hold) on a hold that commit() already ended. The SeatHolds interface (seat-holds.ts) states 'Holds never expire: only commit() or release() ends one', so commit() ending the hold is expected and release() is the method that frees a seat — nothing in the service tracks whether the hold was committed. The repo only exposes the interface (no implementation is present), so I cannot prove release() on a committed hold is a harmless no-op; the claim that it frees the now-occupied new seat (enabling a double booking) is not refuted. There is no upstream guard preventing free() from throwing, and the catch does not distinguish pre-commit from post-commit failure. The previous review decisions all concern src/reports and are unrelated. Per the rules, an unrefuted concrete failure path must be kept.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|free|acquire",
+                "glob": "**/holds*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|free|committed|class .*SeatHolds|implements SeatHolds",
+                "glob": "**/*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "free\\(|release\\(|commit\\(|acquire\\(",
+                "glob": "**/*.ts",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*seat-hold*"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "marked": false,
+          "text": "After `holds.commit(hold)` succeeds, a rejection from `holds.free(booking.seatId)` enters the catch and calls `holds.release(hold)` on an already-committed hold, freeing the seat the booking now occupies and allowing another user to acquire/book the same seat while the booking still references it. Only release while the hold is uncommitted and keep `free()` out of the release path, e.g. track a `committed` flag and skip release once commit succeeded."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "marked": false,
+          "text": "The added comment says `book` releases the hold when the card is declined or the insert fails, but `book` has no try/catch and never calls `holds.release`, so when `payments.charge` throws `CardDeclinedError` or `repo.insert` fails the acquired hold is never released and the seat stays locked forever per the SeatHolds contract, losing inventory. Wrap the `charge`/`insert`/`commit` sequence in the same try/catch used by `changeSeat`/`addGuest` and call `holds.release(hold)` on failure."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P29-hold-leak-on-create-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 184912,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: book() acquires a hold (line 15) but has no try/catch, so when payments.charge rejects (card declined) or repo.insert throws, the hold is never released — even though the comment added in this PR states book releases the hold like changeSeat and addGuest. WHY: seat-holds.ts documents 'Holds never expire: only commit() or release() ends one', so the seat stays locked permanently and every subsequent acquire of that seat fails with SeatTakenError, leaking seats. HOW: mirror the sibling methods — wrap the charge/insert/commit in try/catch and release the hold on error.",
+          "keep": true,
+          "rationale": "The claim is verified by the code. book() (line 15) acquires a hold but has no try/catch; if payments.charge (line 16) or repo.insert (line 17) throws, the hold is never released or committed. Sibling methods changeSeat (lines 29-32) and addGuest (lines 42-45) both wrap in try/catch and call holds.release(hold) on error, confirming the intended pattern that book() omits. seat-holds.ts:5 documents \"Holds never expire: only commit() or release() ends one,\" so the seat leaks permanently and future acquires fail with SeatTakenError. The hold is created inside book(), so no external caller can release it. None of the PreviousReviewDecisions concern this file, so this is not a repeat. The finding is factually correct.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "Holds never expire|release\\(|commit\\(|acquire\\(",
+                "glob": "*.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: the new try/catch in changeSeat releases the new hold on ANY error, including errors thrown by commit() or free() that occur after repo.update already persisted the booking's new seatId. WHY: when free() (or commit()) throws, the booking row already points at newSeatId, but the catch ends that hold, so the seat becomes acquirable again by another user while this booking still references it — a double booking; additionally release() is invoked on a possibly already-committed hold, which can throw inside catch and mask the original error. HOW: only release the hold while the update has not yet persisted, or roll back the update in the catch so the booking and hold state stay consistent.",
+          "keep": true,
+          "rationale": "The double-booking sub-claim is questionable: seat-holds.ts documents that acquire() throws SeatTakenError if a booking already holds the seat, and after repo.update the booking references newSeatId, so releasing the hold cannot let another user acquire it. But the finding also asserts a second, un-refuted consequence: the catch calls release() on a possibly already-committed hold, which can throw inside catch and mask the original error while leaving the old seat unfreed/inconsistent. That release-after-commit cleanup defect is real and not refuted by any guard, so the finding as a whole cannot be actively refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "commit\\(|release\\(|free\\(|acquire\\(",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class .*SeatHolds|SeatHolds|commit|release|free",
+                "glob": "*.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `book()` acquires a hold at line 15 without a `try`/`catch`, a rejected `payments.charge` (card declined) or a throwing `repo.insert` leaves the hold unreleased, and since seat-holds.ts documents that holds never expire, that seat stays locked permanently and every later acquire fails with `SeatTakenError`. Mirror the sibling methods by wrapping the charge, insert, and commit in a `try`/`catch` that calls `this.holds.release(hold)` and rethrows."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new `try`/`catch` in `changeSeat` releases the new hold on any error, so if `commit()` or `free()` throws after `repo.update` has persisted the new `seatId`, the seat becomes acquirable again while the booking still references it (a double booking), and calling `release()` on an already-committed hold can throw inside the catch and mask the original error. Only release the hold while the update has not yet persisted, or roll back the update in the catch so the booking and hold state stay consistent."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P29-hold-leak-on-create-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 628068,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: The new comment on line 12 claims book releases the hold when the card is declined or the insert fails, but book has no try/catch, so the hold acquired on line 15 is never released if payments.charge or repo.insert rejects. WHY: Per the SeatHolds contract ('Holds never expire: only commit() or release() ends one'), a declined card or a failed insert leaks the hold permanently, blocking the seat for every other user. HOW: Wrap the charge/insert in try/catch and release the hold on failure, mirroring changeSeat/addGuest.",
+          "keep": true,
+          "rationale": "Confirmed. book() acquires a hold on line 15 but has no try/catch, unlike changeSeat (lines 24-32) and addGuest (lines 37-45) which both release on failure. payments.charge is documented to throw CardDeclinedError, and repo.insert can reject; in either case the hold from line 15 is never released. Per the SeatHolds contract ('Holds never expire: only commit() or release() ends one'), the hold leaks permanently and blocks the seat. The line-12 comment explicitly claims the opposite behavior, so the finding is factually accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "acquire|release|commit|SeatHolds",
+                "path": "src",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "charge|declined|Declined",
+                "path": "src/payments"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In addGuest the catch releases the seat hold even when the error comes from the commit() that runs after repo.update() has already persisted the guest, so the booking ends up referencing a seat whose hold is released. WHY: the seat becomes acquirable by another user while the booking still lists it, producing a double-booking (and a retry would append a duplicate guest). HOW: release only when the booking mutation itself failed — move the commit() out of the try so a post-update commit failure does not free the seat: acquire hold; try { updated = await this.repo.update(...) } catch (err) { await this.holds.release(hold); throw err; } await this.holds.commit(hold); return updated;.",
+          "keep": true,
+          "rationale": "Confirmed in src/bookings/bookings.service.ts lines 37-45: addGuest performs `repo.update(...)` (persisting the guest referencing the seat) BEFORE `holds.commit(hold)`, and both are inside the same try whose catch calls `holds.release(hold)`. The SeatHolds contract (seat-holds.ts:3-9) states holds never expire and only commit()/release() ends one, so if commit() rejects after the update succeeded, the catch releases the hold, making the seat acquirable again while the persisted booking still lists that seat — a genuine double-booking, and a retry would append a duplicate guest. Nothing guards against commit() throwing, so the failure path is reachable; the proposed fix (move commit out of the try) is consistent. This is unrelated to any previous decision (all prior entries concern src/reports/*), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|class .*Hold",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: The changeSeat try/catch also covers the post-commit holds.free(booking.seatId) call, so if free throws after commit(hold) has already succeeded, the catch calls holds.release(hold) on a hold that commit already ended. WHY: The booking has already been repointed to newSeatId, yet release ends the hold on that new seat — per the contract only commit/release ends a hold, so this can leave the newly assigned seat free for another user to acquire (double booking), or throw a second error that masks the original free() failure. HOW: Only release the hold if the update failed, before commit; do not run the catch over the post-commit free() step.",
+          "keep": true,
+          "rationale": "The code at lines 24-32 confirms the claim structurally: the try block performs repo.update, then commit(hold), then free(booking.seatId); the catch unconditionally calls release(hold). The SeatHolds contract (seat-holds.ts:5) states 'Holds never expire: only commit() or release() ends one', so commit already ended the hold before free() runs. If free() throws after a successful commit, the catch still invokes release(hold) on an already-committed hold for the newly assigned seat — a semantically invalid operation under the stated contract that can either end/free the new seat's reservation or throw a second error masking the original free() failure. No concrete implementation or guard exists in the repo to show release-after-commit is a safe no-op, so the defect cannot be refuted. This is also not a repeat of any previous decision, which all concern src/reports/*.ts and unrelated operations.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "free|release|commit|acquire",
+                "glob": "*holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "free|release|commit|acquire",
+                "glob": "*holds*",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "SeatHolds|implements SeatHolds|free\\(|release\\(",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "*seat*"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 28,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The comment on line 12 says `book` releases the hold on a declined card or failed insert, but because `book` has no `try/catch`, a rejection from `payments.charge` or `repo.insert` leaves the hold acquired on line 15 unreleased, permanently blocking the seat under the `SeatHolds` contract that only `commit()` or `release()` ends a hold. Wrap the charge and insert in `try/catch` and call `holds.release(hold)` on failure, mirroring `changeSeat` and `addGuest`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `changeSeat`, the `try/catch` also covers the post-commit `holds.free(booking.seatId)` call, so if `free` throws after `commit(hold)` succeeds the catch calls `holds.release(hold)` on an already-ended hold, which can free the newly assigned `newSeatId` for another user to acquire (double booking) or mask the original `free()` failure. Only release the hold if the `repo.update` failed before `commit`; do not run the catch over the post-commit `free()` step."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 40,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `addGuest`, the catch releases the seat hold even when the error comes from the `commit()` that runs after `repo.update()` has already persisted the guest, so the booking ends up referencing a seat whose hold is released, letting another user acquire it and causing a double-booking (with a retry also appending a duplicate guest). Release the hold only when the `repo.update()` mutation itself failed by moving `holds.commit(hold)` outside the `try`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P29-hold-leak-on-create-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 798998,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: The new comment at line 12 states that book releases the hold when the card is declined or the insert fails, but book has no try/catch and never calls holds.release, so a failed charge or insert leaks the hold. WHY: SeatHolds.acquire holds never expire (seat-holds.ts:5, only commit()/release() ends one) and Payments.charge throws CardDeclinedError (payments.ts:2), so a single declined card permanently locks the seat for every future booking. HOW: wrap the charge/insert/commit sequence in try/catch and call await this.holds.release(hold) on error, as changeSeat/addGuest already do.",
+          "keep": true,
+          "rationale": "Confirmed: book() (lines 13-20) acquires a hold then calls payments.charge and repo.insert with no try/catch and never calls holds.release. seat-holds.ts:5 documents that holds never expire — only commit()/release() ends one — and payments.ts:3 documents charge throws CardDeclinedError. changeSeat and addGuest both wrap their sequences in try/catch and release the hold on error, but book does not, so a declined card or failed insert permanently leaks the hold. The line 12 comment even claims the opposite. Not a repeat of any previous decision (those concern src/reports/*).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/payments.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "charge|CardDeclined",
+                "path": "src/payments"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In changeSeat the catch block calls this.holds.release(hold) for failures that occur after this.holds.commit(hold), because holds.free(booking.seatId) is inside the same try. WHY: per seat-holds.ts:5 commit() ends the hold, so if free() throws the catch releases an already-committed hold, undoing the seat hold while the booking still points at newSeatId — another user can then acquire/commit that seat, producing a double-booked seat. HOW: only release before commit; commit as the last statement in the try and run free() after the try/catch (or guard release with a committed flag).",
+          "keep": true,
+          "rationale": "Confirmed: free(booking.seatId) sits inside the same try after commit(hold), so if free() throws, the catch unconditionally calls release(hold) on a hold already ended by commit() (seat-holds.ts:4-5 states commit/release both end a hold). No committed-flag guard exists. The SeatHolds implementation is not in the repo, so the claim that releasing a committed hold frees the seat and enables a double-book cannot be refuted; the failure path is concrete and produces a data-integrity bug. Not a repeat of any prior decision (those concern src/reports/*).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class .*SeatHolds|implements SeatHolds|async release|async commit|async free",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "changeSeat\\(",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "SeatHolds|release|commit|free",
+                "glob": "*.ts",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/bookings"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 28,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The comment at line 12 claims `book` releases the hold when the card is declined or the insert fails, but there is no try/catch and no `holds.release` call, so a failed charge or insert leaks a hold that never expires (`SeatHolds.acquire`, seat-holds.ts:5) and permanently locks the seat for every future booking. Wrap the charge/insert/commit sequence in try/catch and call `await this.holds.release(hold)` on error, as `changeSeat` and `addGuest` already do."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In `changeSeat`, `holds.free(booking.seatId)` sits inside the same try as `holds.commit(hold)`, so if `free()` throws the catch releases an already-committed hold (seat-holds.ts:5), allowing another user to acquire and commit that seat while the booking still points at `newSeatId` — a double-booked seat. Only release before commit: make `commit` the last statement in the try and run `free()` after the try/catch (or guard the release with a committed flag)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P29-hold-leak-on-create-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 249867,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: In the catch blocks of changeSeat (line 30) and addGuest (line 43), `await this.holds.release(hold)` runs before `throw err`; if `release` itself rejects, the `throw err` is skipped and the original error is swallowed. WHY: The caller receives the cleanup failure (e.g. a release error) instead of the real fault (the SeatTakenError / DB error from update), so the actual failure cannot be diagnosed or handled correctly. HOW: Guard the cleanup so it cannot mask the original error, e.g. `await this.holds.release(hold).catch(() => {});` before `throw err` (or wrap the release in its own try/catch).",
+          "keep": true,
+          "rationale": "Confirmed in src/bookings/bookings.service.ts lines 29-31 and 42-44: `await this.holds.release(hold); throw err;` runs release before rethrowing. SeatHolds.release returns Promise<void> and can reject, in which case `throw err` is skipped and the original error (SeatTakenError/DB error) is replaced by the cleanup failure. The root cause and failure path are factually correct and reachable; not a generic suggestion, not pure style, and unrelated to any previous review decision (all about src/reports/*).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|free|acquire",
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: `book` never releases the seat hold when `this.payments.charge` throws (card declined) or `this.repo.insert` fails, even though the newly added comment on line 12 states it does. WHY: holds never expire (seat-holds.ts:5), so a declined card or a failed insert leaves the seat permanently held and unbookable by anyone else. HOW: wrap the charge/insert in try/catch and call `await this.holds.release(hold)` on failure, matching the pattern just added to changeSeat/addGuest.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/bookings/bookings.service.ts:13-20 and src/bookings/seat-holds.ts:5. `book` acquires a hold at line 15, then calls `payments.charge` (line 16) and `repo.insert` (line 17) with no try/catch; if either throws, `holds.release(hold)` is never called and `commit` is never reached. seat-holds.ts:5 explicitly documents that holds never expire — only commit() or release() ends one — so a declined card or failed insert permanently holds the seat. The comment added on line 12 ('book releases the hold when the card is declined or the insert fails') is factually false: unlike changeSeat (lines 22-33) and addGuest (lines 35-46), which wrap their bodies in try/catch and call release on failure, book has no such handling. The root cause and failure path are both real and reachable; none of the PreviousReviewDecisions concern this file or this issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|acquire|expire",
+                "glob": "seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/bookings/bookings.service.ts",
+          "claim": "WHAT: the catch block calls `this.holds.release(hold)` on any error, including when `commit(hold)` has already succeeded and only the subsequent `free(booking.seatId)` throws. WHY: the booking was already updated to newSeatId, so releasing the committed hold frees newSeatId; another user can then acquire it, producing two bookings on the same seat (holds only end via commit or release — seat-holds.ts:5). HOW: only release when the failure happens before commit — e.g. keep the commit outside the try, or track a `committed` flag and skip release once commit succeeded.",
+          "keep": true,
+          "rationale": "The code at lines 24-32 wraps repo.update, commit, and free in one try block, and the catch unconditionally calls this.holds.release(hold). If commit(hold) succeeds but the subsequent free(booking.seatId) throws, the catch releases a hold whose seat (newSeatId) is already committed/booked. Per seat-holds.ts:5 holds end only via commit or release, so a release at that point can free the now-booked newSeatId, allowing a later acquire to take it and producing two bookings on one seat. The interface exposes no idempotency guarantee that release is a no-op after commit, so I cannot refute the failure path. No PreviousReviewDecisions entry concerns bookings.service.ts (all are in src/reports), so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/bookings.service.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "seat-holds.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "release|commit|free|acquire",
+                "glob": "**/seat-holds*"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/bookings/seat-holds.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 32,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A declined card or failed `this.repo.insert` leaves the seat permanently held because holds never expire (`seat-holds.ts:5`), making it unbookable by anyone else, and `book` contradicts the comment on line 12 that it releases the hold. Wrap the charge and insert in a try/catch and call `await this.holds.release(hold)` on failure, matching the pattern just added to `changeSeat` and `addGuest`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 24,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When `this.holds.commit(hold)` succeeds but the subsequent `this.holds.free(booking.seatId)` throws, the catch block still calls `this.holds.release(hold)`, freeing `newSeatId` even though the booking was already updated; another user can acquire it and create two bookings on the same seat, since holds only end via commit or release (`seat-holds.ts:5`). Only release when the failure happens before commit, for example by keeping the commit outside the try or tracking a `committed` flag and skipping release once commit succeeds."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/bookings/bookings.service.ts",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "If `this.holds.release(hold)` rejects in the catch blocks of `changeSeat` (line 30) or `addGuest` (line 43), the `throw err` is skipped and the caller receives the cleanup failure instead of the real `SeatTakenError` or DB error from `update`, making the actual fault impossible to diagnose or handle. Guard the cleanup with `await this.holds.release(hold).catch(() => {});` before `throw err`, or wrap the release in its own try/catch so it cannot mask the original error."
+        }
+      ],
+      "claims": [
+        {
+          "id": "book-hold-leak-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

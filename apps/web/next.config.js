@@ -13,11 +13,11 @@ if (process.env.ANALYZE === 'true') {
 // `@libs/*` imports (which traverse to `../../libs/*`). Pinning this
 // explicitly — instead of letting Next auto-detect via lockfile — keeps
 // the protective behavior the previous `outputFileTracingRoot: __dirname`
-// gave us: auto-detect walks upward until it finds a yarn.lock /
+// gave us: auto-detect walks upward until it finds a pnpm-lock.yaml /
 // package.json and was picking up stray files above the repo (e.g. a
 // global ~/package.json with language servers), which caused standalone
 // to emit `.next/standalone/<full-absolute-path>/` instead of a clean
-// `.next/standalone/server.js`. The monorepo root has its own yarn.lock
+// `.next/standalone/server.js`. The monorepo root has its own pnpm-lock.yaml
 // so this resolves to the same place auto-detect would, but bounded.
 //
 // Inside the dev docker container, __dirname = /usr/src/app (the
@@ -54,16 +54,43 @@ const nextConfig = {
     typescript: {
         ignoreBuildErrors: true,
     },
-    eslint: {
-        ignoreDuringBuilds: true,
-    },
     // Turbopack-specific project root. Must match `outputFileTracingRoot`
     // — Next warns and falls back to the latter otherwise.
     turbopack: {
         root: projectRoot,
     },
+    // Dev-server origins allowed to request /_next/* assets. The dev server
+    // answers 403 to any cross-origin asset request it was not told about,
+    // which is exactly what a preview environment is: the app runs `next dev`
+    // on a VM and the browser reaches it through a public hostname.
+    // 127.0.0.1 is always allowed: it is the host we use to keep two tunnelled
+    // environments' cookies apart (cookies ignore the port, so localhost:3000
+    // and localhost:3100 share a jar while localhost and 127.0.0.1 do not).
+    allowedDevOrigins: [
+        '127.0.0.1',
+        ...(process.env.ALLOWED_DEV_ORIGINS ?? '')
+            .split(',')
+            .map((origin) => origin.trim())
+            .filter(Boolean),
+    ],
+    // React Compiler (automatic memoization). Top-level option since Next 16.
+    // Runs through `babel-plugin-react-compiler`, which costs ~13s per build.
+    // Next 16.3 ships the native Rust port behind
+    // `experimental.turbopackRustReactCompiler`, but it hard-throws when the
+    // build is not Turbopack — and `build-analyze` still runs `--webpack` —
+    // so it stays off until the analyzer moves off webpack.
+    reactCompiler: true,
     experimental: {
-        authInterrupts: true,
+        // Tree-shake barrel-heavy packages: import only the icons/helpers a
+        // module actually uses instead of pulling the whole package into the
+        // chunk. lucide-react is imported in ~223 files; date-fns in ~18;
+        // recharts ships a large runtime. Next rewrites these to per-export
+        // deep imports at build time.
+        optimizePackageImports: ["lucide-react", "date-fns", "recharts"],
+        // `turbopackFileSystemCacheForDev` and `authInterrupts` used to live
+        // here. The first is on by default since 16.3 (and is what enables the
+        // new memory eviction); the second gated `forbidden()`/`unauthorized()`,
+        // which nothing in this app calls.
         staleTimes: {
             dynamic: 300,
             static: 600,

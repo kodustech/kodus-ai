@@ -16,6 +16,7 @@ import {
     SelfHostedLicensePayload,
     SubscriptionStatus,
     UserWithLicense,
+    DebitCreditsResult,
 } from './interfaces/license.interface';
 
 // Ed25519 public key used to verify self-hosted license JWTs.
@@ -42,10 +43,17 @@ function isLegacyFormat(
 export class SelfHostedLicenseService implements ILicenseService {
     private readonly logger = createLogger(SelfHostedLicenseService.name);
 
-    private cache: {
-        result: OrganizationLicenseValidationResult;
-        expiresAt: number;
-    } | null = null;
+    /**
+     * Keyed by organization: the key is stored per organization, so one
+     * organization's result says nothing about another's.
+     */
+    private readonly cache = new Map<
+        string,
+        {
+            result: OrganizationLicenseValidationResult;
+            expiresAt: number;
+        }
+    >();
 
     constructor(
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
@@ -55,9 +63,10 @@ export class SelfHostedLicenseService implements ILicenseService {
     async validateOrganizationLicense(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<OrganizationLicenseValidationResult> {
-        // Return cached result if still valid
-        if (this.cache && Date.now() < this.cache.expiresAt) {
-            return this.cache.result;
+        const cacheKey = organizationAndTeamData?.organizationId ?? '';
+        const cached = this.cache.get(cacheKey);
+        if (cached && Date.now() < cached.expiresAt) {
+            return cached.result;
         }
 
         try {
@@ -97,10 +106,10 @@ export class SelfHostedLicenseService implements ILicenseService {
                 expiresAt: new Date(payload.exp * 1000).toISOString(),
             };
 
-            this.cache = {
+            this.cache.set(cacheKey, {
                 result,
                 expiresAt: Date.now() + CACHE_TTL_MS,
-            };
+            });
 
             return result;
         } catch (error) {
@@ -245,28 +254,52 @@ export class SelfHostedLicenseService implements ILicenseService {
         organizationAndTeamData: OrganizationAndTeamData,
         userGitId: string,
     ): Promise<boolean> {
+        const { failed } = await this.unassignLicenses(
+            organizationAndTeamData,
+            [userGitId],
+        );
+
+        return failed.length === 0;
+    }
+
+    /**
+     * Batched so a bulk prune performs a single read-modify-write of the
+     * assigned-users parameter. Revoking one user per call concurrently would
+     * lose updates, leaving seats that look released but are still occupied.
+     */
+    async unassignLicenses(
+        organizationAndTeamData: OrganizationAndTeamData,
+        userGitIds: string[],
+    ): Promise<{ revoked: string[]; failed: string[] }> {
+        if (!userGitIds?.length) {
+            return { revoked: [], failed: [] };
+        }
+
         try {
             const assignedUsers = await this.getAssignedUsers(
                 organizationAndTeamData,
             );
+            const byGitId = new Map(assignedUsers.map((u) => [u.gitId, u]));
 
-            const existing = assignedUsers.find(
-                (u) => u.gitId === userGitId,
-            );
-            if (!existing) {
-                return true;
+            for (const gitId of userGitIds) {
+                const existing = byGitId.get(gitId);
+
+                // Revoking a seat the user never held is a no-op, not a failure.
+                if (existing) {
+                    existing.status = 'inactive';
+                }
             }
 
-            existing.status = 'inactive';
             await this.saveAssignedUsers(organizationAndTeamData, assignedUsers);
-            return true;
+
+            return { revoked: [...userGitIds], failed: [] };
         } catch (error) {
             this.logger.error({
-                message: 'Error unassigning license',
+                message: 'Error unassigning licenses',
                 context: SelfHostedLicenseService.name,
                 error,
             });
-            return false;
+            return { revoked: [], failed: [...userGitIds] };
         }
     }
 
@@ -278,6 +311,41 @@ export class SelfHostedLicenseService implements ILicenseService {
             allowed: true,
             reason: 'SELF_HOSTED',
         };
+    }
+
+    // Trials are a cloud-billing concept; self-hosted installs are licensed
+    // via signed keys, so there is nothing to provision here.
+    async startTrial(
+        _organizationAndTeamData: OrganizationAndTeamData,
+        _byok: boolean,
+    ): Promise<boolean> {
+        return false;
+    }
+
+    // Prepaid credits are a cloud product: self-hosted has no Kodus-routed
+    // provider (the id is hidden by isKodusProviderAvailable), so there is
+    // never a balance to gate on or a debit to send.
+    async getCreditBalance(): Promise<null> {
+        return null;
+    }
+
+    async listCreditLedger(): Promise<[]> {
+        return [];
+    }
+
+    async debitCredits(): Promise<DebitCreditsResult> {
+        return {
+            applied: 0,
+            skipped: 0,
+            appliedUsd: 0,
+            balanceUsd: 0,
+            lowBalance: false,
+            exhausted: false,
+        };
+    }
+
+    async createCreditCheckout(): Promise<null> {
+        return null;
     }
 
     private async getAssignedUsers(
@@ -361,7 +429,7 @@ export class SelfHostedLicenseService implements ILicenseService {
      * Clear the in-memory cache (e.g., after activating a new key).
      */
     clearCache(): void {
-        this.cache = null;
+        this.cache.clear();
     }
 
     private async getLicenseKey(

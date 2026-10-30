@@ -1,9 +1,9 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { REQUEST } from '@nestjs/core';
-import { GetCodeManagementMemberListUseCase } from '@libs/platform/application/use-cases/codeManagement/get-code-management-members-list.use-case';
-import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
+import { Test, TestingModule } from '@nestjs/testing';
+
 import { CacheService } from '@libs/core/cache/cache.service';
+import { OrganizationMemberListService } from '@libs/platform/application/services/organization-member-list.service';
+import { GetCodeManagementMemberListUseCase } from '@libs/platform/application/use-cases/codeManagement/get-code-management-members-list.use-case';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -17,10 +17,12 @@ jest.mock('@libs/core/log/logger', () => ({
 
 describe('GetCodeManagementMemberListUseCase', () => {
     let useCase: GetCodeManagementMemberListUseCase;
-    let mockCodeManagementService: any;
-    let mockPullRequestHandlerService: any;
-    let mockCacheService: any;
-    let mockRequest: any;
+    let mockMemberListService: { fetch: jest.Mock };
+    let mockCacheService: {
+        getFromCache: jest.Mock;
+        addToCache: jest.Mock;
+        removeFromCache: jest.Mock;
+    };
 
     const mockMembers = [
         { id: 1, name: 'Alice' },
@@ -29,37 +31,24 @@ describe('GetCodeManagementMemberListUseCase', () => {
     ];
 
     beforeEach(async () => {
-        mockCodeManagementService = {
-            getListMembers: jest.fn(),
-        };
-
-        mockPullRequestHandlerService = {
-            getPullRequestAuthorsWithCache: jest.fn(),
+        mockMemberListService = {
+            fetch: jest
+                .fn()
+                .mockResolvedValue({ status: 'ok', members: mockMembers }),
         };
 
         mockCacheService = {
             getFromCache: jest.fn().mockResolvedValue(null),
             addToCache: jest.fn().mockResolvedValue(undefined),
-        };
-
-        mockRequest = {
-            user: {
-                organization: {
-                    uuid: 'org-uuid-123',
-                },
-            },
+            removeFromCache: jest.fn().mockResolvedValue(undefined),
         };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 GetCodeManagementMemberListUseCase,
                 {
-                    provide: CodeManagementService,
-                    useValue: mockCodeManagementService,
-                },
-                {
-                    provide: PULL_REQUEST_MANAGER_SERVICE_TOKEN,
-                    useValue: mockPullRequestHandlerService,
+                    provide: OrganizationMemberListService,
+                    useValue: mockMemberListService,
                 },
                 {
                     provide: CacheService,
@@ -67,7 +56,9 @@ describe('GetCodeManagementMemberListUseCase', () => {
                 },
                 {
                     provide: REQUEST,
-                    useValue: mockRequest,
+                    useValue: {
+                        user: { organization: { uuid: 'org-uuid-123' } },
+                    },
                 },
             ],
         }).compile();
@@ -83,44 +74,52 @@ describe('GetCodeManagementMemberListUseCase', () => {
 
             const result = await useCase.execute();
 
-            expect(result).toEqual(mockMembers);
+            expect(result).toEqual({ status: 'ok', members: mockMembers });
             expect(mockCacheService.getFromCache).toHaveBeenCalledWith(
                 'org_members_org-uuid-123',
             );
-            expect(
-                mockCodeManagementService.getListMembers,
-            ).not.toHaveBeenCalled();
+            expect(mockMemberListService.fetch).not.toHaveBeenCalled();
         });
 
         it('should not treat cached empty array as a hit', async () => {
             mockCacheService.getFromCache.mockResolvedValue([]);
-            mockCodeManagementService.getListMembers.mockResolvedValue(
-                mockMembers,
-            );
 
             const result = await useCase.execute();
 
-            expect(result).toEqual(mockMembers);
-            expect(mockCodeManagementService.getListMembers).toHaveBeenCalled();
+            expect(result).toEqual({ status: 'ok', members: mockMembers });
+            expect(mockMemberListService.fetch).toHaveBeenCalled();
         });
 
         it('should fetch from code integration on cache miss', async () => {
             mockCacheService.getFromCache.mockResolvedValue(null);
-            mockCodeManagementService.getListMembers.mockResolvedValue(
-                mockMembers,
-            );
 
             const result = await useCase.execute();
 
-            expect(result).toEqual(mockMembers);
-            expect(mockCodeManagementService.getListMembers).toHaveBeenCalled();
+            expect(result).toEqual({ status: 'ok', members: mockMembers });
+            expect(mockMemberListService.fetch).toHaveBeenCalledWith(
+                {
+                    organizationId: 'org-uuid-123',
+                    teamId: undefined,
+                },
+                {},
+            );
+        });
+
+        // "Refresh members" must reach past both caches — the summary cached
+        // here and the pull request author list cached inside the service.
+        it('tells the service to bypass its own cache when refreshing', async () => {
+            mockCacheService.getFromCache.mockResolvedValue(null);
+
+            await useCase.refreshMembers();
+
+            expect(mockMemberListService.fetch).toHaveBeenCalledWith(
+                expect.anything(),
+                { skipCache: true },
+            );
         });
 
         it('should populate cache after fetching from code integration', async () => {
             mockCacheService.getFromCache.mockResolvedValue(null);
-            mockCodeManagementService.getListMembers.mockResolvedValue(
-                mockMembers,
-            );
 
             await useCase.execute();
 
@@ -135,111 +134,65 @@ describe('GetCodeManagementMemberListUseCase', () => {
             mockCacheService.getFromCache.mockRejectedValue(
                 new Error('Redis down'),
             );
-            mockCodeManagementService.getListMembers.mockResolvedValue(
-                mockMembers,
-            );
 
             const result = await useCase.execute();
 
-            expect(result).toEqual(mockMembers);
+            expect(result).toEqual({ status: 'ok', members: mockMembers });
         });
 
         it('should not fail when addToCache throws', async () => {
             mockCacheService.getFromCache.mockResolvedValue(null);
-            mockCodeManagementService.getListMembers.mockResolvedValue(
-                mockMembers,
-            );
             mockCacheService.addToCache.mockRejectedValue(
                 new Error('Redis down'),
             );
 
             const result = await useCase.execute();
 
-            expect(result).toEqual(mockMembers);
+            expect(result).toEqual({ status: 'ok', members: mockMembers });
         });
 
-        it('should not cache empty results to avoid caching transient errors', async () => {
+        it('should not cache unavailable results to avoid caching transient errors', async () => {
             mockCacheService.getFromCache.mockResolvedValue(null);
-            mockCodeManagementService.getListMembers.mockResolvedValue([]);
-            mockPullRequestHandlerService.getPullRequestAuthorsWithCache.mockResolvedValue(
-                [],
-            );
+            mockMemberListService.fetch.mockResolvedValue({
+                status: 'unavailable',
+                members: [],
+            });
 
             await useCase.execute();
 
             expect(mockCacheService.addToCache).not.toHaveBeenCalled();
         });
-    });
 
-    describe('fallback to pull request authors', () => {
-        it('should fall back to PR authors when code integration returns empty', async () => {
-            const prAuthors = [
-                { id: 10, name: 'PR Author 1' },
-                { id: 11, name: 'PR Author 2' },
-            ];
+        it('should key the cache per team when a teamId is given', async () => {
+            await useCase.execute('team-1');
 
-            mockCodeManagementService.getListMembers.mockResolvedValue([]);
-            mockPullRequestHandlerService.getPullRequestAuthorsWithCache.mockResolvedValue(
-                prAuthors,
-            );
-
-            const result = await useCase.execute();
-
-            expect(result).toEqual(prAuthors);
-            expect(
-                mockPullRequestHandlerService.getPullRequestAuthorsWithCache,
-            ).toHaveBeenCalled();
-        });
-
-        it('should fall back to PR authors when code integration throws', async () => {
-            const prAuthors = [{ id: 10, name: 'PR Author 1' }];
-
-            mockCodeManagementService.getListMembers.mockRejectedValue(
-                new Error('GitLab API error'),
-            );
-            mockPullRequestHandlerService.getPullRequestAuthorsWithCache.mockResolvedValue(
-                prAuthors,
-            );
-
-            const result = await useCase.execute();
-
-            expect(result).toEqual(prAuthors);
-        });
-
-        it('should cache PR author results', async () => {
-            const prAuthors = [{ id: 10, name: 'PR Author 1' }];
-
-            mockCodeManagementService.getListMembers.mockResolvedValue([]);
-            mockPullRequestHandlerService.getPullRequestAuthorsWithCache.mockResolvedValue(
-                prAuthors,
-            );
-
-            await useCase.execute();
-
-            expect(mockCacheService.addToCache).toHaveBeenCalledWith(
-                'org_members_org-uuid-123',
-                prAuthors,
-                30 * 60 * 1000,
+            expect(mockCacheService.getFromCache).toHaveBeenCalledWith(
+                'org_members_org-uuid-123_team-1',
             );
         });
     });
 
-    describe('deduplication', () => {
-        it('should deduplicate members by id', async () => {
-            const duplicateMembers = [
-                { id: 1, name: 'Alice' },
-                { id: 1, name: 'Alice Duplicate' },
-                { id: 2, name: 'Bob' },
-            ];
-
-            mockCodeManagementService.getListMembers.mockResolvedValue(
-                duplicateMembers,
-            );
+    describe('propagating an unavailable member list', () => {
+        it('should surface the unavailable status instead of an empty list', async () => {
+            mockMemberListService.fetch.mockResolvedValue({
+                status: 'unavailable',
+                members: [],
+            });
 
             const result = await useCase.execute();
 
-            expect(result).toHaveLength(2);
-            expect(result.find((m) => m.id === 1)?.name).toBe('Alice');
+            expect(result).toEqual({ status: 'unavailable', members: [] });
+        });
+    });
+
+    describe('refreshMembers', () => {
+        it('should drop the cached entry before refetching', async () => {
+            await useCase.refreshMembers('team-1');
+
+            expect(mockCacheService.removeFromCache).toHaveBeenCalledWith(
+                'org_members_org-uuid-123_team-1',
+            );
+            expect(mockMemberListService.fetch).toHaveBeenCalled();
         });
     });
 });

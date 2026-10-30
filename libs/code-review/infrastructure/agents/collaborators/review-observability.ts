@@ -1,14 +1,14 @@
 /**
- * code-review (domain) — emits the per-agent usage spans (main + verify).
+ * code-review (domain) — wraps a review agent run in a Langfuse trace span.
  *
- * Phase 4 of the provider decomposition. Pulls the OTel/Langfuse usage-span
- * accounting out of BaseCodeReviewAgentProvider. Best-effort: any failure is
- * swallowed (observability must never break a review). The ObservabilityService
- * is injected.
+ * Usage/cost accounting is NOT here: `LLM.run` records the ONE cost span per
+ * leaf model call (finder / verify / resample / prose-recovery), each carrying a
+ * `code-review-*` runName so `deriveArea` buckets it to `review`. This file owns
+ * only the Langfuse trace grouping (session by org:repo:pr). Best-effort: any
+ * failure is swallowed (observability must never break a review).
  */
-import type { ObservabilityService } from '@libs/core/log/observability.service';
 import { propagateAttributes, startActiveObservation } from '@langfuse/tracing';
-import { shouldTrace } from '@libs/core/log/langfuse';
+import { pullRequestSessionId, shouldTrace } from '@libs/core/log/langfuse';
 
 export interface AgentTraceMeta {
     traceName: string;
@@ -46,9 +46,13 @@ export async function runAgentWithTrace<T>(
     return propagateAttributes(
         {
             traceName: meta.traceName,
-            sessionId: traceMetadata.prNumber
-                ? `${traceMetadata.organizationId ?? 'org'}:${traceMetadata.repositoryId ?? 'repo'}:${traceMetadata.prNumber}`
-                : undefined,
+            // Shared derivation: the business-rules agent must land in THIS
+            // session, which only happens if both spell the key identically.
+            sessionId: pullRequestSessionId({
+                organizationId: traceMetadata.organizationId,
+                repositoryId: traceMetadata.repositoryId,
+                pullRequestId: traceMetadata.prNumber,
+            }),
             userId: traceMetadata.organizationId,
             metadata: traceMetadata,
         },
@@ -60,117 +64,4 @@ export async function runAgentWithTrace<T>(
                 return result;
             }),
     );
-}
-
-interface UsageLike {
-    inputTokens: number;
-    outputTokens: number;
-    reasoningTokens: number;
-    totalTokens?: number;
-    cacheReadTokens?: number;
-    cacheWriteTokens?: number;
-}
-
-export interface RecordAgentUsageParams {
-    agentResult: {
-        usage: UsageLike;
-        verificationUsage?: Partial<UsageLike>;
-        steps: number;
-        toolCalls: unknown[];
-        finishReason: string;
-        source: string;
-    };
-    modelName: string;
-    /** byokConfig present → 'byok', else 'system'. */
-    isByok: boolean;
-    categoryLabel: string;
-    identityName: string;
-    organizationId?: string;
-    teamId?: string;
-    prNumber: number;
-    durationMs: number;
-    observability: ObservabilityService;
-}
-
-/**
- * Record two cost spans: the main review usage (finder, net of verify) and —
- * when present — a separate verify span. Token splits mirror the legacy
- * provider. Both delegate to the canonical `recordAgentRunUsage` emitter so the
- * `observability_telemetry` schema is identical across every harness agent
- * (DRY: this file owns the review-specific main/verify split, the
- * ObservabilityService owns the span/attribute schema).
- */
-export async function recordAgentUsageSpans(
-    p: RecordAgentUsageParams,
-): Promise<void> {
-    const { agentResult, observability } = p;
-    // Best-effort: observability must never break a review. When no service is
-    // wired (trial/CLI paths, or tests that don't inject one), skip silently
-    // instead of dereferencing a null and throwing out of the review.
-    if (!observability) {
-        return;
-    }
-    const vUsage = agentResult.verificationUsage;
-    const mainInputTokens =
-        agentResult.usage.inputTokens - (vUsage?.inputTokens ?? 0);
-    const mainOutputTokens =
-        agentResult.usage.outputTokens - (vUsage?.outputTokens ?? 0);
-    const vCacheRead = (vUsage as any)?.cacheReadTokens ?? 0;
-    const vCacheWrite = (vUsage as any)?.cacheWriteTokens ?? 0;
-    const mainCacheRead =
-        ((agentResult.usage as any).cacheReadTokens ?? 0) - vCacheRead;
-    const mainCacheWrite =
-        ((agentResult.usage as any).cacheWriteTokens ?? 0) - vCacheWrite;
-
-    await observability.recordAgentRunUsage({
-        agentName: p.identityName,
-        phase: 'review',
-        runName: `code-review-${p.categoryLabel}`,
-        model: p.modelName,
-        isByok: p.isByok,
-        usage: {
-            inputTokens: mainInputTokens,
-            outputTokens: mainOutputTokens,
-            totalTokens: mainInputTokens + mainOutputTokens,
-            reasoningTokens:
-                agentResult.usage.reasoningTokens -
-                (vUsage?.reasoningTokens ?? 0),
-            cacheReadTokens: mainCacheRead,
-            cacheWriteTokens: mainCacheWrite,
-        },
-        organizationId: p.organizationId,
-        teamId: p.teamId,
-        prNumber: p.prNumber,
-        steps: agentResult.steps,
-        toolCalls: agentResult.toolCalls.length,
-        finishReason: agentResult.finishReason,
-        source: agentResult.source,
-        durationMs: p.durationMs,
-    });
-
-    // Separate span for verification tokens
-    if (
-        vUsage &&
-        ((vUsage.inputTokens ?? 0) > 0 || (vUsage.outputTokens ?? 0) > 0)
-    ) {
-        await observability.recordAgentRunUsage({
-            agentName: p.identityName,
-            phase: 'verify',
-            runName: `code-review-${p.categoryLabel}-verify`,
-            model: p.modelName,
-            isByok: p.isByok,
-            usage: {
-                inputTokens: vUsage.inputTokens ?? 0,
-                outputTokens: vUsage.outputTokens ?? 0,
-                totalTokens:
-                    (vUsage.inputTokens ?? 0) + (vUsage.outputTokens ?? 0),
-                reasoningTokens: vUsage.reasoningTokens ?? 0,
-                cacheReadTokens: vCacheRead,
-                cacheWriteTokens: vCacheWrite,
-            },
-            organizationId: p.organizationId,
-            teamId: p.teamId,
-            prNumber: p.prNumber,
-        });
-    }
 }

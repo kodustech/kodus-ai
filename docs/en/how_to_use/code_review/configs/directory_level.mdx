@@ -1,0 +1,61 @@
+---
+title: "Directory-Level Settings"
+description: "Target specific folders in your repo with custom code review settings. Ideal for monorepos."
+---
+
+## Overview
+
+Apply custom code review settings to specific folders in your repository. Ideal for monorepos where different areas have different standards or ownership.
+
+Kody selects a single config per PR: **Directory** → **Repository** → **Global**
+
+<Note>
+  Learn how settings flow between levels in <a href="/en/how_to_use/code_review/configs/inheritance_overrides">Config Inheritance & Overrides</a>.
+</Note>
+
+## How it works
+
+- Configure any folder at any depth (e.g., `api/src/services`)
+- Configure as many folders as you want
+- **No overlapping**: if you configure `api/src/services`, you cannot also configure `api/src/services/users`
+
+### Selection rules
+
+- **One configured directory touched**: Uses that directory's config
+- **No configured directories touched**: Uses repository config (or global if no repo config)
+- **Two or more configured directories touched**: Escalates to repository config (or global if no repo config)
+
+<Note>
+  Kody uses one config per PR to keep reviews predictable. Mixing configs causes conflicts.
+</Note>
+
+## Examples
+
+<Tabs>
+  <Tab title="Single configured directory">
+    You configured `src/microservice-alpha`. PR changes files in `src/microservice-alpha` and unconfigured folders.
+    
+    Uses **microservice-alpha** config.
+  </Tab>
+  <Tab title="No configured directories">
+    PR only touches directories without specific configs.
+    
+    Uses **repository** config (or **global** if no repo config).
+  </Tab>
+  <Tab title="Multiple configured directories">
+    You configured `src/microservice-alpha` and `src/microservice-beta`. PR touches both.
+    
+    Escalates to **repository** config (or **global** if no repo config).
+  </Tab>
+</Tabs>
+
+## Setup
+
+1. In the sidebar, open the scope picker at the top of the **Code review** group and choose **Add repository configuration**
+2. In **Create repository settings**, **Select the target repository**, then **Select the target directories** (one or more folders) and click **Create settings**
+3. Pick the new directory scope — it appears indented under its repository in the scope picker — and change settings on any page (General, What to review, Kody Rules, What Kody writes); settings pages save with **Save settings**
+
+To change the folders later, use the **⋯** menu next to the scope picker → **Edit directories**; **Delete configuration** removes the directory configuration.
+
+If you also use `kodus-config.yml`, it overrides web settings (see Config Priority in General settings).
+

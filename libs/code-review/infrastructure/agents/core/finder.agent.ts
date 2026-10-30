@@ -13,6 +13,7 @@ import type {
     AgentRunner,
     AgentSpec,
 } from '@libs/agent-harness/domain/contracts/agent.contract';
+import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import type { Compressor } from '@libs/agent-harness/domain/contracts/compression.contract';
 import type { ProgressLedger } from '@libs/agent-harness/domain/contracts/progress.contract';
 import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
@@ -33,29 +34,54 @@ import { ForceFinalizePolicy } from '@libs/agent-harness/infrastructure/policies
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
 import { LlmVerifier } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
+import { ConventionVerifier } from '@libs/code-review/infrastructure/agents/core/convention-verifier.agent';
+import {
+    checkConventionQuotes,
+    isToolSource,
+    isProvenByAstGrep,
+    type AstGrepOutputLog,
+    type ConventionCheckRejected,
+    type GuideDirLister,
+    type GuideFileReader,
+} from '@libs/code-review/infrastructure/agents/core/convention-check';
 import { buildToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
-import { supportsStrictTools } from '@libs/code-review/infrastructure/agents/core/model-strictness';
+import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
-import type { Verdict } from '@libs/agent-harness/domain/contracts/verifier.contract';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
+import {
+    citesRepoInstruction,
+    isRepoInstructionFile,
+    quotesRepoInstruction,
+    type RepoInstructionsContext,
+} from '@libs/code-review/infrastructure/agents/collaborators/repo-instructions';
+import { formatPreviousDecisions } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import type {
+    Verdict,
+    VerdictParseMode,
+} from '@libs/agent-harness/domain/contracts/verifier.contract';
 import {
     buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
     type LangfuseTelemetryMetadata,
 } from '@libs/core/log/langfuse';
 // Domain helper relocated out of the legacy file (Zod validation of findings).
 import { sanitizeFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
-import { withStructuredOutputFallback } from '@libs/llm/byok-to-vercel';
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
-import { generateObject } from 'ai';
+import { LLM } from '@libs/llm/llm';
+import { extractJsonFromText } from '@libs/llm/structured-output-repair';
+import { createLogger } from '@libs/core/log/logger';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { z } from 'zod';
 
 export const FINDER_DONE_TOOL = 'submitResult' as const;
+
+const finderLogger = createLogger('finder');
 
 /** A single finding as produced by the finder (matches the legacy
  *  FindingsOutput.suggestions item shape). */
 export interface FinderSuggestion {
     relevantFile: string;
     language?: string;
-    label?: 'bug' | 'security' | 'performance';
+    label?: 'bug' | 'security' | 'performance' | 'repo_instruction';
     suggestionContent: string;
     existingCode: string;
     improvedCode: string;
@@ -65,7 +91,19 @@ export interface FinderSuggestion {
     severity?: 'critical' | 'high' | 'medium' | 'low';
     confidence?: number;
     ruleUuid?: string;
+    /** Id of the earlier suggestion on this PR this finding revises (#2039). */
+    revisesSuggestionId?: string;
+    /** Custom agents: `convention` = applies a team guide quoted in `source`. */
+    kind?: 'bug' | 'convention';
+    source?: { file: string; section?: string; quote: string };
 }
+
+const FINDER_LABELS = [
+    'bug',
+    'security',
+    'performance',
+    'repo_instruction',
+] as const;
 
 /** JSON schema for submitResult — mirrors the legacy _findingsSchema. */
 const SUBMIT_RESULT_SCHEMA: JSONSchema = {
@@ -84,14 +122,14 @@ const SUBMIT_RESULT_SCHEMA: JSONSchema = {
                 properties: {
                     relevantFile: { type: 'string' },
                     language: { type: 'string' },
-                    label: {
-                        type: 'string',
-                        enum: ['bug', 'security', 'performance'],
-                    },
+                    label: { type: 'string', enum: [...FINDER_LABELS] },
                     suggestionContent: { type: 'string' },
                     existingCode: { type: 'string' },
                     improvedCode: { type: 'string' },
-                    oneSentenceSummary: { type: 'string' },
+                    oneSentenceSummary: {
+                        type: 'string',
+                        description: TITLE_PROMPT_SPEC,
+                    },
                     relevantLinesStart: { type: 'number' },
                     relevantLinesEnd: { type: 'number' },
                     severity: {
@@ -106,6 +144,7 @@ const SUBMIT_RESULT_SCHEMA: JSONSchema = {
                     'suggestionContent',
                     'existingCode',
                     'improvedCode',
+                    'oneSentenceSummary',
                 ],
             },
         },
@@ -114,8 +153,11 @@ const SUBMIT_RESULT_SCHEMA: JSONSchema = {
 };
 
 /** The done tool. No-op execute: it is a finalize SIGNAL the CompletionGatePolicy
- *  detects by name; its input (the findings) is captured in the RunState. */
-const submitResultTool: AgentTool = {
+ *  detects by name; its input (the findings) is captured in the RunState.
+ *  Exported so the overhead estimator (core-agent-loop.adapter) counts its
+ *  schema — buildFinderAgentSpec always adds it to the model's tool set, so it
+ *  is real per-request overhead. */
+export const submitResultTool: AgentTool = {
     name: FINDER_DONE_TOOL,
     description:
         'Submit your final findings and end the review. Call this once you have investigated the changed code.',
@@ -123,29 +165,165 @@ const submitResultTool: AgentTool = {
     execute: async () => ({ output: 'submitted' }),
 };
 
+/** submitResult with `kind` + `source` on each finding (custom agents with
+ *  linked guides). Offered only to those agents, so every other review sends
+ *  exactly the tool it always did. */
+function withConventionFields(tool: AgentTool): AgentTool {
+    const schema = tool.inputSchema as any;
+    const items = schema.properties.suggestions.items;
+    return {
+        ...tool,
+        inputSchema: {
+            ...schema,
+            properties: {
+                ...schema.properties,
+                suggestions: {
+                    ...schema.properties.suggestions,
+                    items: {
+                        ...items,
+                        properties: {
+                            ...items.properties,
+                            kind: {
+                                type: 'string',
+                                enum: ['bug', 'convention'],
+                                description:
+                                    "'convention' when the finding applies a rule from a team guide or reports an ast-grep rule match; 'bug' otherwise.",
+                            },
+                            source: {
+                                type: 'object',
+                                additionalProperties: false,
+                                description:
+                                    'Required for kind convention: the guide file, its section heading, and the exact sentence of the rule, copied verbatim. For an ast-grep rule match: file "ast-grep:<ruleId>" and the rule\'s message as quote.',
+                                properties: {
+                                    file: { type: 'string' },
+                                    section: { type: 'string' },
+                                    quote: { type: 'string' },
+                                },
+                                required: ['file', 'quote'],
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    };
+}
+
+/** submitResult with `revisesSuggestionId` on each finding (#2039/#2020).
+ *  Offered only when the PR has earlier suggestions: a first-round review sends
+ *  exactly the tool it always did, so this change cannot move its recall. */
+/**
+ * The done-tool offering only `labels` (the agent's allowed labels, as its
+ * prompt states them). Labels the finder does not know are ignored; with none
+ * it knows, every label stays.
+ */
+function withLabels(
+    tool: AgentTool,
+    labels: readonly string[] | undefined,
+): AgentTool {
+    const offered = FINDER_LABELS.filter((l) => labels?.includes(l));
+    if (!offered.length) return tool;
+    const schema = tool.inputSchema as any;
+    const items = schema.properties.suggestions.items;
+    return {
+        ...tool,
+        inputSchema: {
+            ...schema,
+            properties: {
+                ...schema.properties,
+                suggestions: {
+                    ...schema.properties.suggestions,
+                    items: {
+                        ...items,
+                        properties: {
+                            ...items.properties,
+                            label: { ...items.properties.label, enum: offered },
+                        },
+                    },
+                },
+            },
+        },
+    };
+}
+
+function withRevisionField(tool: AgentTool): AgentTool {
+    const schema = tool.inputSchema as any;
+    const items = schema.properties.suggestions.items;
+    return {
+        ...tool,
+        inputSchema: {
+            ...schema,
+            properties: {
+                ...schema.properties,
+                suggestions: {
+                    ...schema.properties.suggestions,
+                    items: {
+                        ...items,
+                        properties: {
+                            ...items.properties,
+                            revisesSuggestionId: { type: 'string' },
+                        },
+                    },
+                },
+            },
+        },
+    };
+}
+
 export interface BuildFinderSpecParams {
     systemPrompt: string;
     modelId: string;
+    /** The runtime failover target's model id, when the resolved slot has one.
+     *  Strict tool use is only enabled when BOTH this and `modelId` support it —
+     *  a strict tool built for the primary but swapped onto a non-strict fallback
+     *  (e.g. Gemini → OpenAI) is rejected by the fallback's Structured Outputs. */
+    fallbackModelId?: string;
     /** Investigation tools (grep/readFile/...) from buildFinderToolRegistry. */
     tools: ToolRegistry;
+    /** The labels the agent may report; the done-tool offers only these. */
+    labels?: readonly string[];
     coverageLedger: ProgressLedger;
     compressor?: Compressor;
     maxSteps?: number;
     /** Provider options (reasoning/thinking config) forwarded to the model. */
     providerOptions?: Readonly<Record<string, unknown>>;
+    /** Cost-span run name for this finder's leaf model calls (e.g.
+     *  `code-review-bug`). Buckets the usage span to `review` in `deriveArea`.
+     *  Defaults to `code-review` (still `review`) when unset. */
+    usageRunName?: string;
+    /** Cost-span agentName (the review agent's identity name). */
+    agentName?: string;
+    /** The PR has earlier suggestions: the done-tool accepts
+     *  `revisesSuggestionId` (see withRevisionField). */
+    acceptsRevisions?: boolean;
+    /** A custom agent with linked guides: the done-tool accepts `kind` +
+     *  `source` (see withConventionFields). */
+    acceptsConventions?: boolean;
     /** Provider options attached to the system message (e.g. Anthropic prompt
      *  caching) so the long system prompt is cached across the loop's steps. */
-    systemProviderOptions?: Readonly<Record<string, unknown>>;
 }
 
 export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
+    let doneTool = params.acceptsRevisions
+        ? withRevisionField(submitResultTool)
+        : submitResultTool;
+    if (params.acceptsConventions) doneTool = withConventionFields(doneTool);
+    doneTool = withLabels(doneTool, params.labels);
     const tools = new InMemoryToolRegistry([
         ...params.tools.list(),
         // Enable strict/structured tool calling on the done-tool for
         // strict-capable models (Gemini VALIDATED mode) so the findings payload
         // can't be omitted or emitted as prose. Best-effort otherwise. NOT
         // enabled for Anthropic — see model-strictness.ts (it craters recall).
-        { ...submitResultTool, strict: supportsStrictTools(params.modelId) },
+        // Considers the failover target too: a strict tool built for a Gemini
+        // primary must NOT be sent to an OpenAI fallback (it rejects the schema).
+        {
+            ...doneTool,
+            strict: supportsStrictToolsForRun(
+                params.modelId,
+                params.fallbackModelId,
+            ),
+        },
     ]);
 
     const policies = [
@@ -164,8 +342,12 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
 
     return {
         id: 'finder',
+        // Cost-span identity: LLM.run records the ONE usage span per model call
+        // with this runName; `deriveArea` buckets `code-review*` under `review`.
+        runName: params.usageRunName ?? 'code-review',
+        agentName: params.agentName,
+        phase: 'review',
         systemPrompt: params.systemPrompt,
-        modelId: params.modelId,
         tools,
         policies,
         maxSteps: params.maxSteps ?? 20,
@@ -174,7 +356,6 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         // doneToolName concern — same tool, distinct roles.
         resultToolName: FINDER_DONE_TOOL,
         providerOptions: params.providerOptions,
-        systemProviderOptions: params.systemProviderOptions,
     };
 }
 
@@ -183,7 +364,28 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
  *  submitResult call into RunState.artifacts in step order). The LAST artifact
  *  is the finder's final output. Falls back to [] if the agent never finalized
  *  (budget-exhausted). No hand re-scan of steps — that is the runner's job. */
-export function extractFindings(state: RunState): {
+/** The findings of the submits before `latest`, in the order they came. */
+function earlierSubmittedFindings(
+    state: RunState,
+    latest: RunState['artifacts'][number],
+    telemetryMetadata?: { organizationId?: string; modelId?: string },
+): FinderSuggestion[] {
+    return state.artifacts
+        .filter((a) => a.type === FINDER_DONE_TOOL && a !== latest)
+        .flatMap(
+            (a) =>
+                (sanitizeFindingsResult(a.payload as any, telemetryMetadata)
+                    ?.suggestions ?? []) as FinderSuggestion[],
+        );
+}
+
+export function extractFindings(
+    state: RunState,
+    // Purely for the [LLM_ENVELOPE] logs sanitizeFindingsResult emits — see
+    // that function's own doc comment for why this is an untyped inline
+    // shape rather than LangfuseTelemetryMetadata.
+    telemetryMetadata?: { organizationId?: string; modelId?: string },
+): {
     reasoning: string;
     suggestions: FinderSuggestion[];
 } {
@@ -191,12 +393,36 @@ export function extractFindings(state: RunState): {
     const artifact = [...state.artifacts]
         .reverse()
         .find((a) => a.type === FINDER_DONE_TOOL);
+    // OBSERVABILIDADE: "zero findings" tem TRES causas distintas aqui e nenhuma
+    // era registrada — artefato valido com lista vazia, artefato inutilizavel
+    // (submitResult({}) vazio ou prosa), e artefato ausente. Sem isto, o numero
+    // publicado nao distingue "revisou e nao achou" de "quebrou o formato".
+    // Validated ONCE: a second pass logged every failure twice (#2112).
+    const clean = artifact
+        ? sanitizeFindingsResult(artifact.payload, telemetryMetadata)
+        : null;
+    (state as any).__findingsOutcome = !artifact
+        ? 'no-artifact'
+        : clean
+          ? 'structured'
+          : 'artifact-unusable';
     if (artifact) {
-        const clean = sanitizeFindingsResult(artifact.payload as any);
         if (clean) {
+            const suggestions = (clean.suggestions ?? []) as FinderSuggestion[];
+            // A model that submits its findings and then submits again with
+            // none ("already recorded") still means the first ones. Reading
+            // only the last submit lost them, and the prose recovery then
+            // re-extracted them under new titles, posting each twice.
             return {
                 reasoning: clean.reasoning ?? '',
-                suggestions: (clean.suggestions ?? []) as FinderSuggestion[],
+                suggestions:
+                    suggestions.length > 0
+                        ? suggestions
+                        : earlierSubmittedFindings(
+                              state,
+                              artifact,
+                              telemetryMetadata,
+                          ),
             };
         }
         // Artifact present but unusable — either empty args (e.g. Gemini
@@ -204,13 +430,23 @@ export function extractFindings(state: RunState): {
         // PROSE in `reasoning` and omitted `suggestions`. Preserve that prose so
         // a downstream fallback-LLM can re-structure it into findings; otherwise
         // those (real) findings are silently lost.
-        const proseReasoning =
-            typeof (artifact.payload as { reasoning?: unknown })?.reasoning ===
-            'string'
-                ? ((artifact.payload as { reasoning: string }).reasoning ?? '')
-                : '';
+        // When the findings came as JSON text that could not be parsed, that
+        // text goes to the recoverer too: the findings are in it, not in
+        // `reasoning` (#2112).
+        const payload = artifact.payload as Record<string, unknown> | string;
+        const proseReasoning = [
+            typeof payload === 'object' &&
+            typeof payload?.reasoning === 'string'
+                ? payload.reasoning
+                : '',
+            typeof payload === 'string'
+                ? payload
+                : unparsedFindingsText(payload),
+        ]
+            .filter((t) => t.trim() !== '')
+            .join('\n\n');
         return (
-            findingsFromText(state) ?? {
+            findingsFromText(state, telemetryMetadata) ?? {
                 reasoning: proseReasoning,
                 suggestions: [],
             }
@@ -218,22 +454,63 @@ export function extractFindings(state: RunState): {
     }
     // 2. Fallback: the model answered in TEXT instead of calling submitResult
     //    (or called it empty). Recover the findings JSON from its final text.
-    return findingsFromText(state) ?? { reasoning: '', suggestions: [] };
+    return (
+        findingsFromText(state, telemetryMetadata) ?? {
+            reasoning: '',
+            suggestions: [],
+        }
+    );
+}
+
+/** The findings a payload holds as text, under the key, an alias, or the
+ *  arguments of a tool-call wrapper — '' when there is none. */
+function unparsedFindingsText(
+    payload: Record<string, unknown> | undefined,
+    depth = 0,
+): string {
+    if (!payload || typeof payload !== 'object' || depth > 3) return '';
+    for (const k of [
+        'suggestions',
+        'findings',
+        'codeSuggestions',
+        'arguments',
+    ]) {
+        if (typeof payload[k] === 'string') return payload[k] as string;
+    }
+    for (const k of ['parameters', 'arguments', 'result', 'data', 'output']) {
+        const inner = payload[k];
+        if (inner && typeof inner === 'object') {
+            const t = unparsedFindingsText(
+                inner as Record<string, unknown>,
+                depth + 1,
+            );
+            if (t) return t;
+        }
+    }
+    return '';
 }
 
 /** Recover findings from the model's final text — covers "answered in prose/JSON
  *  instead of calling submitResult" and empty-arg submitResult. */
-function findingsFromText(state: RunState): {
+function findingsFromText(
+    state: RunState,
+    telemetryMetadata?: { organizationId?: string; modelId?: string },
+): {
     reasoning: string;
     suggestions: FinderSuggestion[];
 } | null {
     for (let i = state.steps.length - 1; i >= 0; i--) {
         const text = state.steps[i].message.content;
-        if (typeof text !== 'string' || !text.trim()) continue;
-        const json = extractJsonBlock(text);
+        if (typeof text !== 'string' || !text.trim()) {
+            continue;
+        }
+        const json = extractJsonFromText(text);
         if (!json) continue;
         try {
-            const clean = sanitizeFindingsResult(JSON.parse(json));
+            const clean = sanitizeFindingsResult(
+                JSON.parse(json),
+                telemetryMetadata,
+            );
             if (clean) {
                 return {
                     reasoning: clean.reasoning ?? '',
@@ -245,17 +522,12 @@ function findingsFromText(state: RunState): {
             // not valid JSON in this step — try an earlier one
         }
     }
-    return null;
-}
-
-/** Pull a JSON object out of free text: a ```json fenced block, else the
- *  widest {...} span. */
-function extractJsonBlock(text: string): string | null {
-    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenced?.[1]) return fenced[1].trim();
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    if (start >= 0 && end > start) return text.slice(start, end + 1);
+    // KNOWN LIMITATION (E) — total parse failure under-reports SILENTLY: no step
+    // held extractable JSON. The caller falls to prose recovery
+    // (recoverFindingsFromProse), which also returns [] when the prose doesn't read
+    // like findings. If BOTH miss, the finder's findings are dropped with no
+    // counter/log — a review can silently under-report. Accepted for now; a
+    // parse-failure metric would make the drop observable.
     return null;
 }
 
@@ -288,7 +560,10 @@ const RECOVERY_SCHEMA = z.object({
             improvedCode: z.string(),
             language: z.string().nullable(),
             label: z.string().nullable(),
-            oneSentenceSummary: z.string().nullable(),
+            oneSentenceSummary: z
+                .string()
+                .nullable()
+                .describe(TITLE_PROMPT_SPEC),
             relevantLinesStart: z.number().nullable(),
             relevantLinesEnd: z.number().nullable(),
             severity: z.string().nullable(),
@@ -297,12 +572,18 @@ const RECOVERY_SCHEMA = z.object({
     ),
 });
 
+const REVISION_RECOVERY_SCHEMA = RECOVERY_SCHEMA.extend({
+    suggestions: z.array(
+        RECOVERY_SCHEMA.shape.suggestions.element.extend({
+            revisesSuggestionId: z.string().optional(),
+        }),
+    ),
+});
+
 /** Injected capability: re-structure a prose `reasoning` into findings. The
  *  domain (finder/recall passes) depends only on this function; the adapter
  *  wires it to the concrete internal-model fallback. Undefined = recovery off. */
-export type ProseRecoverer = (
-    reasoning: string,
-) => Promise<FinderSuggestion[]>;
+export type ProseRecoverer = (reasoning: string) => Promise<FinderSuggestion[]>;
 
 /** Extract findings from a run, and — if the model produced NONE but wrote
  *  finding-like prose in `reasoning` (the Anthropic omission mode) — recover
@@ -311,10 +592,28 @@ export type ProseRecoverer = (
 export async function extractFindingsWithRecovery(
     state: RunState,
     recover?: ProseRecoverer,
+    telemetryMetadata?: { organizationId?: string; modelId?: string },
 ): Promise<FinderFindings> {
-    const found = extractFindings(state);
+    const found = extractFindings(state, telemetryMetadata);
     if (found.suggestions.length > 0 || !recover) return found;
     const recovered = await recover(found.reasoning);
+    // Logged when there was something to recover: an unusable or missing
+    // result, or prose the recoverer turned into findings.
+    if (
+        (state as any).__findingsOutcome !== 'structured' ||
+        recovered.length > 0
+    ) {
+        finderLogger.log({
+            message: `[DONE-TOOL] prose recovery returned ${recovered.length} finding(s)`,
+            context: 'finder',
+            metadata: {
+                recovered: recovered.length,
+                outcome: (state as any).__findingsOutcome,
+                organizationId: telemetryMetadata?.organizationId,
+                modelId: telemetryMetadata?.modelId,
+            },
+        });
+    }
     return recovered.length > 0
         ? { reasoning: found.reasoning, suggestions: recovered }
         : found;
@@ -322,33 +621,58 @@ export async function extractFindingsWithRecovery(
 
 export async function recoverFindingsFromProse(
     prose: string,
-    byokConfig: BYOKConfig | undefined,
+    byokConfig: NormalizedModel | undefined,
     organizationId: string | undefined,
+    usageRunName?: string,
+    previousDecisions?: readonly PrDecisionRecord[],
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
     try {
-        const suggestions = await withStructuredOutputFallback(
-            {
-                byokConfig,
-                organizationId,
-                label: 'finder-prose-recovery',
-            },
-            async (model) => {
-                const { object } = await generateObject({
-                    model,
-                    schema: RECOVERY_SCHEMA,
-                    prompt:
-                        "The following is a code reviewer's analysis written as " +
-                        'prose. Extract EVERY concrete finding it describes into ' +
-                        'the structured schema — one entry per distinct issue, ' +
-                        'using the file paths and line numbers mentioned. Do NOT ' +
-                        'invent findings; only extract what is explicitly ' +
-                        `described.\n\nANALYSIS:\n${prose}`,
-                });
-                return object.suggestions as unknown as FinderSuggestion[];
-            },
-        );
-        return suggestions ?? [];
+        // ONE primitive: LLM.run resolves the slot (or managed default), owns the
+        // span + the json_schema→json_object fallback the recovery pass needs, and
+        // returns the parsed object. The runName buckets this recovery call's
+        // usage span to `review` (deriveArea) alongside the finder/verify calls —
+        // it is part of the same review, not a separate `other` area.
+        const result = await LLM.run({
+            byokConfig,
+            schema: previousDecisions?.length
+                ? REVISION_RECOVERY_SCHEMA
+                : RECOVERY_SCHEMA,
+            // The title rule (#2157) mirrors the finder's own schema. The
+            // "Respond with a JSON object" sentence must stay: the text must
+            // literally contain the word "json" somewhere: OpenAI (and
+            // OpenAI-compatible providers) reject a `json_object`
+            // response-format request outright otherwise —
+            // their own error is "'messages' must contain the word 'json'
+            // in some form" — which is exactly the json_schema→json_object
+            // fallback LLM.run owns for this call (prod incident,
+            // 2026-09-17: this silently 400'd recovery for every provider
+            // needing that fallback, e.g. gpt-5.6-sol/gpt-5.6-terra).
+            // Verified live against the real OpenAI API (2026-09-17): the
+            // exact same request 400s with that message without this
+            // sentence, and 200s with it.
+            // Since #1916 the structured executor guarantees the same thing
+            // centrally for every json_object route (it writes the schema AND
+            // the keyword into the system prompt), so this sentence is now a
+            // belt-and-braces duplicate rather than the only thing standing
+            // between this call and a 400.
+            user:
+                "The following is a code reviewer's analysis written as " +
+                'prose. Extract EVERY concrete finding it describes into ' +
+                'the structured schema — one entry per distinct issue, ' +
+                'using the file paths and line numbers mentioned. Do NOT ' +
+                'invent findings; only extract what is explicitly ' +
+                `described. oneSentenceSummary: ${TITLE_PROMPT_SPEC}.` +
+                `\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}` +
+                (previousDecisions?.length
+                    ? `\n\n${formatPreviousDecisions(previousDecisions)}\nPreserve the earlier suggestion's Id in revisesSuggestionId when the analysis revises it. Do not invent a relationship absent from the analysis; omit the field for unrelated findings.`
+                    : ''),
+            runName: usageRunName
+                ? `${usageRunName}-recovery`
+                : 'code-review-recovery',
+            organizationId,
+        });
+        return (result.suggestions as unknown as FinderSuggestion[]) ?? [];
     } catch {
         // Best-effort: recovery must never break the review.
         return [];
@@ -362,15 +686,26 @@ export interface RunFinderWithVerifyParams {
     finderSpec: AgentSpec;
     /** Model id for the verifier runs. */
     modelId: string;
+    /** Failover target model id — threaded to the verifier so its strict tool
+     *  use accounts for the failover model (Gemini→OpenAI must not send strict). */
+    fallbackModelId?: string;
     /** Investigation tools shared with the verifier. */
     tools: ToolRegistry;
+    /** Runner for the verify pass when it runs on its own model (a custom
+     *  agent's check slot, #2172). Defaults to `runner`. */
+    verifyRunner?: AgentRunner;
+    /** Model id of `verifyRunner`'s slot; `modelId` when unset. */
+    verifyModelId?: string;
+    /** Failover target of `verifyRunner`'s slot. */
+    verifyFallbackModelId?: string;
+    /** Provider options built for `verifyRunner`'s model. */
+    verifyProviderOptions?: Readonly<Record<string, unknown>>;
     /** Verify concurrency (default 4). */
     concurrency?: number;
     /** Provider options (reasoning/thinking config) forwarded to verifier runs. */
     providerOptions?: Readonly<Record<string, unknown>>;
     /** System-message provider options (e.g. Anthropic prompt caching), forwarded
      *  to the finder spec and the verifier runs. */
-    systemProviderOptions?: Readonly<Record<string, unknown>>;
     /** Skip the recall pass entirely (fast mode / self-contained trial). */
     skipHeavyPasses?: boolean;
     /** Skip ONLY the synthesis-rescue pass. */
@@ -380,9 +715,52 @@ export interface RunFinderWithVerifyParams {
     telemetryMetadata?: LangfuseTelemetryMetadata;
     /** Agent name (finder/security/...) — prefixes every observation name. */
     agentName?: string;
+    /** Cost-span run name base (e.g. `code-review-bug`) forwarded to the verifier
+     *  runs so their leaf usage spans bucket to `review` in `deriveArea`. */
+    usageRunName?: string;
     /** Injected prose-findings recovery capability (see ProseRecoverer). The
      *  adapter wires it to the internal-model fallback; omit to disable. */
     recoverProse?: ProseRecoverer;
+    /** Suggestions already posted on THIS PR in a previous review round
+     *  (issue #1313). Forwarded to the LlmVerifier, which filters by file per
+     *  candidate — see LlmVerifierParams. */
+    previousDecisions?: PrDecisionRecord[];
+    /** Forwarded to the LlmVerifier as evidence for `repo_instruction`
+     *  candidates. */
+    repoInstructions?: RepoInstructionsContext;
+    /** Hold a finding that cites an instruction file under another label to
+     *  the repo_instruction quote check. Off for custom agents, whose guides
+     *  can be the same files and take the convention check. Default on. */
+    checksInstructionCitations?: boolean;
+    /** Second pass for convention findings (custom agents with linked guides).
+     *  When set, `kind: 'convention'` findings take the quote check and the
+     *  convention verifier instead of HV2. Absent → every finding takes HV2,
+     *  exactly as before. */
+    conventionCheck?: ConventionCheckParams;
+    /** A custom agent's team system (MCP) tools; see RecallPassesParams. */
+    teamSystemTools?: string[];
+    /** A custom agent kept to its lane: what it may report. The verifier
+     *  drops a bug finding outside it (see verifierPromptFor), and the
+     *  synthesis rescue asks only for missed findings within it. Absent →
+     *  both run exactly as before. */
+    laneFocus?: string;
+}
+
+export interface ConventionCheckParams {
+    /** Reads a guide as it is on the PR's target branch. */
+    readGuide: GuideFileReader;
+    /** Lists a skill's files on the target branch, so a rule quoted from a
+     *  file beside SKILL.md is found there. */
+    listGuideDir?: GuideDirLister;
+    /** Guides linked to this agent. Non-empty → only these may be quoted, and
+     *  the recall pass asks for missed violations of them. */
+    guideFiles?: string[];
+    /** The custom agent's instructions: a rule cited from `TeamInstructions`
+     *  is checked against them. */
+    teamInstructions?: string;
+    /** What the ast-grep tool returned during this review (see
+     *  recordAstGrepOutputs). Absent → no finding is proven by ast-grep. */
+    astGrepLog?: AstGrepOutputLog;
 }
 
 export interface VerifyUsage {
@@ -399,11 +777,25 @@ export interface FinderWithVerifyResult {
      *  `kept`): which files the verifier itself read/grepped while judging each.
      *  Empty summary when the verifier used no tools for that finding. */
     keptEvidence: ToolEvidenceSummary[];
+    /** How each KEPT finding's verdict was read (same order as `kept`) — the
+     *  verify funnel's provenance, so a `keep` that is really a parse miss is
+     *  visible in the trace instead of indistinguishable from a judged keep
+     *  (issue #1937). */
+    keptParseMode: VerdictParseMode[];
     droppedByVerify: Array<{
         finding: FinderSuggestion;
         evidence?: string;
         verifierEvidence: ToolEvidenceSummary;
+        parseMode: VerdictParseMode;
     }>;
+    /** Candidates whose verify run failed (`parseMode: 'verify-error'`), so
+     *  nobody judged them. Not in `kept`: a review never publishes a finding
+     *  as checked when the check did not run (#2171). */
+    unverified: Array<{ finding: FinderSuggestion; error: string }>;
+    /** Convention findings whose quote is not in the cited guide on the target
+     *  branch (`quote-not-found`): dropped before any verify, kept apart so
+     *  the gate is observable. Always empty without `conventionCheck`. */
+    droppedByQuoteCheck: ConventionCheckRejected[];
     /** The finder's RunState (for usage/steps/trace mapping by callers). */
     finderState: RunState;
     /** Token usage of the verify sub-step (sum across verifier runs). The
@@ -423,6 +815,30 @@ const ZERO_VERIFY_USAGE: VerifyUsage = {
     cacheReadTokens: 0,
 };
 
+/** The runner and model the verify pass uses: its own when the caller gave
+ *  one (a custom agent's check slot), the finder's otherwise. */
+function verifyModelOf(params: RunFinderWithVerifyParams): {
+    runner: AgentRunner;
+    modelId: string;
+    fallbackModelId?: string;
+    providerOptions?: Readonly<Record<string, unknown>>;
+} {
+    if (!params.verifyRunner) {
+        return {
+            runner: params.runner,
+            modelId: params.modelId,
+            fallbackModelId: params.fallbackModelId,
+            providerOptions: params.providerOptions,
+        };
+    }
+    return {
+        runner: params.verifyRunner,
+        modelId: params.verifyModelId ?? params.modelId,
+        fallbackModelId: params.verifyFallbackModelId,
+        providerOptions: params.verifyProviderOptions,
+    };
+}
+
 /**
  * Runs the finder, then verifies each finding on the SAME runner (HV2
  * refute-to-drop). This is the parity path with the legacy runAgentLoop
@@ -437,9 +853,11 @@ export async function runFinderWithVerify(
         params.finderSpec,
         {
             ...input,
-            telemetry: buildLangfuseTelemetry(
-                params.agentName ?? 'finder',
-                params.telemetryMetadata,
+            ...toAiSdkTelemetryArgs(
+                buildLangfuseTelemetry(
+                    params.agentName ?? 'finder',
+                    params.telemetryMetadata,
+                ),
             ),
         },
         ctx,
@@ -449,6 +867,7 @@ export async function runFinderWithVerify(
     const base = await extractFindingsWithRecovery(
         finderState,
         params.recoverProse,
+        { ...params.telemetryMetadata, modelId: params.modelId },
     );
 
     // RECALL PASS: synthesis rescue — one extra finder run that re-thinks from
@@ -466,8 +885,12 @@ export async function runFinderWithVerify(
             skipHeavyPasses: params.skipHeavyPasses,
             skipSynthesisRescue: params.skipSynthesisRescue,
             telemetryMetadata: params.telemetryMetadata,
+            modelId: params.modelId,
             agentName: params.agentName,
             recoverProse: params.recoverProse,
+            conventionGuides: params.conventionCheck?.guideFiles,
+            teamSystemTools: params.teamSystemTools,
+            laneScoped: !!params.laneFocus,
         },
         ctx,
     );
@@ -480,73 +903,109 @@ export async function runFinderWithVerify(
             reasoning,
             kept: [],
             keptEvidence: [],
+            keptParseMode: [],
             droppedByVerify: [],
+            unverified: [],
+            droppedByQuoteCheck: [],
             finderState,
             verifyUsage: ZERO_VERIFY_USAGE,
             recallUsage,
         };
     }
 
-    // Verify each finding (HV2 refute-to-drop) with the confidence SPLIT inside
-    // LlmVerifier: high-confidence → light depth, low-confidence → full depth.
-    const verifier = new LlmVerifier(params.runner, {
-        modelId: params.modelId,
-        tools: params.tools,
-        providerOptions: params.providerOptions,
-        systemProviderOptions: params.systemProviderOptions,
-        telemetryMetadata: params.telemetryMetadata,
-        agentName: params.agentName,
-    });
-    const pass = await runVerificationPass<FinderSuggestion>(
-        { candidates: suggestions, verifier, concurrency: params.concurrency },
+    // SECOND PASS ROUTING (custom agents). A convention finding is judged
+    // against the team's rule, not by HV2 — which drops "style" and "missing
+    // X" by rule and never sees the guide. First the deterministic quote check
+    // on the target branch, then the convention verifier. A finding an
+    // ast-grep call in this run actually matched is proven and skips both.
+    // Without `conventionCheck` everything below sees only `bugs` = all.
+    const route = params.conventionCheck
+        ? await routeByKind(suggestions, params.conventionCheck, {
+              organizationId: params.telemetryMetadata?.organizationId,
+              teamId: params.telemetryMetadata?.teamId,
+              repositoryId: params.telemetryMetadata?.repositoryId,
+              pullRequestId: params.telemetryMetadata?.pullRequestId,
+              agent: params.agentName,
+          })
+        : {
+              bugs: suggestions,
+              proven: [] as FinderSuggestion[],
+              conventions: [] as FinderSuggestion[],
+              sectionOf: new Map<FinderSuggestion, string>(),
+              rejected: [] as ConventionCheckRejected[],
+          };
+
+    // HV2 on the bug findings (refute-to-drop + evidence gate), on the check
+    // model when the caller gave one.
+    const verify = verifyModelOf(params);
+    const investigated = strongFilesFromRun(finderState);
+    const hv2 = await verifyFindings(
+        {
+            ...params,
+            runner: verify.runner,
+            modelId: verify.modelId,
+            fallbackModelId: verify.fallbackModelId,
+            providerOptions: verify.providerOptions,
+        },
+        route.bugs,
+        investigated,
         ctx,
     );
-
-    let kept = pass.kept;
-    let dropped = pass.dropped;
-    let gateUsage: VerifyUsage = ZERO_VERIFY_USAGE;
-
+    let kept = hv2.kept;
+    let dropped = hv2.dropped;
     // Per-finding verifier verdict (carries the verifier's investigation tool
     // calls) so we can attribute per-finding verifier evidence to the trace.
-    const verdictByFinding = new Map<FinderSuggestion, Verdict>();
-    pass.kept.forEach((f, i) => verdictByFinding.set(f, pass.keptVerdicts[i]));
-    pass.dropped.forEach((d) => verdictByFinding.set(d.candidate, d.verdict));
+    const verdictByFinding = hv2.verdictByFinding;
 
-    // EVIDENCE GATE (ported from legacy): a finding kept WITHOUT the finder
-    // having investigated its file is not trusted blindly — it gets a thorough
-    // FULL re-verify, which may then drop it.
-    const investigated = strongFilesFromRun(finderState);
-    const unevidenced = kept.filter(
-        (f) => !fileWasInvestigated(investigated, f.relevantFile),
-    );
-    if (unevidenced.length > 0) {
-        const fullVerifier = new LlmVerifier(params.runner, {
-            modelId: params.modelId,
+    // Convention findings that passed the quote check. The quote check is
+    // their evidence gate: they never take the HV2 full re-verify above,
+    // which would drop them as style.
+    let conventionUsage: VerifyUsage = ZERO_VERIFY_USAGE;
+    if (route.conventions.length > 0) {
+        // Judged on the check model, like the HV2 verifier above.
+        const conventionVerifier = new ConventionVerifier(verify.runner, {
+            modelId: verify.modelId,
+            fallbackModelId: verify.fallbackModelId,
             tools: params.tools,
-            forceFull: true,
-            providerOptions: params.providerOptions,
-            systemProviderOptions: params.systemProviderOptions,
+            sectionOf: (f) => route.sectionOf.get(f),
+            providerOptions: verify.providerOptions,
             telemetryMetadata: params.telemetryMetadata,
             agentName: params.agentName,
+            usageRunName: params.usageRunName,
+            previousDecisions: params.previousDecisions,
         });
-        const gate = await runVerificationPass<FinderSuggestion>(
+        const conv = await runVerificationPass<FinderSuggestion>(
             {
-                candidates: unevidenced,
-                verifier: fullVerifier,
+                candidates: route.conventions,
+                verifier: conventionVerifier,
                 concurrency: params.concurrency,
             },
             ctx,
         );
-        // The gate's re-verify is the more thorough look — its verdict (and tool
-        // evidence) supersedes the first pass for the re-checked findings.
-        gate.kept.forEach((f, i) =>
-            verdictByFinding.set(f, gate.keptVerdicts[i]),
+        conv.kept.forEach((f, i) =>
+            verdictByFinding.set(f, conv.keptVerdicts[i]),
         );
-        gate.dropped.forEach((d) => verdictByFinding.set(d.candidate, d.verdict));
-        const stillDropped = new Set(gate.dropped.map((d) => d.candidate));
-        kept = kept.filter((f) => !stillDropped.has(f));
-        dropped = [...dropped, ...gate.dropped];
-        gateUsage = { ...fullVerifier.usage };
+        conv.dropped.forEach((d) =>
+            verdictByFinding.set(d.candidate, d.verdict),
+        );
+        kept = [...kept, ...conv.kept];
+        dropped = [...dropped, ...conv.dropped];
+        conventionUsage = { ...conventionVerifier.usage };
+    }
+    for (const f of route.proven) {
+        verdictByFinding.set(f, {
+            keep: true,
+            rationale: 'ast-grep match',
+            toolCalls: [],
+            parseMode: 'proof',
+        });
+    }
+    if (route.conventions.length > 0 || route.proven.length > 0) {
+        // Back to the finder's order, so routing never reorders the output.
+        const order = new Map(suggestions.map((s, i) => [s, i]));
+        kept = [...kept, ...route.proven].sort(
+            (a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0),
+        );
     }
 
     // Map the generic verdict.toolCalls (name/args/result) into the review
@@ -562,25 +1021,357 @@ export async function runFinderWithVerify(
         );
 
     // The harness speaks neutral "candidate"; code-review's own term is "finding".
+    const parseModeOf = (f: FinderSuggestion): VerdictParseMode =>
+        verdictByFinding.get(f)?.parseMode ?? 'default-keep';
+
+    // The Verifier port fails open, so a candidate whose verify run failed
+    // comes back as kept. Nobody judged it: take it out of the published set
+    // and report it on its own (#2171). The evidence gate's re-verify already
+    // superseded the first verdict above, so this reads the final one.
+    const unverified = kept
+        .filter((f) => parseModeOf(f) === 'verify-error')
+        .map((f) => ({
+            finding: f,
+            error:
+                verdictByFinding.get(f)?.rationale ??
+                'verification unavailable',
+        }));
+    if (unverified.length > 0) {
+        const unverifiedSet = new Set(unverified.map((u) => u.finding));
+        kept = kept.filter((f) => !unverifiedSet.has(f));
+    }
+
     return {
         reasoning,
         kept,
         keptEvidence: kept.map(evidenceOf),
+        keptParseMode: kept.map(parseModeOf),
         droppedByVerify: dropped.map((d) => ({
             finding: d.candidate,
             evidence: d.verdict.rationale,
             verifierEvidence: evidenceOf(d.candidate),
+            parseMode: d.verdict.parseMode ?? 'default-keep',
         })),
+        unverified,
+        droppedByQuoteCheck: route.rejected,
         finderState,
-        verifyUsage: sumVerifyUsage(verifier.usage, gateUsage),
+        verifyUsage: sumVerifyUsage(hv2.verifyUsage, conventionUsage),
         recallUsage,
     };
+}
+
+/**
+ * The verify step: each candidate judged by the verifier (refute-to-drop), then
+ * the evidence gate, which re-verifies in full a finding kept on a file the
+ * finder never investigated (`investigated`: strongFilesFromRun of its run).
+ * Called by runFinderWithVerify; the funnel's verify eval calls it too.
+ */
+export async function verifyFindings(
+    params: Pick<
+        RunFinderWithVerifyParams,
+        | 'runner'
+        | 'modelId'
+        | 'fallbackModelId'
+        | 'tools'
+        | 'concurrency'
+        | 'providerOptions'
+        | 'telemetryMetadata'
+        | 'agentName'
+        | 'usageRunName'
+        | 'previousDecisions'
+        | 'repoInstructions'
+        | 'checksInstructionCitations'
+        | 'laneFocus'
+    >,
+    suggestions: FinderSuggestion[],
+    investigated: Set<string>,
+    ctx: ToolContext,
+): Promise<{
+    kept: FinderSuggestion[];
+    dropped: { candidate: FinderSuggestion; verdict: Verdict }[];
+    verdictByFinding: Map<FinderSuggestion, Verdict>;
+    verifyUsage: VerifyUsage;
+}> {
+    // A finding that cites an instruction file under another label is a
+    // convention break too. Before verify, one quoting the target branch is
+    // relabeled repo_instruction, so the verifier judges it against the file
+    // (appliesTo, the changed line); one that does not (the setting is off,
+    // or it quotes the PR's own version) is dropped. A finding on the
+    // instruction file itself reviews that file and is left alone.
+    const preDropped: { candidate: FinderSuggestion; verdict: Verdict }[] = [];
+    let candidates = suggestions;
+    if (params.checksInstructionCitations !== false) {
+        const relabeled = new Map<FinderSuggestion, FinderSuggestion>();
+        const unsupported = new Set<FinderSuggestion>();
+        for (const f of suggestions) {
+            if (
+                f.label === 'repo_instruction' ||
+                !citesRepoInstruction(f, params.repoInstructions) ||
+                isRepoInstructionFile(f.relevantFile, params.repoInstructions)
+            ) {
+                continue;
+            }
+            if (
+                quotesRepoInstruction(
+                    f.suggestionContent,
+                    params.repoInstructions,
+                )
+            ) {
+                relabeled.set(f, { ...f, label: 'repo_instruction' });
+            } else {
+                unsupported.add(f);
+            }
+        }
+        if (relabeled.size || unsupported.size) {
+            candidates = suggestions
+                .filter((f) => !unsupported.has(f))
+                .map((f) => relabeled.get(f) ?? f);
+            const rationale = params.repoInstructions?.files?.length
+                ? 'It cites an instruction file without quoting it as merged on the target branch.'
+                : 'It cites an instruction file, and coding-agent instructions are off for this review.';
+            for (const candidate of unsupported) {
+                preDropped.push({
+                    candidate,
+                    verdict: { keep: false, rationale },
+                });
+            }
+            finderLogger.log({
+                message: `Findings citing an instruction file under another label: ${relabeled.size} relabeled repo_instruction, ${unsupported.size} dropped`,
+                context: 'finder.repo-instruction-citation',
+                metadata: {
+                    ...params.telemetryMetadata,
+                    agentName: params.agentName,
+                    instructionsOn: !!params.repoInstructions?.files?.length,
+                    relabeled: [...relabeled.keys()].map((f) => f.relevantFile),
+                    dropped: [...unsupported].map((f) => f.relevantFile),
+                },
+            });
+        }
+    }
+
+    // Verify each finding (HV2 refute-to-drop) with the confidence SPLIT inside
+    // LlmVerifier: high-confidence → light depth, low-confidence → full depth.
+    const verifier = new LlmVerifier(params.runner, {
+        modelId: params.modelId,
+        fallbackModelId: params.fallbackModelId,
+        tools: params.tools,
+        providerOptions: params.providerOptions,
+        telemetryMetadata: params.telemetryMetadata,
+        agentName: params.agentName,
+        usageRunName: params.usageRunName,
+        previousDecisions: params.previousDecisions,
+        repoInstructions: params.repoInstructions,
+        laneFocus: params.laneFocus,
+    });
+    const pass = await runVerificationPass<FinderSuggestion>(
+        { candidates, verifier, concurrency: params.concurrency },
+        ctx,
+    );
+
+    let kept = pass.kept;
+    let dropped = [...preDropped, ...pass.dropped];
+    let gateUsage: VerifyUsage = ZERO_VERIFY_USAGE;
+
+    // Per-finding verifier verdict (carries the verifier's investigation tool
+    // calls) so we can attribute per-finding verifier evidence to the trace.
+    const verdictByFinding = new Map<FinderSuggestion, Verdict>();
+    pass.kept.forEach((f, i) => verdictByFinding.set(f, pass.keptVerdicts[i]));
+    pass.dropped.forEach((d) => verdictByFinding.set(d.candidate, d.verdict));
+    preDropped.forEach((d) => verdictByFinding.set(d.candidate, d.verdict));
+
+    // EVIDENCE GATE (ported from legacy): a finding kept WITHOUT the finder
+    // having investigated its file is not trusted blindly — it gets a thorough
+    // FULL re-verify, which may then drop it.
+    const unevidenced = kept.filter(
+        (f) => !fileWasInvestigated(investigated, f.relevantFile),
+    );
+    if (unevidenced.length > 0) {
+        const fullVerifier = new LlmVerifier(params.runner, {
+            modelId: params.modelId,
+            fallbackModelId: params.fallbackModelId,
+            tools: params.tools,
+            forceFull: true,
+            providerOptions: params.providerOptions,
+            telemetryMetadata: params.telemetryMetadata,
+            agentName: params.agentName,
+            usageRunName: params.usageRunName,
+            previousDecisions: params.previousDecisions,
+            repoInstructions: params.repoInstructions,
+            laneFocus: params.laneFocus,
+        });
+        const gate = await runVerificationPass<FinderSuggestion>(
+            {
+                candidates: unevidenced,
+                verifier: fullVerifier,
+                concurrency: params.concurrency,
+            },
+            ctx,
+        );
+        // The gate's re-verify is the more thorough look — its verdict (and tool
+        // evidence) supersedes the first pass for the re-checked findings.
+        gate.kept.forEach((f, i) =>
+            verdictByFinding.set(f, gate.keptVerdicts[i]),
+        );
+        gate.dropped.forEach((d) =>
+            verdictByFinding.set(d.candidate, d.verdict),
+        );
+        const stillDropped = new Set(gate.dropped.map((d) => d.candidate));
+        kept = kept.filter((f) => !stillDropped.has(f));
+        dropped = [...dropped, ...gate.dropped];
+        gateUsage = { ...fullVerifier.usage };
+    }
+
+    // A repo_instruction finding must quote the instructions merged on the
+    // target branch. The verifier is told so but does not always hold to it
+    // (it kept quotes of a rule the PR itself adds to CLAUDE.md), so the quote
+    // is checked here.
+    const unquoted = kept.filter(
+        (f) =>
+            f.label === 'repo_instruction' &&
+            !quotesRepoInstruction(
+                f.suggestionContent,
+                params.repoInstructions,
+            ),
+    );
+    if (unquoted.length > 0) {
+        const unquotedSet = new Set(unquoted);
+        kept = kept.filter((f) => !unquotedSet.has(f));
+        dropped = [
+            ...dropped,
+            ...unquoted.map((candidate) => {
+                const verdict: Verdict = {
+                    ...verdictByFinding.get(candidate),
+                    keep: false,
+                    rationale:
+                        'The quoted instruction is not in the target-branch instruction files.',
+                };
+                verdictByFinding.set(candidate, verdict);
+                return { candidate, verdict };
+            }),
+        ];
+        finderLogger.log({
+            message: `Dropped ${unquoted.length} repo_instruction finding(s) whose quote is not in the target-branch instructions`,
+            context: 'finder.repo-instruction-quote',
+            metadata: {
+                ...params.telemetryMetadata,
+                agentName: params.agentName,
+                files: unquoted.map((f) => f.relevantFile),
+            },
+        });
+    }
+
+    return {
+        kept,
+        dropped,
+        verdictByFinding,
+        verifyUsage: sumVerifyUsage(verifier.usage, gateUsage),
+    };
+}
+
+/** Split candidates for the second pass: bug findings → HV2; convention
+ *  findings proven by an ast-grep match → kept without a judge; the other
+ *  convention findings → quote check, whose survivors go to the convention
+ *  verifier with their guide section and whose failures are dropped. */
+async function routeByKind(
+    suggestions: FinderSuggestion[],
+    check: ConventionCheckParams,
+    logContext: Record<string, unknown> = {},
+): Promise<{
+    bugs: FinderSuggestion[];
+    proven: FinderSuggestion[];
+    conventions: FinderSuggestion[];
+    sectionOf: Map<FinderSuggestion, string>;
+    rejected: ConventionCheckRejected[];
+}> {
+    // A "convention" sourced from a tool's output (e.g. a CLI) quotes no
+    // rule, so the quote gate would drop it: it is checked as a bug instead.
+    const toolSourced = suggestions.filter(
+        (s) => s.kind === 'convention' && isToolSource(s, check.guideFiles),
+    );
+    const bugs = [
+        ...suggestions.filter((s) => s.kind !== 'convention'),
+        ...toolSourced.map((s) => ({
+            ...s,
+            kind: 'bug' as const,
+            source: undefined,
+        })),
+    ];
+    const candidates = suggestions.filter(
+        (s) => s.kind === 'convention' && !isToolSource(s, check.guideFiles),
+    );
+    if (candidates.length === 0) {
+        return {
+            bugs,
+            proven: [],
+            conventions: [],
+            sectionOf: new Map(),
+            rejected: [],
+        };
+    }
+    const astGrepOutputs = check.astGrepLog?.outputs ?? [];
+    const proven = candidates.filter((s) =>
+        isProvenByAstGrep(s, astGrepOutputs),
+    );
+    const provenSet = new Set(proven);
+    const quoted = await checkConventionQuotes(
+        candidates.filter((s) => !provenSet.has(s)),
+        check.readGuide,
+        check.guideFiles ?? [],
+        check.listGuideDir,
+        check.teamInstructions,
+    );
+    if (quoted.rejected.length > 0) {
+        finderLogger.log({
+            message: `[quote-check] dropped ${quoted.rejected.length} convention finding(s) whose quote is not in the guide on the target branch`,
+            context: 'finder',
+            serviceName: 'finder',
+            metadata: {
+                ...logContext,
+                // Counts by why: the detail names the guide, never the quote.
+                byReason: quoted.rejected.reduce<Record<string, number>>(
+                    (counts, r) => {
+                        const why = quoteRejectReason(r.detail);
+                        counts[why] = (counts[why] ?? 0) + 1;
+                        return counts;
+                    },
+                    {},
+                ),
+                rejected: quoted.rejected.map((r) => ({
+                    file: r.finding.relevantFile,
+                    guide: r.finding.source?.file,
+                    detail: r.detail,
+                })),
+            },
+        });
+    }
+    return {
+        bugs,
+        proven,
+        conventions: quoted.passed.map((p) => p.finding),
+        sectionOf: new Map(
+            quoted.passed.map((p) => [p.finding, p.sectionText]),
+        ),
+        rejected: quoted.rejected,
+    };
+}
+
+/** A quote-check rejection's detail without the guide's path, so the log
+ *  counts rejections by why. */
+function quoteRejectReason(detail: string): string {
+    if (detail.startsWith('quote not found in ')) return 'quote not in guide';
+    if (detail.endsWith(' is not a guide linked to this review'))
+        return 'guide not linked';
+    if (detail.endsWith(' not found on the target branch'))
+        return 'guide not on target branch';
+    if (detail.startsWith('could not list the files of '))
+        return 'skill files not listable';
+    return detail;
 }
 
 /** Files the finder actually investigated via readFile/checkTypes — the "strong
  *  evidence" the evidence gate checks. (grep is excluded: a search doesn't prove
  *  the agent read the matched code, matching the legacy strongFiles notion.) */
-function strongFilesFromRun(state: RunState): Set<string> {
+export function strongFilesFromRun(state: RunState): Set<string> {
     const out = new Set<string>();
     for (const step of state.steps) {
         for (const tc of step.message.toolCalls ?? []) {
@@ -601,14 +1392,24 @@ function strongFilesFromRun(state: RunState): Set<string> {
     return out;
 }
 
-function normalizePath(p: string): string {
+export function normalizePath(p: string): string {
+    // The finding type declares relevantFile as string, but LLM output
+    // (observed with kimi-k2.7) sometimes omits it; an undefined here
+    // crashed the whole finder run ("Completed with Warnings", agent
+    // dropped, minutes of work lost).
+    if (typeof p !== 'string' || !p) return '';
     return p
         .replace(/\\/g, '/')
         .replace(/^\.?\/+/, '')
         .toLowerCase();
 }
 
-function fileWasInvestigated(investigated: Set<string>, file: string): boolean {
+export function fileWasInvestigated(
+    investigated: Set<string>,
+    file: string,
+): boolean {
+    // A finding without a file can't claim investigation evidence.
+    if (!file) return false;
     const f = normalizePath(file);
     for (const s of investigated) {
         if (s === f || s.endsWith('/' + f) || f.endsWith('/' + s)) {
@@ -644,9 +1445,22 @@ interface RecallPassesParams {
     skipHeavyPasses?: boolean;
     skipSynthesisRescue?: boolean;
     telemetryMetadata?: LangfuseTelemetryMetadata;
+    /** The finder's model id, for the findings parse logs (#2112). */
+    modelId?: string;
     agentName?: string;
     /** Injected prose-findings recovery (see ProseRecoverer). */
     recoverProse?: ProseRecoverer;
+    /** Guides linked to a custom agent: the synthesis rescue also asks for
+     *  missed violations of them, not only missed bugs. */
+    conventionGuides?: string[];
+    /** A custom agent's team system (MCP) tools: the synthesis rescue also
+     *  asks whether one it consulted states a requirement the change breaks.
+     *  Unset or empty for every other agent, whose prompt stays unchanged. */
+    teamSystemTools?: string[];
+    /** A custom agent kept to its lane: the synthesis rescue asks for missed
+     *  findings within its focus instead of missed bugs. Unset for every
+     *  other agent, whose prompt stays unchanged. */
+    laneScoped?: boolean;
 }
 
 const ZERO_RECALL_USAGE: VerifyUsage = {
@@ -675,19 +1489,23 @@ export async function runRecallPasses(
             params.finderSpec,
             {
                 prompt,
-                telemetry: buildLangfuseTelemetry(
-                    `${params.agentName ?? 'finder'}-${label}`,
-                    params.telemetryMetadata,
+                ...toAiSdkTelemetryArgs(
+                    buildLangfuseTelemetry(
+                        `${params.agentName ?? 'finder'}-${label}`,
+                        params.telemetryMetadata,
+                    ),
                 ),
             },
             ctx,
         );
+        const extracted = await extractFindingsWithRecovery(
+            state,
+            params.recoverProse,
+            { ...params.telemetryMetadata, modelId: params.modelId },
+        );
         usage = sumVerifyUsage(usage, usageOf(state.usage));
         toolCalls.push(...collectToolCalls(state));
-        findings = mergeSuggestions(
-            findings,
-            await extractFindingsWithRecovery(state, params.recoverProse),
-        );
+        findings = mergeSuggestions(findings, extracted);
     };
 
     // Synthesis rescue — re-think from the evidence already gathered, surface
@@ -703,6 +1521,9 @@ export async function runRecallPasses(
                 inspected,
                 toolCalls,
                 findings.suggestions,
+                params.conventionGuides,
+                params.teamSystemTools,
+                params.laneScoped,
             ),
             'synthesis-rescue',
         );
@@ -777,6 +1598,9 @@ function buildSynthesisPrompt(
     inspected: Set<string>,
     toolCalls: Array<{ tool: string; args: unknown }>,
     current: FinderSuggestion[],
+    conventionGuides?: string[],
+    teamSystemTools?: string[],
+    laneScoped?: boolean,
 ): string {
     const inspectedList = inspected.size
         ? [...inspected].join('\n')
@@ -803,10 +1627,64 @@ ${investigationSummary(toolCalls) || 'No tool calls captured.'}
 ${currentSummary}
 </CurrentFindings>
 
-Your task:
+${laneScoped ? LANE_SYNTHESIS_TASK : SYNTHESIS_TASK}${formatMissedConventionsTask(conventionGuides)}${formatTeamSystemsTask(teamSystemTools, toolCalls)}`;
+}
+
+const SYNTHESIS_TASK = `Your task:
 - Re-think the review based on the context above.
 - Do not add variants or restatements of existing findings.
 - Do not add speculative risks.
 - If there are concrete missed bugs, submit them.
 - If there is no clearly missed bug, submit an empty suggestions array.`;
+
+/** The rescue of a custom agent kept to its lane: re-thinking for missed bugs
+ *  would re-do the generalist's hunt (#2172). */
+const LANE_SYNTHESIS_TASK = `Your task:
+- Re-think the review based on the context above, within your focus (the team's instructions, guides, skills and tools in your system prompt).
+- Do not add variants or restatements of existing findings.
+- Do not add speculative risks, and do not add general bugs outside your focus: the generalist reviewer covers them.
+- If there are concrete missed findings within your focus, submit them.
+- If there is none, submit an empty suggestions array.`;
+
+/** Custom agents with team system (MCP) tools: the rescue also asks whether a
+ *  record they read states a requirement the change breaks. The finder only
+ *  reports what it sees in the code, so a requirement the code never mentions
+ *  was left out (#2172). Empty for every other agent, so their rescue prompt
+ *  is unchanged. */
+function formatTeamSystemsTask(
+    teamSystemTools: string[] | undefined,
+    toolCalls: Array<{ tool: string; args: unknown }>,
+): string {
+    if (!teamSystemTools?.length) return '';
+    const names = new Set(teamSystemTools);
+    const consulted = toolCalls
+        .filter((tc) => names.has(tc.tool))
+        .map((tc) => `- ${investigationSummary([tc])}`);
+    return `
+
+<ConsultedTeamSystems>
+${[...new Set(consulted)].join('\n') || 'None yet.'}
+</ConsultedTeamSystems>
+
+Did a team system you consulted state a requirement this change breaks?
+- Check what those records require (a ticket's acceptance criteria, a recorded decision, an incident's follow-up) against the changed code. Call the tool again to re-read a record; the answer is kept for this review.
+- A requirement the change contradicts or leaves out is a finding even when the code never mentions it. Report it on the changed code it concerns, and cite the record (system, id and the requirement's own words) as the evidence.
+- A requirement that does not apply to this change is not a violation.`;
+}
+
+/** Custom agents with linked guides: the rescue also looks for rules of those
+ *  guides the changed code breaks. Empty for every other agent, so their
+ *  rescue prompt is unchanged. */
+function formatMissedConventionsTask(guides?: string[]): string {
+    if (!guides?.length) return '';
+    return `
+
+<LinkedGuides>
+${guides.map((g) => `- ${g}`).join('\n')}
+</LinkedGuides>
+
+This agent also enforces the team guides above:
+- Also look for MISSED VIOLATIONS of these guides in the changed code — a rule the change breaks that no current finding reports.
+- For each, set kind "convention" and source { file, section, quote }, where file is the file you read the rule from (a skill's SKILL.md or the skill file you opened) and quote is the rule's exact sentence copied verbatim from it (read it with the tools; never paraphrase or invent a rule).
+- A rule that does not cover this file or case is not a violation.`;
 }

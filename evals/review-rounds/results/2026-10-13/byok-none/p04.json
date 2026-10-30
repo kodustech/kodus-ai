@@ -1,0 +1,2159 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "8d22cf93b7b767539c70cf6d879db8b39e0dbdde1464815e132caf5145e6d525"
+  },
+  "startedAt": "2026-10-13T21:22:45.611Z",
+  "updatedAt": "2026-10-13T21:40:41.529Z",
+  "complete": true,
+  "selectedCases": [
+    "P04-rule-local-path-doc-reworded",
+    "P04-rule-local-path-doc-reworded-control",
+    "P05-rule-local-path-fixture-touched",
+    "P05-rule-local-path-fixture-touched-control",
+    "P06-rule-cli-exit-code-weak-assertion",
+    "P06-rule-cli-exit-code-weak-assertion-control"
+  ],
+  "summary": {
+    "measured": 30,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 15,
+        "violations": 14,
+        "rate": 0.933
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 45,
+        "violations": 1,
+        "rate": 0.022
+      },
+      "index-reference (#2039)": {
+        "n": 59,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P04-rule-local-path-doc-reworded · local-path-doc-repeat [not_deliver]": {
+        "pass": 1,
+        "n": 5,
+        "delivered": 4
+      },
+      "P04-rule-local-path-doc-reworded · local-path-doc-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P04-rule-local-path-doc-reworded-control · local-path-doc-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P04-rule-local-path-doc-reworded-control · local-path-doc-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-new-site [deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 4
+      },
+      "P05-rule-local-path-fixture-touched-control · local-path-fixture-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P05-rule-local-path-fixture-touched-control · local-path-fixture-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P06-rule-cli-exit-code-weak-assertion · cli-exit-code-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P06-rule-cli-exit-code-weak-assertion · cli-exit-code-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P06-rule-cli-exit-code-weak-assertion-control · cli-exit-code-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P06-rule-cli-exit-code-weak-assertion-control · cli-exit-code-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37570,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P04-rule-local-path-doc-reworded",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `docs/runbooks/replay-dead-letters.md:14` (2026-10-06 12:00 UTC).\n\nThe runbook still fails for whoever is on call because the replay step points at an absolute path on one developer's machine, violating the rule against local machine paths in committed files. Replace `/Users/dev/code/ledger/scripts/replay-dlq.sh` with the repository-relative `scripts/replay-dlq.sh`, consistent with the other commands in this runbook."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Nobody else has that directory, so the instruction to attach the log is unusable on call, and the absolute path violates the rule against local machine paths in committed files. Replace `/Users/dev/tmp/replay-dlq.log` with a documented temporary location such as `$TMPDIR/replay-dlq.log`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41427,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P04-rule-local-path-doc-reworded",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `docs/runbooks/replay-dead-letters.md:14` (2026-10-06 12:00 UTC).\n\nNobody else has that directory, so the runbook fails for whoever is on call. Replace the absolute path with the repository-relative `scripts/replay-dlq.sh`, as the other commands in this runbook do."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "That path exists only on the author's machine, so on-call engineers cannot find the log. Refer to a repository-relative or temporary path instead, such as `tmp/replay-dlq.log` or `$TMPDIR/replay-dlq.log`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26174,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P04-rule-local-path-doc-reworded",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `docs/runbooks/replay-dead-letters.md:14` (2026-10-06 12:00 UTC).\n\nLine 14 still commits an absolute developer-machine path, so the previously flagged violation remains unsolved despite being marked implemented. Replace it with the repository-relative `scripts/replay-dlq.sh` to match the other commands in this runbook."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Anyone else following this runbook has no `/Users/dev/tmp` directory, so the documented log location is wrong for them. Refer to a temporary directory or a configurable setting instead, such as `$TMPDIR/replay-dlq.log`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34975,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "This troubleshooting step points at `/Users/dev/tmp/replay-dlq.log`, a path on one developer's machine that violates \"No local machine paths in committed files\", so whoever is on call cannot attach the log the runbook asks for. Use a machine-independent location such as `/tmp/replay-dlq.log` (or a path configured in the script)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P04-rule-local-path-doc-reworded",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33234,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P04-rule-local-path-doc-reworded",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `docs/runbooks/replay-dead-letters.md:14` (2026-10-06 12:00 UTC).\n\nBecause `/Users/dev/code/ledger/scripts/replay-dlq.sh` only exists on one developer's machine, the runbook still fails for anyone else on call and violates the \"No local machine paths in committed files\" rule, and the `/Users/dev/code/ledger/` prefix is still present despite the earlier fix being marked implemented. Replace it with the repository-relative `scripts/replay-dlq.sh`, matching the other commands in this runbook."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `/Users/dev/tmp/replay-dlq.log` exists only on one developer's machine, the on-call engineer has no such directory and the log will not be found, violating the \"No local machine paths in committed files\" rule. Use a temporary directory such as `${TMPDIR:-/tmp}/replay-dlq.log` or document the log location as a setting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P04-rule-local-path-doc-reworded-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 33155,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Committing the absolute path `/Users/dev/code/ledger/scripts/replay-dlq.sh` violates the rule against local machine paths in committed files. Replace it with the repository-relative `scripts/replay-dlq.sh`, as the surrounding lines already do for `scripts/dlq-stats.sh`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Documenting the log location as the absolute path `/Users/dev/tmp/replay-dlq.log` violates the rule against local machine paths in committed files. Reference a temporary directory such as `$TMPDIR/replay-dlq.log` or a configurable setting instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P04-rule-local-path-doc-reworded-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 26525,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The line contains an absolute developer-machine path `/Users/dev/code/ledger/scripts/replay-dlq.sh`, which violates the rule against committing local machine paths. Replace it with a repository-relative path such as `scripts/replay-dlq.sh`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The log path `/Users/dev/tmp/replay-dlq.log` is an absolute path from a developer machine, violating the rule against local machine paths in committed files. Use a temporary directory such as `/tmp/replay-dlq.log` or a documented setting instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P04-rule-local-path-doc-reworded-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 18287,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The committed path `/Users/dev/code/ledger/scripts/replay-dlq.sh` only resolves on the original developer's machine, so the runbook breaks for anyone else. Replace it with the repository-relative `scripts/replay-dlq.sh`, since the surrounding text already establishes the repo root."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The absolute path `/Users/dev/tmp/replay-dlq.log` points at a developer machine and will not exist for anyone else following the runbook. Reference a temporary directory or a configurable setting instead, such as `$TMPDIR/replay-dlq.log`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P04-rule-local-path-doc-reworded-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 23472,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "This absolute developer machine path will not exist on any other machine and leaks a local directory layout. Use a repository-relative path such as `scripts/replay-dlq.sh` instead."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Hardcoding an absolute developer machine path for the log file means the runbook breaks on any other machine. Replace `/Users/dev/tmp/replay-dlq.log` with a temporary directory or a configurable setting, for example `$TMPDIR/replay-dlq.log`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P04-rule-local-path-doc-reworded-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 49574,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 14,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Committing the absolute developer-machine path `/Users/dev/code/ledger/scripts/replay-dlq.sh` into the runbook violates rule 1, so anyone following it cannot reproduce that path. Reference the script repository-relative as `scripts/replay-dlq.sh`, as the other commands in this file already do."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "docs/runbooks/replay-dead-letters.md",
+          "line": 29,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Committing the absolute developer-machine path `/Users/dev/tmp/replay-dlq.log` into the runbook violates rule 1, and operators on other machines will not have that path. Describe a temporary directory or a configurable setting instead, such as `$TMPDIR/replay-dlq.log` or a configured log path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-doc-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "local-path-doc-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 51876,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `tests/conftest.py:10` (2026-10-06 12:00 UTC).\n\nBecause `/Users/dev/Downloads/...` is a developer-machine absolute path, it will not exist in CI or on any other machine, and the earlier fix marked implemented was not actually applied in the diff. Replace it with a repository-relative fixture such as `SAMPLE_EXPORT = FIXTURES / \"invoices-2026-09.csv\"` and commit the sample under `tests/fixtures/`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "`archive_dir` is set to `/Users/dev/billing-archive`, an absolute path from a developer machine, so any test that writes archives will fail or pollute the local disk on CI and other machines. Use a repository-relative path or a pytest `tmp_path` directory instead, e.g. add `tmp_path` to the fixture and pass `archive_dir=str(tmp_path / \"billing-archive\")`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21663,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `tests/conftest.py:10` (2026-10-06 12:00 UTC).\n\nWrapping `/Users/dev/Downloads/invoices-2026-09.csv` in `Path(...)` leaves `SAMPLE_EXPORT` pointing at an absolute developer path, so `sample_rows` still fails in CI and on every other machine. Point the fixture at a repository-relative path under `tests/fixtures/`, as `broken_rows` does, and commit the sample CSV there."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The `archive_dir` argument is set to `/Users/dev/billing-archive`, a committed local-machine path that will not exist in CI or on another developer's machine. Replace it with a temporary directory such as `tmp_path` or a repository-relative path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21227,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `tests/conftest.py:10` (2026-10-06 12:00 UTC).\n\nBecause this absolute path exists only on one laptop, `sample_rows` fails in CI and for every other developer, violating the \"No local machine paths in committed files\" rule. Commit the sample under `tests/fixtures/` and build the path from `FIXTURES`, as `broken_rows` does."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Hard-coding this developer-machine path in the committed `settings` fixture breaks it in CI and on any other machine, violating the \"No local machine paths in committed files\" rule. Use a temporary directory such as pytest's `tmp_path` or a repository-relative path instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 69932,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `tests/conftest.py:10` (2026-10-06 12:00 UTC).\n\nBecause `SAMPLE_EXPORT` still points at `/Users/dev/Downloads/invoices-2026-09.csv` in violation of 'No local machine paths in committed files', the fixture exists only on one laptop, so `sample_rows` fails in CI and for every other developer, and the earlier `round-a-P05-rule-local-path-fixture-touched` suggestion was marked implemented even though the path was only wrapped in `Path(...)` and moved to a module constant. Commit the sample under `tests/fixtures/` and build the path from `FIXTURES`, as `broken_rows` does."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `archive_dir` is hard-coded to `/Users/dev/billing-archive` in violation of 'No local machine paths in committed files', any machine without that exact directory (CI or another developer) will write to a non-existent or wrong location. Use a temporary directory such as pytest's `tmp_path` or a repository-relative path instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35194,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `tests/conftest.py:10` (2026-10-06 12:00 UTC).\n\nBecause `SAMPLE_EXPORT` still points at `/Users/dev/Downloads/invoices-2026-09.csv`, the file exists only on one laptop, so `sample_rows` fails in CI and for every other developer. Commit the sample under `tests/fixtures/` and build the path from `FIXTURES`, as `broken_rows` does, rather than using the absolute developer-machine path."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 15,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The new `archive_dir` value `/Users/dev/billing-archive` commits an absolute developer-machine path, violating the rule against local machine paths, so any test or code that writes to the archive fails outside the one laptop where that directory exists. Use a temporary directory such as pytest's `tmp_path` fixture or a repository-relative path instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P05-rule-local-path-fixture-touched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 31774,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "This hard-coded path violates the \"No local machine paths in committed files\" rule and will not exist on any other machine or in CI, so the `sample_rows` fixture fails to find the export. Store the export in the repository fixtures directory and reference it with a repository-relative path."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "This hard-coded path violates the \"No local machine paths in committed files\" rule and does not exist on other machines or in CI, so the `settings` fixture points at an invalid archive directory. Use a temporary directory such as pytest's `tmp_path`, or a settings value, instead of an absolute local path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P05-rule-local-path-fixture-touched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 26208,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `sample_rows` resolves the export against a developer's absolute path, the fixture fails on any other machine and in CI. Commit the export as a fixture file and reference it repository-relatively, such as `FIXTURES / \"invoices-2026-09.csv\"`, or make it a `Settings` value."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Since `archive_dir` points at a developer-machine absolute path, the fixture only works where `/Users/dev/billing-archive` exists. Use a repository-relative path or a `tmp_path` based directory instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P05-rule-local-path-fixture-touched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 37732,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `/Users/dev/Downloads/invoices-2026-09.csv` is an absolute developer-machine path that violates the 'No local machine paths in committed files' rule, the `sample_rows` fixture will fail with `FileNotFoundError` on CI or another developer's machine. Replace it with a repository-relative path such as a file under `tests/fixtures`, or a `tmp_path`/settings-based location."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `/Users/dev/billing-archive` is a hardcoded developer-machine path that violates the 'No local machine paths in committed files' rule, it will not exist or be writable on CI, so any test that archives invoices will fail. Use `pytest`'s `tmp_path` or a repository-relative directory to make `archive_dir` machine-independent, for example `str(tmp_path / \"billing-archive\")`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P05-rule-local-path-fixture-touched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 41983,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The fixture points at an absolute path from a developer machine, so it does not exist on any other machine or CI runner and collection fails there. Commit the sample export under `tests/fixtures/` and reference it repository-relative as `FIXTURES / \"invoices-2026-09.csv\"`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "`archive_dir` is an absolute path on the developer's machine, so the test writes outside the repo and fails elsewhere. Use a temporary directory such as pytest's `tmp_path` (or a repo-relative path) instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P05-rule-local-path-fixture-touched-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 20429,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 10,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "A hard-coded developer machine path like `/Users/<name>/...` breaks on other machines and violates the rule against absolute paths in committed files. Reference the sample export from the repository fixtures directory instead, as in `FIXTURES / \"invoices-2026-09.csv\"`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Pointing `archive_dir` at a developer machine path breaks on other machines and violates the rule against absolute paths in committed files. Use a temporary directory such as pytest's `tmp_path` or a repository-relative path instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54107,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P06-rule-cli-exit-code-weak-assertion",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `test/cli/validate.test.ts:11` (2026-10-06 12:00 UTC).\n\nA CLI that prints the message but exits 0 would let a pipeline accept a broken manifest while this test stays green. Assert the exact exit code alongside the existing `stderr` message checks."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "A word match does not prove the process failed, so a CLI that reports the problem but exits 0 would slip through. Assert the exact exit code in addition to the `stdout` message check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 32327,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 13,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "The unknown-field test never asserts the process exit code, so checking stderr for the word \"error\" passes even if the CLI prints the message and exits 0, letting a pipeline running `validate` accept a broken manifest while this test stays green. Add `expect(result.exitCode).toBe(1);` alongside the message assertions."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 25,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Because the duplicate-name test only checks that stdout contains \"failed\", a CLI that prints the word but exits 0 would let any pipeline running `validate` treat the duplicate manifest as valid. Assert the exact exit code with `expect(result.exitCode).toBe(1);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44843,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Because the test never checks the exit code, a CLI that prints the error messages but exits 0 would let a pipeline running `validate` treat an invalid manifest as valid and keep this test green. Add an exact exit-code assertion such as `expect(result.exitCode).toBe(1);` alongside the stderr checks."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "A message containing \"failed\" does not prove the process failed, so a CLI that prints it but exits 0 would let CI accept a manifest with duplicate names. Add an exact exit-code assertion such as `expect(result.exitCode).toBe(1);` alongside the stdout check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41415,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "A CLI that prints the message but exits 0 would let pipelines accept a broken manifest while this test still passes. Add `expect(result.exitCode).toBe(1);` alongside the message assertions."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "A CLI that prints `failed` yet exits 0 would let pipelines accept a manifest with duplicate names while this test still passes. Assert the exact code, e.g. `expect(result.exitCode).toBe(1);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 31795,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "The unknown-field test only checks stderr text, so a CLI that prints the message but exits 0 would still pass, letting pipelines accept a broken manifest. Add `expect(result.exitCode).toBe(1)` alongside the message check."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "A CLI that prints \"failed\" but still exits 0 would pass this test, so a duplicate-name manifest would be treated as valid by callers. Add `expect(result.exitCode).toBe(1)` (or the CLI's actual failure code) to the test."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P06-rule-cli-exit-code-weak-assertion-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 52833,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "A crash or wrong exit status would still pass because the test only checks stderr text. Add `expect(result.exitCode).toBe(1);` alongside the stderr assertions, using the manifest's real invalid-input exit code."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Checking only stdout for the word 'failed' is not enough on its own, so an incorrect exit status could go unnoticed. Assert the exact exit code with `expect(result.exitCode).toBe(1);`, matching the duplicate-name validation failure code."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P06-rule-cli-exit-code-weak-assertion-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 27534,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Because this test never asserts the exit code, it cannot prove the CLI actually failed for the unknown field even though it checks `stderr` for `error` and the field name. Add `expect(result.exitCode).toBe(1);` (or the code the command actually returns for a validation failure) alongside the `stderr` assertion, as required by rule [1]."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Because this test only checks that `stdout` contains `failed`, the word match does not prove the command exited non-zero. Add an exact exit code assertion such as `expect(result.exitCode).toBe(1);` as required by rule [1]."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P06-rule-cli-exit-code-weak-assertion-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 32384,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Checking only that stderr contains `error` or `unknown field \"colour\"` would still pass if the CLI exited 0 or crashed with an unexpected code. Add `expect(result.exitCode).toBe(1)` (adjust to the actual code the CLI returns for a validation failure) alongside the stderr assertions."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "A word like `failed` in stdout is not enough; the test would pass even if the process exited 0. Add `expect(result.exitCode).toBe(1)` (adjust to the actual code the CLI returns for a duplicate-name failure)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P06-rule-cli-exit-code-weak-assertion-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 22031,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Without an exact exit-code assertion, the test would still pass if the command exited 0 as long as stderr contains `error`/`unknown field`, violating the rule 'CLI tests assert the exit code'. Add an explicit assertion such as `expect(result.exitCode).toBe(1)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Because the test only checks that stdout contains `failed`, it would still pass if the CLI exited 0, violating the rule 'CLI tests assert the exit code'. Assert the exact exit code, for example `expect(result.exitCode).toBe(1)`, alongside or instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P06-rule-cli-exit-code-weak-assertion-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 48954,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "test/cli/validate.test.ts",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Checking only that `stderr` contains `\"error\"` and the `unknown field \"colour\"` message passes even when the command exits 0, so a broken validation command can go unnoticed. Add `expect(result.exitCode).toBe(1)` in addition to the message checks."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "test/cli/validate.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "text": "Checking only that `stdout` contains `\"failed\"` lets a passing exit status slip through, so a failing validation command may not be detected. Add `expect(result.exitCode).toBe(1)` alongside the stdout check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

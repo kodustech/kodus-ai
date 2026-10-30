@@ -1,0 +1,1064 @@
+import { createHash } from 'crypto';
+import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
+import { setLlmObservability } from '@libs/llm/llm-observability';
+import { LLM } from '@libs/llm/llm';
+import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
+import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+
+// Build the spy INSIDE the factory (and expose it) so createLogger returns a
+// real object during the hoisted service import — importing the service now
+// pulls llm.ts -> reasoning-options.ts, which calls createLogger at module load,
+// i.e. BEFORE a top-level `const loggerSpy` would be initialized (TDZ).
+jest.mock('@libs/core/log/logger', () => {
+    const spy = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        info: jest.fn(),
+    };
+    return { createLogger: () => spy, __loggerSpy: spy };
+});
+const loggerSpy = (
+    jest.requireMock('@libs/core/log/logger') as {
+        __loggerSpy: Record<string, jest.Mock>;
+    }
+).__loggerSpy;
+
+const tracedGenerateTextMock = jest.fn();
+jest.mock('@libs/llm/llm-call', () => ({
+    tracedGenerateText: (...args: unknown[]) => tracedGenerateTextMock(...args),
+    timeoutSignal: jest.fn(() => undefined),
+    LLM_CALL_TIMEOUT_MS: 600_000,
+}));
+
+jest.mock('@libs/llm/byok-to-vercel', () => ({
+    buildModelFromSlot: jest.fn(() => ({})),
+    getModelName: jest.fn(() => 'openai_compatible:test-model'),
+    // The real runTextReviewCall path (via LLM.run) resolves a per-slot limiter.
+    // No BYOK slot here → the real getLimiterForSlot returns null (no wrapping),
+    // so a null stub is faithful. The json_schema helpers are only hit on the
+    // structured path (mocked separately) but are stubbed for completeness.
+    getLimiterForSlot: jest.fn(() => null),
+    mayUseJsonSchema: jest.fn(() => false),
+    markJsonSchemaUnsupported: jest.fn(),
+    isJsonSchemaUnsupportedError: jest.fn(() => false),
+}));
+
+jest.mock('@libs/core/log/langfuse', () => ({
+    buildLangfuseTelemetry: jest.fn(() => undefined),
+    // The real runTextReviewCall spreads toAiSdkTelemetryArgs(...) onto the SDK
+    // call — undefined here would throw and get swallowed into a null summary.
+    toAiSdkTelemetryArgs: jest.fn(() => ({})),
+}));
+
+// Structured calls (atom decomposition + per-atom detector compilation) are
+// routed by runName so each test controls both stages independently.
+const structuredCallMock = jest.fn();
+// Override ONLY the schema path (atom-decomposition / detector-compilation).
+// The text path (summary generation) must keep the REAL runTextReviewCall so it
+// drives the mocked tracedGenerateText — LLM.run routes text vs schema to these
+// two functions, so a full module mock (dropping runTextReviewCall) breaks the
+// summary path.
+jest.mock('@libs/llm/structured-review-call', () => ({
+    ...jest.requireActual('@libs/llm/structured-review-call'),
+    runStructuredReviewCall: (...args: unknown[]) =>
+        structuredCallMock(...args),
+}));
+
+const sha256 = (text: string) =>
+    createHash('sha256').update(text).digest('hex');
+
+const LONG_TEXT = 'x'.repeat(1001);
+const orgData = { organizationId: 'org-1', teamId: 'team-1' };
+
+function createService(
+    opts: {
+        byokConfig?: object | null;
+        subscriptionStatus?: SubscriptionStatus | string;
+        repository?: Partial<{
+            findByOrganizationId: jest.Mock;
+            updateRule: jest.Mock;
+        }>;
+    } = {},
+) {
+    const permissionValidationService = {
+        // v2-native: generateAtoms/summary ask the service for the codeReview
+        // carrier (null → env/managed default).
+        resolveTaskSlot: jest.fn().mockResolvedValue(null),
+        getBYOKConfig: jest
+            .fn()
+            .mockResolvedValue(
+                opts.byokConfig === undefined
+                    ? { main: { model: 'm' } }
+                    : opts.byokConfig,
+            ),
+        getSubscriptionStatus: jest
+            .fn()
+            .mockResolvedValue(
+                opts.subscriptionStatus ?? SubscriptionStatus.TRIAL,
+            ),
+    };
+    const repository = {
+        findByOrganizationId: jest
+            .fn()
+            .mockResolvedValue({ uuid: 'doc-uuid' }),
+        updateRule: jest.fn().mockResolvedValue({ uuid: 'doc-uuid' }),
+        ...opts.repository,
+    };
+    // Pass-through observability stub: exec() runs, usage span is a no-op.
+    // The "records the usage span" test asserts runAiSdkLLMInSpan was used.
+    const observabilityService = {
+        runAiSdkLLMInSpan: jest.fn(async ({ exec }: any) => exec()),
+    };
+    // LLM.run reads observability through the PORT (getLlmObservability), not the
+    // service's injected instance — register the same stub so LLM.run's text/
+    // schema calls are intercepted (the text path then runs the real
+    // runTextReviewCall → mocked tracedGenerateText).
+    setLlmObservability(observabilityService as any);
+    const service = new KodyRuleSummaryService(
+        permissionValidationService as any,
+        repository as any,
+        observabilityService as any,
+    );
+    return {
+        service,
+        permissionValidationService,
+        repository,
+        observabilityService,
+    };
+}
+
+const validSummaryText =
+    'WHAT TO VALIDATE:\n- condition\n\nHOW TO VALIDATE:\n- signal';
+
+describe('KodyRuleSummaryService', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        tracedGenerateTextMock.mockResolvedValue({ text: validSummaryText });
+        // default: decomposition yields 2 atoms; compiler declines both
+        structuredCallMock.mockImplementation(async ({ runName }: any) => {
+            if (runName === 'kody-rules.atom-decomposition') {
+                return {
+                    atoms: [
+                        {
+                            title: 'No .call(...) forward syntax',
+                            spec: 'WHAT: forward syntax\nHOW: def self.call(...)',
+                            examples: [
+                                { snippet: 'def self.call(...)', isCorrect: false },
+                                { snippet: 'def self.call(a:)', isCorrect: true },
+                            ],
+                        },
+                        {
+                            title: 'errors: must be a string array',
+                            spec: 'WHAT: raw errors object\nHOW: Failure.new(errors: x.errors)',
+                        },
+                    ],
+                };
+            }
+            // atom detector compiler: decline by default
+            return { mechanical: false, reason: 'semantic' };
+        });
+    });
+
+    describe('isLong', () => {
+        it('treats exactly 1000 chars as short and 1001 as long', () => {
+            const { service } = createService();
+
+            expect(service.isLong('x'.repeat(1000))).toBe(false);
+            expect(service.isLong('x'.repeat(1001))).toBe(true);
+            expect(service.isLong(undefined)).toBe(false);
+            expect(service.isLong(null)).toBe(false);
+            expect(service.isLong('')).toBe(false);
+        });
+    });
+
+    describe('resolveForReview', () => {
+        it('swaps a long rule for its summary when the sourceHash matches', () => {
+            const { service } = createService();
+            const rule: Partial<IKodyRule> = {
+                uuid: 'r1',
+                rule: LONG_TEXT,
+                summary: {
+                    content: validSummaryText,
+                    sourceHash: sha256(LONG_TEXT),
+                    generatedAt: new Date(),
+                    model: 'm',
+                },
+            };
+
+            const resolved = service.resolveForReview(rule);
+
+            expect(resolved.rule).toBe(validSummaryText);
+            // original never mutated — other consumers see the full text
+            expect(rule.rule).toBe(LONG_TEXT);
+        });
+
+        it('returns the original and logs when the sourceHash does not match', () => {
+            const { service } = createService();
+            const rule: Partial<IKodyRule> = {
+                uuid: 'r1',
+                rule: LONG_TEXT,
+                summary: {
+                    content: validSummaryText,
+                    sourceHash: sha256('some other text'),
+                    generatedAt: new Date(),
+                    model: 'm',
+                },
+            };
+
+            const resolved = service.resolveForReview(rule);
+
+            expect(resolved.rule).toBe(LONG_TEXT);
+            expect(loggerSpy.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining('stale summary'),
+                }),
+            );
+        });
+
+        it('leaves short rules untouched even when a summary exists', () => {
+            const { service } = createService();
+            const shortText = 'short rule';
+            const rule: Partial<IKodyRule> = {
+                uuid: 'r1',
+                rule: shortText,
+                summary: {
+                    content: 'stale content from a former long version',
+                    sourceHash: sha256(shortText),
+                    generatedAt: new Date(),
+                    model: 'm',
+                },
+            };
+
+            const resolved = service.resolveForReview(rule);
+
+            expect(resolved.rule).toBe(shortText);
+        });
+    });
+
+    describe('generate', () => {
+        it('returns a summary with the sourceHash of the exact rule text', async () => {
+            const { service } = createService();
+
+            const summary = await service.generate(
+                { uuid: 'r1', title: 't', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(summary).not.toBeNull();
+            expect(summary!.content).toBe(validSummaryText);
+            expect(summary!.sourceHash).toBe(sha256(LONG_TEXT));
+            expect(summary!.model).toBe('openai_compatible:test-model');
+        });
+
+        it('returns null for short rules without calling the LLM', async () => {
+            const { service } = createService();
+
+            const summary = await service.generate(
+                { uuid: 'r1', rule: 'short' },
+                orgData,
+            );
+
+            expect(summary).toBeNull();
+            expect(tracedGenerateTextMock).not.toHaveBeenCalled();
+        });
+
+        it('skips generation post-trial without BYOK', async () => {
+            const { service } = createService({
+                byokConfig: null,
+                subscriptionStatus: SubscriptionStatus.EXPIRED,
+            });
+
+            const summary = await service.generate(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(summary).toBeNull();
+            expect(tracedGenerateTextMock).not.toHaveBeenCalled();
+        });
+
+        it('generates on the managed default during trial without BYOK', async () => {
+            const { service } = createService({
+                byokConfig: null,
+                subscriptionStatus: SubscriptionStatus.TRIAL,
+            });
+
+            const summary = await service.generate(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(summary).not.toBeNull();
+            expect(tracedGenerateTextMock).toHaveBeenCalled();
+        });
+
+        it('discards output missing the required sections', async () => {
+            const { service } = createService();
+            tracedGenerateTextMock.mockResolvedValue({
+                text: 'some prose that is not the expected spec',
+            });
+
+            const summary = await service.generate(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(summary).toBeNull();
+        });
+
+        it('returns null instead of throwing when the LLM call fails', async () => {
+            const { service } = createService();
+            tracedGenerateTextMock.mockRejectedValue(new Error('boom'));
+
+            const summary = await service.generate(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(summary).toBeNull();
+        });
+
+        it('does not set a temperature (some BYOK models reject 0)', async () => {
+            const { service } = createService();
+
+            await service.generate({ uuid: 'r1', rule: LONG_TEXT }, orgData);
+
+            const callArgs = tracedGenerateTextMock.mock.calls[0][0];
+            expect(callArgs).not.toHaveProperty('temperature');
+        });
+
+        it('records the LLM call through the usage span (BYOK token accounting)', async () => {
+            // Generation may burn the customer's BYOK key: the call MUST go
+            // through runAiSdkLLMInSpan so tokens reach the usage analytics.
+            const { service, observabilityService } = createService();
+
+            await service.generate(
+                { uuid: 'r1', title: 't', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(
+                observabilityService.runAiSdkLLMInSpan,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    runName: 'kody-rules.summary-generation',
+                    model: 'openai_compatible:test-model',
+                    attrs: expect.objectContaining({
+                        organizationId: orgData.organizationId,
+                    }),
+                }),
+            );
+        });
+    });
+
+    describe('ensureSummaries', () => {
+        it('generates and persists only for long rules lacking a valid summary', async () => {
+            const { service, repository } = createService();
+            const alreadySummarized: Partial<IKodyRule> = {
+                uuid: 'ok',
+                rule: LONG_TEXT,
+                summary: {
+                    content: validSummaryText,
+                    sourceHash: sha256(LONG_TEXT),
+                    generatedAt: new Date(),
+                    model: 'm',
+                },
+            };
+            const shortRule: Partial<IKodyRule> = { uuid: 's', rule: 'short' };
+            const pendingRule: Partial<IKodyRule> = {
+                uuid: 'p',
+                rule: LONG_TEXT,
+            };
+
+            const result = await service.ensureSummaries(
+                [alreadySummarized, shortRule, pendingRule],
+                orgData,
+            );
+
+            expect(tracedGenerateTextMock).toHaveBeenCalledTimes(1);
+            expect(repository.updateRule).toHaveBeenCalledWith(
+                'doc-uuid',
+                'p',
+                expect.objectContaining({
+                    summary: expect.objectContaining({
+                        sourceHash: sha256(LONG_TEXT),
+                    }),
+                }),
+            );
+            const updated = result.find((r) => r.uuid === 'p');
+            expect(updated?.summary?.content).toBe(validSummaryText);
+        });
+
+        it('still returns the in-memory summary when persistence fails', async () => {
+            const { service } = createService({
+                repository: {
+                    updateRule: jest
+                        .fn()
+                        .mockRejectedValue(new Error('mongo down')),
+                },
+            });
+
+            const result = await service.ensureSummaries(
+                [{ uuid: 'p', rule: LONG_TEXT }],
+                orgData,
+            );
+
+            expect(result[0].summary?.content).toBe(validSummaryText);
+        });
+
+        it('returns rules untouched when generation fails', async () => {
+            const { service, repository } = createService();
+            tracedGenerateTextMock.mockRejectedValue(new Error('llm down'));
+            const rule: Partial<IKodyRule> = { uuid: 'p', rule: LONG_TEXT };
+
+            const result = await service.ensureSummaries([rule], orgData);
+
+            expect(result[0].summary).toBeUndefined();
+            expect(repository.updateRule).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('atoms (virtual decomposition)', () => {
+        it('decomposes a long rule into atoms carrying stable ids and the atoms hash', async () => {
+            const { service } = createService();
+
+            const atoms = await service.generateAtoms(
+                { uuid: 'r1', title: 't', rule: LONG_TEXT, examples: [] },
+                orgData,
+            );
+
+            expect(atoms).not.toBeNull();
+            expect(atoms!.items).toHaveLength(2);
+            expect(atoms!.items[0].id).toBe('r1-atom-1');
+            expect(atoms!.sourceHash).toBe(
+                service.atomsHashOf({ rule: LONG_TEXT, examples: [] }),
+            );
+        });
+
+        it('attaches a detector when the atom compiler returns a mechanical pattern', async () => {
+            const { service } = createService();
+            structuredCallMock.mockImplementation(async ({ runName }: any) => {
+                if (runName === 'kody-rules.atom-decomposition') {
+                    return {
+                        atoms: [
+                            { title: 'a', spec: 's', examples: [
+                                { snippet: 'def self.call(...)', isCorrect: false },
+                                { snippet: 'def self.call(a:)', isCorrect: true },
+                            ] },
+                        ],
+                    };
+                }
+                return {
+                    mechanical: true,
+                    pattern: 'def\\s+self\\.call\\(\\.\\.\\.\\)',
+                    reason: 'mechanical',
+                };
+            });
+
+            const atoms = await service.generateAtoms(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(atoms!.items[0].detector?.pattern).toBeTruthy();
+        });
+
+        it('atoms hash covers examples — an examples edit invalidates', () => {
+            const { service } = createService();
+            const base = { rule: LONG_TEXT, examples: [{ snippet: 'a', isCorrect: false }] };
+
+            const h1 = service.atomsHashOf(base);
+            const h2 = service.atomsHashOf({ ...base, examples: [{ snippet: 'b', isCorrect: false }] });
+
+            expect(h1).not.toBe(h2);
+        });
+
+        it('expandForReview maps atoms to rules carrying the PARENT uuid and only the atom detector', () => {
+            const { service } = createService();
+            const parent: any = {
+                uuid: 'parent-1', title: 'Big rule', rule: LONG_TEXT,
+                severity: 'high', path: 'app/**', scope: 'file',
+                detector: { type: 'regex', pattern: 'PARENT' },
+                examples: [],
+            };
+            parent.atoms = {
+                items: [
+                    { id: 'parent-1-atom-1', title: 'atom A', spec: 'WHAT: a', detector: { type: 'regex', pattern: 'ATOM' } },
+                    { id: 'parent-1-atom-2', title: 'atom B', spec: 'WHAT: b' },
+                ],
+                sourceHash: service.atomsHashOf(parent),
+                generatedAt: new Date(), model: 'm',
+            };
+
+            const units = service.expandForReview(parent);
+
+            expect(units).toHaveLength(2);
+            expect(units.every((u) => u.uuid === 'parent-1')).toBe(true);
+            expect(units[0].detector?.pattern).toBe('ATOM');
+            expect(units[1].detector).toBeUndefined();
+            expect(units.every((u) => u.severity === 'high' && u.path === 'app/**')).toBe(true);
+        });
+
+        it('expandForReview falls back to summary/full text on stale atoms hash', () => {
+            const { service } = createService();
+            const parent: any = {
+                uuid: 'p', rule: LONG_TEXT,
+                atoms: { items: [{ id: 'x', title: 'a', spec: 's' }], sourceHash: 'stale', generatedAt: new Date(), model: 'm' },
+            };
+
+            const units = service.expandForReview(parent);
+
+            expect(units).toHaveLength(1);
+            expect(units[0].rule).toBe(LONG_TEXT);
+            expect(loggerSpy.warn).toHaveBeenCalledWith(
+                expect.objectContaining({ message: expect.stringContaining('stale atoms') }),
+            );
+        });
+
+        it('caps atom generation per review and defers the rest (backfill budget)', async () => {
+            const { service, repository } = createService();
+            const rules = Array.from({ length: 8 }, (_, i) => ({
+                uuid: `r${i}`,
+                rule: LONG_TEXT,
+            }));
+
+            const out = await service.ensureAtoms(rules, orgData);
+
+            // 5 decomposed (persisted), 3 deferred untouched
+            expect(repository.updateRule).toHaveBeenCalledTimes(5);
+            expect(out.filter((r) => r.atoms).length).toBe(5);
+            expect(loggerSpy.log).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining('backfill budget'),
+                }),
+            );
+        });
+
+        it('ensureAtoms persists the decomposition on the rule doc', async () => {
+            const { service, repository } = createService();
+
+            await service.ensureAtoms([{ uuid: 'p', rule: LONG_TEXT }], orgData);
+
+            expect(repository.updateRule).toHaveBeenCalledWith(
+                'doc-uuid', 'p',
+                expect.objectContaining({ atoms: expect.objectContaining({ items: expect.any(Array) }) }),
+            );
+        });
+
+        it('prepareForReview expands long rules and leaves short rules intact', async () => {
+            const { service } = createService();
+            const shortRule = { uuid: 's', rule: 'short rule' };
+
+            const out = await service.prepareForReview(
+                [shortRule, { uuid: 'p', rule: LONG_TEXT }],
+                orgData,
+            );
+
+            // short passes through; long became its 2 atoms
+            expect(out).toHaveLength(3);
+            expect(out[0]).toEqual(shortRule);
+            expect(out.filter((r) => r.uuid === 'p')).toHaveLength(2);
+        });
+
+        it('decomposition failure falls back to the summary path (never blocks)', async () => {
+            const { service } = createService();
+            structuredCallMock.mockRejectedValue(new Error('llm down'));
+
+            const out = await service.prepareForReview(
+                [{ uuid: 'p', rule: LONG_TEXT }],
+                orgData,
+            );
+
+            expect(out).toHaveLength(1);
+            expect(out[0].rule).toBe(LONG_TEXT);
+        });
+    });
+
+    describe('atom verification (polarity, fidelity, coverage)', () => {
+        // Both atoms decomposed here carry examples, so both are eligible
+        // for the verify call regardless of which index the test flags.
+        function mockDecompositionWithTwoAtoms() {
+            structuredCallMock.mockImplementation(async ({ runName }: any) => {
+                if (runName === 'kody-rules.atom-decomposition') {
+                    return {
+                        atoms: [
+                            {
+                                title: 'Declaration is direct (not via a mixin)',
+                                spec: 'WHAT: direct typography declaration\nHOW: property: value in the diff',
+                                examples: [
+                                    {
+                                        snippet: ".title { font-family: 'Roboto'; }",
+                                        isCorrect: true,
+                                    },
+                                    {
+                                        snippet:
+                                            ".title { @include font-family('Roboto'); }",
+                                        isCorrect: false,
+                                    },
+                                ],
+                            },
+                            {
+                                title: 'Property is font-family/size/weight',
+                                spec: 'WHAT: property name\nHOW: matches one of the three',
+                                examples: [
+                                    {
+                                        snippet: '.text { font-size: 14px; }',
+                                        isCorrect: true,
+                                    },
+                                    {
+                                        snippet: '.text { line-height: 1.5; }',
+                                        isCorrect: false,
+                                    },
+                                ],
+                            },
+                        ],
+                    };
+                }
+                return { mechanical: false, reason: 'semantic' };
+            });
+        }
+
+        it('drops an atom the verify pass flags as inverted, keeps the rest', async () => {
+            const { service } = createService();
+            mockDecompositionWithTwoAtoms();
+            const decompose = structuredCallMock.getMockImplementation()!;
+            structuredCallMock.mockImplementation(async (args: any) => {
+                if (args.runName === 'kody-rules.atom-verify') {
+                    return {
+                        invalidAtoms: [
+                            { index: 0, reason: 'inverted polarity' },
+                        ],
+                    };
+                }
+                return decompose(args);
+            });
+
+            const atoms = await service.generateAtoms(
+                {
+                    uuid: 'r1',
+                    title: 'Avoid direct typography properties in styles',
+                    rule: LONG_TEXT,
+                },
+                orgData,
+            );
+
+            expect(atoms).not.toBeNull();
+            expect(atoms!.items).toHaveLength(1);
+            expect(atoms!.items[0].title).toBe(
+                'Property is font-family/size/weight',
+            );
+            expect(loggerSpy.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining('dropped 1/2 atom(s)'),
+                }),
+            );
+        });
+
+        it('drops an atom flagged as invented (not present in the original rule)', async () => {
+            const { service } = createService();
+            mockDecompositionWithTwoAtoms();
+            const decompose = structuredCallMock.getMockImplementation()!;
+            structuredCallMock.mockImplementation(async (args: any) => {
+                if (args.runName === 'kody-rules.atom-verify') {
+                    return {
+                        invalidAtoms: [
+                            { index: 1, reason: 'not in original rule' },
+                        ],
+                    };
+                }
+                return decompose(args);
+            });
+
+            const atoms = await service.generateAtoms(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(atoms!.items).toHaveLength(1);
+            expect(atoms!.items[0].title).toBe(
+                'Declaration is direct (not via a mixin)',
+            );
+            expect(loggerSpy.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining('dropped 1/2 atom(s)'),
+                    metadata: expect.objectContaining({
+                        dropped: [
+                            expect.objectContaining({
+                                reason: 'not in original rule',
+                            }),
+                        ],
+                    }),
+                }),
+            );
+        });
+
+        it('logs missing coverage without dropping any atom or blocking generation', async () => {
+            const { service } = createService();
+            mockDecompositionWithTwoAtoms();
+            const decompose = structuredCallMock.getMockImplementation()!;
+            structuredCallMock.mockImplementation(async (args: any) => {
+                if (args.runName === 'kody-rules.atom-verify') {
+                    return {
+                        invalidAtoms: [],
+                        missingRequirements: [
+                            'icon-vs-text scoping is never checked',
+                        ],
+                    };
+                }
+                return decompose(args);
+            });
+
+            const atoms = await service.generateAtoms(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(atoms!.items).toHaveLength(2);
+            expect(loggerSpy.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'missing coverage for 1 requirement(s)',
+                    ),
+                }),
+            );
+        });
+
+        it('falls back to summary/full text when every atom fails verification', async () => {
+            const { service } = createService();
+            structuredCallMock.mockImplementation(async ({ runName }: any) => {
+                if (runName === 'kody-rules.atom-decomposition') {
+                    return {
+                        atoms: [
+                            {
+                                title: 'Declaration is direct',
+                                spec: 'WHAT: x\nHOW: y',
+                                examples: [
+                                    { snippet: 'a', isCorrect: true },
+                                    { snippet: 'b', isCorrect: false },
+                                ],
+                            },
+                        ],
+                    };
+                }
+                if (runName === 'kody-rules.atom-verify') {
+                    return { invalidAtoms: [{ index: 0, reason: 'inverted polarity' }] };
+                }
+                return { mechanical: false, reason: 'semantic' };
+            });
+
+            const atoms = await service.generateAtoms(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(atoms).toBeNull();
+        });
+
+        it('ships atoms unverified when the verify call itself fails', async () => {
+            const { service } = createService();
+            mockDecompositionWithTwoAtoms();
+            const originalImpl = structuredCallMock.getMockImplementation();
+            structuredCallMock.mockImplementation(async (args: any) => {
+                if (args.runName === 'kody-rules.atom-verify') {
+                    throw new Error('verify call down');
+                }
+                return originalImpl!(args);
+            });
+
+            const atoms = await service.generateAtoms(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(atoms).not.toBeNull();
+            expect(atoms!.items).toHaveLength(2);
+            expect(loggerSpy.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining('verification failed'),
+                }),
+            );
+        });
+
+        it('still calls the verify pass when no atom has examples, so coverage gaps are caught', async () => {
+            // An all-semantic decomposition (no atom carries examples) must
+            // still get its coverage checked — restricting the call to
+            // example-bearing atoms would make a coverage gap silently read
+            // as "fully enforced" just because nothing had examples.
+            const { service } = createService();
+            structuredCallMock.mockImplementation(async ({ runName }: any) => {
+                if (runName === 'kody-rules.atom-decomposition') {
+                    return {
+                        atoms: [{ title: 'no examples here', spec: 'WHAT: x\nHOW: y' }],
+                    };
+                }
+                if (runName === 'kody-rules.atom-verify') {
+                    return {
+                        invalidAtoms: [],
+                        missingRequirements: ['icon-vs-text scoping is never checked'],
+                    };
+                }
+                return { mechanical: false, reason: 'semantic' };
+            });
+
+            const atoms = await service.generateAtoms(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(structuredCallMock).toHaveBeenCalledWith(
+                expect.objectContaining({ runName: 'kody-rules.atom-verify' }),
+            );
+            expect(atoms!.items).toHaveLength(1);
+            expect(loggerSpy.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'missing coverage for 1 requirement(s)',
+                    ),
+                }),
+            );
+        });
+
+        it('ignores a returned index outside the atoms actually sent for verification', async () => {
+            const { service } = createService();
+            mockDecompositionWithTwoAtoms();
+            const decompose = structuredCallMock.getMockImplementation()!;
+            structuredCallMock.mockImplementation(async (args: any) => {
+                if (args.runName === 'kody-rules.atom-verify') {
+                    // Hallucinated: only 2 atoms exist (indexes 0-1), but
+                    // the model answers with an out-of-bounds index.
+                    return {
+                        invalidAtoms: [
+                            { index: 5, reason: 'inverted polarity' },
+                        ],
+                    };
+                }
+                return decompose(args);
+            });
+
+            const atoms = await service.generateAtoms(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            // Nothing gets dropped on a hallucinated index — safer than
+            // risking a drop that doesn't correspond to what the model
+            // actually judged.
+            expect(atoms!.items).toHaveLength(2);
+            expect(loggerSpy.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'outside the atoms it was sent',
+                    ),
+                    metadata: expect.objectContaining({ outOfRange: [5] }),
+                }),
+            );
+        });
+    });
+});
+
+// Hashing/validity guards that decide whether a cached summary or atom
+// decomposition may still be served (a stale one = the review judging against
+// outdated rule text, silently). Injected deps are never touched here.
+describe('KodyRuleSummaryService — hashing & validity guards', () => {
+    const long = 'r'.repeat(1200);
+    let service: KodyRuleSummaryService;
+
+    beforeEach(() => {
+        service = new KodyRuleSummaryService({} as any, {} as any, {} as any);
+    });
+
+    it('hashOf is deterministic, distinguishes inputs, and hashes null/undefined as ""', () => {
+        expect(service.hashOf('abc')).toBe(service.hashOf('abc'));
+        expect(service.hashOf('abc')).not.toBe(service.hashOf('abd'));
+        const empty = service.hashOf('');
+        expect(service.hashOf(undefined)).toBe(empty);
+        expect(service.hashOf(null)).toBe(empty);
+    });
+
+    describe('hasValidSummary', () => {
+        it('is true only when content exists AND sourceHash matches the CURRENT rule text', () => {
+            const valid = {
+                rule: long,
+                summary: { content: 'S', sourceHash: service.hashOf(long) },
+            };
+            expect(service.hasValidSummary(valid as any)).toBe(true);
+        });
+
+        it('is false when there is no summary content', () => {
+            const noContent = {
+                rule: long,
+                summary: { sourceHash: service.hashOf(long) },
+            };
+            expect(service.hasValidSummary(noContent as any)).toBe(false);
+        });
+
+        it('is false when the rule text changed under the summary (stale hash)', () => {
+            const stale = {
+                rule: 'NEW rule text',
+                summary: {
+                    content: 'S',
+                    sourceHash: service.hashOf('OLD rule text'),
+                },
+            };
+            expect(service.hasValidSummary(stale as any)).toBe(false);
+        });
+    });
+
+    describe('hasValidAtoms', () => {
+        it('is true only when items exist AND the atoms hash matches', () => {
+            const base = { rule: 'R', examples: [{ snippet: 'x' }] };
+            const valid = {
+                ...base,
+                atoms: {
+                    items: [{}],
+                    sourceHash: service.atomsHashOf(base as any),
+                },
+            };
+            expect(service.hasValidAtoms(valid as any)).toBe(true);
+        });
+
+        it('is false when an example edit invalidated the decomposition', () => {
+            const original = { rule: 'R', examples: [{ snippet: 'x' }] };
+            const edited = {
+                rule: 'R',
+                examples: [{ snippet: 'EDITED' }],
+                atoms: {
+                    items: [{}],
+                    sourceHash: service.atomsHashOf(original as any),
+                },
+            };
+            expect(service.hasValidAtoms(edited as any)).toBe(false);
+        });
+
+        it('is false when there are no atom items', () => {
+            const base = { rule: 'R', examples: [{ snippet: 'x' }] };
+            const empty = {
+                ...base,
+                atoms: { items: [], sourceHash: service.atomsHashOf(base as any) },
+            };
+            expect(service.hasValidAtoms(empty as any)).toBe(false);
+        });
+    });
+
+    it('resolveForReview returns the rule UNTOUCHED when there is no summary', () => {
+        const rule = { rule: long };
+        expect(service.resolveForReview(rule as any)).toBe(rule);
+    });
+});
+
+describe('KodyRuleSummaryService — LLM.run-level guards', () => {
+    const ORG = { organizationId: 'org-1', teamId: 'team-1' } as any;
+    const long = 'r'.repeat(1200);
+    let runSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+        runSpy = jest.spyOn(LLM, 'run');
+    });
+
+    afterEach(() => runSpy.mockRestore());
+
+    it('generate runs on the resolved BYOK slot even post-trial (own key is always allowed)', async () => {
+        const slot = { provider: 'openai', model: 'gpt-4o', apiKey: 'enc' } as any;
+        const service = new KodyRuleSummaryService(
+            {
+                resolveTaskSlot: jest.fn().mockResolvedValue(slot),
+                getSubscriptionStatus: jest
+                    .fn()
+                    .mockResolvedValue(SubscriptionStatus.ACTIVE),
+            } as any,
+            {} as any,
+            {} as any,
+        );
+        runSpy.mockResolvedValue(validSummaryText);
+
+        const out = await service.generate({ rule: long, uuid: 'u1' } as any, ORG);
+
+        expect(out).not.toBeNull();
+        expect(runSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ byokConfig: slot }),
+        );
+    });
+
+    it('verifyAtoms returns empty without an LLM call when there are no atoms', async () => {
+        const service = new KodyRuleSummaryService({} as any, {} as any, {} as any);
+
+        const out = await (service as any).verifyAtoms(
+            { rule: 'R' },
+            [],
+            undefined,
+            { organizationId: 'o' },
+        );
+
+        expect(out.invalidIndexes.size).toBe(0);
+        expect(out.missingRequirements).toEqual([]);
+        expect(runSpy).not.toHaveBeenCalled();
+    });
+});
+
+// ensureSummaries() must never block a review: generate() is stubbed here to
+// pin the orchestration around it.
+describe('KodyRuleSummaryService — ensureSummaries() orchestration', () => {
+    const ORG = { organizationId: 'org-1', teamId: 'team-1' } as any;
+    const long = 'r'.repeat(1200);
+
+    let service: KodyRuleSummaryService;
+    let findByOrganizationId: jest.Mock;
+    let updateRule: jest.Mock;
+    let genSpy: jest.SpyInstance;
+
+    const summary = () =>
+        ({ content: 'SUM', sourceHash: 'hash', model: 'm' }) as any;
+
+    beforeEach(() => {
+        findByOrganizationId = jest.fn().mockResolvedValue({ uuid: 'doc-1' });
+        updateRule = jest.fn().mockResolvedValue(undefined);
+        service = new KodyRuleSummaryService(
+            {} as any,
+            { findByOrganizationId, updateRule } as any,
+            {} as any,
+        );
+        genSpy = jest.spyOn(service, 'generate');
+    });
+
+    it('does nothing (no generate, no DB) when no rule needs a summary', async () => {
+        const rules = [{ uuid: 'r2', rule: 'short' }] as any;
+        const out = await service.ensureSummaries(rules, ORG);
+
+        expect(out).toBe(rules);
+        expect(genSpy).not.toHaveBeenCalled();
+        expect(findByOrganizationId).not.toHaveBeenCalled();
+    });
+
+    it('leaves short/already-summarized rules as the same references', async () => {
+        const valid = {
+            uuid: 'r3',
+            rule: long,
+            summary: { content: 'S', sourceHash: service.hashOf(long) },
+        } as any;
+        const short = { uuid: 'r2', rule: 'short' } as any;
+        genSpy.mockResolvedValue(summary());
+
+        const out = await service.ensureSummaries(
+            [valid, short, { uuid: 'r1', rule: long } as any],
+            ORG,
+        );
+
+        expect(out.find((r) => r.uuid === 'r3')).toBe(valid);
+        expect(out.find((r) => r.uuid === 'r2')).toBe(short);
+    });
+
+    it('degrades to in-memory when the DOC lookup fails — summary used, persist skipped', async () => {
+        findByOrganizationId.mockRejectedValue(new Error('no doc'));
+        genSpy.mockResolvedValue(summary());
+
+        const out = await service.ensureSummaries(
+            [{ uuid: 'r1', rule: long } as any],
+            ORG,
+        );
+
+        expect(out[0].summary).toBeDefined();
+        expect(updateRule).not.toHaveBeenCalled();
+    });
+});

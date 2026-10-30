@@ -1,0 +1,70 @@
+---
+title: "Instruções para Agentes de Código"
+description: "Deixe o Kody ler as instruções que sua equipe escreve para agentes de código (CLAUDE.md, AGENTS.md, .cursor/rules, instruções do Copilot) e apontar mudanças que as quebram, sem transformá-las em Kody Rules."
+---
+
+Arquivos como `CLAUDE.md`, `AGENTS.md`, `.cursor/rules` e `.github/copilot-instructions.md` dizem aos agentes de código como sua equipe trabalha. Eles não são política de review, então o Kodus nunca os transforma em Kody Rules. Quando você ativa esta configuração, o Kody lê os que cobrem os arquivos alterados por um pull request e aponta mudanças que quebram o que eles dizem.
+
+Para transformar uma convenção em uma regra de review aplicada, escreva-a como uma [Regra de Repositório](/pt-BR/how_to_use/code_review/configs/repository_rules) em `.kody/rules`.
+
+## Como ativar
+
+- **Durante o onboarding**, a etapa **Teach Kody how your team builds software** lista os arquivos de agentes de código encontrados em cada repositório selecionado e pergunta se o Kody deve usá-los. Fica desativado a menos que você ative.
+- **Depois**, escolha **Global** ou um repositório no seletor de escopo no topo do grupo **Code review**, abra **What to review** e ative **Coding-agent instructions**. O valor global é o padrão para todo repositório que não define o próprio.
+
+A configuração é armazenada como `repoInstructionsEnabled` na configuração de code review (e no `kodus-config.yml`). A antiga `ideRulesSyncEnabled` não é mais lida, então um valor definido nela não ativa esta opção.
+
+## Arquivos que o Kody lê
+
+### Cursor
+- `.cursorrules`
+- `.cursor/rules/**/*.mdc`
+
+### GitHub Copilot
+- `.github/copilot-instructions.md`
+- `.github/instructions/**/*.instructions.md`
+
+### Agentes (convenção agents.md)
+- `AGENTS.md`, `.agents.md`, `.agent.md`
+- `.agents/rules/**`
+
+### Claude
+- `CLAUDE.md`
+
+### Windsurf
+- `.windsurfrules`
+
+### Sourcegraph Cody
+- `.sourcegraph/**/*.rule.md`
+
+Arquivos de configuração de ferramentas (`.claude/settings.json`, `.opencode.json`, `.aider.conf.yml`, `.aiderignore`) são reconhecidos mas nunca lidos, porque não trazem instruções contra as quais verificar o código.
+
+As skills do Claude (`.claude/skills/**`) também não são lidas: o Claude carrega uma skill só quando uma tarefa precisa dela.
+
+## Como um review os usa
+
+- **Só os arquivos que cobrem a mudança.** Um arquivo na raiz do repositório cobre todos os arquivos. Um arquivo aninhado como `services/billing/CLAUDE.md` cobre `services/billing/**`. Uma regra do Cursor com `globs:` (e sem `alwaysApply: true`) ou um arquivo do Copilot com `applyTo:` cobre apenas os arquivos que declara. Uma regra do Cursor sem nenhum dos dois, que o Cursor só carrega quando o agente pede, não é lida.
+- **Lidos a partir da branch de destino do pull request.** Um pull request é verificado contra as instruções já mergeadas nela; mudanças que ele faz nas instruções só valem depois do merge.
+- **Referências são seguidas.** Um arquivo que aponta para outro arquivo do repositório, com uma linha que é só um caminho (`AI-AGENTS.md`) ou um import do Claude Code (`@docs/guide.md`), é seguido na branch de destino: o arquivo apontado é lido no lugar dele, dentro dos mesmos limites. Caminhos fora do repositório são ignorados.
+- **Com limite.** No máximo 8 arquivos e 64 KB por review, os arquivos mais próximos do código alterado primeiro; um arquivo mais longo é cortado. O review registra no log o que ficou de fora.
+- **Os apontamentos recebem o rótulo Repo Instruction.** O Kody só reporta um quando a instrução se aplica ao arquivo alterado e a linha que a quebra foi adicionada ou modificada pelo pull request. O comentário cita a instrução e nomeia o arquivo.
+- **Os filtros da review valem.** Apontamentos Repo Instruction passam pelo filtro de severidade e pelos limites de sugestões do time como qualquer outro apontamento; um abaixo do limite não é publicado. A opção deixa o Kody ler os arquivos, não publicar além desses limites.
+- **Nunca são instruções para o Kody.** Os arquivos são tratados como texto do repositório contra o qual o diff é verificado. Qualquer coisa que peçam ao revisor é ignorada, e eles nunca mudam como bugs, problemas de segurança ou de performance são avaliados.
+
+## Regras importadas antes desta mudança
+
+Versões anteriores do Kodus convertiam esses arquivos em Kody Rules. Essas regras são mantidas, mas ficam **congeladas**: não são mais atualizadas quando o arquivo muda e trazem a origem **Agent file** na página de Kody Rules. O chip **rules from coding-agent files** filtra a lista para mostrar só elas, para que você possa pausá-las ou excluí-las, ou mover as convenções que quer aplicar para `.kody/rules`.
+
+Regras que o onboarding importou de arquivos de agentes de código sem que ninguém as escolhesse foram removidas: a cópia de um arquivo em cada repositório tinha virado uma regra própria, aplicada a todos os repositórios. A página de Kody Rules mostra quantas foram removidas e leva a **Coding-agent instructions** em **What to review**, que lê esses mesmos arquivos nos reviews de cada repositório. Para recuperar as regras removidas, fale com o suporte.
+
+`@kody-sync` não faz mais nada: arquivos de Kody Rules sempre sincronizam, e arquivos de agentes de código nunca viram regras. `@kody-ignore` continua excluindo um arquivo de Kody Rule da sincronização.
+
+## Verificando no self-hosted
+
+Os logs do worker trazem um marcador grep-ável para cada review que lê instruções para agentes de código:
+
+```bash
+docker logs kodus_worker 2>&1 | grep "\[repo-instructions\]"
+```
+
+Cada linha mostra quantos arquivos de instrução foram encontrados, quais foram lidos, quantos bytes e se algo ficou de fora.

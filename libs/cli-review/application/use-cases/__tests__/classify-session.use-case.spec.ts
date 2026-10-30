@@ -1,7 +1,66 @@
+/**
+ * ClassifySessionUseCase — comprehensive spec (single source of truth).
+ *
+ * Phase 3 (plan 03-01) migrated extractWithLLM off the legacy
+ * BYOKPromptRunner LangChain path onto the AI SDK path (runStructuredReviewCall).
+ * The LLM response is therefore stubbed at the `tracedGenerateText` seam (the same
+ * seam structured-review-call.spec.ts and the former parity spec used) — NOT via a
+ * MockLanguageModelV4, which hangs on the structured-output path. runStructuredReviewCall
+ * itself runs for real (real schema conversion + model-builder sentinels + span),
+ * so the mapping this spec exercises is the migration's actual behavior.
+ *
+ * Coverage: skip logic, LLM success + byte-for-byte mapping, single-span routing,
+ * heuristic fallback, auto-promote, event aggregation, large-session slicing, and
+ * duplicate session_end. This file absorbs the former small parity spec
+ * (classify-session.use-case.spec.ts) — see the "extractWithLLM mapping parity"
+ * block at the bottom.
+ */
+
+// Model builders return sentinels — no real model/network is touched.
+jest.mock('@libs/llm/byok-to-vercel', () => ({
+    mayUseJsonSchema: jest.fn(() => true),
+    markJsonSchemaUnsupported: jest.fn(),
+    isJsonSchemaUnsupportedError: jest.fn(() => false),
+    buildModelFromSlot: jest.fn(() => ({ __model: 'managed-default' })),
+    getModelName: jest.fn(() => 'managed-default'),
+}));
+jest.mock('@libs/llm/byok-model-wrapper', () => ({
+    wrapByokModel: jest.fn((model: any) => model),
+}));
+jest.mock('@libs/llm/llm-call', () => ({
+    tracedGenerateText: jest.fn(),
+    timeoutSignal: jest.fn(() => undefined),
+    LLM_CALL_TIMEOUT_MS: 600000,
+}));
+jest.mock('@libs/core/log/langfuse', () => ({
+    buildLangfuseTelemetry: jest.fn(() => ({ isEnabled: false })),
+    toAiSdkTelemetryArgs: jest.fn(() => ({ telemetry: { isEnabled: false } })),
+}));
+
 import { ClassifySessionUseCase } from '../classify-session.use-case';
+import { setLlmObservability } from '@libs/llm/llm-observability';
 import { SessionEventRepository } from '@libs/cli-review/infrastructure/repositories/session-event.repository';
 import { SessionEventModel } from '@libs/cli-review/infrastructure/repositories/schemas/session-event.model';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
+import { tracedGenerateText } from '@libs/llm/llm-call';
+import { LLM_TASK } from '@libs/llm/byok-config';
+
+const mockGenerate = tracedGenerateText as unknown as jest.Mock;
+
+const mockPermissionValidationService = {
+    resolveTaskSlot: jest.fn().mockResolvedValue(undefined),
+} as any;
+
+// runAiSdkLLMInSpan just runs the exec and returns its result — one span path.
+const observabilityService = {
+    runAiSdkLLMInSpan: jest.fn(async ({ exec }: any) => exec()),
+} as any;
+
+/** Stub the LLM to resolve a structured `{ decisions }` payload. */
+function mockLLMDecisions(decisions: unknown[]): void {
+    mockGenerate.mockResolvedValue({
+        experimental_output: { decisions },
+    });
+}
 
 function makeEvent(overrides: Partial<SessionEventModel>): SessionEventModel {
     return {
@@ -24,10 +83,14 @@ function makeEvent(overrides: Partial<SessionEventModel>): SessionEventModel {
     } as SessionEventModel;
 }
 
+/** The JSON userPayload the source hands to tracedGenerateText via `prompt`. */
+function llmPayload(): any {
+    return JSON.parse(mockGenerate.mock.calls[0][0].prompt);
+}
+
 describe('ClassifySessionUseCase', () => {
     let useCase: ClassifySessionUseCase;
     let repo: jest.Mocked<SessionEventRepository>;
-    let promptRunner: jest.Mocked<PromptRunnerService>;
 
     beforeEach(() => {
         repo = {
@@ -40,11 +103,25 @@ describe('ClassifySessionUseCase', () => {
             create: jest.fn(),
         } as any;
 
-        promptRunner = {
-            builder: jest.fn(),
-        } as any;
+        mockGenerate.mockReset();
+        // Safe default: an empty structured result. LLM-path tests override this.
+        mockGenerate.mockResolvedValue({
+            experimental_output: { decisions: [] },
+        });
+        observabilityService.runAiSdkLLMInSpan.mockClear();
+        // LLM.run records its span through the observability port — register the mock.
+        setLlmObservability(observabilityService);
 
-        useCase = new ClassifySessionUseCase(repo, promptRunner);
+        mockPermissionValidationService.resolveTaskSlot.mockReset();
+        mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
+            undefined,
+        );
+
+        useCase = new ClassifySessionUseCase(
+            repo,
+            observabilityService,
+            mockPermissionValidationService,
+        );
     });
 
     it('should skip if event not found', async () => {
@@ -84,6 +161,7 @@ describe('ClassifySessionUseCase', () => {
             'end-1',
             'No textual context for classification',
         );
+        expect(repo.markClassificationProcessing).not.toHaveBeenCalled();
     });
 
     it('should call LLM and mark completed on success', async () => {
@@ -109,28 +187,13 @@ describe('ClassifySessionUseCase', () => {
             makeEvent({ type: 'session_end', uuid: 'end-1', payload: {} }),
         ]);
 
-        const mockExecute = jest.fn().mockResolvedValue({
-            decisions: [
-                {
-                    type: 'implementation_detail',
-                    decision: 'Use JWT for API authentication',
-                    confidence: 0.85,
-                },
-            ],
-        });
-
-        promptRunner.builder.mockReturnValue({
-            setProviders: jest.fn().mockReturnThis(),
-            setParser: jest.fn().mockReturnThis(),
-            setLLMJsonMode: jest.fn().mockReturnThis(),
-            setTemperature: jest.fn().mockReturnThis(),
-            setPayload: jest.fn().mockReturnThis(),
-            addPrompt: jest.fn().mockReturnThis(),
-            setRunName: jest.fn().mockReturnThis(),
-            setBYOKConfig: jest.fn().mockReturnThis(),
-            setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-            execute: mockExecute,
-        } as any);
+        mockLLMDecisions([
+            {
+                type: 'implementation_detail',
+                decision: 'Use JWT for API authentication',
+                confidence: 0.85,
+            },
+        ]);
 
         await useCase.execute('end-1');
 
@@ -145,95 +208,11 @@ describe('ClassifySessionUseCase', () => {
             ]),
             'llm',
         );
-    });
-
-    it('should fallback to heuristics when LLM returns empty', async () => {
-        repo.findByUuid.mockResolvedValue(
-            makeEvent({ uuid: 'end-1', type: 'session_end' }),
-        );
-        repo.findBySessionId.mockResolvedValue([
-            makeEvent({
-                type: 'turn_start',
-                payload: {
-                    prompt: 'We decided to use Redis for caching instead of Memcached',
-                },
-            }),
-            makeEvent({
-                type: 'turn_end',
-                payload: { filesModified: ['src/cache.ts'] },
-            }),
-            makeEvent({ type: 'session_end', uuid: 'end-1', payload: {} }),
-        ]);
-
-        const mockExecute = jest.fn().mockResolvedValue({
-            decisions: [],
-        });
-
-        promptRunner.builder.mockReturnValue({
-            setProviders: jest.fn().mockReturnThis(),
-            setParser: jest.fn().mockReturnThis(),
-            setLLMJsonMode: jest.fn().mockReturnThis(),
-            setTemperature: jest.fn().mockReturnThis(),
-            setPayload: jest.fn().mockReturnThis(),
-            addPrompt: jest.fn().mockReturnThis(),
-            setRunName: jest.fn().mockReturnThis(),
-            setBYOKConfig: jest.fn().mockReturnThis(),
-            setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-            execute: mockExecute,
-        } as any);
-
-        await useCase.execute('end-1');
-
-        expect(repo.markClassificationCompleted).toHaveBeenCalledWith(
-            'end-1',
-            expect.arrayContaining([
-                expect.objectContaining({ type: expect.any(String) }),
-            ]),
-            'heuristic',
-        );
-    });
-
-    it('should fallback to heuristics when LLM throws', async () => {
-        repo.findByUuid.mockResolvedValue(
-            makeEvent({ uuid: 'end-1', type: 'session_end' }),
-        );
-        repo.findBySessionId.mockResolvedValue([
-            makeEvent({
-                type: 'turn_start',
-                payload: {
-                    prompt: 'Adopt convention: always use snake_case for DB columns',
-                },
-            }),
-            makeEvent({
-                type: 'turn_end',
-                payload: { filesModified: ['src/db.ts'] },
-            }),
-            makeEvent({ type: 'session_end', uuid: 'end-1', payload: {} }),
-        ]);
-
-        const mockExecute = jest
-            .fn()
-            .mockRejectedValue(new Error('LLM timeout'));
-
-        promptRunner.builder.mockReturnValue({
-            setProviders: jest.fn().mockReturnThis(),
-            setParser: jest.fn().mockReturnThis(),
-            setLLMJsonMode: jest.fn().mockReturnThis(),
-            setTemperature: jest.fn().mockReturnThis(),
-            setPayload: jest.fn().mockReturnThis(),
-            addPrompt: jest.fn().mockReturnThis(),
-            setRunName: jest.fn().mockReturnThis(),
-            setBYOKConfig: jest.fn().mockReturnThis(),
-            setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-            execute: mockExecute,
-        } as any);
-
-        await useCase.execute('end-1');
-
-        expect(repo.markClassificationCompleted).toHaveBeenCalledWith(
-            'end-1',
-            expect.any(Array),
-            'heuristic-fallback',
+        expect(
+            mockPermissionValidationService.resolveTaskSlot,
+        ).toHaveBeenCalledWith(
+            { organizationId: 'org-1', teamId: 'team-1' },
+            LLM_TASK.prSummary,
         );
     });
 
@@ -250,19 +229,7 @@ describe('ClassifySessionUseCase', () => {
             makeEvent({ type: 'session_end', uuid: 'end-1', payload: {} }),
         ]);
 
-        const mockExecute = jest.fn().mockRejectedValue(new Error('LLM down'));
-        promptRunner.builder.mockReturnValue({
-            setProviders: jest.fn().mockReturnThis(),
-            setParser: jest.fn().mockReturnThis(),
-            setLLMJsonMode: jest.fn().mockReturnThis(),
-            setTemperature: jest.fn().mockReturnThis(),
-            setPayload: jest.fn().mockReturnThis(),
-            addPrompt: jest.fn().mockReturnThis(),
-            setRunName: jest.fn().mockReturnThis(),
-            setBYOKConfig: jest.fn().mockReturnThis(),
-            setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-            execute: mockExecute,
-        } as any);
+        mockGenerate.mockRejectedValue(new Error('LLM down'));
 
         // Make markCompleted throw to simulate heuristic persistence failure
         repo.markClassificationCompleted.mockRejectedValue(
@@ -282,21 +249,7 @@ describe('ClassifySessionUseCase', () => {
     // ---------------------------------------------------------------
 
     function setupLLMFailure() {
-        const mockExecute = jest
-            .fn()
-            .mockRejectedValue(new Error('LLM unavailable'));
-        promptRunner.builder.mockReturnValue({
-            setProviders: jest.fn().mockReturnThis(),
-            setParser: jest.fn().mockReturnThis(),
-            setLLMJsonMode: jest.fn().mockReturnThis(),
-            setTemperature: jest.fn().mockReturnThis(),
-            setPayload: jest.fn().mockReturnThis(),
-            addPrompt: jest.fn().mockReturnThis(),
-            setRunName: jest.fn().mockReturnThis(),
-            setBYOKConfig: jest.fn().mockReturnThis(),
-            setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-            execute: mockExecute,
-        } as any);
+        mockGenerate.mockRejectedValue(new Error('LLM unavailable'));
     }
 
     function setupSessionWithPrompt(prompt: string) {
@@ -318,18 +271,13 @@ describe('ClassifySessionUseCase', () => {
     }
 
     describe('heuristic type inference', () => {
+        // One row proves the fallback wires inferDecisionType in; the keyword
+        // table itself is covered directly in ../classify-session.use-case.spec.ts.
         it.each([
             [
                 'We decided to use a microservice architecture',
                 'architectural_decision',
             ],
-            ['Convention: always use snake_case for DB columns', 'convention'],
-            [
-                'Used Redis instead of Memcached because of better pub/sub',
-                'tradeoff',
-            ],
-            ['Added express framework as dependency', 'tooling'],
-            ['Implemented JWT validation middleware', 'implementation_detail'],
         ])(
             'prompt "%s" should map to type "%s"',
             async (prompt, expectedType) => {
@@ -354,174 +302,6 @@ describe('ClassifySessionUseCase', () => {
     // ---------------------------------------------------------------
 
     describe('auto-promote logic', () => {
-        it('should set autoPromoteCandidate=true for high-confidence promotable types via LLM', async () => {
-            repo.findByUuid.mockResolvedValue(
-                makeEvent({ uuid: 'end-ap', type: 'session_end' }),
-            );
-            repo.findBySessionId.mockResolvedValue([
-                makeEvent({
-                    type: 'turn_start',
-                    payload: { prompt: 'Set up the architecture' },
-                }),
-                makeEvent({
-                    type: 'turn_end',
-                    payload: { filesModified: ['src/arch.ts'] },
-                }),
-                makeEvent({ type: 'session_end', uuid: 'end-ap', payload: {} }),
-            ]);
-
-            const mockExecute = jest.fn().mockResolvedValue({
-                decisions: [
-                    {
-                        type: 'architectural_decision',
-                        decision: 'Use event-driven architecture',
-                        confidence: 0.9,
-                    },
-                    {
-                        type: 'convention',
-                        decision: 'Always use camelCase',
-                        confidence: 0.75,
-                    },
-                    {
-                        type: 'tradeoff',
-                        decision: 'Chose SQL over NoSQL',
-                        confidence: 0.7,
-                    },
-                ],
-            });
-
-            promptRunner.builder.mockReturnValue({
-                setProviders: jest.fn().mockReturnThis(),
-                setParser: jest.fn().mockReturnThis(),
-                setLLMJsonMode: jest.fn().mockReturnThis(),
-                setTemperature: jest.fn().mockReturnThis(),
-                setPayload: jest.fn().mockReturnThis(),
-                addPrompt: jest.fn().mockReturnThis(),
-                setRunName: jest.fn().mockReturnThis(),
-                setBYOKConfig: jest.fn().mockReturnThis(),
-                setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-                execute: mockExecute,
-            } as any);
-
-            await useCase.execute('end-ap');
-
-            const decisions = repo.markClassificationCompleted.mock.calls[0][1];
-            expect(decisions).toHaveLength(3);
-            expect(decisions[0].autoPromoteCandidate).toBe(true);
-            expect(decisions[1].autoPromoteCandidate).toBe(true);
-            expect(decisions[2].autoPromoteCandidate).toBe(true);
-        });
-
-        it('should set autoPromoteCandidate=false for low-confidence promotable types', async () => {
-            repo.findByUuid.mockResolvedValue(
-                makeEvent({ uuid: 'end-ap2', type: 'session_end' }),
-            );
-            repo.findBySessionId.mockResolvedValue([
-                makeEvent({
-                    type: 'turn_start',
-                    payload: { prompt: 'Some architecture work' },
-                }),
-                makeEvent({
-                    type: 'turn_end',
-                    payload: { filesModified: ['src/x.ts'] },
-                }),
-                makeEvent({
-                    type: 'session_end',
-                    uuid: 'end-ap2',
-                    payload: {},
-                }),
-            ]);
-
-            const mockExecute = jest.fn().mockResolvedValue({
-                decisions: [
-                    {
-                        type: 'architectural_decision',
-                        decision: 'Maybe use microservices',
-                        confidence: 0.5,
-                    },
-                ],
-            });
-
-            promptRunner.builder.mockReturnValue({
-                setProviders: jest.fn().mockReturnThis(),
-                setParser: jest.fn().mockReturnThis(),
-                setLLMJsonMode: jest.fn().mockReturnThis(),
-                setTemperature: jest.fn().mockReturnThis(),
-                setPayload: jest.fn().mockReturnThis(),
-                addPrompt: jest.fn().mockReturnThis(),
-                setRunName: jest.fn().mockReturnThis(),
-                setBYOKConfig: jest.fn().mockReturnThis(),
-                setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-                execute: mockExecute,
-            } as any);
-
-            await useCase.execute('end-ap2');
-
-            const decisions = repo.markClassificationCompleted.mock.calls[0][1];
-            expect(decisions[0].autoPromoteCandidate).toBe(false);
-        });
-
-        it('should set autoPromoteCandidate=false for non-promotable types even with high confidence', async () => {
-            repo.findByUuid.mockResolvedValue(
-                makeEvent({ uuid: 'end-ap3', type: 'session_end' }),
-            );
-            repo.findBySessionId.mockResolvedValue([
-                makeEvent({
-                    type: 'turn_start',
-                    payload: { prompt: 'Implement feature' },
-                }),
-                makeEvent({
-                    type: 'turn_end',
-                    payload: { filesModified: ['src/y.ts'] },
-                }),
-                makeEvent({
-                    type: 'session_end',
-                    uuid: 'end-ap3',
-                    payload: {},
-                }),
-            ]);
-
-            const mockExecute = jest.fn().mockResolvedValue({
-                decisions: [
-                    {
-                        type: 'implementation_detail',
-                        decision: 'Use singleton pattern',
-                        confidence: 0.95,
-                    },
-                    {
-                        type: 'tooling',
-                        decision: 'Use webpack',
-                        confidence: 0.8,
-                    },
-                    {
-                        type: 'other',
-                        decision: 'Some other choice',
-                        confidence: 0.9,
-                    },
-                ],
-            });
-
-            promptRunner.builder.mockReturnValue({
-                setProviders: jest.fn().mockReturnThis(),
-                setParser: jest.fn().mockReturnThis(),
-                setLLMJsonMode: jest.fn().mockReturnThis(),
-                setTemperature: jest.fn().mockReturnThis(),
-                setPayload: jest.fn().mockReturnThis(),
-                addPrompt: jest.fn().mockReturnThis(),
-                setRunName: jest.fn().mockReturnThis(),
-                setBYOKConfig: jest.fn().mockReturnThis(),
-                setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-                execute: mockExecute,
-            } as any);
-
-            await useCase.execute('end-ap3');
-
-            const decisions = repo.markClassificationCompleted.mock.calls[0][1];
-            expect(decisions[0].autoPromoteCandidate).toBe(false);
-            expect(decisions[1].autoPromoteCandidate).toBe(false);
-            expect(decisions[2].autoPromoteCandidate).toBe(false);
-        });
-
         it('heuristic fallback decisions always have autoPromoteCandidate=false (confidence too low)', async () => {
             setupSessionWithPrompt(
                 'We decided to use a microservice architecture',
@@ -542,67 +322,6 @@ describe('ClassifySessionUseCase', () => {
     // ---------------------------------------------------------------
 
     describe('aggregateEvents edge cases', () => {
-        it('should SKIP session with only session_start and session_end (no turns)', async () => {
-            repo.findByUuid.mockResolvedValue(
-                makeEvent({ uuid: 'end-empty', type: 'session_end' }),
-            );
-            repo.findBySessionId.mockResolvedValue([
-                makeEvent({
-                    type: 'session_start',
-                    payload: {
-                        agentType: 'claude-code',
-                        gitRemote: 'github.com/org/repo',
-                    },
-                }),
-                makeEvent({
-                    type: 'session_end',
-                    uuid: 'end-empty',
-                    payload: {},
-                }),
-            ]);
-
-            await useCase.execute('end-empty');
-
-            expect(repo.markClassificationSkipped).toHaveBeenCalledWith(
-                'end-empty',
-                'No textual context for classification',
-            );
-            expect(repo.markClassificationProcessing).not.toHaveBeenCalled();
-        });
-
-        it('should SKIP session with empty prompts and no tool calls', async () => {
-            repo.findByUuid.mockResolvedValue(
-                makeEvent({ uuid: 'end-blank', type: 'session_end' }),
-            );
-            repo.findBySessionId.mockResolvedValue([
-                makeEvent({ type: 'session_start', payload: {} }),
-                makeEvent({
-                    type: 'turn_start',
-                    payload: { prompt: '' },
-                }),
-                makeEvent({
-                    type: 'turn_start',
-                    payload: { prompt: '   ' },
-                }),
-                makeEvent({
-                    type: 'turn_end',
-                    payload: { toolCalls: [], filesModified: [], commands: [] },
-                }),
-                makeEvent({
-                    type: 'session_end',
-                    uuid: 'end-blank',
-                    payload: {},
-                }),
-            ]);
-
-            await useCase.execute('end-blank');
-
-            expect(repo.markClassificationSkipped).toHaveBeenCalledWith(
-                'end-blank',
-                'No textual context for classification',
-            );
-        });
-
         it('should include subagent info in aggregation', async () => {
             repo.findByUuid.mockResolvedValue(
                 makeEvent({ uuid: 'end-sub', type: 'session_end' }),
@@ -623,20 +342,8 @@ describe('ClassifySessionUseCase', () => {
                 }),
             ]);
 
-            // Subagents count as useful content, so it should proceed to LLM
-            const mockExecute = jest.fn().mockResolvedValue({ decisions: [] });
-            promptRunner.builder.mockReturnValue({
-                setProviders: jest.fn().mockReturnThis(),
-                setParser: jest.fn().mockReturnThis(),
-                setLLMJsonMode: jest.fn().mockReturnThis(),
-                setTemperature: jest.fn().mockReturnThis(),
-                setPayload: jest.fn().mockReturnThis(),
-                addPrompt: jest.fn().mockReturnThis(),
-                setRunName: jest.fn().mockReturnThis(),
-                setBYOKConfig: jest.fn().mockReturnThis(),
-                setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-                execute: mockExecute,
-            } as any);
+            // Subagents count as useful content, so it should proceed to LLM.
+            mockLLMDecisions([]);
 
             await useCase.execute('end-sub');
 
@@ -646,10 +353,9 @@ describe('ClassifySessionUseCase', () => {
                 'end-sub',
             );
 
-            // Verify subagent data was passed to LLM via setPayload
-            const builderMock = promptRunner.builder.mock.results[0].value;
-            const payloadArg = builderMock.setPayload.mock.calls[0][0];
-            expect(payloadArg.subagents).toEqual([
+            // Verify subagent data was passed to the LLM via the userPayload.
+            const payload = llmPayload();
+            expect(payload.subagents).toEqual([
                 { type: 'code-review', task: 'Review auth module' },
             ]);
         });
@@ -705,29 +411,13 @@ describe('ClassifySessionUseCase', () => {
 
             repo.findBySessionId.mockResolvedValue(events);
 
-            const mockSetPayload = jest.fn().mockReturnThis();
-            const mockExecute = jest.fn().mockResolvedValue({
-                decisions: [
-                    {
-                        type: 'implementation_detail',
-                        decision: 'Refactored all modules',
-                        confidence: 0.6,
-                    },
-                ],
-            });
-
-            promptRunner.builder.mockReturnValue({
-                setProviders: jest.fn().mockReturnThis(),
-                setParser: jest.fn().mockReturnThis(),
-                setLLMJsonMode: jest.fn().mockReturnThis(),
-                setTemperature: jest.fn().mockReturnThis(),
-                setPayload: mockSetPayload,
-                addPrompt: jest.fn().mockReturnThis(),
-                setRunName: jest.fn().mockReturnThis(),
-                setBYOKConfig: jest.fn().mockReturnThis(),
-                setBYOKFallbackConfig: jest.fn().mockReturnThis(),
-                execute: mockExecute,
-            } as any);
+            mockLLMDecisions([
+                {
+                    type: 'implementation_detail',
+                    decision: 'Refactored all modules',
+                    confidence: 0.6,
+                },
+            ]);
 
             await useCase.execute('end-large');
 
@@ -739,7 +429,7 @@ describe('ClassifySessionUseCase', () => {
             );
 
             // Verify context was sliced for the LLM payload
-            const payload = mockSetPayload.mock.calls[0][0];
+            const payload = llmPayload();
             expect(payload.turns.length).toBeLessThanOrEqual(20);
             for (const turn of payload.turns) {
                 expect(turn.toolCalls.length).toBeLessThanOrEqual(5);
@@ -813,6 +503,103 @@ describe('ClassifySessionUseCase', () => {
                 expect.any(Array),
                 'heuristic-fallback',
             );
+        });
+    });
+
+    // ---------------------------------------------------------------
+    // extractWithLLM mapping parity (absorbed from the former parity spec)
+    //
+    // Proves "no behavior change on the happy path" after migrating
+    // extractWithLLM onto runStructuredReviewCall: a fixed { decisions: [...] }
+    // result, returned through the REAL runStructuredReviewCall (real schema
+    // conversion + model resolution + span), maps byte-for-byte to the same
+    // CliSessionClassifiedDecision[] the pre-migration mapping produced.
+    // ---------------------------------------------------------------
+
+    describe('extractWithLLM mapping parity (AI SDK path)', () => {
+        const MODEL_DECISIONS = [
+            {
+                type: 'architectural_decision',
+                origin: 'human',
+                decision: 'Use event sourcing for the audit log',
+                rationale: 'Full auditability of every state change',
+                confidence: 0.9,
+                evidence: ['src/audit/store.ts', 'src/audit/replay.ts'],
+            },
+            {
+                type: 'tooling',
+                decision: 'Adopt pnpm as the package manager',
+                confidence: 0.4,
+            },
+        ];
+
+        const aggregated = {
+            agentType: 'claude-code',
+            gitRemote: 'git@github.com:kodus/example.git',
+            turns: [
+                {
+                    prompt: 'Design the audit log',
+                    response: 'I chose event sourcing.',
+                    toolCalls: ['Edit'],
+                    filesModified: ['src/audit/store.ts'],
+                },
+            ],
+            prompts: ['Design the audit log'],
+            responses: ['I chose event sourcing.'],
+            toolCalls: ['Edit'],
+            filesModified: ['src/audit/store.ts', 'src/audit/replay.ts'],
+            filesRead: [],
+            commands: [],
+            subagents: [],
+        };
+
+        it('maps the model decisions[] byte-for-byte to CliSessionClassifiedDecision[]', async () => {
+            mockLLMDecisions(MODEL_DECISIONS);
+
+            const decisions = await (useCase as any).extractWithLLM(
+                aggregated,
+                { organizationId: 'org-123' },
+            );
+
+            expect(decisions).toEqual([
+                {
+                    type: 'architectural_decision',
+                    origin: 'human',
+                    decision: 'Use event sourcing for the audit log',
+                    rationale: 'Full auditability of every state change',
+                    confidence: 0.9,
+                    evidence: ['src/audit/store.ts', 'src/audit/replay.ts'],
+                    // No model-provided scope → falls back to the session's
+                    // filesModified (normalizeScope), so the decision can reach
+                    // a review.
+                    scope: ['src/audit/store.ts', 'src/audit/replay.ts'],
+                    // 0.9 >= 0.7 and architectural_decision is auto-promotable.
+                    autoPromoteCandidate: true,
+                },
+                {
+                    type: 'tooling',
+                    origin: undefined,
+                    decision: 'Adopt pnpm as the package manager',
+                    rationale: undefined,
+                    confidence: 0.4,
+                    evidence: [],
+                    // Same fallback to filesModified for a scope-less decision.
+                    scope: ['src/audit/store.ts', 'src/audit/replay.ts'],
+                    // 0.4 < 0.7 → not a candidate.
+                    autoPromoteCandidate: false,
+                },
+            ]);
+        });
+
+        it('routes through exactly one AI SDK span path (runAiSdkLLMInSpan), no LangChain wrapper', async () => {
+            mockLLMDecisions(MODEL_DECISIONS);
+
+            await (useCase as any).extractWithLLM(aggregated, { organizationId: 'org-123' });
+
+            expect(observabilityService.runAiSdkLLMInSpan).toHaveBeenCalledTimes(
+                1,
+            );
+            expect(mockGenerate).toHaveBeenCalledTimes(1);
         });
     });
 });

@@ -36,10 +36,11 @@ the default branch.
 ## Structure
 
 - `docs.json` — site configuration and navigation
-- `how_to_use/` — product usage guides
-- `how_to_deploy/` — deployment guides (multi-language)
-- `cookbook/` — example setups and recipes
-- `knowledge_base/` — concept docs / FAQ
+- `en/`, `es/`, `pt-BR/`, `ja/`, `zh/` — language roots used by the
+  Mintlify language selector. Each contains matching `how_to_use/`,
+  `how_to_deploy/`, `cookbook/`, and `knowledge_base/` page paths.
+- `docs.json` redirects the previous section-first URLs to these language
+  roots so existing links continue to work.
 - `_snippets/` — reusable MDX fragments imported via `<Snippet>` component
 - `_snippets/env-vars-generated.mdx` — **auto-generated** from
   `kodus-ai/.env.schema`. Don't edit by hand. Run `pnpm run env:apply` to
@@ -47,8 +48,8 @@ the default branch.
 
 ## Internal engineering docs
 
-Engineering plans, runbooks, and dev-only guides live in `docs-internal/`
-(separate from this site). Those don't ship to the public docs.
+Engineering plans and design notes live in GitHub issues, not in the repo.
+`docs-internal/` only holds the generated OpenAPI spec and Postman collection.
 
 ## Troubleshooting
 

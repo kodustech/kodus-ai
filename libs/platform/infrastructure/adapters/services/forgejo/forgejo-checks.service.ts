@@ -50,22 +50,14 @@ export class ForgejoChecksService implements IChecksAdapter {
         return null;
     }
 
-    async createCheckRun(
-        params: CreateCheckRunParams,
-    ): Promise<string | null> {
-        const {
-            organizationAndTeamData,
-            repository,
-            headSha,
-            output,
-            status,
-        } = params;
+    async createCheckRun(params: CreateCheckRunParams): Promise<string | null> {
+        const { organizationAndTeamData, repository, headSha, output, status } =
+            params;
 
         try {
-            const authDetail =
-                await this.forgejoService.getAuthDetails(
-                    organizationAndTeamData,
-                );
+            const authDetail = await this.forgejoService.getAuthDetails(
+                organizationAndTeamData,
+            );
             if (!authDetail) {
                 this.logger.warn({
                     message:
@@ -76,8 +68,7 @@ export class ForgejoChecksService implements IChecksAdapter {
                 return null;
             }
 
-            const client =
-                this.forgejoService.createForgejoClient(authDetail);
+            const client = this.forgejoService.createForgejoClient(authDetail);
 
             const state = statusStateMap[status] ?? 'pending';
 
@@ -148,10 +139,9 @@ export class ForgejoChecksService implements IChecksAdapter {
         }
 
         try {
-            const authDetail =
-                await this.forgejoService.getAuthDetails(
-                    organizationAndTeamData,
-                );
+            const authDetail = await this.forgejoService.getAuthDetails(
+                organizationAndTeamData,
+            );
             if (!authDetail) {
                 this.logger.warn({
                     message:
@@ -162,11 +152,14 @@ export class ForgejoChecksService implements IChecksAdapter {
                 return false;
             }
 
-            const client =
-                this.forgejoService.createForgejoClient(authDetail);
+            const client = this.forgejoService.createForgejoClient(authDetail);
 
             const state = this.resolveState(status, conclusion);
-            const description = this.resolveDescription(status, conclusion, output);
+            const description = this.resolveDescription(
+                status,
+                conclusion,
+                output,
+            );
 
             await repoCreateStatus({
                 client,
@@ -263,9 +256,7 @@ export class ForgejoChecksService implements IChecksAdapter {
      * Forgejo commit status IDs are numeric and not needed for updates;
      * we encode the SHA as `sha:<hash>` so updates can repost by SHA.
      */
-    private resolveHeadSha(
-        params: UpdateCheckRunParams,
-    ): string | null {
+    private resolveHeadSha(params: UpdateCheckRunParams): string | null {
         const { checkRunId } = params;
         if (typeof checkRunId === 'string' && checkRunId.startsWith('sha:')) {
             return checkRunId.slice(4);

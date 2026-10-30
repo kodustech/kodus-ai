@@ -57,14 +57,13 @@ diferentes — **verify não é policy.**
 | `compression/` → `ContextWindowCompressor` (+ `context-compressor`) | impl canônica do `Compressor` (janela de token); usada por code-review **e** pelo fetcher de skills via `CompressionPolicy` |
 | `verify/` → `llm-verdict` (`buildVerifierAgentSpec` / `extractVerdict` / `submitVerdictTool`) | scaffolding genérico de `Verdict` (doer≠checker, fail-open) — um domínio só fornece prompt + candidato→prompt |
 | `orchestration/verification-pass` → `runVerificationPass<T>` | driver do `Verifier<T>` sobre um conjunto de candidatos |
-| `orchestration/sub-agent.factory` → `DefaultSubAgentFactory` | sub-agent-como-tool |
 
 ## Capacidades do `AiSdkAgentRunner`
 
 - **Tools**: 2 caminhos — `AgentTool → aiTool()`, ou passthrough nativo via `AiSdkToolRegistry`.
 - **System prompt**: string, ou com `systemProviderOptions` (cache Anthropic).
 - **Config de chamada**: `temperature`, `maxOutputTokens`, `providerOptions`.
-- **Telemetria**: `input.telemetry` → `experimental_telemetry` (Langfuse).
+- **Telemetria**: `input.telemetry` → AI SDK `telemetry` (+ `runtimeContext` when metadata is present; Langfuse).
 - **Cancelamento**: `ctx.signal` → `abortSignal`.
 - **Parada**: `policy.shouldStop` (OR) + `stepCountIs(maxSteps)` fail-open.
 - **Steer por step**: diretivas de `policy.prepareStep` mescladas; `sanitizeNoSystem`.
@@ -185,7 +184,7 @@ fetcher é um agent do runner (com MCP); a **análise** é single-shot no runner
 - [x] L1 contracts (`domain/contracts`)
 - [x] L1 infra: `AiSdkAgentRunner` sobre Vercel AI SDK (stopWhen/prepareStep/tools/telemetry)
 - [x] Policies: Budget, Compression, CompletionGate, ForceFinalize
-- [x] Verifier + `runVerificationPass` (Splits) · `SubAgentFactory`
+- [x] Verifier + `runVerificationPass` (Splits)
 - [x] `AiSdkToolRegistry` (tools nativos AI SDK sem round-trip)
 - [x] `finalText(state)` helper (`domain/run-state.util`) — usado por conversation + business
 - [x] Consumidores: code-review (full), skills (fetcher), conversation, **business (todo no harness)**

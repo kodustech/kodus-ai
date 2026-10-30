@@ -1,0 +1,358 @@
+import { BadRequestException } from '@nestjs/common';
+
+import { TestByokModelUseCase } from './test-byok-model.use-case';
+
+jest.mock('@libs/common/utils/crypto', () => ({
+    decrypt: (v: string) => `dec:${v}`,
+}));
+
+function build(opts: {
+    configValue: unknown;
+    catalog?: Array<{ id: string; name: string }> | Error;
+    /** Whether producing the catalog used the org's key. Live listings do;
+     *  static and curated-fallback lists do not, and a hit from those must not
+     *  stand in for a real probe. Defaults to a live listing. */
+    exercisedCredential?: boolean;
+}) {
+    const orgParams = {
+        findByKey: jest.fn().mockResolvedValue(
+            opts.configValue ? { configValue: opts.configValue } : null,
+        ),
+    } as any;
+    const connectionUseCase = {
+        execute: jest.fn().mockResolvedValue({ ok: true, code: 'ok', latencyMs: 5 }),
+    } as any;
+    const getModels = {
+        execute: jest.fn(async () => {
+            if (opts.catalog instanceof Error) throw opts.catalog;
+            // A LIVE listing by default: these cases are about the catalog fast
+            // path, which only applies when producing the list authenticated.
+            // The curated/static case has its own suite, where a hit must fall
+            // through to a real probe because the key was never used.
+            return {
+                models: opts.catalog ?? [],
+                exercisedCredential: opts.exercisedCredential ?? true,
+            };
+        }),
+    } as any;
+    return {
+        useCase: new TestByokModelUseCase(orgParams, connectionUseCase, getModels),
+        connectionUseCase,
+        getModels,
+    };
+}
+
+const org = { organizationId: 'org-1' };
+const moonshot = {
+    version: 2,
+    credentials: [
+        {
+            id: 'c1',
+            provider: 'openai_compatible',
+            apiKey: 'enc',
+            settings: { baseURL: 'https://api.moonshot.ai/v1' },
+        },
+    ],
+    models: [],
+};
+
+describe('TestByokModelUseCase', () => {
+    it('returns ok when the model IS in the provider catalog', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: moonshot,
+            catalog: [{ id: 'kimi-k2.7-code', name: 'Kimi' }],
+        });
+        const res = await useCase.execute({
+            provider: 'openai_compatible',
+            model: 'kimi-k2.7-code',
+            organizationAndTeamData: org,
+        });
+        expect(res.ok).toBe(true);
+        expect(connectionUseCase.execute).not.toHaveBeenCalled();
+    });
+
+    it('fails (not_found) when the model is NOT in the provider catalog', async () => {
+        const { useCase } = build({
+            configValue: moonshot,
+            catalog: [{ id: 'kimi-k2.7-code', name: 'Kimi' }],
+        });
+        const res = await useCase.execute({
+            provider: 'openai_compatible',
+            model: 'kimi-DOES-NOT-EXIST',
+            organizationAndTeamData: org,
+        });
+        expect(res.ok).toBe(false);
+        expect(res.code).toBe('not_found');
+    });
+
+    it('falls through to a real probe on a CURATED-catalog miss (Bedrock/Vertex)', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: {
+                version: 2,
+                credentials: [
+                    {
+                        id: 'c1',
+                        provider: 'amazon_bedrock',
+                        settings: { awsBearerToken: 'enc' },
+                    },
+                ],
+                models: [],
+            },
+            catalog: [{ id: 'us.anthropic.claude-opus-4-8', name: 'Opus' }],
+        });
+        // A model missing from the curated Bedrock list must NOT be rejected —
+        // it may still be a valid cross-region profile.
+        await useCase.execute({
+            provider: 'amazon_bedrock',
+            model: 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+            organizationAndTeamData: org,
+        });
+        expect(connectionUseCase.execute).toHaveBeenCalled();
+    });
+
+    it('falls back to a real provider probe when there is no catalog', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: {
+                version: 2,
+                credentials: [
+                    {
+                        id: 'c1',
+                        provider: 'anthropic_compatible',
+                        apiKey: 'enc',
+                        settings: { baseURL: 'https://x' },
+                    },
+                ],
+                models: [],
+            },
+            catalog: new Error('listing unavailable'),
+        });
+        await useCase.execute({
+            provider: 'anthropic_compatible',
+            model: 'some-model',
+            organizationAndTeamData: org,
+        });
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                provider: 'anthropic_compatible',
+                model: 'some-model',
+                apiKey: 'dec:enc',
+            }),
+        );
+    });
+
+    const bedrock = {
+        version: 2,
+        credentials: [
+            {
+                id: 'c1',
+                provider: 'amazon_bedrock',
+                settings: { awsBearerToken: 'enc', awsRegion: 'us-east-1' },
+            },
+        ],
+        models: [],
+    };
+
+    it('a CHANGED safe setting (region) skips the catalog and probes with the OVERRIDDEN region', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: bedrock,
+            // The stored-region catalog WOULD "find" it — but a changed region must
+            // not ride the stored-region listing.
+            catalog: [{ id: 'model-x', name: 'X' }],
+        });
+        await useCase.execute({
+            provider: 'amazon_bedrock',
+            model: 'model-x',
+            organizationAndTeamData: org,
+            awsRegion: 'eu-west-1', // differs from the stored us-east-1
+        });
+        // Catalog shortcut skipped → a real probe ran against the NEW region.
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
+            expect.objectContaining({ awsRegion: 'eu-west-1' }),
+        );
+    });
+
+    it('the SAME region keeps the fast catalog path (no needless probe)', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: bedrock,
+            catalog: [{ id: 'model-x', name: 'X' }],
+        });
+        const res = await useCase.execute({
+            provider: 'amazon_bedrock',
+            model: 'model-x',
+            organizationAndTeamData: org,
+            awsRegion: 'us-east-1', // equal to stored → not a change
+        });
+        expect(res.ok).toBe(true);
+        expect(connectionUseCase.execute).not.toHaveBeenCalled();
+    });
+
+    it('NEVER sends the stored secret to a caller-supplied baseURL (keeps the stored endpoint)', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: moonshot, // stored baseURL = https://api.moonshot.ai/v1
+            catalog: new Error('unlistable'), // force the connection probe path
+        });
+        // A caller trying to smuggle an exfil endpoint past the type. The stored
+        // secret must reach the STORED host only — never the caller's.
+        await useCase.execute({
+            provider: 'openai_compatible',
+            model: 'some-model',
+            organizationAndTeamData: org,
+            baseURL: 'https://evil.example/v1',
+        } as any);
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                apiKey: 'dec:enc',
+                baseURL: 'https://api.moonshot.ai/v1',
+            }),
+        );
+    });
+
+    it('rejects when the org has no saved slot for the provider', async () => {
+        const { useCase } = build({ configValue: null });
+        await expect(
+            useCase.execute({
+                provider: 'openai_compatible',
+                model: 'x',
+                organizationAndTeamData: org,
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects an empty model id', async () => {
+        const { useCase } = build({ configValue: moonshot });
+        await expect(
+            useCase.execute({
+                provider: 'openai_compatible',
+                model: '  ',
+                organizationAndTeamData: org,
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    // Regression (catalog removal): a key-only connect to an Anthropic-protocol
+    // BRAND stores NO baseURL. On a listing miss the probe still runs, delegated to
+    // TestByokConnection with the empty stored baseURL — which resolves the brand's
+    // defaultBaseURL (covered by that use-case's own spec). Before the fix this path
+    // had no endpoint and the probe threw "baseURL is required".
+    it('key-only brand connect (no stored baseURL) delegates the probe for the endpoint to be resolved', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: {
+                version: 2,
+                credentials: [
+                    { id: 'c1', provider: 'moonshot', apiKey: 'enc', settings: {} },
+                ],
+                models: [],
+            },
+            catalog: [], // listing miss → fall through to the probe
+        });
+        await useCase.execute({
+            provider: 'moonshot',
+            model: 'kimi-k2.7-code',
+            organizationAndTeamData: org,
+        });
+        // The probe now also receives the org id (alpha gate); assert on the input.
+        expect((connectionUseCase.execute as jest.Mock).mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                provider: 'moonshot',
+                model: 'kimi-k2.7-code',
+                baseURL: undefined, // stored key-only → TestByokConnection fills it
+            }),
+        );
+    });
+
+    describe('two gateways of one provider', () => {
+        const twoGateways = {
+            version: 2,
+            credentials: [
+                {
+                    id: 'cred-a',
+                    provider: 'openai_compatible',
+                    apiKey: 'enc-a',
+                    settings: { baseURL: 'https://gateway-a.example.com/v1' },
+                },
+                {
+                    id: 'cred-b',
+                    provider: 'openai_compatible',
+                    apiKey: 'enc-b',
+                    settings: { baseURL: 'https://gateway-b.example.com/v1' },
+                },
+            ],
+            models: [],
+        };
+
+        it('probes the credential named by id, not the first of its provider', async () => {
+            const { useCase, connectionUseCase, getModels } = build({
+                configValue: twoGateways,
+                catalog: [],
+            });
+
+            await useCase.execute({
+                provider: 'openai_compatible',
+                model: 'some-model',
+                credentialId: 'cred-b',
+                organizationAndTeamData: org,
+            });
+
+            expect(getModels.execute).toHaveBeenCalledWith(
+                'openai_compatible',
+                org,
+                undefined,
+                'cred-b',
+            );
+            expect(
+                (connectionUseCase.execute as jest.Mock).mock.calls[0][0],
+            ).toEqual(
+                expect.objectContaining({
+                    apiKey: 'dec:enc-b',
+                    baseURL: 'https://gateway-b.example.com/v1',
+                }),
+            );
+        });
+
+        it("finds a model only the named gateway serves in that gateway's catalog", async () => {
+            const { useCase, connectionUseCase, getModels } = build({
+                configValue: twoGateways,
+            });
+            getModels.execute.mockImplementation(
+                async (_p: string, _o: unknown, _b: unknown, id?: string) => ({
+                    models:
+                        id === 'cred-b'
+                            ? [{ id: 'only-on-b', name: 'B' }]
+                            : [{ id: 'only-on-a', name: 'A' }],
+                    exercisedCredential: true,
+                }),
+            );
+
+            const res = await useCase.execute({
+                provider: 'openai_compatible',
+                model: 'only-on-b',
+                credentialId: 'cred-b',
+                organizationAndTeamData: org,
+            });
+
+            expect(res).toEqual(
+                expect.objectContaining({ ok: true, verifiedBy: 'catalog' }),
+            );
+            expect(connectionUseCase.execute).not.toHaveBeenCalled();
+        });
+
+        it('refuses an id that is not saved instead of probing another gateway', async () => {
+            const { useCase, connectionUseCase } = build({
+                configValue: twoGateways,
+            });
+
+            await expect(
+                useCase.execute({
+                    provider: 'openai_compatible',
+                    model: 'some-model',
+                    credentialId: 'cred-gone',
+                    organizationAndTeamData: org,
+                }),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(connectionUseCase.execute).not.toHaveBeenCalled();
+        });
+    });
+});

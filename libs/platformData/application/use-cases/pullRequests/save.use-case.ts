@@ -301,6 +301,7 @@ export class SavePullRequestUseCase {
             'unassigned',
             'active',
             'completed',
+            'abandoned',
             'ready_for_review',
         ] as const;
         const validObjectActions = [

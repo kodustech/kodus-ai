@@ -41,6 +41,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
             '/health/ready',
             '/health/simple',
             '/health/live',
+            '/health/serving',
             '/auth/refresh',
             '/auth/login',
             '/auth/signup',

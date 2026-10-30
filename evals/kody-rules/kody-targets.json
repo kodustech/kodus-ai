@@ -1,25 +1,50 @@
 {
     "__doc": [
-        "Per-model floors for the kody-rules gate (occurrence-recall + specificity).",
-        "occurrence-recall varies HUGELY by model (35%-72%), so a single flat",
-        "threshold is wrong — each model gates against its own floor.",
-        "",
-        "occMin = observed occurrence-recall − ~2·binomial-SE (SE = sqrt(p(1-p)/43)",
-        "≈ 0.07 over the 43 golden sites), rounded down. specMin stays flat: every",
-        "model measured 99-100% specificity, so 95% is a safe shared floor.",
-        "",
-        "Calibrated 2026-07-03 from one full github-cases run (14 cases / 43 sites)",
-        "per model. Single run — tighten with more runs. NOTE: gpt-5.4 (40%) and",
-        "gemini (35%) are low because kody-rules inherits the bug-finder's",
-        "depth-first prompt (a breadth task on a depth brain) — a prompt fix is a",
-        "separate follow-up; these floors just stop a regression below today's real.",
-        "RATCHET: when a PR intentionally moves a model, refresh its floor here with",
-        "a fresh run as evidence."
+        "Per-model floors for the kody-rules gate (occurrence recall + specificity), in percent.",
+        "The eval runs production's review (production-review.js): save-time compile, sandbox checkout of the PR head, FetchChangedFilesStage, AgentReviewStage. Floors calibrated on the replay engine it replaced (gpt-5.4, gpt-5.4-mini, gemini-3-flash-preview, and deepseek's 86/95) measured another path and were removed; a model without a floor here is not gated on recall.",
+        "deepseek-v4-flash@fireworks (the nightly model): calibrated 2026-10-16 from 2 local runs of github-cases on one commit, run one after the other: 39 of 39 sites each, 0 of 139 clean files flagged each, every case alike (paired per-case difference 0). With p = 1 the binomial SE is 0, so the floor is observed − 2·SE with the Agresti–Coull SE (p̃ = (k+2)/(n+4)): occMin 93 (0.9358 over 39 sites: two missed sites pass, three fail), specMin 98 (0.9804 over 139 files: two false alarms pass, three fail).",
+        "Deliberate break: production's mergeKodyRuleFindings with kodyRuleOtherLocations dropped (a comment keeps one place per rule, #2015's class of regression): 15 of 39 sites (38%), 0 of 139 clean files flagged, gate red (exit 1).",
+        "The truth: an added line matching the rule's pattern, outside a comment (medusa#15810's four console.log are JSDoc examples, so that case has no sites and only scores specificity).",
+        "2026-10-16, cloud route: the model now comes from the org's cloud route (evals/shared/model-route.js) instead of the self-hosted env route (applyModelEnv); on deepseek the request bodies are identical but for reasoning_effort, which the env route sent as high and the managed route leaves unset. Two runs on it: 39 and 39 of 39 sites, 0 of 139 clean files flagged each. The floors stand.",
+        "RATCHET: when a PR intentionally moves a model, refresh its floor here with two fresh runs as evidence.",
+        "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6 (github-cases, --runs=1 each): occurrences 39/39 and 39/39 (100%), clean files 139/139 and 139/139 (100%). occMin 94, specMin 98 = observed - 2 binomial SE, at most 2 below a perfect pair.",
+        "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6 (github-cases, --runs=1 each): occurrences 37/39 and 37/39 (94.9%), clean files 139/139 and 139/139 (100%). occMin 87, specMin 98 = observed - 2 binomial SE, at most 2 below a perfect pair.",
+        "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3 (github-cases, --runs=1 each): occurrences 39/39 and 39/39 (100%), clean files 139/139 and 139/139 (100%). occMin 94, specMin 98 = observed - 2 binomial SE, at most 2 below a perfect pair.",
+        "deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on f75374a8e (BYOK route) (github-cases, --runs=1 each): occurrences 39/39 and 39/39 (100%), clean files 139/139 and 139/139 (100%). occMin 94, specMin 98 = observed - 2 binomial SE, at most 2 below a perfect pair."
     ],
     "dataset": "github-cases",
     "models": {
-        "gpt-5.4": { "occMin": 25, "specMin": 95, "observed": { "occ": 40, "spec": 99 } },
-        "gpt-5.4-mini": { "occMin": 55, "specMin": 95, "observed": { "occ": 72, "spec": 99 } },
-        "gemini-3-flash-preview": { "occMin": 20, "specMin": 95, "observed": { "occ": 35, "spec": 100 } }
+        "deepseek-v4-flash@fireworks": {
+            "occMin": 94,
+            "specMin": 98,
+            "observed": {
+                "occ": 100,
+                "spec": 100
+            }
+        },
+        "gpt-6-sol": {
+            "occMin": 94,
+            "specMin": 98,
+            "observed": {
+                "occ": 100,
+                "spec": 100
+            }
+        },
+        "claude-sonnet-5-5": {
+            "occMin": 87,
+            "specMin": 98,
+            "observed": {
+                "occ": 94.9,
+                "spec": 100
+            }
+        },
+        "kimi-k2.7-code@openrouter": {
+            "occMin": 94,
+            "specMin": 98,
+            "observed": {
+                "occ": 100,
+                "spec": 100
+            }
+        }
     }
 }

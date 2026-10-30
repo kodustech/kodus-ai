@@ -31,7 +31,6 @@ export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineCon
         const pullRequestMessagesConfig = context.pullRequestMessagesConfig;
 
         if (
-            !context.dryRun?.enabled &&
             context.lastExecution &&
             context.platformType === PlatformType.GITHUB
         ) {
@@ -111,6 +110,26 @@ export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineCon
             });
         }
 
+        // A partial run's note too, not only the last SUCCESS (#1721).
+        const previous = context.previousStatusNote ?? context.lastExecution;
+        const previousCommentId = Number(previous?.commentId);
+        const previousNoteId = Number(previous?.noteId);
+        // A later run with an opening-only end message never writes its
+        // summary back. Reusing that note would erase the first run's summary.
+        const previousGitlabNote =
+            context.platformType === PlatformType.GITLAB &&
+            pullRequestMessagesConfig?.endReviewMessage?.status !==
+                PullRequestMessageStatus.ONLY_WHEN_OPENED &&
+            !previous?.threadId &&
+            Number.isSafeInteger(previousCommentId) &&
+            previousCommentId > 0 &&
+            previousCommentId === previousNoteId
+                ? {
+                      commentId: previousCommentId,
+                      noteId: previousNoteId,
+                  }
+                : undefined;
+
         const result = await this.commentManagerService.createInitialComment(
             context.organizationAndTeamData,
             context.pullRequest.number,
@@ -120,7 +139,7 @@ export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineCon
             context.platformType,
             context.codeReviewConfig,
             pullRequestMessagesConfig,
-            context.dryRun,
+            previousGitlabNote,
         );
 
         return this.updateContext(context, (draft) => {

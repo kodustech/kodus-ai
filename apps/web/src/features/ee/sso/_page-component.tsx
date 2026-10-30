@@ -14,6 +14,7 @@ import { Textarea } from "@components/ui/textarea";
 import { toast } from "@components/ui/toaster/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAsyncAction } from "@hooks/use-async-action";
+import { useConfig } from "@providers/ConfigProvider";
 import {
     confirmSSODomainVerification,
     createOrUpdateSSOConfig,
@@ -21,9 +22,8 @@ import {
     getSSODomainVerificationStatus,
     startSSOConnectionTest,
 } from "@services/ssoConfig/fetch";
-import { AlertCircle, Save, Upload } from "lucide-react";
+import { AlertCircle, Upload } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
-import { useConfig } from "@providers/ConfigProvider";
 import { useAuth } from "src/core/providers/auth.provider";
 import { publicDomainsSet } from "src/core/utils/email";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
@@ -45,6 +45,11 @@ import {
     fetchAndParseMetadata,
     parseMetadataFromFile,
 } from "./_components/metadata";
+import {
+    SAML_EMAIL_IDENTIFIER_FORMAT,
+    savedSsoFormValues,
+    toSamlProviderConfig,
+} from "./_utils/saved-form-values";
 
 const createSsoSchema = (userDomain: string) =>
     z
@@ -128,9 +133,6 @@ const createSsoSchema = (userDomain: string) =>
 
 type SsoFormData = z.input<ReturnType<typeof createSsoSchema>>;
 
-const SAML_EMAIL_IDENTIFIER_FORMAT =
-    "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
-
 interface SSOTestDraftStorage {
     active?: boolean;
     providerConfig?: SsoFormData["providerConfig"];
@@ -139,14 +141,6 @@ interface SSOTestDraftStorage {
 
 const buildSSOTestDraftKey = (organizationId?: string) =>
     `sso-test-draft:${organizationId || "unknown"}`;
-
-const toSamlProviderConfig = (config?: SsoFormData["providerConfig"]) => ({
-    idpIssuer: config?.idpIssuer || "",
-    entryPoint: config?.entryPoint || "",
-    cert: config?.cert || "",
-    identifierFormat: config?.identifierFormat,
-    issuer: config?.issuer,
-});
 
 export const ClientSsoOrganizationSettingsPage = (props: {
     email: string;
@@ -190,27 +184,14 @@ export const ClientSsoOrganizationSettingsPage = (props: {
             : "";
 
     const userDomain = props.email.split("@")[1];
+    const savedValues = useMemo(
+        () => savedSsoFormValues(props.ssoConfig, userDomain),
+        [props.ssoConfig, userDomain],
+    );
     const form = useForm<SsoFormData>({
         mode: "onChange",
         resolver: zodResolver(createSsoSchema(userDomain)),
-        defaultValues: {
-            active: props.ssoConfig.active,
-            providerConfig: {
-                idpIssuer: props.ssoConfig.providerConfig?.idpIssuer || "",
-                entryPoint: props.ssoConfig.providerConfig?.entryPoint || "",
-                cert: props.ssoConfig.providerConfig?.cert || "",
-                identifierFormat:
-                    props.ssoConfig.providerConfig?.identifierFormat ||
-                    SAML_EMAIL_IDENTIFIER_FORMAT,
-                issuer:
-                    props.ssoConfig.providerConfig.issuer ||
-                    "kodus-orchestrator",
-            },
-            domains:
-                props.ssoConfig.domains.length > 0
-                    ? props.ssoConfig.domains
-                    : [userDomain],
-        },
+        defaultValues: savedValues,
     });
 
     const {
@@ -242,19 +223,14 @@ export const ClientSsoOrganizationSettingsPage = (props: {
     const persistedFingerprint = useMemo(() => {
         return buildSSOConfigFingerprint({
             protocol: SSOProtocol.SAML,
-            providerConfig: toSamlProviderConfig(
-                props.ssoConfig.providerConfig,
-            ),
-            domains:
-                props.ssoConfig.domains.length > 0
-                    ? props.ssoConfig.domains
-                    : [userDomain],
+            providerConfig: toSamlProviderConfig(savedValues.providerConfig),
+            domains: savedValues.domains,
         });
-    }, [props.ssoConfig.domains, props.ssoConfig.providerConfig, userDomain]);
+    }, [savedValues]);
 
     const hasUnsavedChangesComparedToPersistedConfig =
         currentFingerprint !== persistedFingerprint ||
-        Boolean(isEnabled) !== Boolean(props.ssoConfig.active);
+        Boolean(isEnabled) !== Boolean(savedValues.active);
 
     const needsConnectionRetest =
         Boolean(isEnabled) && currentFingerprint !== validatedFingerprint;
@@ -679,14 +655,36 @@ export const ClientSsoOrganizationSettingsPage = (props: {
 
     return (
         <Page.Root>
-            <form onSubmit={handleSubmit(saveSettings)}>
-                <Page.Header>
-                    <Page.Title>SSO Settings</Page.Title>
-                    <Page.HeaderActions>
+            <form
+                className="flex flex-col gap-6"
+                onSubmit={handleSubmit(saveSettings)}>
+                <Page.Header sticky>
+                    <Page.TitleContainer>
+                        <Page.Title>SSO Settings</Page.Title>
+                        <Page.Description>
+                            Let your team sign in to Kodus through your identity
+                            provider over SAML.
+                        </Page.Description>
+                    </Page.TitleContainer>
+                    {/* No Reset: a restored test draft becomes the form's
+                        defaults, so resetting would land on the draft, not
+                        on the saved config, and read as a no-op. */}
+                    <Page.SaveActions
+                        isDirty={
+                            isDirty ||
+                            hasUnsavedChangesComparedToPersistedConfig
+                        }
+                        isSaving={isLoadingSubmitButton}
+                        canSave={
+                            isValid &&
+                            !(isEnabled && needsConnectionRetest) &&
+                            !needsDomainVerification
+                        }
+                        onSave={handleSubmit(saveSettings)}>
                         <Button
                             type="button"
-                            size="md"
-                            variant="secondary"
+                            size="sm"
+                            variant="helper"
                             onClick={handleConnectionTest}
                             loading={isTestingConnection}
                             disabled={
@@ -694,23 +692,7 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                             }>
                             Test connection
                         </Button>
-                        <Button
-                            type="submit"
-                            size="md"
-                            variant="primary"
-                            leftIcon={<Save />}
-                            disabled={
-                                (!isDirty &&
-                                    !hasUnsavedChangesComparedToPersistedConfig) ||
-                                !isValid ||
-                                isLoadingSubmitButton ||
-                                (isEnabled && needsConnectionRetest) ||
-                                needsDomainVerification
-                            }
-                            loading={isLoadingSubmitButton}>
-                            Save settings
-                        </Button>
-                    </Page.HeaderActions>
+                    </Page.SaveActions>
                 </Page.Header>
 
                 <Page.Content className="flex flex-col gap-8">
@@ -794,7 +776,7 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                                                         />
                                                         <Button
                                                             type="button"
-                                                            variant="primary"
+                                                            variant="helper"
                                                             size="md"
                                                             onClick={
                                                                 handleMetadataFetch
@@ -822,7 +804,7 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                                                 <div>
                                                     <Button
                                                         type="button"
-                                                        variant="secondary"
+                                                        variant="helper"
                                                         size="md"
                                                         onClick={
                                                             handleUploadClick
@@ -878,7 +860,7 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                                                             />
                                                             <Button
                                                                 type="button"
-                                                                variant="secondary"
+                                                                variant="helper"
                                                                 size="md"
                                                                 onClick={() => {
                                                                     navigator.clipboard.writeText(
@@ -1083,15 +1065,14 @@ export const ClientSsoOrganizationSettingsPage = (props: {
                                                                     (prev) => ({
                                                                         ...prev,
                                                                         [record.domain]:
-                                                                        {
-                                                                            domain: record.domain,
-                                                                            verified:
-                                                                                true,
-                                                                            verifiedAt:
-                                                                                record.verifiedAt,
-                                                                            verifiedByEmail:
-                                                                                record.contactEmail,
-                                                                        },
+                                                                            {
+                                                                                domain: record.domain,
+                                                                                verified: true,
+                                                                                verifiedAt:
+                                                                                    record.verifiedAt,
+                                                                                verifiedByEmail:
+                                                                                    record.contactEmail,
+                                                                            },
                                                                     }),
                                                                 )
                                                             }

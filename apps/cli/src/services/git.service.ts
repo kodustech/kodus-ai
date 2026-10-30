@@ -9,9 +9,7 @@ import {
     extractOrgRepoFromRemote,
     inferPlatformFromRemote,
 } from '../utils/git-remote.js';
-import {
-    parseGitStatus,
-} from '../utils/git-status.js';
+import { parseGitStatus } from '../utils/git-status.js';
 import { countDiffChanges } from '../utils/git-diff.js';
 import {
     buildFileContentReadPlan,
@@ -56,6 +54,44 @@ class GitService {
     async getGitRoot(): Promise<string> {
         await this.ensureRepo();
         return this.git.revparse(['--show-toplevel']);
+    }
+
+    /**
+     * Absolute path to the directory git actually reads hooks from.
+     *
+     * Never assume `<toplevel>/.git/hooks`: inside a linked worktree `.git` is a
+     * *file* pointing at `<main>/.git/worktrees/<name>`, so joining `.git` there
+     * fails with ENOTDIR. `git rev-parse --git-path hooks` resolves the shared
+     * common dir for worktrees and also honours `core.hooksPath`, which is what
+     * git will really execute.
+     */
+    async getHooksDir(): Promise<string> {
+        await this.ensureRepo();
+
+        try {
+            const resolved = (
+                await this.git.revparse([
+                    '--path-format=absolute',
+                    '--git-path',
+                    'hooks',
+                ])
+            ).trim();
+            if (resolved) {
+                return resolved;
+            }
+        } catch {
+            // `--path-format` needs git >= 2.31; fall through to the manual
+            // resolution below for older clients.
+        }
+
+        // `--git-common-dir` prints an absolute path inside a linked worktree
+        // but a *cwd-relative* one in an ordinary checkout (`../../.git` from a
+        // nested directory), so it must be resolved against the cwd — resolving
+        // it against the toplevel would climb above the repo.
+        const commonDir = (
+            await this.git.revparse(['--git-common-dir'])
+        ).trim();
+        return path.resolve(process.cwd(), commonDir, 'hooks');
     }
 
     async getHeadSha(): Promise<string | null> {
@@ -386,7 +422,9 @@ class GitService {
                 const sha = (
                     await this.git.raw(['merge-base', 'HEAD', ref])
                 ).trim();
-                if (sha) {return sha;}
+                if (sha) {
+                    return sha;
+                }
             } catch {
                 // Ref doesn't exist locally / no merge base — try next.
             }

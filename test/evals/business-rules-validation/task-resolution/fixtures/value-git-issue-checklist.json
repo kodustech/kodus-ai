@@ -1,0 +1,27 @@
+{
+    "name": "value-git-issue-checklist",
+    "issue": "#1941",
+    "trackers": [],
+    "pullRequest": {
+        "title": "feat: scale servings",
+        "body": "Closes #12"
+    },
+    "expect": {
+        "outcome": "validated",
+        "criteria": [
+            "Amounts are rounded to two decimals",
+            "Servings below 1 are rejected"
+        ],
+        "toolsCalled": ["KODUS_GET_ISSUE"]
+    },
+    "gitIssuesConnected": true,
+    "repository": {
+        "issues": [
+            {
+                "number": 12,
+                "title": "Scale servings",
+                "body": "Cooks change servings.\n\n## Acceptance criteria\n- [ ] Amounts are rounded to two decimals\n- [ ] Servings below 1 are rejected"
+            }
+        ]
+    }
+}

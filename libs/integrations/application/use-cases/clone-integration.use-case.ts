@@ -1,10 +1,14 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Inject } from '@nestjs/common';
+import { Inject, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
+import {
+    ITeamService,
+    TEAM_SERVICE_TOKEN,
+} from '@libs/organization/domain/team/contracts/team.service.contract';
 import {
     toIntegrationCategory,
     toPlatformType,
@@ -29,8 +33,23 @@ export class CloneIntegrationUseCase implements IUseCase {
         private readonly request: Request & {
             user: { organization: { uuid: string } };
         },
+        @Inject(TEAM_SERVICE_TOKEN)
+        private readonly teamService: ITeamService,
     ) {}
     public async execute(params: any): Promise<{ status: boolean }> {
+        const organizationId = this.request.user?.organization?.uuid;
+        // Reject before the catch, which converts failures into a success HTTP response.
+        for (const teamId of [params.teamId, params.teamIdClone]) {
+            if (
+                !organizationId ||
+                !teamId ||
+                (await this.teamService.findOneOrganizationIdByTeamId(
+                    teamId,
+                )) !== organizationId
+            ) {
+                throw new NotFoundException('Team not found');
+            }
+        }
         try {
             const organizationAndTeamData = {
                 organizationId: this.request.user.organization.uuid,

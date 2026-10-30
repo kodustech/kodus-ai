@@ -1,5 +1,11 @@
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import {
+    IUsersService,
+    USER_SERVICE_TOKEN,
+} from '@libs/identity/domain/user/contracts/user.service.contract';
 
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import {
@@ -13,10 +19,19 @@ export class GetAssignedReposUseCase implements IUseCase {
     constructor(
         @Inject(PERMISSIONS_SERVICE_TOKEN)
         private readonly permissionsService: IPermissionsService,
+        @Inject(REQUEST)
+        private readonly request: UserRequest,
+        @Inject(USER_SERVICE_TOKEN)
+        private readonly userService: IUsersService,
     ) {}
 
     async execute(params: { userId: string }): Promise<string[]> {
         const { userId } = params;
+        const organizationId = this.request.user?.organization?.uuid;
+
+        if (!organizationId) {
+            return [];
+        }
 
         if (!userId) {
             this.logger.warn({
@@ -29,6 +44,13 @@ export class GetAssignedReposUseCase implements IUseCase {
         }
 
         try {
+            const user = await this.userService.findOne({
+                uuid: userId,
+                organization: { uuid: organizationId },
+            });
+            if (!user) {
+                return [];
+            }
             const permissions = await this.permissionsService.findOne({
                 user: { uuid: userId },
             });

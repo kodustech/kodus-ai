@@ -1,0 +1,323 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "claude-haiku-4-5",
+  "judgeReasoningEffort": null,
+  "reps": 3,
+  "engine": {
+    "commit": "03b25de6ec9310180b9797eaa725f4dae7922a25",
+    "sourceDigest": "3b409a719f077fff11ab4d17d1afee27fe9943ff3b13422cbaf3795144723628"
+  },
+  "startedAt": "2026-10-04T14:16:48.690Z",
+  "updatedAt": "2026-10-04T14:34:17.443Z",
+  "complete": true,
+  "selectedCases": [
+    "R2-consequence-status-implemented",
+    "K2-rule-reverses-prior"
+  ],
+  "summary": {
+    "measured": 2,
+    "infra": 4,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 2,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 2,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R2-consequence-status-implemented \u00b7 resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 487071,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError from fetchStatus (status.ts:8-9) makes it reach pollCharge, whose handler calls gw.submit \u2014 but NotReadyError means the gateway already HAS the charge (not settled yet) and submit is documented as non-idempotent (\"every call creates a new charge\"). WHY: pollCharge runs on every tick, so every tick while a charge is unsettled now issues a fresh submit, creating duplicate charges and double-billing the customer. Before this change fetchStatus wrapped every error in FailedError, so pollCharge's NotReadyError/resubmit branch was unreachable. HOW: do not resubmit on NotReadyError \u2014 treat it as pending and re-poll (e.g. return a pending state), and only resubmit on a distinct \"charge never received\" error. NOTE: this revises the earlier round-a-propagate suggestion \u2014 propagating NotReadyError is correct in isolation, but it activates a non-idempotent resubmit path in poller.ts that must be fixed alongside it.",
+          "keep": true,
+          "rationale": "Verified: errors.ts documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', while poller.ts:13-15 treats NotReadyError as 'gateway never received it' and calls gw.submit, which gateway.ts:3 explicitly documents as 'NOT idempotent: every call creates a new charge.' Before this change fetchStatus wrapped every error (including NotReadyError) into FailedError, so pollCharge's resubmit branch was unreachable. The new re-throw at status.ts:8-9 makes it reachable, so on each poll tick for an unsettled charge a fresh submit is issued, producing duplicate charges. This is a distinct consequence of applying the earlier round-a-propagate suggestion (not a repeat of it), and the code path is concrete and reachable. KEEP.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|submit",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError from fetchStatus (status.ts:8-9) makes it reach pollCharge, whose NotReadyError branch calls gw.submit(charge.payload). WHY: errors.ts documents NotReadyError as a transient 'gateway has the charge but has not settled it yet' condition, while gateway.ts documents submit as NOT idempotent ('every call creates a new charge') \u2014 so a charge that was actually received but is not yet settled is now resubmitted, creating a duplicate charge (double billing), and it repeats on every poll tick while the status stays not-ready. Before this change NotReadyError was wrapped in FailedError, so this resubmit path was unreachable. HOW: Do not funnel a transient not-settled state into the resubmit path \u2014 distinguish 'never received' from 'not settled' (e.g. a dedicated error type) or make the resend idempotent with an idempotency key derived from charge.id, so pollCharge only calls submit when the gateway truly never received the charge.",
+          "keep": true,
+          "rationale": "Verified the full path: status.ts:8-9 re-throws NotReadyError, poller.ts:13-15 catches it and calls the non-idempotent gw.submit (gateway.ts:3), while errors.ts:1 defines NotReadyError as \"gateway has the charge but not settled.\" Thus a received-but-unsettled charge gets resubmitted every poll tick, creating duplicate charges. Previously fetchStatus wrapped it in FailedError and pollCharge's NotReadyError branch was unreachable, so this is genuinely activated by the change. This is NOT a repeat of the earlier decision (round-a-propagate), which raised the opposite failure (transient misclassified as terminal); this double-billing failure is a distinct consequence of applying that fix. Technical claim holds.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRe-throwing NotReadyError from fetchStatus (status.ts:8-9) now reaches pollCharge, whose handler calls the non-idempotent gw.submit, so every tick while a charge is unsettled issues a fresh submit and double-bills the customer (previously fetchStatus wrapped every error in FailedError, leaving this branch unreachable). Do not resubmit on NotReadyError \u2014 treat it as pending and re-poll, and only resubmit on a distinct \"charge never received\" error."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRe-throwing NotReadyError from fetchStatus (status.ts:8-9) now reaches pollCharge's NotReadyError branch, which calls the non-idempotent gw.submit (gateway.ts: \"every call creates a new charge\"), so a received-but-unsettled charge gets resubmitted and double-billed on every poll tick (previously NotReadyError was wrapped in FailedError, making this path unreachable). Distinguish \"never received\" from \"not settled\" \u2014 via a dedicated error type or an idempotency key derived from charge.id \u2014 so pollCharge only calls submit when the gateway truly never received the charge."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R2-consequence-status-implemented",
+      "error": "judge exhausted retries: fetch failed"
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 228134,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: By rethrowing NotReadyError unchanged, fetchStatus now surfaces a transient 'charge accepted but not settled yet' state to pollCharge, whose catch branch calls the non-idempotent gw.submit(charge.payload). WHY: Gateway.submit is documented as 'NOT idempotent: every call creates a new charge' (gateway.ts:3) while errors.ts documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)' (errors.ts:1), and pollCharge runs 'on every tick' \u2014 so a charge that was actually accepted is resubmitted and duplicated on every tick (duplicate/over-charge). Before this change fetchStatus always threw FailedError, so pollCharge's NotReadyError branch was unreachable; this change newly makes it reachable. HOW: do not resubmit on a transient not-settled status \u2014 in pollCharge, treat NotReadyError as 'wait and retry' (return a pending state) rather than calling gw.submit, and only resubmit on a distinct 'never received' error. Alternatively, reconcile the two conflicting NotReadyError definitions so the propagated error's meaning matches the resubmit handling.",
+          "keep": true,
+          "rationale": "no parseable verdict \u2014 kept by default",
+          "tools": []
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBy rethrowing NotReadyError unchanged, fetchStatus now surfaces a transient 'charge accepted but not settled yet' state to pollCharge, whose catch branch calls the non-idempotent gw.submit(charge.payload). Gateway.submit is documented as 'NOT idempotent: every call creates a new charge' (gateway.ts:3) while errors.ts documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient)' (errors.ts:1), and pollCharge runs 'on every tick' \u2014 so a charge that was actually accepted is resubmitted and duplicated on every tick (duplicate/over-charge). Before this change fetchStatus always threw FailedError, so pollCharge's NotReadyError branch was unreachable; this change newly makes it reachable. do not resubmit on a transient not-settled status \u2014 in pollCharge, treat NotReadyError as 'wait and retry' (return a pending state) rather than calling gw.submit, and only resubmit on a distinct 'never received' error. Alternatively, reconcile the two conflicting NotReadyError definitions so the propagated error's meaning matches the resubmit handling."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K2-rule-reverses-prior",
+      "error": "Kody Rules could not be evaluated: all 1 rule check(s) failed to run. Your Kody Rules were not applied to this PR."
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K2-rule-reverses-prior",
+      "error": "Kody Rules could not be evaluated: all 1 rule check(s) failed to run. Your Kody Rules were not applied to this PR."
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K2-rule-reverses-prior",
+      "error": "Kody Rules could not be evaluated: all 1 rule check(s) failed to run. Your Kody Rules were not applied to this PR."
+    }
+  ],
+  "infraReasonNote": "Provider DNS resolution failed during this batch (api.fireworks.ai ENOTFOUND); one judge request exhausted fetch retries. Unmeasured rows remain infra."
+}

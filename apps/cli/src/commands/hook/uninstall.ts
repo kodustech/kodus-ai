@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import fs from 'fs/promises';
 import path from 'path';
 import { gitService } from '../../services/git.service.js';
-import { KODUS_MARKER } from './install.js';
+import { extractTraceBlock, KODUS_MARKER } from './install.js';
 import { exitWithCode } from '../../utils/cli-exit.js';
 import { cliError, cliInfo } from '../../utils/logger.js';
 import type { GlobalOptions } from '../../types/cli.js';
@@ -35,8 +35,7 @@ export async function uninstallAction(
             throw new CommandError('NOT_IN_GIT_REPO', 'Not a git repository.');
         }
 
-        const gitRoot = await gitService.getGitRoot();
-        const hookPath = path.join(gitRoot.trim(), '.git', 'hooks', 'pre-push');
+        const hookPath = path.join(await gitService.getHooksDir(), 'pre-push');
 
         let content: string;
         try {
@@ -79,7 +78,14 @@ export async function uninstallAction(
             return;
         }
 
-        await fs.unlink(hookPath);
+        const traceBlock = extractTraceBlock(content);
+        if (traceBlock) {
+            await fs.writeFile(hookPath, `#!/bin/sh\n${traceBlock}\n`, {
+                mode: 0o755,
+            });
+        } else {
+            await fs.unlink(hookPath);
+        }
         cliInfo(chalk.green('✓ Pre-push hook removed successfully.'));
     } catch (error) {
         const normalized = normalizeCommandError(error);

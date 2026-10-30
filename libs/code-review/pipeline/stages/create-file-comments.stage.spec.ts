@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { CreateFileCommentsStage } from './create-file-comments.stage';
 import { COMMENT_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CommentManagerService.contract';
 import { SUGGESTION_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/SuggestionService.contract';
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
-import { DRY_RUN_SERVICE_TOKEN } from '@libs/dryRun/domain/contracts/dryRun.service.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
 /**
@@ -20,10 +20,11 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
     let mockCommentManagerService: any;
     let mockPullRequestService: any;
     let mockSuggestionService: any;
-    let mockDryRunService: any;
 
+    // Frozen by DEFAULT: that is the shape production hands every stage after
+    // the first produce(). See test/fixtures/frozen-pipeline-context.ts.
     const baseContext = (overrides: Partial<CodeReviewPipelineContext> = {}) =>
-        ({
+        frozenContext({
             organizationAndTeamData: {
                 organizationId: 'org-A',
                 teamId: 'team-1',
@@ -43,7 +44,6 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
             discardedSuggestions: [],
             prAllCommits: [{ sha: 'commit-1' }],
             fileMetadata: new Map(),
-            dryRun: { enabled: false },
             ...overrides,
         }) as any as CodeReviewPipelineContext;
 
@@ -62,9 +62,6 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
                 filteredDiscardedSuggestions: [],
             }),
         };
-        mockDryRunService = {
-            addFilesToDryRun: jest.fn().mockResolvedValue(undefined),
-        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -81,10 +78,6 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
                     provide: SUGGESTION_SERVICE_TOKEN,
                     useValue: mockSuggestionService,
                 },
-                {
-                    provide: DRY_RUN_SERVICE_TOKEN,
-                    useValue: mockDryRunService,
-                },
             ],
         }).compile();
 
@@ -94,41 +87,75 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
     it('persists changedFiles even when there are no valid AND no discarded suggestions', async () => {
         // The bug: this exact combination (both arrays empty) used to skip
         // the save call entirely and leave files: [] in the document.
+        // baseContext() is Immer-frozen, so this also guards c886e369a (a
+        // direct write to the frozen pullRequest threw before the save).
         const ctx = baseContext({
             validSuggestions: [],
             discardedSuggestions: [],
         } as any);
 
-        await stage.execute(ctx);
+        const result = await stage.execute(ctx);
 
         expect(
             mockPullRequestService.aggregateAndSaveDataStructure,
         ).toHaveBeenCalledTimes(1);
 
         const callArgs =
-            mockPullRequestService.aggregateAndSaveDataStructure.mock
-                .calls[0];
+            mockPullRequestService.aggregateAndSaveDataStructure.mock.calls[0];
         // Signature: (pullRequest, repository, enrichedFiles, prioritized,
-        //            unused, platformType, organizationAndTeamData, commits)
+        //            unused, platformType, organizationAndTeamData, commits,
+        //            prLevelSuggestions, options)
         const enrichedFiles = callArgs[2];
         const orgAndTeam = callArgs[6];
 
+        expect(callArgs[0].number).toBe(99);
         expect(enrichedFiles).toHaveLength(1);
         expect(enrichedFiles[0].filename).toBe('src/foo.ts');
         expect(orgAndTeam.organizationId).toBe('org-A');
+        // The pull request here is the one the review started with: the save
+        // keeps a close or merge stored while it ran.
+        expect(callArgs[9]).toEqual({ keepStoredState: true });
+
+        // An empty (not missing) lineComments is what lets
+        // RequestChangesOrApproveStage approve a clean PR.
+        expect(result.lineComments).toEqual([]);
+        // Comments on suggestions implemented since the last run are
+        // resolved on every review, even one with nothing new to post.
+        expect(
+            mockSuggestionService.resolveImplementedSuggestionsOnPlatform,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationAndTeamData: expect.objectContaining({
+                    organizationId: 'org-A',
+                }),
+                prNumber: 99,
+            }),
+        );
     });
 
-    it('still persists when validSuggestions=0 but discardedSuggestions has items (regression for the prior happy path)', async () => {
+    it('records the reviewed head as analyzed, not whichever commit sorts last (#2037)', async () => {
+        // Rebased commits share one committer date, so a date-sorted list can
+        // end on the oldest commit. Bitbucket's head sha is 12 characters.
+        const head = 'abcdef123456' + '0'.repeat(28);
         const ctx = baseContext({
-            validSuggestions: [],
-            discardedSuggestions: [{ id: 'd-1' } as any],
+            pullRequest: { number: 99, head: { sha: 'abcdef123456' } },
+            prAllCommits: [{ sha: head }, { sha: 'oldest' }],
         } as any);
 
-        await stage.execute(ctx);
+        const result = await stage.execute(ctx);
 
-        expect(
-            mockPullRequestService.aggregateAndSaveDataStructure,
-        ).toHaveBeenCalledTimes(1);
+        expect(result.lastAnalyzedCommit).toEqual({ sha: head });
+    });
+
+    it('falls back to the last listed commit when the head is not in the list', async () => {
+        const ctx = baseContext({
+            pullRequest: { number: 99, head: { sha: 'gone-by-force-push' } },
+            prAllCommits: [{ sha: 'commit-1' }, { sha: 'commit-2' }],
+        } as any);
+
+        const result = await stage.execute(ctx);
+
+        expect(result.lastAnalyzedCommit).toEqual({ sha: 'commit-2' });
     });
 
     it('aborts early (no save) when there are no commits', async () => {
@@ -143,17 +170,37 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
             mockPullRequestService.aggregateAndSaveDataStructure,
         ).not.toHaveBeenCalled();
     });
-
-    it('skips Mongo persistence and routes to dryRunService when dryRun is enabled', async () => {
+    it('records missing prompt delivery as partial while preserving frozen input', async () => {
+        const error = new Error('reply failed');
+        mockCommentManagerService.createLineComments = jest.fn(
+            async (...args: unknown[]) => {
+                (args[8] as (error: Error) => void)(error);
+                return { commentResults: [], lastAnalyzedCommit: 'abc' };
+            },
+        );
         const ctx = baseContext({
-            dryRun: { enabled: true, id: 'dry-1' },
-        } as any);
-
-        await stage.execute(ctx);
-
-        expect(mockDryRunService.addFilesToDryRun).toHaveBeenCalledTimes(1);
-        expect(
-            mockPullRequestService.aggregateAndSaveDataStructure,
-        ).not.toHaveBeenCalled();
+            errors: [],
+            codeReviewConfig: {},
+            validSuggestions: [
+                {
+                    relevantFile: 'src/foo.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    suggestionContent: 'Guard null.',
+                    severity: 'high',
+                    label: 'bug',
+                },
+            ] as never,
+        });
+        const out = await stage.execute(ctx);
+        expect(ctx.errors).toEqual([]);
+        expect(out.errors).toEqual([
+            expect.objectContaining({
+                severity: 'partial',
+                substage: 'bitbucket-prompt-reply',
+                error,
+            }),
+        ]);
+        expect(out.lastAnalyzedCommit).toBe('abc');
     });
 });

@@ -360,7 +360,11 @@ export class PipelineChecksService implements IPipelineChecksService {
             platformType,
         } = data;
         if (!checkRunId) {
-            this.logger.warn({
+            // EXPECTED when the run has no GitHub check-run to update (checks
+            // disabled, self-hosted without the Checks API, or a stage that runs
+            // before the check is created). Not an anomaly → `debug`, off the
+            // logs table.
+            this.logger.debug({
                 message: 'No checkRunId found in context for updateCheck',
                 context: PipelineChecksService.name,
             });
@@ -416,7 +420,9 @@ export class PipelineChecksService implements IPipelineChecksService {
             platformType,
         } = data;
         if (!checkRunId) {
-            this.logger.warn({
+            // Same expected no-op as updateCheck (no check-run in context) →
+            // `debug`, not `warn`.
+            this.logger.debug({
                 message: 'No checkRunId found in context for finalizeCheck',
                 context: PipelineChecksService.name,
             });

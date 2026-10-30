@@ -13,30 +13,35 @@ const CODE_REVIEW_ROUTE_OVERRIDE_PATH_PREFIXES: Record<string, string[]> = {
         "showStatusFeedback",
         "reviewCadence",
         "pullRequestApprovalActive",
+        "approvalLabels",
+        "approvalAuthors",
+        "approvalRiskActive",
+        "approvalRiskInstructions",
+        "approvalSensitivePaths",
         "kodusConfigFileOverridesWebPreferences",
         "isRequestChangesActive",
         "runOnDraft",
         "enableCommittableSuggestions",
     ],
-    "review-categories": ["reviewOptions"],
+    "linked-repositories": ["linkedRepositories"],
+    "business-logic": ["businessLogic"],
     "custom-prompts": ["v2PromptOverrides"],
-    // The "Review Filters" tab lives under href=suggestion-control and
-    // edits `suggestionControl.*` fields (max suggestions, severity
-    // filter, grouping mode, etc.). The entry was dropped in
-    // c4749d680 assuming the page would be removed along with the
-    // sidebar rename, but the page is still there — without this entry
-    // the override-count badge silently reads as 0.
-    "suggestion-control": ["suggestionControl"],
+    // Tabs shell: "What to review" = categories + their prompts + filters.
+    "review-scope": [
+        "reviewOptions",
+        "v2PromptOverrides.categories",
+        "suggestionControl",
+        "repoInstructionsEnabled",
+    ],
+    // Tabs shell: "What Kody writes" = suggestion voice + PR summary (the
+    // custom messages count is added separately, see the shell header).
+    "output": ["v2PromptOverrides.generation", "summary"],
     "pr-summary": ["summary"],
     "kody-rules": [
-        // `ideRulesSyncEnabled` is intentionally NOT counted: it's an
-        // import action toggle ("am I auto-syncing right now?"), not a
-        // rule-shaping configuration. Counting it as an override made
-        // the Kody Rules nav badge show "1" on repos that hadn't actually
-        // customised any rule policy, which read as "1 custom rule" to
-        // users.
         "kodyKnowledgeApproval",
         "kodyRulesGeneratorEnabled",
+        "kodyRulesAutoPauseEnabled",
+        "kodyLearningExcludedReviewers",
     ],
 };
 

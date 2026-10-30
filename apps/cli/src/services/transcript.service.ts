@@ -68,8 +68,7 @@ class TranscriptService {
 
             // Handle top-level entries with message field
             const message = entry['message'] as
-                | Record<string, unknown>
-                | undefined;
+                Record<string, unknown> | undefined;
             if (message) {
                 this.processMessage(
                     message,
@@ -205,8 +204,7 @@ class TranscriptService {
 
             // Token usage
             const usage = message['usage'] as
-                | Record<string, unknown>
-                | undefined;
+                Record<string, unknown> | undefined;
             if (usage) {
                 result.tokenUsage.inputTokens += toNumber(
                     usage['input_tokens'],

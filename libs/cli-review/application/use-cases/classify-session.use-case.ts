@@ -1,13 +1,8 @@
 import { createLogger } from '@libs/core/log/logger';
-import {
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { LLM } from '@libs/llm/llm';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
+import { ObservabilityService } from '@libs/core/log/observability.service';
 import {
     CliSessionClassifiedDecision,
     CliSessionDecisionOrigin,
@@ -15,6 +10,9 @@ import {
 } from '@libs/cli-review/domain/types/cli-session-capture.types';
 import { SessionEventRepository } from '@libs/cli-review/infrastructure/repositories/session-event.repository';
 import { SessionEventModel } from '@libs/cli-review/infrastructure/repositories/schemas/session-event.model';
+import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { LLM_TASK } from '@libs/llm/byok-config';
 
 const LLMDecisionSchema = z.object({
     type: z.enum([
@@ -30,9 +28,10 @@ const LLMDecisionSchema = z.object({
     rationale: z.string().max(1000).optional(),
     confidence: z.number().min(0).max(1).optional(),
     evidence: z.array(z.string().max(300)).max(5).optional(),
+    scope: z.array(z.string().max(300)).max(20).optional(),
 });
 
-const LLMDecisionExtractionSchema = z.object({
+export const LLMDecisionExtractionSchema = z.object({
     decisions: z.array(LLMDecisionSchema).max(12),
 });
 
@@ -62,7 +61,8 @@ export class ClassifySessionUseCase {
 
     constructor(
         private readonly sessionEventRepository: SessionEventRepository,
-        private readonly promptRunnerService: PromptRunnerService,
+        private readonly observabilityService: ObservabilityService,
+        private readonly permissionValidationService: PermissionValidationService,
     ) {}
 
     async execute(sessionEndEventUuid: string): Promise<void> {
@@ -106,7 +106,10 @@ export class ClassifySessionUseCase {
         );
 
         try {
-            const decisions = await this.extractWithLLM(aggregated);
+            const decisions = await this.extractWithLLM(aggregated, {
+                organizationId: sessionEndEvent.organizationId,
+                teamId: sessionEndEvent.teamId,
+            });
             if (decisions.length > 0) {
                 await this.sessionEventRepository.markClassificationCompleted(
                     sessionEndEventUuid,
@@ -291,13 +294,8 @@ export class ClassifySessionUseCase {
 
     private async extractWithLLM(
         aggregated: AggregatedSession,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<CliSessionClassifiedDecision[]> {
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            LLMModelProvider.CEREBRAS_GLM_47,
-            LLMModelProvider.GEMINI_3_FLASH_PREVIEW,
-        );
-
         const systemPrompt = [
             'You are classifying a complete coding session into reusable decisions.',
             '',
@@ -308,7 +306,7 @@ export class ClassifySessionUseCase {
             '- "filesModified": files the agent changed',
             '',
             'Return ONLY JSON with shape:',
-            '{ "decisions": [ { "type": "...", "origin": "...", "decision": "...", "rationale": "...", "confidence": 0.0, "evidence": ["..."] } ] }',
+            '{ "decisions": [ { "type": "...", "origin": "...", "decision": "...", "rationale": "...", "confidence": 0.0, "evidence": ["..."], "scope": ["path/from/filesModified.ts"] } ] }',
             '',
             'Allowed decision types:',
             '- architectural_decision: high-level structure or system choice',
@@ -328,6 +326,7 @@ export class ClassifySessionUseCase {
             '- Keep each "decision" concise and self-contained.',
             '- confidence must be between 0 and 1.',
             '- Use the turn structure to determine origin: if the decision came from a prompt, it is "human". If it appeared first in a response without being asked, it is "agent". If the human asked something general and the agent made the specific technical choice, it is "collaborative".',
+            '- "scope" lists the paths the decision applies to. Draw them from filesModified (a directory prefix is fine); omit paths that do not appear there.',
             '- If nothing useful exists, return { "decisions": [] }.',
         ].join('\n');
 
@@ -348,22 +347,31 @@ export class ClassifySessionUseCase {
             subagents: aggregated.subagents.slice(0, 10),
         };
 
-        const result = await promptRunner
-            .builder()
-            .setParser(ParserType.ZOD, LLMDecisionExtractionSchema)
-            .setLLMJsonMode(true)
-            .setTemperature(0)
-            .setPayload(userPayload)
-            .addPrompt({
-                role: PromptRole.SYSTEM,
-                prompt: systemPrompt,
-            })
-            .addPrompt({
-                role: PromptRole.USER,
-                prompt: JSON.stringify(userPayload),
-            })
-            .setRunName('classifySession')
-            .execute();
+        // Migrated off the legacy LangChain PromptRunner path onto the AI SDK
+        // path (REQ-NOLC-01). Routed through the org's own BYOK slot for
+        // LLM_TASK.prSummary (falls back to the managed default when the org
+        // has none) — this used to hardcode `byokConfig: undefined` regardless
+        // of BYOK, a leftover of the migration off LangChain. prSummary is
+        // reused rather than a dedicated task: this is the same "structured
+        // extraction over a session/PR" workload as the module's other
+        // prSummary callers (public-pr-ai-summary/public-pr-grouping), not a
+        // primary review workload like codeReview/kodyRulesReview.
+        // `.setTemperature(0)` is likewise dropped — runStructuredReviewCall
+        // does not thread temperature; acceptable for this structured
+        // extraction. Parity is on the parsed decisions[] mapping.
+        const byokConfig = await this.permissionValidationService.resolveTaskSlot(
+            organizationAndTeamData,
+            LLM_TASK.prSummary,
+        );
+
+        const result = await LLM.run({
+            schema: LLMDecisionExtractionSchema,
+            system: systemPrompt,
+            user: JSON.stringify(userPayload),
+            runName: 'ClassifySessionUseCase::classifySession',
+            organizationId: organizationAndTeamData?.organizationId,
+            byokConfig,
+        });
 
         const rawDecisions = result?.decisions ?? [];
         return rawDecisions.map((decision) => {
@@ -385,6 +393,10 @@ export class ClassifySessionUseCase {
                     .map((item) => this.trim(item, 300))
                     .filter(Boolean)
                     .slice(0, 5),
+                scope: this.normalizeScope(
+                    decision.scope,
+                    aggregated.filesModified,
+                ),
                 autoPromoteCandidate: this.shouldAutoPromote(
                     normalizedType,
                     normalizedConfidence,
@@ -430,6 +442,9 @@ export class ClassifySessionUseCase {
                 decision: this.trim(sentence, 500),
                 confidence,
                 evidence,
+                // Without a model there is nothing to scope a sentence to
+                // beyond the files the session touched.
+                scope: aggregated.filesModified.slice(0, 20),
                 autoPromoteCandidate: this.shouldAutoPromote(type, confidence),
             };
         });
@@ -487,6 +502,53 @@ export class ClassifySessionUseCase {
             confidence >= 0.7 &&
             ['architectural_decision', 'convention', 'tradeoff'].includes(type)
         );
+    }
+
+    /**
+     * Keep model-invented paths out of the store: a scope entry only counts if
+     * it is, or prefixes, a path the session actually modified.
+     */
+    private normalizeScope(
+        rawScope: string[] | undefined,
+        filesModified: string[],
+    ): string[] {
+        const candidates = filesModified.map((entry) =>
+            this.normalizePath(entry),
+        );
+
+        const requested = (rawScope ?? [])
+            .map((entry) => this.normalizePath(entry))
+            .filter(Boolean);
+
+        const candidatePrefixes = new Set<string>();
+        for (const candidate of candidates) {
+            const segments = candidate.split('/');
+            for (let index = 1; index <= segments.length; index += 1) {
+                candidatePrefixes.add(segments.slice(0, index).join('/'));
+            }
+        }
+
+        const valid = requested.filter((entry) =>
+            candidatePrefixes.has(entry),
+        );
+
+        // A decision with no usable scope still belongs to the files the
+        // session touched — otherwise it can never reach a review.
+        const resolved = valid.length > 0 ? valid : candidates;
+
+        return [...new Set(resolved)].slice(0, 20);
+    }
+
+    private normalizePath(value: string): string {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value
+            .trim()
+            .replace(/\\/g, '/')
+            .replace(/^\.\//, '')
+            .replace(/^\/+/, '')
+            .replace(/\/+$/, '');
     }
 
     private normalizeConfidence(value?: number): number | undefined {

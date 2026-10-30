@@ -1,13 +1,13 @@
 import { createLogger } from '@libs/core/log/logger';
-import {
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { LLM_ERROR_TAG } from '@libs/llm/log-tags';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import z from 'zod';
 import filteredLibraryKodyRules from '@libs/code-review/infrastructure/data/filtered-rules.json';
 import { Injectable } from '@nestjs/common';
 import { v4 } from 'uuid';
+
+import { LLM_TASK } from '@libs/llm/byok-config';
+import { LLM } from '@libs/llm/llm';
 
 import { SUPPORTED_LANGUAGES } from '@libs/code-review/domain/contracts/SupportedLanguages';
 import { isKodyAuthoredBody } from '@libs/common/utils/kody-identifiers';
@@ -22,7 +22,7 @@ import {
     prompt_CommentCategorizerUser,
     prompt_CommentIrrelevanceFilterSystem,
     prompt_CommentIrrelevanceFilterUser,
-} from '@libs/common/utils/langchainCommon/prompts/commentAnalysis';
+} from '@libs/common/utils/prompts/commentAnalysis';
 import {
     kodyRulesGeneratorDuplicateFilterSchema,
     kodyRulesGeneratorQualityFilterSchema,
@@ -33,11 +33,10 @@ import {
     prompt_KodyRulesGeneratorQualityFilterUser,
     prompt_KodyRulesGeneratorSystem,
     prompt_KodyRulesGeneratorUser,
-} from '@libs/common/utils/langchainCommon/prompts/kodyRulesGenerator';
+} from '@libs/common/utils/prompts/kodyRulesGenerator';
 import { DocumentationContextItem } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { LibraryKodyRule } from '@libs/core/infrastructure/config/types/general/kodyRules.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { KodyRuleSeverity } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
@@ -46,14 +45,88 @@ import {
     KodyRulesStatus,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
+/**
+ * Resolved model selection for a Kody Rules LLM call. BYOK wins when present;
+ * otherwise `modelOverride` forces the managed trial model (DeepSeek V4 Flash
+ * on Fireworks); both undefined resolves the self-hosted env model. Produced by
+ * `resolveKodyRulesModelPolicy`.
+ */
+export interface KodyRulesModelSelection {
+    byokConfig?: NormalizedModel;
+    modelOverride?: string;
+}
+
 @Injectable()
 export class CommentAnalysisService {
     private readonly logger = createLogger(CommentAnalysisService.name);
     constructor(
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observabilityService: ObservabilityService,
         private readonly permissionValidationService: PermissionValidationService,
     ) {}
+
+    /**
+     * Runs a structured-output LLM call, resolving the model the SAME way the
+     * code-review agents do (see `resolveReviewAgentModel` / model-factory):
+     * `resolveTaskModel(v2Config, LLM_TASK.codeReview, …)` over the org's raw config
+     * — BYOK wins; self-hosted resolves the env model; cloud trial forces the
+     * managed model (DeepSeek V4 Flash on Fireworks) via `modelOverride` (the
+     * default-model override); cloud without BYOK is already skipped upstream by
+     * the model policy. `wrapByokModel` adds the shared concurrency limiter +
+     * error classification. Non-strict structured output so schemas with optional
+     * fields work across providers. LLM failures propagate — callers must not
+     * treat them as "no result".
+     */
+    private async runStructuredLLM<S extends z.ZodType>(args: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        modelConfig: KodyRulesModelSelection;
+        schema: S;
+        system: string;
+        user: string;
+        runName: string;
+        attrs?: Record<string, unknown>;
+    }): Promise<z.infer<S>> {
+        const {
+            organizationAndTeamData,
+            modelConfig,
+            schema,
+            system,
+            user,
+            runName,
+            attrs,
+        } = args;
+
+        // Resolve the routed codeReview slot (org-aware), then run it through the
+        // shared STRUCTURED executor — the same path every other structured review
+        // call uses: BYOK limiter, the slot's tuning + reasoning, the span, the
+        // central strict-wire-schema conversion and the D-00c latency re-issue.
+        // Replaces the hand-rolled resolveTaskModel + wrapByokModel +
+        // tracedGenerateText copy. `modelOverride` (trial default) only applies
+        // when there is no BYOK; off-BYOK yields the env/managed default.
+        const slot = await this.permissionValidationService.resolveTaskSlot(
+            organizationAndTeamData,
+            LLM_TASK.codeReview,
+        );
+
+        // Cast: LLM.run's return is a conditional over `z.ZodType | Schema`;
+        // here `S extends z.ZodType`, so it resolves to `z.infer<S>` — TS just
+        // can't narrow the conditional through the call. observabilityService is
+        // no longer passed: LLM owns the span internally (app singleton).
+        return LLM.run({
+            byokConfig: slot,
+            schema,
+            system,
+            user,
+            runName,
+            spanName: `${CommentAnalysisService.name}::${runName}`,
+            attrs,
+            organizationId: organizationAndTeamData.organizationId,
+            telemetryMetadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+            },
+            defaultModelOverride: modelConfig.modelOverride,
+        }) as Promise<z.infer<S>>;
+    }
 
     async categorizeComments(params: {
         comments: UncategorizedComment[];
@@ -75,56 +148,19 @@ export class CommentAnalysisService {
                 return [];
             }
 
-            const runName = 'commentCategorizer';
-            const spanName = `${CommentAnalysisService.name}::${runName}`;
-
-            const byokConfig =
-                await this.permissionValidationService.getBYOKConfig(
-                    organizationAndTeamData,
-                );
-
-            const promptRunner = new BYOKPromptRunnerService(
-                this.promptRunnerService,
-                LLMModelProvider.GEMINI_2_5_PRO,
-                LLMModelProvider.NOVITA_DEEPSEEK_V3_0324,
-                byokConfig,
-            );
-
-            const spanAttrs = {
-                type: promptRunner.executeMode,
-                commentsCount: filteredComments.length,
-            };
-
-            const { result: categorizedCommentsRes } =
-                await this.observabilityService.runLLMInSpan({
-                    spanName,
-                    runName,
-                    attrs: spanAttrs,
-                    byokConfig,
-                    exec: async (callbacks) => {
-                        return promptRunner
-                            .builder()
-                            .setParser(ParserType.ZOD, commentCategorizerSchema)
-                            .setLLMJsonMode(true)
-                            .setPayload({ comments: filteredComments })
-                            .addPrompt({
-                                role: PromptRole.SYSTEM,
-                                prompt: prompt_CommentCategorizerSystem,
-                            })
-                            .addPrompt({
-                                role: PromptRole.USER,
-                                prompt: prompt_CommentCategorizerUser,
-                            })
-                            .addMetadata({
-                                context: CommentAnalysisService.name,
-                                metadata: params,
-                                runName,
-                            })
-                            .addCallbacks(callbacks)
-                            .setRunName(runName)
-                            .execute();
-                    },
-                });
+            // The codeReview slot is resolved inside runStructuredLLM from the
+            // raw config (native); no legacy byokConfig needed here.
+            const categorizedCommentsRes = await this.runStructuredLLM({
+                organizationAndTeamData,
+                modelConfig: {},
+                schema: commentCategorizerSchema,
+                system: prompt_CommentCategorizerSystem(),
+                user: prompt_CommentCategorizerUser({
+                    comments: filteredComments,
+                }),
+                runName: 'commentCategorizer',
+                attrs: { commentsCount: filteredComments.length },
+            });
 
             const categorizedComments = categorizedCommentsRes?.suggestions;
             if (!categorizedComments || categorizedComments.length === 0) {
@@ -142,7 +178,7 @@ export class CommentAnalysisService {
             });
         } catch (error) {
             this.logger.error({
-                message: 'Error categorizing comments',
+                message: `${LLM_ERROR_TAG} Error categorizing comments`,
                 context: CommentAnalysisService.name,
                 error,
                 metadata: params,
@@ -185,6 +221,7 @@ export class CommentAnalysisService {
         comments: UncategorizedComment[];
         existingRules: IKodyRule[];
         organizationAndTeamData: OrganizationAndTeamData;
+        modelConfig?: KodyRulesModelSelection;
         memories?: Array<Partial<IKodyRule>>;
         documentationContext?: DocumentationContextItem[];
     }): Promise<IKodyRule[]> {
@@ -196,224 +233,129 @@ export class CommentAnalysisService {
             documentationContext,
         } = params;
 
-        try {
-            const filteredComments = await this.filterComments({
-                comments,
-                organizationAndTeamData,
-            });
+        // The use-case/cron pass the policy-resolved selection (its
+        // `modelOverride` still honored). When called without one, the codeReview
+        // slot is resolved inside runStructuredLLM from the raw config.
+        const modelConfig: KodyRulesModelSelection = params.modelConfig ?? {};
 
-            if (!filteredComments || filteredComments.length === 0) {
-                this.logger.log({
-                    message:
-                        'No comments to generate Kody rules after filtering',
-                    context: CommentAnalysisService.name,
-                    metadata: params,
-                });
-                return [];
-            }
+        // NOTE: no swallowing try/catch here — an LLM failure must propagate so
+        // the use-case marks the run as errored instead of "0 rules, success".
+        const filteredComments = await this.filterComments({
+            comments,
+            organizationAndTeamData,
+            modelConfig,
+        });
 
-            const byokConfig =
-                await this.permissionValidationService.getBYOKConfig(
-                    organizationAndTeamData,
-                );
-
-            const promptRunner = new BYOKPromptRunnerService(
-                this.promptRunnerService,
-                LLMModelProvider.GEMINI_2_5_PRO,
-                LLMModelProvider.NOVITA_DEEPSEEK_V3_0324,
-                byokConfig,
-            );
-
-            const genRun = 'generateKodyRules.generate';
-            const { result: generatedRes } =
-                await this.observabilityService.runLLMInSpan({
-                    spanName: `${CommentAnalysisService.name}::${genRun}`,
-                    runName: genRun,
-                    attrs: {
-                        type: promptRunner.executeMode,
-                        commentsCount: filteredComments.length,
-                    },
-                    byokConfig,
-                    exec: async (callbacks) => {
-                        return promptRunner
-                            .builder()
-                            .setParser(ParserType.ZOD, kodyRulesGeneratorSchema)
-                            .setLLMJsonMode(true)
-                            .setPayload({
-                                comments: filteredComments,
-                                rules: filteredLibraryKodyRules,
-                                memories,
-                                documentationContext,
-                            })
-                            .addPrompt({
-                                role: PromptRole.SYSTEM,
-                                prompt: prompt_KodyRulesGeneratorSystem,
-                            })
-                            .addPrompt({
-                                role: PromptRole.USER,
-                                prompt: prompt_KodyRulesGeneratorUser,
-                            })
-                            .addMetadata({
-                                context: CommentAnalysisService.name,
-                                metadata: params,
-                                runName: genRun,
-                            })
-                            .setRunName(genRun)
-                            .addCallbacks(callbacks)
-                            .execute();
-                    },
-                });
-
-            const generated = generatedRes?.rules as Partial<IKodyRule>[];
-
-            if (!generated || generated.length === 0) {
-                this.logger.log({
-                    message: 'No rules generated',
-                    context: CommentAnalysisService.name,
-                    metadata: params,
-                });
-                return [];
-            }
-
-            const generatedWithUuids = generated.map((rule) => ({
-                ...rule,
-                uuid: rule.uuid || v4(),
-            }));
-
-            const existingRulesAsLibrary = existingRules.map((rule) => ({
-                ...rule,
-                why_is_this_important:
-                    (rule as Partial<LibraryKodyRule>)?.why_is_this_important ||
-                    '',
-            })) as LibraryKodyRule[];
-
-            let deduplicatedRules = generatedWithUuids;
-            if (existingRules && existingRules.length > 0) {
-                const dedupeRun = 'generateKodyRules.dedupe';
-                const { result: deduplicatedRulesUuidsRes } =
-                    await this.observabilityService.runLLMInSpan({
-                        spanName: `${CommentAnalysisService.name}::${dedupeRun}`,
-                        runName: dedupeRun,
-                        attrs: {
-                            type: promptRunner.executeMode,
-                            newRulesCount: generatedWithUuids.length,
-                            existingRulesCount: existingRulesAsLibrary.length,
-                        },
-                        byokConfig,
-                        exec: async (callbacks) => {
-                            return promptRunner
-                                .builder()
-                                .setParser(
-                                    ParserType.ZOD,
-                                    kodyRulesGeneratorDuplicateFilterSchema,
-                                )
-                                .setLLMJsonMode(true)
-                                .setPayload({
-                                    existingRules: existingRulesAsLibrary,
-                                    newRules: generatedWithUuids,
-                                })
-                                .addPrompt({
-                                    role: PromptRole.SYSTEM,
-                                    prompt: prompt_KodyRulesGeneratorDuplicateFilterSystem,
-                                })
-                                .addPrompt({
-                                    role: PromptRole.USER,
-                                    prompt: prompt_KodyRulesGeneratorDuplicateFilterUser,
-                                })
-                                .addMetadata({
-                                    context: CommentAnalysisService.name,
-                                    metadata: params,
-                                    runName: dedupeRun,
-                                })
-                                .addCallbacks(callbacks)
-                                .setRunName(dedupeRun)
-                                .execute();
-                        },
-                    });
-
-                const deduplicatedRulesUuids = deduplicatedRulesUuidsRes?.uuids;
-
-                if (
-                    !deduplicatedRulesUuids ||
-                    deduplicatedRulesUuids.length === 0
-                ) {
-                    this.logger.log({
-                        message: 'No rules after deduplication',
-                        context: CommentAnalysisService.name,
-                        metadata: params,
-                    });
-                    return [];
-                }
-
-                deduplicatedRules = this.mapRuleUuidToRule({
-                    rules: generatedWithUuids,
-                    uuids: deduplicatedRulesUuids,
-                });
-            }
-
-            const qualityRun = 'generateKodyRules.quality';
-            const { result: filteredRulesUuidsRes } =
-                await this.observabilityService.runLLMInSpan({
-                    spanName: `${CommentAnalysisService.name}::${qualityRun}`,
-                    runName: qualityRun,
-                    attrs: {
-                        type: promptRunner.executeMode,
-                        candidateRulesCount: deduplicatedRules.length,
-                    },
-                    byokConfig,
-                    exec: async (callbacks) => {
-                        return promptRunner
-                            .builder()
-                            .setParser(
-                                ParserType.ZOD,
-                                kodyRulesGeneratorQualityFilterSchema,
-                            )
-                            .setLLMJsonMode(true)
-                            .setPayload({ rules: deduplicatedRules })
-                            .addPrompt({
-                                role: PromptRole.SYSTEM,
-                                prompt: prompt_KodyRulesGeneratorQualityFilterSystem,
-                            })
-                            .addPrompt({
-                                role: PromptRole.USER,
-                                prompt: prompt_KodyRulesGeneratorQualityFilterUser,
-                            })
-                            .addMetadata({
-                                context: CommentAnalysisService.name,
-                                metadata: params,
-                                runName: qualityRun,
-                            })
-                            .addCallbacks(callbacks)
-                            .setRunName(qualityRun)
-                            .execute();
-                    },
-                });
-
-            const filteredRulesUuids = filteredRulesUuidsRes?.uuids;
-
-            if (!filteredRulesUuids || filteredRulesUuids.length === 0) {
-                this.logger.log({
-                    message: 'No rules after quality filter',
-                    context: CommentAnalysisService.name,
-                    metadata: params,
-                });
-                return [];
-            }
-
-            const filteredRules = this.mapRuleUuidToRule({
-                rules: deduplicatedRules,
-                uuids: filteredRulesUuids,
-            });
-
-            return this.standardizeRules({ rules: filteredRules });
-        } catch (error) {
-            this.logger.error({
-                message: 'Error generating Kody rules',
+        if (!filteredComments || filteredComments.length === 0) {
+            this.logger.log({
+                message: 'No comments to generate Kody rules after filtering',
                 context: CommentAnalysisService.name,
-                error,
-                metadata: params,
+                metadata: { organizationAndTeamData },
+            });
+            return [];
+        }
+
+        const generatedRes = await this.runStructuredLLM({
+            organizationAndTeamData,
+            modelConfig,
+            schema: kodyRulesGeneratorSchema,
+            system: prompt_KodyRulesGeneratorSystem(),
+            user: prompt_KodyRulesGeneratorUser({
+                comments: filteredComments,
+                rules: filteredLibraryKodyRules,
+                memories,
+                documentationContext,
+            }),
+            runName: 'generateKodyRules.generate',
+            attrs: { commentsCount: filteredComments.length },
+        });
+
+        const generated = generatedRes?.rules as Partial<IKodyRule>[];
+
+        if (!generated || generated.length === 0) {
+            this.logger.log({
+                message: 'No rules generated',
+                context: CommentAnalysisService.name,
+                metadata: { organizationAndTeamData },
+            });
+            return [];
+        }
+
+        const generatedWithUuids = generated.map((rule) => ({
+            ...rule,
+            uuid: rule.uuid || v4(),
+        }));
+
+        const existingRulesAsLibrary = existingRules.map((rule) => ({
+            ...rule,
+            why_is_this_important:
+                (rule as Partial<LibraryKodyRule>)?.why_is_this_important || '',
+        })) as LibraryKodyRule[];
+
+        let deduplicatedRules = generatedWithUuids;
+        if (existingRules && existingRules.length > 0) {
+            const deduplicatedRulesUuidsRes = await this.runStructuredLLM({
+                organizationAndTeamData,
+                modelConfig,
+                schema: kodyRulesGeneratorDuplicateFilterSchema,
+                system: prompt_KodyRulesGeneratorDuplicateFilterSystem(),
+                user: prompt_KodyRulesGeneratorDuplicateFilterUser({
+                    existingRules: existingRulesAsLibrary,
+                    newRules: generatedWithUuids,
+                }),
+                runName: 'generateKodyRules.dedupe',
+                attrs: {
+                    newRulesCount: generatedWithUuids.length,
+                    existingRulesCount: existingRulesAsLibrary.length,
+                },
+            });
+
+            const deduplicatedRulesUuids = deduplicatedRulesUuidsRes?.uuids;
+
+            if (!deduplicatedRulesUuids || deduplicatedRulesUuids.length === 0) {
+                this.logger.log({
+                    message: 'No rules after deduplication',
+                    context: CommentAnalysisService.name,
+                    metadata: { organizationAndTeamData },
+                });
+                return [];
+            }
+
+            deduplicatedRules = this.mapRuleUuidToRule({
+                rules: generatedWithUuids,
+                uuids: deduplicatedRulesUuids,
             });
         }
+
+        const filteredRulesUuidsRes = await this.runStructuredLLM({
+            organizationAndTeamData,
+            modelConfig,
+            schema: kodyRulesGeneratorQualityFilterSchema,
+            system: prompt_KodyRulesGeneratorQualityFilterSystem(),
+            user: prompt_KodyRulesGeneratorQualityFilterUser({
+                rules: deduplicatedRules,
+            }),
+            runName: 'generateKodyRules.quality',
+            attrs: { candidateRulesCount: deduplicatedRules.length },
+        });
+
+        const filteredRulesUuids = filteredRulesUuidsRes?.uuids;
+
+        if (!filteredRulesUuids || filteredRulesUuids.length === 0) {
+            this.logger.log({
+                message: 'No rules after quality filter',
+                context: CommentAnalysisService.name,
+                metadata: { organizationAndTeamData },
+            });
+            return [];
+        }
+
+        const filteredRules = this.mapRuleUuidToRule({
+            rules: deduplicatedRules,
+            uuids: filteredRulesUuids,
+        });
+
+        return this.standardizeRules({ rules: filteredRules });
     }
 
     private mapRuleUuidToRule(params: {
@@ -465,81 +407,41 @@ export class CommentAnalysisService {
     private async filterComments(params: {
         comments: UncategorizedComment[];
         organizationAndTeamData: OrganizationAndTeamData;
+        modelConfig?: KodyRulesModelSelection;
     }): Promise<UncategorizedComment[]> {
         const { comments, organizationAndTeamData } = params;
 
-        try {
-            const runName = 'commentIrrelevanceFilter';
-            const spanName = `${CommentAnalysisService.name}::${runName}`;
+        // Resolved inside runStructuredLLM from the raw config when no
+        // policy-resolved selection is passed (native).
+        const modelConfig: KodyRulesModelSelection = params.modelConfig ?? {};
 
-            const byokConfig =
-                await this.permissionValidationService.getBYOKConfig(
-                    organizationAndTeamData,
-                );
+        // No swallowing catch — a provider failure must propagate so the run
+        // is marked errored. An empty result (no relevant comments) is a
+        // legitimate outcome and returns [], distinct from a failure.
+        const filteredCommentsIdsRes = await this.runStructuredLLM({
+            organizationAndTeamData,
+            modelConfig,
+            schema: commentIrrelevanceFilterSchema,
+            system: prompt_CommentIrrelevanceFilterSystem(),
+            user: prompt_CommentIrrelevanceFilterUser({ comments }),
+            runName: 'commentIrrelevanceFilter',
+            attrs: { commentsCount: comments.length },
+        });
 
-            const promptRunner = new BYOKPromptRunnerService(
-                this.promptRunnerService,
-                LLMModelProvider.GEMINI_2_5_PRO,
-                LLMModelProvider.NOVITA_DEEPSEEK_V3_0324,
-                byokConfig,
-            );
+        const filteredCommentsIds = filteredCommentsIdsRes?.ids;
 
-            const spanAttrs = {
-                type: promptRunner.executeMode,
-                commentsCount: comments.length,
-            };
-
-            const { result: filteredCommentsIdsRes } =
-                await this.observabilityService.runLLMInSpan({
-                    spanName,
-                    runName,
-                    attrs: spanAttrs,
-                    byokConfig,
-                    exec: async (callbacks) => {
-                        return promptRunner
-                            .builder()
-                            .setParser(
-                                ParserType.ZOD,
-                                commentIrrelevanceFilterSchema,
-                            )
-                            .setLLMJsonMode(true)
-                            .setPayload({ comments })
-                            .addPrompt({
-                                role: PromptRole.SYSTEM,
-                                prompt: prompt_CommentIrrelevanceFilterSystem,
-                            })
-                            .addPrompt({
-                                role: PromptRole.USER,
-                                prompt: prompt_CommentIrrelevanceFilterUser,
-                            })
-                            .addMetadata({
-                                context: CommentAnalysisService.name,
-                                metadata: params,
-                                runName,
-                            })
-                            .addCallbacks(callbacks)
-                            .setRunName(runName)
-                            .execute();
-                    },
-                });
-
-            const filteredCommentsIds = filteredCommentsIdsRes?.ids;
-
-            if (!filteredCommentsIds || filteredCommentsIds.length === 0) {
-                throw new Error('No comments after filtering');
-            }
-
-            return comments.filter((comment) =>
-                filteredCommentsIds.includes(comment.id.toString()),
-            );
-        } catch (error) {
-            this.logger.error({
-                message: 'Error filtering comments',
+        if (!filteredCommentsIds || filteredCommentsIds.length === 0) {
+            this.logger.log({
+                message: 'No relevant comments after irrelevance filter',
                 context: CommentAnalysisService.name,
-                error,
-                metadata: params,
+                metadata: { organizationAndTeamData },
             });
+            return [];
         }
+
+        return comments.filter((comment) =>
+            filteredCommentsIds.includes(comment.id.toString()),
+        );
     }
 
     private getPercentages<T>(count: T, total: number) {
@@ -558,7 +460,12 @@ export class CommentAnalysisService {
             reviewComments: any[];
             files?: any[];
         }[],
+        // Provider-native user ids whose comments must be dropped before
+        // learning (issue #1497). Denylist — empty/undefined keeps everyone.
+        excludedReviewerIds?: Set<string>,
     ) {
+        const hasExclusions = !!excludedReviewerIds && excludedReviewerIds.size > 0;
+
         const processedComments = comments
             .map((pr) => {
                 const allComments = [
@@ -568,9 +475,13 @@ export class CommentAnalysisService {
 
                 const mappedComments = allComments.flatMap((comment) => {
                     if (!('body' in comment)) {
+                        // GitLab discussion notes. Carry `author` so the
+                        // reviewer-exclusion filter below can identify them —
+                        // GitLab keys the author on `author`, not `user`.
                         return comment.notes.flatMap((note) => ({
                             id: note.id,
                             body: note.body,
+                            author: note.author,
                         }));
                     }
 
@@ -613,6 +524,17 @@ export class CommentAnalysisService {
                         // github / gitlab / azure / forgejo.
                         (comment) => !isKodyAuthoredBody(comment?.body),
                     )
+                    ?.filter((comment) => {
+                        // Reviewer denylist (issue #1497): drop comments from
+                        // excluded git users. Keep when we can't identify the
+                        // author, so a denylist never silently removes an
+                        // unidentifiable reviewer's comments.
+                        if (!hasExclusions) {
+                            return true;
+                        }
+                        const authorId = this.getCommentAuthorId(comment);
+                        return !authorId || !excludedReviewerIds.has(authorId);
+                    })
                     ?.filter((comment) => comment?.body?.length > 100);
 
                 let finalComments = filteredComments;
@@ -678,6 +600,21 @@ export class CommentAnalysisService {
         }
 
         return processedComments;
+    }
+
+    /**
+     * Provider-native author id of a raw review comment, as a string, for
+     * matching against the reviewer denylist. GitHub/Azure key the author on
+     * `user`, GitLab on `author`; ids are numeric on GitHub/GitLab and a GUID
+     * on Azure, so everything is normalized to string. Returns undefined when
+     * the author can't be identified.
+     */
+    private getCommentAuthorId(comment: any): string | undefined {
+        const rawId = comment?.user?.id ?? comment?.author?.id;
+        if (rawId === undefined || rawId === null || rawId === '') {
+            return undefined;
+        }
+        return String(rawId);
     }
 
     private fileExtensionFrequencyAnalysis(files: { filename: string }[]) {

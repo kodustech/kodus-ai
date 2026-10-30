@@ -31,10 +31,19 @@ export const useSelectedTeamId = () => {
 
 const cookieHelpers = ClientSideCookieHelpers("global-selected-team-id");
 
-export const SelectedTeamProvider = ({ children }: React.PropsWithChildren) => {
+export const SelectedTeamProvider = ({
+    children,
+    initialTeamId,
+}: React.PropsWithChildren<{ initialTeamId?: string }>) => {
+    // Initialize from the server-read cookie (passed as a prop) so the first
+    // client render matches the server. Reading the cookie directly here would
+    // return undefined on the server and the real value on the client, which
+    // diverges the tree — shifting downstream Radix `useId()`s and triggering
+    // hydration mismatches (e.g. the settings sidebar Collapsibles/Tabs). Falls
+    // back to the client cookie only when no server value is supplied.
     const [teamId, _setTeamId] = useState<
         React.ContextType<typeof TeamContext>["teamId"]
-    >(cookieHelpers.get());
+    >(() => initialTeamId ?? cookieHelpers.get());
 
     return (
         <TeamContext.Provider

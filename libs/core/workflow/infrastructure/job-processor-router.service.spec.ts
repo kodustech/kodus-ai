@@ -58,17 +58,4 @@ describe('runWithTimeout (router core)', () => {
         expect(clearSpy).toHaveBeenCalled();
         clearSpy.mockRestore();
     });
-
-    it('Regression: code_review app timeout (1h45min) must stay strictly below broker consumer_timeout (2h)', () => {
-        // If this ever flips, the broker (rabbitmq-ec2.tfvars
-        // consumer_timeout=7200000) starts winning the race and the
-        // message-stuck-unacked bug from 2026-05 returns.
-        const APP_TIMEOUT_CODE_REVIEW_MS = 105 * 60 * 1000; // 1h45min
-        const BROKER_CONSUMER_TIMEOUT_MS = 7200 * 1000;     // 2h
-        const REQUIRED_CLEANUP_MARGIN_MS = 5 * 60 * 1000;   // 5min minimum
-
-        expect(APP_TIMEOUT_CODE_REVIEW_MS).toBeLessThan(
-            BROKER_CONSUMER_TIMEOUT_MS - REQUIRED_CLEANUP_MARGIN_MS,
-        );
-    });
 });

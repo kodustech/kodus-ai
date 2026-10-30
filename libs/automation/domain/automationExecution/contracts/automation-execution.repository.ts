@@ -30,14 +30,39 @@ export interface IAutomationExecutionRepository {
         pullRequestNumber?: number;
         pullRequestTitle?: string;
         prFilters?: Array<{ number: number; repositoryId: string }>;
+        status?: string;
+        createdAtFrom?: string;
+        createdAtTo?: string;
         skip?: number;
+        cursor?: { createdAt: string | Date; uuid: string };
         take?: number;
         order?: 'ASC' | 'DESC';
         includeTotal?: boolean;
     }): Promise<{
         data: AutomationExecutionEntity[];
         total: number;
+        // Distinct PRs matching the DB-level filters (only with includeTotal).
+        distinctPrTotal: number;
     }>;
+    getDistinctReviewedPullRequestKeys(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds?: string[];
+        createdAtFrom?: Date | string;
+    }): Promise<
+        Array<{
+            repositoryId: string;
+            pullRequestNumber: number;
+            hasError: boolean;
+        }>
+    >;
+    // Distinct PRs still awaiting their first review: every execution for the PR
+    // was 'skipped' (no license, BYOK, manual/paused cadence, ignored user…) and
+    // none ran a review. Drives the Awaiting facet, sourced from execution rows.
+    getAwaitingReviewPullRequestKeys(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds?: string[];
+        createdAtFrom?: Date | string;
+    }): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>>;
     findCliReviewExecutionsByOrganization(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId?: string;
@@ -57,7 +82,12 @@ export interface IAutomationExecutionRepository {
     findStaleInProgress(
         cutoffDate: Date,
         limit?: number,
+        options?: { excludeOrigins?: string[] },
     ): Promise<AutomationExecutionEntity[]>;
+    // Liveness heartbeat: bumps `updatedAt` of a still-IN_PROGRESS row so
+    // the "review already running" gate can tell a live run from one whose
+    // process died without a terminal update.
+    touchInProgress(uuid: string): Promise<void>;
     findByPeriodAndTeamAutomationId(
         startDate: Date,
         endDate: Date,
@@ -68,5 +98,11 @@ export interface IAutomationExecutionRepository {
         startDate: Date,
         endDate: Date,
         teamAutomationId: string,
-    ): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>>;
+    ): Promise<
+        Array<{
+            repositoryId: string;
+            pullRequestNumber: number;
+            mayAllowNoComments: boolean;
+        }>
+    >;
 }

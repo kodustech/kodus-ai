@@ -1,0 +1,1374 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "8c206718746410428f38bed002a490ba4fcfb0a5a9e4e86aab2b98b752a62c3d"
+  },
+  "startedAt": "2026-10-15T12:56:42.263Z",
+  "updatedAt": "2026-10-15T13:15:44.715Z",
+  "complete": true,
+  "selectedCases": [
+    "R1-repeat-open",
+    "R6-incomplete-fix",
+    "R13-repeat-after-move",
+    "P25-casefold-offsets-on-original",
+    "P32-install-failure-only-logged"
+  ],
+  "casesSourceDigest": "27bcb6c2b5b90c85beb3052b039ba86f032523a186409b36db9e65c55cda8345",
+  "summary": {
+    "measured": 25,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 25,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R1-repeat-open · resubmit-repeat [not_deliver, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R6-incomplete-fix · credit-negative-repeat [not_deliver, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "R13-repeat-after-move · resubmit-repeat-moved [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P25-casefold-offsets-on-original · highlight-offsets-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P25-casefold-offsets-on-original · page-off-by-one-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P32-install-failure-only-logged · install-failure-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37186,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 31830,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34782,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29233,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24965,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24688,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 5,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35429,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 27070,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 48293,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R6-incomplete-fix",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 47371,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "credit-negative-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 51915,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35260,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 35601,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 68911,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53021,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 57405,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of() computes start = page * per_page while its own docstring states page starts at 1, so page=1 returns results[20:40] and the first 20 results are never shown (and page=0 is needed to get the first page). WHY: every page from the UI is shifted by one, so the first page of search results is unreachable and the last page returns an empty list. HOW: use start = (page - 1) * per_page and guard page < 1.",
+          "keep": true,
+          "rationale": "The docstring explicitly states page starts at 1, but the code computes start = page * per_page, so page=1 yields results[20:40] and the first 20 results are unreachable. This is a concrete off-by-one bug matching the claim; the prior decisions concern highlight offsets and CSV escaping, not pagination, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of\\("
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page while its own docstring says page starts at 1, so page=1 returns results[20:40] and the first 20 results are never shown. WHY: the first page of search results is silently skipped and every page is shifted by one page, returning the wrong result set to the user. HOW: use start = (page - 1) * per_page (and guard page < 1 to 1).",
+          "keep": true,
+          "rationale": "The code at lines 37-40 computes `start = page * per_page` while its own docstring states \"page comes from ?page= and starts at 1.\" With page=1 the slice becomes results[20:40], skipping the first 20 results and shifting every page by one. The claim accurately describes the code; the offset arithmetic is inconsistent with the documented 1-based contract. No upstream guard or caller correction is present, and this is distinct from the earlier casefold/CSV decisions.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `page_of` computes `start = page * per_page` while its docstring says `page` starts at 1, `page=1` returns `results[20:40]` and the first 20 results are never shown, so the first page is silently skipped and every page returns the wrong result set. Use `start = (page - 1) * per_page` and guard `page < 1` to 1."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "catalog/search/highlight.py",
+          "line": 39,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `page_of()` computes `start = page * per_page` while its docstring states `page` starts at 1, `page=1` returns `results[20:40]` and the first 20 results are never shown, so every page from the UI is shifted by one, the first page is unreachable, the last page returns an empty list, and only `page=0` would get the first page. Use `start = (page - 1) * per_page` and guard `page < 1`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 66108,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page using 0-based math while its docstring documents 1-based input (\"page comes from ?page= and starts at 1\"). WHY: with the documented 1-based input, page=1 returns results[20:40], silently skipping the first per_page results and never returning the true first page (the UI would need to send page=0, which a 1-based contract never produces). HOW: either subtract one (start = (page - 1) * per_page, clamping page<1 to 1) or update the docstring/contract to 0-based — the current docstring and implementation disagree.",
+          "keep": true,
+          "rationale": "Confirmed: page_of's docstring documents 1-based input (\"page comes from ?page= and starts at 1\"), but start = page * per_page is 0-based math. With page=1, results[20:40] is returned, silently skipping the first per_page results; the true first page would require page=0, which the documented 1-based contract never produces. The docstring and implementation genuinely disagree and the mismatch yields a wrong result under the documented contract. Not covered by any previous decision (those concern highlight/casefold offsets and CSV escaping). No callers exist in the repo, but the documented contract itself is the reference.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "With the documented 1-based input, `page=1` returns `results[20:40]`, silently skipping the first `per_page` results and never returning the true first page (the UI would need to send `page=0`, which a 1-based contract never produces). Either subtract one (`start = (page - 1) * per_page`, clamping `page < 1` to 1) or update the docstring/contract to 0-based, since the current docstring and implementation disagree."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 47525,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page while the docstring states page starts at 1, so page=1 returns the second window (results[per_page:2*per_page]) and the first per_page results are never returned. WHY: every paged search silently drops the first page of results and shifts all later pages by one, producing wrong output for all callers. HOW: compute start = (page - 1) * per_page (and clamp page to a minimum of 1 if callers can pass 0/negative values).",
+          "keep": true,
+          "rationale": "The code matches the claim verbatim: docstring states page starts at 1, but start = page * per_page, so page=1 returns results[per_page:2*per_page], dropping the first per_page results and shifting all pages by one. This is a real off-by-one producing wrong output. It is a distinct function/failure not covered by any previous decision (decision 1 concerns casefold offsets in highlight/snippet; decision 2 concerns CSV escaping).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `page_of` computes `start = page * per_page` while the docstring says `page` starts at 1, every paged search silently drops the first page of results and shifts all later pages by one, returning wrong output for all callers. Compute `start = (page - 1) * per_page`, and clamp `page` to a minimum of 1 if callers can pass 0 or negative values."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 90806,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page while its docstring states pages start at 1, so page=1 returns the second page. WHY: every result page is shifted by one (page=1 → results[20:40]), silently skipping the first 20 results and dropping the last page's tail for any caller that follows the documented 1-based contract. HOW: subtract one, e.g. `start = (page - 1) * per_page`, and clamp to avoid negative slices for page <= 0.",
+          "keep": true,
+          "rationale": "Confirmed: page_of docstring explicitly states pages start at 1, yet start = page * per_page makes page=1 return results[20:40], skipping the first page and shifting every page by one. No upstream caller clamping or compensating logic exists in the file, and the two previous decisions address unrelated issues (casefold offsets, CSV escaping). The off-by-one is real.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of|page",
+                "path": "catalog/search"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`page_of` computes `start = page * per_page` despite its docstring saying pages start at 1, so `page=1` returns `results[20:40]`, silently skipping the first 20 results and dropping the last page's tail for callers following the documented 1-based contract. Use `start = (page - 1) * per_page` and clamp for `page <= 0` to avoid negative slices."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59948,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page while its docstring (and the ?page= contract) says page starts at 1, so page=1 returns the SECOND page and the first page (results[0:per_page]) is never returned. WHY: the first page of search results is unreachable and every page is shifted by one, so users miss the top results and page numbering is off by one. HOW: use start = (page - 1) * per_page for the documented 1-based page.",
+          "keep": true,
+          "rationale": "Confirmed: line 38 docstring states \"page comes from ?page= and starts at 1\", yet line 39 computes start = page * per_page (0-based). For page=1, start=per_page, skipping results[0:per_page], so the first page is unreachable and every page is shifted by one. The claim is factually accurate and not addressed by either prior decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `page_of` multiplies `page` by `per_page` despite the 1-based `?page=` contract, `page=1` returns the second page and `results[0:per_page]` is never returned, making the first page unreachable and shifting every page number by one. Change the calculation to `start = (page - 1) * per_page` so the documented 1-based page indexing works."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34454,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: The `unless install_gems` branch only logs an error and then falls through to migrate/precompile_assets/activate, despite the message saying \"aborting the release\". WHY: When `bundle install` fails (native gem fails to compile, gem server unreachable) the release still migrates and symlinks a release whose gems are missing, and the app crashes at boot after the switch — the exact failure the prior suggestion (round-a-P32-install-failure-only-logged) flagged, and this applied change does not actually abort. HOW: Return early (or raise) after logging so the release is not activated, e.g. `unless install_gems\n  raise \"bundle install failed in #{@release_dir}\"\nend` (or `sh!(\"bundle\", \"install\", \"--deployment\")` inside install_gems).",
+          "keep": false,
+          "rationale": "This finding re-raises the exact problem already raised in PreviousDecision round-a-P32-install-failure-only-logged (Outcome: partially_implemented): install_gems ignores the bundle install result, so run! migrates/activates a release with missing gems and the app crashes at boot after the switch. The candidate names the same failure (missing-gem release activated, boot crash) in the same operation, merely re-describing the developer's partial fix (the added error log) as not aborting. The rules state that re-raising the problem a previous entry raised — including when it says the developer's fix is incomplete — is a repeat and must be dropped. The current diff gives no concrete new evidence that the applied change is wrong or was reverted; it only confirms the fix is partial, which is the same comment already on the PR.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44860,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56609,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "lib/deploy/release.rb",
+          "claim": "WHAT: run! checks the result of install_gems but only logs an error and continues, so migrate, precompile_assets, and activate still execute when bundle install failed. WHY: on a failed install (native gem does not compile, gem server unreachable) the release is migrated and the symlink is switched to a release whose gems are missing, so the app crashes at boot after activation; the log line also falsely claims 'aborting the release'. HOW: abort before the remaining steps, e.g. `return false unless install_gems` (or raise), or run the install through sh! so a non-zero exit raises.",
+          "keep": false,
+          "rationale": "This finding repeats PreviousDecision round-a-P32-install-failure-only-logged (lib/deploy/release.rb:22-24), which already raised the exact same problem: install_gems failure is only logged and run! proceeds to migrate/activate a release whose gems are missing, crashing the app at boot. That entry's Outcome is \"partially_implemented\" — the developer made install_gems return the system() result but run! still only logs and continues, so the same failure (same crash in the same operation) persists. Per the repeat rule, a finding that re-raises the problem a prior decision already raised on this PR — even noting the fix is incomplete — must be dropped. The candidate adds no new distinct consequence; it is the same missing-abort failure.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "lib/deploy/release.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36781,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P32-install-failure-only-logged",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 47743,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "install-failure-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

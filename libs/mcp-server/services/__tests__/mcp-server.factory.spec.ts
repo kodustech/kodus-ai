@@ -57,6 +57,7 @@ describe('McpServerFactory', () => {
             { getAllTools: jest.fn().mockReturnValue([tool]) } as any,
             { getAllTools: jest.fn().mockReturnValue([]) } as any,
             { getAllTools: jest.fn().mockReturnValue([]) } as any,
+            { authorize: jest.fn(async (_name, args) => args) } as any,
         );
 
         const first = await factory.create();
@@ -88,10 +89,53 @@ describe('McpServerFactory', () => {
             { getAllTools: jest.fn().mockReturnValue([tool]) } as any,
             { getAllTools: jest.fn().mockReturnValue([]) } as any,
             { getAllTools: jest.fn().mockReturnValue([]) } as any,
+            { authorize: jest.fn(async (_name, args) => args) } as any,
         );
 
         await expect(factory.create()).rejects.toThrow(
             'Invalid input schema for MCP tool: KODUS_LIST_REPOSITORIES',
         );
+    });
+
+    it('hands every tool the arguments scoped by the authorizer, and never calls a tool the authorizer rejects', async () => {
+        const tool = {
+            name: 'KODUS_GET_KODY_RULES',
+            description: 'List rules',
+            inputSchema: { type: 'object', properties: {} },
+            outputSchema: { type: 'object', properties: {} },
+            annotations: { readOnlyHint: true },
+            execute: jest.fn().mockResolvedValue({ content: [] }),
+        };
+        const authorize = jest
+            .fn()
+            .mockResolvedValueOnce({ organizationId: 'org-own' })
+            .mockRejectedValueOnce(new Error('organizationId does not match'));
+
+        const { McpServerFactory } = await import('../mcp-server.factory');
+        const factory = new McpServerFactory(
+            { getAllTools: jest.fn().mockReturnValue([]) } as any,
+            { getAllTools: jest.fn().mockReturnValue([tool]) } as any,
+            { getAllTools: jest.fn().mockReturnValue([]) } as any,
+            { authorize } as any,
+        );
+        await factory.create();
+        const execute = mockRegisterTool.mock.calls[0][2];
+        const extra = { authInfo: { extra: {} } };
+
+        await execute({ organizationId: 'org-own' }, extra);
+        expect(authorize).toHaveBeenCalledWith(
+            'KODUS_GET_KODY_RULES',
+            { organizationId: 'org-own' },
+            extra,
+        );
+        expect(tool.execute).toHaveBeenCalledWith(
+            { organizationId: 'org-own' },
+            extra,
+        );
+
+        await expect(
+            execute({ organizationId: 'org-victim' }, extra),
+        ).rejects.toThrow('organizationId does not match');
+        expect(tool.execute).toHaveBeenCalledTimes(1);
     });
 });

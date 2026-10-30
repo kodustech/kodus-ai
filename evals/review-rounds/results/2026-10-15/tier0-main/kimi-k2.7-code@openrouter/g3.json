@@ -1,0 +1,709 @@
+{
+  "model": "kimi-k2.7-code@openrouter",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "53d0ebdf770e24c6841bb578c550fdf5cfc9f5fc4a717a339b1de93e7a48047d"
+  },
+  "startedAt": "2026-10-15T16:21:24.744Z",
+  "updatedAt": "2026-10-15T16:34:27.252Z",
+  "complete": true,
+  "selectedCases": [
+    "R12-unrelated-other-file",
+    "P01-rule-skip-comment-incomplete",
+    "P24-create-mode-section-hidden"
+  ],
+  "casesSourceDigest": "8fc1e61b6995acc0f6bff96a0186a57c1ca986ecc2355dcab5093f9b1c64ec57",
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 4,
+        "violations": 1,
+        "rate": 0.25
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 2,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 13,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R12-unrelated-other-file · refund-guard-inverted [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P01-rule-skip-comment-incomplete · skip-comment-repeat [not_deliver]": {
+        "pass": 1,
+        "n": 2,
+        "delivered": 1
+      },
+      "P24-create-mode-section-hidden · billing-hidden-on-create-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 72848,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The guard `amount < charge.amount` inverts the intended over-refund check, rejecting partial refunds and allowing refunds larger than the charge. WHY: Partial refunds now throw 'refund exceeds the charge', while over-refunds silently proceed, causing incorrect business behavior and potential financial loss. HOW: Restore the original comparison `amount > charge.amount`.",
+          "keep": true,
+          "rationale": "The code at src/billing/refund.ts:4-6 reads `if (amount < charge.amount) { throw new Error('refund exceeds the charge'); }`. This is logically inverted: when the refund amount is smaller than the charge (a partial refund), it throws an 'exceeds the charge' error, while refund amounts larger than the charge pass through silently. The proposed fix `amount > charge.amount` matches the error message and intended business logic. The single PreviousReviewDecision concerns a different file (src/billing/status.ts) and a different failure (NotReadyError propagation), so this finding is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The guard condition `amount < charge.amount` is the inverse of the intended check, so partial refunds are rejected and over-refunds are accepted. WHY: This allows a refund larger than the original charge to be submitted to the gateway, risking financial loss, while legitimate partial refunds fail with a misleading error. HOW: Restore the comparison to `amount > charge.amount` so that refunds exceeding the charge are rejected.",
+          "keep": true,
+          "rationale": "The guard at src/billing/refund.ts:4 uses `amount < charge.amount`, which fires when the refund is smaller than the charge. The error message says 'refund exceeds the charge', so a partial refund is wrongly rejected while any refund larger than the charge bypasses the check and is submitted to the gateway. The inverse comparison `amount > charge.amount` is the only behavior consistent with the message and the described intent, confirming the reported bug.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund\\(",
+                "glob": "*.ts",
+                "excludeTests": false
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund",
+                "glob": "*.test.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The guard `amount < charge.amount` rejects partial refunds and allows over-refunds to reach the gateway, risking financial loss and misleading errors. Restore the comparison to `amount > charge.amount` so refunds exceeding `charge.amount` are rejected."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The guard `amount < charge.amount` rejects partial refunds with a misleading error while allowing over-refunds to proceed silently, risking financial loss. Restore the comparison to `amount > charge.amount` so refunds exceeding `charge.amount` are rejected."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 108321,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The refund guard is inverted: `amount < charge.amount` throws for partial refunds and permits refunds larger than the original charge. WHY: This allows an over-refund to reach `gw.submit`, while valid partial refunds are rejected, causing incorrect financial operations. HOW: Restore the comparison to `amount > charge.amount` so only refunds exceeding the charge are rejected.",
+          "keep": true,
+          "rationale": "The cited code at src/billing/refund.ts:4-6 uses `if (amount < charge.amount)` and throws 'refund exceeds the charge'. This comparison rejects partial refunds (where amount is less than charge.amount) while allowing refunds larger than the original charge to pass through to `gw.submit`. The claim that the guard is inverted is factually correct from the source. No upstream callers were found that validate the refund amount before this check, and `gw.submit` is documented as non-idempotent, so the over-refund can be executed. The previous review decision concerns a different file (src/billing/status.ts) and a different bug (error propagation), so this finding is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund\\(",
+                "path": "src",
+                "excludeTests": false
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted guard rejects legitimate partial refunds and lets over-refunds reach `gw.submit`, producing incorrect financial operations. Restore the check to `amount > charge.amount` so only refunds exceeding `charge.amount` are blocked."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 72188,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 6,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "A bare `2` in `z.string().length(2)` gives no hint that it is the country-code length, making future updates error-prone. Define a module-level constant like `COUNTRY_CODE_LENGTH` and pass it to `length()`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/shipping/postal.ts",
+          "line": 1,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "Embedding `5`, `3`, and `4` directly in the `BR` and `US` postal-code regex quantifiers obscures what each segment represents. Extract named constants for each segment length and build the patterns from those constants."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 72512,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-comment-validation-skips"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/shipping/address.schema.ts:11` (2026-10-06 12:00 UTC).\n\nThe `superRefine` early return for `value.pickupPoint` has no `Skips:` comment, violating the rule that every early return in a validator must explain what it skips. Replace the `// early exit` comment with `// Skips: pickup points skip postal-code validation; every other address is validated against its country pattern`, which also reverses the earlier suggestion that was marked as implemented."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/shipping/postal.ts",
+          "line": 1,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The literal `{5}`, `{3}`, and `{4}` quantifiers in `POSTAL_PATTERNS` are unexplained postal-code segment lengths that are hard to maintain per country. Replace the regex literals with named length constants (such as `BRAZIL_POSTAL_PREFIX_LENGTH`, `BRAZIL_POSTAL_SUFFIX_LENGTH`, `US_POSTAL_PREFIX_LENGTH`, and `US_POSTAL_EXTENSION_LENGTH`) and compose `RegExp` instances from them."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 239851,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: The submit button is never disabled while `onSave(draft)` is in flight. WHY: Rapid clicks on 'Create customer' call `onSave` multiple times before the first promise settles, which can create duplicate customers. HOW: Add an `isSaving` state, set it before calling `onSave`, and disable the button while saving.",
+          "keep": true,
+          "rationale": "CustomerForm.tsx's submit() awaits onSave(draft) but there is no isSaving state or any guard preventing additional submissions while the promise is pending. The submit button is rendered without a disabled prop, so repeated clicks can invoke onSave multiple times before the first call settles. The earlier PreviousReviewDecision addresses a different failure (missing billing section in create mode), not duplicate submissions.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `submit()` awaits `onSave(draft)` without a try/catch, and the `onSubmit` handler discards the returned promise with `void submit()`. WHY: If `onSave` rejects, the rejection is unhandled and the user receives no feedback that the save failed. HOW: Wrap `onSave(draft)` in try/catch inside `submit()` and surface the error via `setErrors`.",
+          "keep": true,
+          "rationale": "The code at lines 19-23 matches the claim exactly: `submit()` awaits `onSave(draft)` with no try/catch, and the form's `onSubmit` calls `void submit()` which discards the returned promise. The `onSave` prop is typed `Promise<void>`, so a rejection becomes an unhandled promise rejection and the user sees no save-failure feedback. The existing `setErrors` state is only used for synchronous validation, confirming the async rejection path is unhandled. The PreviousReviewDecision (billing section visibility in create mode) concerns a different failure and does not address this unhandled rejection.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/validate.ts",
+          "claim": "WHAT: The billing email regex is run against `draft.billingEmail` without trimming leading or trailing whitespace. WHY: A valid email such as ' user@example.com ' fails validation, blocking form submission even though the address is correct. HOW: Trim the value before testing: `if (!EMAIL.test(draft.billingEmail.trim()))`.",
+          "keep": true,
+          "rationale": "validate.ts uses EMAIL.test(draft.billingEmail) without trimming. BillingSection stores the raw input value and CustomerForm validates the draft directly, so a leading/trailing space causes the regex to fail. This is a separate issue from the previous 'create mode hidden billing section' decision, which concerned the input not being rendered at all.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "validateCustomer\\(",
+                "path": "src/customers",
+                "excludeTests": false
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "billingEmail",
+                "path": "src/customers",
+                "excludeTests": false
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/BillingSection.tsx",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/validate.ts",
+          "claim": "WHAT: The email regex is run against draft.billingEmail without trimming whitespace. WHY: A billing email copied with leading or trailing spaces (common from paste/autofill) will fail validation even though it is otherwise valid, blocking customer creation. HOW: Trim the email before testing it, matching how the name is already validated.",
+          "keep": true,
+          "rationale": "Confirmed. The regex /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/ anchors to the start/end of the string and its first/last character classes exclude whitespace, so any leading or trailing whitespace in draft.billingEmail causes the test to fail. validate.ts line 8 tests draft.billingEmail directly without trimming, while line 7 already trims draft.name for validation. The previous review decision addresses a separate failure (BillingSection hidden in create mode), not this whitespace issue, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "validateCustomer\\(",
+                "excludeTests": true,
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: submit() awaits onSave(draft) without a try/catch, and the onSubmit handler discards the returned promise with void. WHY: If onSave rejects, the rejection is unhandled and will surface as an unhandled promise rejection instead of being surfaced to the user or logged gracefully. HOW: Catch onSave errors inside submit() and add them to the errors state (or log them), so the rejection is handled.",
+          "keep": true,
+          "rationale": "CustomerForm.tsx defines submit() (lines 19-23) which awaits onSave(draft) without any try/catch. The form's onSubmit handler (lines 31-34) calls void submit(), discarding the returned promise. If the onSave prop rejects, that rejection is not caught in the component, so it will surface as an unhandled promise rejection instead of being added to errors or logged. The previous review decision about the billing section is unrelated to this error-handling path.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 150
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: The submit button is never disabled while onSave(draft) is pending. WHY: Rapid clicks on 'Create customer' call submit() multiple times before the first save resolves, which can create duplicate customer records. HOW: Add an isSubmitting state, guard submit() with it, and pass disabled={isSubmitting} to the button.",
+          "keep": true,
+          "rationale": "CustomerForm.tsx defines submit() as an async function that awaits onSave(draft) but never tracks whether a save is in flight. The submit button is rendered without any disabled prop, and the form's onSubmit simply calls void submit() every time the button is clicked. Therefore rapid clicks while the first onSave is still pending will invoke submit() multiple times and can call onSave repeatedly, creating duplicate customer records. The claim is accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 6,
+        "after": 6
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/validate.ts",
+          "line": 8,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A billing email copied with leading or trailing whitespace fails the `EMAIL` regex and blocks form submission even when the address is valid. Trim `draft.billingEmail` before passing it to `EMAIL.test`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Rapid clicks on 'Create customer' call `onSave` multiple times before the first promise settles, which can create duplicate customers. Add an `isSaving` state, set it before calling `onSave`, and disable the submit button while saving."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "If `onSave` rejects, the unhandled promise rejection gives the user no feedback that the save failed. Wrap `await onSave(draft)` in a `try/catch` inside `submit()` and surface the error with `setErrors`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/customers/validate.ts",
+          "line": 8,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A billing email pasted with leading or trailing spaces fails `EMAIL.test` and blocks customer creation even when the address is valid. Trim `draft.billingEmail` before testing it, matching how the name field is already validated."
+        },
+        {
+          "sourceIndex": 4,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 16,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Rapid clicks on 'Create customer' call `submit()` multiple times before the first save resolves, which can create duplicate customer records. Add an `isSubmitting` state, guard `submit()` with it, and pass `disabled={isSubmitting}` to the button."
+        },
+        {
+          "sourceIndex": 5,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 31,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Discarding `submit()` with `void` lets an `onSave` rejection become an unhandled promise rejection. Attach a `.catch()` handler to `submit()` in the `onSubmit` handler so the error is logged or surfaced to the user."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 210472,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: The billing section is still hidden in create mode for a new customer because showBilling is gated on mode === 'edit' || Boolean(draft.id). WHY: In create mode draft.id is undefined, so showBilling is false, the billing email input is not rendered, and validateCustomer rejects the empty billingEmail causing 'Create customer' to always fail. HOW: Render BillingSection unconditionally, or change the condition so create mode is included, e.g. const showBilling = true;.",
+          "keep": false,
+          "rationale": "This finding repeats the exact same failure already raised by PreviousDecision round-a-P24-create-mode-section-hidden: in create mode the BillingSection is hidden because it is gated on draft.id, validateCustomer requires a billing email, and therefore creating a customer fails. Even though the code still shows the buggy condition and the technical claim is correct, the previous review round already described the same problem on this pull request. Per the instructions, findings that raise again a problem already in PreviousReviewDecisions must be dropped regardless of the earlier outcome.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

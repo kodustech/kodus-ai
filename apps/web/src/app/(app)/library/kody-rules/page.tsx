@@ -30,34 +30,36 @@ export default async function Route({
         getLibraryKodyRulesBuckets().catch(() => []),
     ]);
 
-    const orgLanguage = await getOrganizationLanguage(teamId).catch(
-        () => undefined,
-    );
     const previewBuckets = [...buckets]
         .sort((a, b) => b.rulesCount - a.rulesCount)
         .slice(0, BUCKETS_PREVIEW_COUNT);
 
-    const [bucketRulesResponse, bucketPreviews] = await Promise.all([
-        params.bucket
-            ? getLibraryKodyRulesWithFeedback({
-                page: 1,
-                limit: 48,
-                buckets: [params.bucket],
-                plug_and_play: initialPlugAndPlay || undefined,
-            })
-            : Promise.resolve(null),
-        Promise.all(
-            previewBuckets.map(async (bucket) => {
-                const response = await getLibraryKodyRulesWithFeedback({
-                    page: 1,
-                    limit: BUCKET_RULES_PREVIEW_LIMIT,
-                    buckets: [bucket.slug],
-                });
+    // orgLanguage only needs teamId; the bucket queries only need `buckets`.
+    // All independent — fetch them in one parallel wave instead of blocking
+    // the (heavier) bucket previews behind the language round-trip.
+    const [orgLanguage, bucketRulesResponse, bucketPreviews] =
+        await Promise.all([
+            getOrganizationLanguage(teamId).catch(() => undefined),
+            params.bucket
+                ? getLibraryKodyRulesWithFeedback({
+                      page: 1,
+                      limit: 48,
+                      buckets: [params.bucket],
+                      plug_and_play: initialPlugAndPlay || undefined,
+                  })
+                : Promise.resolve(null),
+            Promise.all(
+                previewBuckets.map(async (bucket) => {
+                    const response = await getLibraryKodyRulesWithFeedback({
+                        page: 1,
+                        limit: BUCKET_RULES_PREVIEW_LIMIT,
+                        buckets: [bucket.slug],
+                    });
 
-                return { bucket, rules: response?.data || [] };
-            }),
-        ),
-    ]);
+                    return { bucket, rules: response?.data || [] };
+                }),
+            ),
+        ]);
 
     return (
         <KodyRulesLibrary

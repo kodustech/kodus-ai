@@ -118,6 +118,7 @@ __resolve_op_ref DIGITALOCEAN_TOKEN        || exit 1
 __resolve_op_ref HCLOUD_TOKEN              || exit 1
 __resolve_op_ref SH_LICENSE_KEY            || exit 1
 __resolve_op_ref GH_DEV_TOKEN              || exit 1
+__resolve_op_ref CLOUDFLARE_API_TOKEN      || exit 1
 __resolve_op_ref API_OPEN_AI_API_KEY       || exit 1
 __resolve_op_ref API_OPENAI_FORCE_BASE_URL || exit 1
 __resolve_op_ref API_LLM_PROVIDER_MODEL    || exit 1

@@ -60,10 +60,6 @@ describe('WebhookContextService', () => {
         service = module.get<WebhookContextService>(WebhookContextService);
     });
 
-    it('should be defined', () => {
-        expect(service).toBeDefined();
-    });
-
     it('should return context when config is found', async () => {
         const platformType = PlatformType.GITHUB;
         const repositoryId = '123';

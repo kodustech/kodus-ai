@@ -15,6 +15,7 @@ import {
     IUsersService,
     USER_SERVICE_TOKEN,
 } from '@libs/identity/domain/user/contracts/user.service.contract';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 // A successful SSO assertion is proof the IdP owns the email, so any
 // pre-existing account that never finished email confirmation can be
@@ -35,6 +36,7 @@ export class SSOLoginUseCase implements IUseCase {
         private readonly signUpUseCase: SignUpUseCase,
         @Inject(USER_SERVICE_TOKEN)
         private readonly usersService: IUsersService,
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(profile: any, organizationId: string) {
@@ -71,6 +73,12 @@ export class SSOLoginUseCase implements IUseCase {
                 user,
                 AuthProvider.SSO,
             );
+
+            void this.telemetry.userLoggedIn({
+                userId: user.uuid,
+                organizationId: user.organization?.uuid ?? organizationId,
+                method: 'sso',
+            });
 
             return {
                 accessToken,

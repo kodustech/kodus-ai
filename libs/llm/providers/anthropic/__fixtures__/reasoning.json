@@ -1,0 +1,10 @@
+{
+    "_note": "Captured generate result for a Claude extended-thinking (reasoning) call routed through @ai-sdk/anthropic v4. A1 FINDING (code-verified against node_modules/@ai-sdk/anthropic/dist/index.js:1969-1973, which sets `outputTokens: { total, text: void 0, reasoning: void 0 }`): Anthropic's Messages API `usage` has NO separate thinking-token field — thinking tokens are billed INTO output_tokens. So at the AI SDK generateText boundary the module consumes, reasoning is NOT reported separately and normalizeUsage.reasoning MUST be 0 (a number, never null). Do NOT invent an outputTokenDetails.reasoningTokens for anthropic — that would double-count. The outputTokens below ALREADY INCLUDES the thinking tokens. This is why anthropic's usageGranularity is 'output_only', not 'reasoning_split' (the D-05 conformance asserts that match).",
+    "text": "{\"decisions\":[{\"type\":\"architecture\",\"origin\":\"human\",\"decision\":\"Adopt the provider-module registry\",\"confidence\":0.9}]}",
+    "finishReason": "stop",
+    "usage": {
+        "inputTokens": 1450,
+        "outputTokens": 3820,
+        "totalTokens": 5270
+    }
+}

@@ -85,7 +85,7 @@ export class WebhookHealthController {
             }
 
             // Try to check a queue (non-blocking if it doesn't exist yet)
-            await channel.checkQueue('workflow.webhooks.queue').catch(() => {
+            await channel.checkQueue('workflow.jobs.webhook.queue').catch(() => {
                 // Queue may not exist yet, but the connection is OK
             });
 

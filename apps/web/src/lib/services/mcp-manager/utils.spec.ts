@@ -29,10 +29,6 @@ jest.mock("src/core/utils/helpers", () => ({
     createUrl: (...args: unknown[]) => (createUrlMock as any)(...args),
 }));
 
-jest.mock("src/core/utils/session", () => ({
-    getJWTToken: jest.fn().mockResolvedValue("client-token"),
-}));
-
 jest.mock("src/core/config/auth", () => ({
     auth: jest
         .fn()
@@ -90,13 +86,15 @@ describe("mcpManagerFetch dual-mode", () => {
         expect(url).toBe("http://my-mcp-container:4040/integrations");
     });
 
-    it("client side: goes through /api/proxy/mcp and uses browser JWT", async () => {
+    it("client side: goes through /api/proxy/mcp and lets the proxy inject the Bearer", async () => {
         setServer(false);
         const { mcpManagerFetch } = await import("./utils");
         await mcpManagerFetch("/integrations");
         const [url, init] = typedFetchMock.mock.calls[0];
         expect(url).toBe("/api/proxy/mcp/integrations");
-        expect(init.headers.Authorization).toBe("Bearer client-token");
+        // The browser must NOT attach a token — the proxy is the single
+        // Bearer authority (no /api/auth/session round-trip).
+        expect(init.headers.Authorization).toBeUndefined();
     });
 
     it("client side: internal hostname does not appear in the URL", async () => {

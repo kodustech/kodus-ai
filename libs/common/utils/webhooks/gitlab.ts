@@ -11,6 +11,7 @@ import {
     IWebhookGitlabCommentEvent,
 } from '@libs/platform/domain/platformIntegrations/types/webhooks/webhooks-gitlab.type';
 
+import { resolveGitlabDraftStatus } from './gitlab-draft.utils';
 import { extractRepoFullName } from './webhooks.utils';
 
 export class GitlabMappedPlatform implements IMappedPlatform {
@@ -65,6 +66,7 @@ export class GitlabMappedPlatform implements IMappedPlatform {
                     fullName: mergeRequest?.source?.path_with_namespace,
                 },
                 ref: mergeRequest?.source_branch,
+                sha: mergeRequest?.last_commit?.id ?? '',
             },
             base: {
                 repo: {
@@ -73,10 +75,7 @@ export class GitlabMappedPlatform implements IMappedPlatform {
                 },
                 ref: mergeRequest?.target_branch,
             },
-            isDraft:
-                'draft' in mergeRequest
-                    ? (mergeRequest?.draft ?? false)
-                    : false,
+            isDraft: resolveGitlabDraftStatus(mergeRequest),
             tags: mergeRequest?.labels?.map((label) => label.title) ?? [],
         };
     }

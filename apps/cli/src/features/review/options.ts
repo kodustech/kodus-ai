@@ -23,7 +23,10 @@ export function validateReviewOptions(options: {
         );
     }
 
-    if (options.failOn && !VALID_FAIL_ON_SEVERITIES.has(options.failOn as never)) {
+    if (
+        options.failOn &&
+        !VALID_FAIL_ON_SEVERITIES.has(options.failOn as never)
+    ) {
         throw new Error(
             `Invalid value for \`--fail-on\`: \`${options.failOn}\`. Use one of: info, warning, error, critical.`,
         );

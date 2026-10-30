@@ -1,4 +1,18 @@
-import { deriveTu, SYSTEM_RUN_NAMES } from './token-usage-tu';
+import {
+    CUSTOM_AGENT_RUN_PREFIX,
+    deriveArea,
+    deriveTu,
+    ROUTING_TASKS,
+    SUGGESTION_RUN_NAMES,
+    SYSTEM_RUN_NAMES,
+} from './token-usage-tu';
+import {
+    BACKFILL_CUSTOM_AGENT_RUN_PREFIX,
+    BACKFILL_ROUTING_TASKS,
+    BACKFILL_SUGGESTION_RUN_NAMES,
+    BACKFILL_SYSTEM_RUN_NAMES,
+} from '../infrastructure/database/mongo/token-usage/backfill-tu';
+import { LLM_TASK } from '@libs/llm/byok-config';
 
 /**
  * `deriveTu` is the single source of the `attributes.tu` sub-doc mirrored onto
@@ -63,6 +77,15 @@ describe('deriveTu', () => {
         ).toBe('gpt-5');
         // bare name (no provider prefix) is unchanged
         expect(deriveTu(usage)!.model).toBe('claude-sonnet-5');
+        // Bedrock `:<version>` suffix is stripped to the model, NOT stored as "0"
+        // (which collapsed every Bedrock model onto one bucket). Regression.
+        expect(
+            deriveTu({
+                ...usage,
+                'gen_ai.response.model':
+                    'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+            })!.model,
+        ).toBe('us.anthropic.claude-3-5-haiku-20241022-v1');
     });
 
     describe('byok view flags', () => {
@@ -70,6 +93,130 @@ describe('deriveTu', () => {
             expect(deriveTu({ ...usage, type: 'byok' })!.isByok).toBe(true);
             expect(deriveTu({ ...usage, type: 'system' })!.isByok).toBe(false);
             expect(deriveTu(usage)!.isByok).toBe(false);
+        });
+
+        it('stamps the process area from the run name', () => {
+            expect(
+                deriveTu({ ...usage, 'gen_ai.run.name': 'code-review-security' })!
+                    .area,
+            ).toBe('review');
+            expect(deriveTu(usage)!.area).toBe('other');
+        });
+
+        it('captures the routing task from `route` (the per-task dimension)', () => {
+            expect(deriveTu({ ...usage, route: 'codeReview' })!.route).toBe(
+                'codeReview',
+            );
+        });
+
+        it('stamped `route` wins over the area de-para', () => {
+            // Even in a review-area span, an explicit route is authoritative.
+            expect(
+                deriveTu({
+                    ...usage,
+                    'gen_ai.run.name': 'code-review-security',
+                    route: 'kodyRulesReview',
+                })!.route,
+            ).toBe('kodyRulesReview');
+        });
+
+        it('IGNORES a non-task `route` (stale tier string) → area de-para', () => {
+            // A pre-realignment span stamped the TIER ('default'/'taskOverride')
+            // in `route`. That is not a valid task, so the per-task view must not
+            // show it — fall back to the area de-para instead.
+            expect(
+                deriveTu({
+                    ...usage,
+                    'gen_ai.run.name': 'code-review-security',
+                    route: 'default',
+                })!.route,
+            ).toBe('codeReview');
+            expect(
+                deriveTu({
+                    ...usage,
+                    'gen_ai.run.name': 'generateSummaryPR',
+                    route: 'taskOverride',
+                })!.route,
+            ).toBe('prSummary');
+        });
+
+        describe('custom review agents (#2172)', () => {
+            // A custom agent's spans are named `code-review-custom-<slug>`
+            // (finder, `-recovery`) and `…-verify` / `…-convention-verify`
+            // (its check). Without a stamped route (managed model, no BYOK)
+            // they used to fall into the `review` area → `codeReview`.
+            it('attributes an unstamped custom agent run to `customAgent`', () => {
+                for (const rn of [
+                    'code-review-custom-api-contracts',
+                    'code-review-custom-api-contracts-recovery',
+                ]) {
+                    expect(
+                        deriveTu({ ...usage, 'gen_ai.run.name': rn })!.route,
+                    ).toBe('customAgent');
+                }
+            });
+
+            it('counts a custom agent verify in `customAgent`, the model it runs on', () => {
+                for (const rn of [
+                    'code-review-custom-api-contracts-verify',
+                    'code-review-custom-api-contracts-convention-verify',
+                ]) {
+                    expect(
+                        deriveTu({ ...usage, 'gen_ai.run.name': rn })!.route,
+                    ).toBe('customAgent');
+                }
+            });
+
+            it('keeps a stamped custom agent route', () => {
+                expect(
+                    deriveTu({
+                        ...usage,
+                        'gen_ai.run.name': 'code-review-custom-api-contracts',
+                        'route': 'customAgent',
+                    })!.route,
+                ).toBe('customAgent');
+            });
+
+            it('leaves the native review agents on `codeReview`', () => {
+                for (const rn of [
+                    'code-review-security',
+                    'code-review-security-verify',
+                    'code-review-generalist-recovery',
+                ]) {
+                    expect(
+                        deriveTu({ ...usage, 'gen_ai.run.name': rn })!.route,
+                    ).toBe('codeReview');
+                }
+            });
+
+            it('keeps the custom agent run in the `review` area', () => {
+                expect(
+                    deriveTu({
+                        ...usage,
+                        'gen_ai.run.name': 'code-review-custom-api-contracts',
+                    })!.area,
+                ).toBe('review');
+            });
+        });
+
+        it('BACK-COMPAT: infers the task from area when `route` is absent', () => {
+            // Pre-launch spans have no `route` attr → de-para from the area.
+            expect(
+                deriveTu({ ...usage, 'gen_ai.run.name': 'code-review-security' })!
+                    .route,
+            ).toBe('codeReview');
+            expect(
+                deriveTu({ ...usage, 'gen_ai.run.name': 'generateSummaryPR' })!
+                    .route,
+            ).toBe('prSummary');
+            expect(
+                deriveTu({
+                    ...usage,
+                    'gen_ai.run.name': 'kodyRulesAnalyzeCodeWithAI',
+                })!.route,
+            ).toBe('kodyRulesReview');
+            // system/other are not attributable → '' (never undefined).
+            expect(deriveTu(usage)!.route).toBe('');
         });
 
         it('sys is true only for the internal system-analysis run-names', () => {
@@ -84,5 +231,95 @@ describe('deriveTu', () => {
             ).toBe(false);
             expect(deriveTu(usage)!.sys).toBe(false);
         });
+    });
+});
+
+/**
+ * `deriveArea` maps every usage span onto the small fixed TokenUsageArea set.
+ * The cases below pin one representative run-name per producer family (see
+ * the full inventory in issue #1453 / the observability call sites).
+ */
+describe('deriveArea', () => {
+    const cases: Array<[string, string]> = [
+        // system (SYSTEM_RUN_NAMES wins even over other rules)
+        ['selectReviewMode', 'system'],
+        ['generateCodeSuggestions', 'system'],
+        // kody rules — analysis, sharded classifiers, PR-level, generation, sync
+        ['kodyRulesAnalyzeCodeWithAI', 'kody_rules'],
+        // the review AGENT run-name spells the product "kodus" (with the S) —
+        // must still resolve, else it leaks into 'other' → "Unrouted".
+        ['kodus-rules-review-agent.shard', 'kody_rules'],
+        ['classifierKodyRulesAnalyzeCodeWithAI', 'kody_rules'],
+        ['suggestionGenerationKodyRulesAnalyzeCodeWithAI', 'kody_rules'],
+        ['prLevelKodyRulesAnalyzer', 'kody_rules'],
+        ['generateKodyRules.generate', 'kody_rules'],
+        ['extractKodyRuleIdsFromContent', 'kody_rules'],
+        ['kodyRulesRecommendationFromSuggestions', 'kody_rules'],
+        ['kodyRulesFilesToRulesFastBatch', 'kody_rules'],
+        ['kodyMemoryResolution', 'kody_rules'],
+        // generalist review agents — every leaf model call the harness review
+        // makes carries a `code-review-*` runName so LLM.run's ONE usage span
+        // lands in `review` (there is no separate aggregate span anymore).
+        ['code-review-security', 'review'],
+        ['code-review-bug-verify', 'review'],
+        ['code-review-bug-recovery', 'review'],
+        ['code-review-dedup', 'review'],
+        ['analyzeCodeWithAI', 'review'],
+        ['analyzeCodeWithAI_v2', 'review'],
+        // suggestion refinement — current run-names + legacy
+        ['severity-classifier', 'suggestions'],
+        ['suggestion-formatter', 'suggestions'],
+        ['severityAnalysis', 'suggestions'],
+        ['validateWithLLM', 'suggestions'],
+        ['checkSuggestionSimplicity', 'suggestions'],
+        ['safeguardAgentVerification_turn2', 'suggestions'],
+        ['repeatedCodeReviewSuggestionClustering', 'suggestions'],
+        // PR summary
+        ['generateSummaryPR', 'summary'],
+        ['generateSummaryPR_chunk_3', 'summary'],
+        ['generateSummaryPR_consolidation', 'summary'],
+        // conversation
+        ['conversationAgent', 'conversation'],
+        // everything else
+        ['businessRulesVerify', 'other'],
+        ['kodus-web-search-fetcher', 'other'],
+        ['documentationPlanner:src/index.ts', 'other'],
+        ['commentCategorizer', 'other'],
+        ['', 'other'],
+    ];
+
+    it.each(cases)('%s → %s', (runName, area) => {
+        expect(deriveArea(runName)).toBe(area);
+    });
+
+    it('classifies conversation via agent.phase when the run name is custom', () => {
+        expect(deriveArea('someCustomRun', 'conversation')).toBe(
+            'conversation',
+        );
+    });
+
+    it('handles non-string input', () => {
+        expect(deriveArea(undefined)).toBe('other');
+        expect(deriveArea(42 as any)).toBe('other');
+    });
+
+    // The Mongo backfill mirrors deriveArea as an aggregation $switch with its
+    // own copies of the run-name lists — if these drift, history and new
+    // writes would disagree on where tokens went.
+    it('stays in sync with the backfill run-name lists', () => {
+        expect(new Set(BACKFILL_SYSTEM_RUN_NAMES)).toEqual(
+            new Set(SYSTEM_RUN_NAMES),
+        );
+        expect(new Set(BACKFILL_SUGGESTION_RUN_NAMES)).toEqual(
+            new Set(SUGGESTION_RUN_NAMES),
+        );
+        expect(new Set(BACKFILL_ROUTING_TASKS)).toEqual(ROUTING_TASKS);
+        expect(BACKFILL_CUSTOM_AGENT_RUN_PREFIX).toBe(CUSTOM_AGENT_RUN_PREFIX);
+    });
+
+    it('ROUTING_TASKS matches the real LlmTask enum', () => {
+        // The guard must trust exactly the valid tasks — no more (would let a
+        // garbage value through), no fewer (would de-para a real task away).
+        expect(ROUTING_TASKS).toEqual(new Set(Object.values(LLM_TASK)));
     });
 });

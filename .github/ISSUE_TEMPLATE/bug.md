@@ -1,39 +1,49 @@
 ---
 name: Bug report
-about: Report any issues with the platform
+about: Report something that is broken
 title: ''
 labels: ['🐛 bug']
 assignees: ''
 ---
 
-Found a bug? Please fill out the sections below. 👍
+### What happened
 
-### Issue Summary
+The behavior you observed, in past tense. What you saw, not what you think is causing it.
 
-A summary of the issue. This needs to be a clear detailed-rich summary.
-
-### Steps to Reproduce
+### Steps to reproduce
 
 1. (for example) Went to ...
-2. Clicked on...
+2. Clicked on ...
 3. ...
 
-Any other relevant information. For example, why do you consider this a bug and what did you expect to happen instead?
+If you could not reproduce it, say so here and list what you tried. "Not reproducible from these steps, here is what was attempted" is a useful report.
 
-### Actual Results
+### Expected result
 
-- What's happening right now that is different from what is expected
+What the system should have done.
 
-### Expected Results
+### Actual result
 
-- This is an ideal result that the system should get after the tests are performed
-
-### Technical details
-
-- Browser version, screen recording, console logs, network requests: You can make a recording with [Bird Eats Bug](https://birdeatsbug.com/).
-- Node.js version
-- Anything else that you think could be an issue.
+What it did instead.
 
 ### Evidence
 
-- How was this tested? This is quite mandatory in terms of bugs. Providing evidence of your testing with screenshots or/and videos is an amazing way to prove the bug and a troubleshooting chance to find the solution.
+Exact error text, correlation or request ids, timestamps with the timezone, screenshots or a recording, versions (app, Node, browser), and the provider or model when the failing path depends on one. Paste the real strings rather than a summary of them.
+
+There is no length limit here. Evidence is the part of a report nobody can reconstruct later.
+
+### Impact
+
+How many occurrences, since when, and how many organizations or repositories are affected, with the query or log search that produced those numbers. Write `unknown` when you cannot measure it. Avoid "several", "many" and "constantly", since nobody can prioritize on an adjective.
+
+### Cause (only if you read the code)
+
+Leave this section out unless you opened the code. If you did, cite `path/file.ts:line` and the branch or version you read, and describe the mechanism. Keep the fix out of it: which layer changes, and how, is decided in the design step.
+
+### Still unverified
+
+Anything above you could not check. If this list is empty and you did not reproduce the bug, look again.
+
+---
+
+For whoever picks this up, human or agent: the cause above was read at the cited version. Confirm it still holds in the current code before changing anything, and correct this issue if it does not. Do not ship a fix for a cause this report did not prove.

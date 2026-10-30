@@ -9,6 +9,7 @@ import {
 } from '@libs/core/context-resolution/domain/contracts/context-resolution.service.contract';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { KODY_RULE_DETECTOR_COMPILER_TOKEN } from '@libs/kodyRules/domain/contracts/kody-rule-detector-compiler.contract';
 import { PERMISSIONS_SERVICE_TOKEN } from '@libs/identity/domain/permissions/contracts/permissions.service.contract';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
@@ -23,6 +24,7 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -122,6 +124,13 @@ describe('CreateOrUpdateKodyRulesUseCase — inheritance toggle authz', () => {
     const buildUseCase = async (user: Record<string, unknown>) => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
+                {
+                    provide: TelemetryService,
+                    useValue: {
+                        kodyRuleChanged: jest.fn(),
+                        kodyRulesImported: jest.fn(),
+                    },
+                },
                 CreateOrUpdateKodyRulesUseCase,
                 AuthorizationService,
                 PermissionsAbilityFactory,
@@ -154,6 +163,14 @@ describe('CreateOrUpdateKodyRulesUseCase — inheritance toggle authz', () => {
                     useValue: {
                         getBYOKConfig: jest.fn().mockResolvedValue(null),
                         getSubscriptionStatus: jest
+                            .fn()
+                            .mockResolvedValue(undefined),
+                    },
+                },
+                {
+                    provide: KODY_RULE_DETECTOR_COMPILER_TOKEN,
+                    useValue: {
+                        compileAndSave: jest
                             .fn()
                             .mockResolvedValue(undefined),
                     },

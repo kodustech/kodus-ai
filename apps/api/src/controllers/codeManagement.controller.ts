@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { GetAreaRiskMapUseCase } from '../use-cases/get-area-risk-map.use-case';
 import {
     CheckPolicies,
     PolicyGuard,
@@ -37,11 +38,13 @@ import { DeleteIntegrationAndRepositoriesUseCase } from '@libs/platform/applicat
 import { GetRepositoryTreeByDirectoryUseCase } from '@libs/platform/application/use-cases/codeManagement/get-repository-tree-by-directory.use-case';
 import { GetPRsByRepoUseCase } from '@libs/platform/application/use-cases/codeManagement/get-prs-repo.use-case';
 import { GetWebhookStatusUseCase } from '@libs/platform/application/use-cases/codeManagement/get-webhook-status.use-case';
+import { GetWebhookCreationFailuresUseCase } from '@libs/platform/application/use-cases/codeManagement/get-webhook-creation-failures.use-case';
 import { SearchCodeManagementUsersUseCase } from '@libs/platform/application/use-cases/codeManagement/search-code-management-users.use-case';
 import { GetCurrentCodeManagementUserUseCase } from '@libs/platform/application/use-cases/codeManagement/get-current-code-management-user.use-case';
 import { FinishOnboardingDTO } from '@libs/platform/dtos/finish-onboarding.dto';
 import { GetRepositoryTreeByDirectoryDto } from '@libs/platform/dtos/get-repository-tree-by-directory.dto';
 import { WebhookStatusQueryDto } from '../dtos/webhook-status-query.dto';
+import { AreaRiskMapQueryDto } from '../dtos/area-risk-map-query.dto';
 import {
     ApiBearerAuth,
     ApiCreatedResponse,
@@ -52,7 +55,6 @@ import {
     ApiTags,
 } from '@nestjs/swagger';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
-import { ApiArrayResponseDto } from '../dtos/api-response.dto';
 import {
     CodeManagementPullRequestsResponseDto,
     CodeManagementRepositoriesCreateResponseDto,
@@ -61,10 +63,13 @@ import {
     CodeManagementCurrentUserResponseDto,
     CodeManagementRepositoryTreeResponseDto,
     CodeManagementWebhookStatusResponseDto,
+    CodeManagementWebhookCreationFailuresResponseDto,
 } from '../dtos/code-management.response.dto';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 @ApiTags('Code Management')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
 @Controller('code-management')
 export class CodeManagementController {
     constructor(
@@ -80,12 +85,37 @@ export class CodeManagementController {
         private readonly getRepositoryTreeByDirectoryUseCase: GetRepositoryTreeByDirectoryUseCase,
         private readonly getPRsByRepoUseCase: GetPRsByRepoUseCase,
         private readonly getWebhookStatusUseCase: GetWebhookStatusUseCase,
+        private readonly getWebhookCreationFailuresUseCase: GetWebhookCreationFailuresUseCase,
         private readonly searchCodeManagementUsersUseCase: SearchCodeManagementUsersUseCase,
         private readonly getCurrentCodeManagementUserUseCase: GetCurrentCodeManagementUserUseCase,
+        private readonly getAreaRiskMapUseCase: GetAreaRiskMapUseCase,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
     ) {}
+
+    @Get('/area-risk-map')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkRepoPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+            repo: { key: { query: 'repositoryId' } },
+        }),
+    )
+    @ApiOperation({ summary: 'Read historical code-area risk evidence' })
+    @ApiQuery({ name: 'repositoryId', required: true })
+    @ApiQuery({ name: 'teamId', required: true })
+    public async getAreaRiskMap(@Query() query: AreaRiskMapQueryDto) {
+        const organizationId = this.request?.user?.organization?.uuid;
+        if (!organizationId)
+            throw new BadRequestException('organizationId required');
+        return this.getAreaRiskMapUseCase.execute({
+            organizationId,
+            teamId: query.teamId,
+            repositoryId: query.repositoryId,
+        });
+    }
 
     @Get('/repositories/org')
     @UseGuards(PolicyGuard)
@@ -187,6 +217,12 @@ export class CodeManagementController {
             repositories: Repository[];
             teamId: string;
             type?: 'replace' | 'append';
+            /**
+             * Set by the chunked save on every request but the last, so
+             * webhooks are reconciled once against the complete selection
+             * instead of against each partially-persisted chunk.
+             */
+            deferWebhooks?: boolean;
         },
     ) {
         return this.createRepositoriesUseCase.execute(body);
@@ -202,10 +238,10 @@ export class CodeManagementController {
     )
     @ApiOperation({
         summary: 'List organization members',
-        description: 'Returns members from the connected code platform.',
+        description:
+            'Returns members from the connected code platform. A "unavailable" status means the platform could not be reached and the empty list must not be read as an empty organization.',
     })
     @ApiQuery({ name: 'teamId', required: true })
-    @ApiOkResponse({ type: ApiArrayResponseDto })
     public async getOrganizationMembers(@Query() query: { teamId: string }) {
         return this.getCodeManagementMemberListUseCase.execute(query.teamId);
     }
@@ -224,7 +260,6 @@ export class CodeManagementController {
             'Clears the cached members list and re-fetches from the code platform.',
     })
     @ApiQuery({ name: 'teamId', required: true })
-    @ApiOkResponse({ type: ApiArrayResponseDto })
     public async refreshOrganizationMembers(
         @Query() query: { teamId: string },
     ) {
@@ -466,7 +501,10 @@ export class CodeManagementController {
         },
     ) {
         return await this.searchCodeManagementUsersUseCase.execute({
-            organizationId: query.organizationId,
+            // Scope to the caller's own organization. Trusting
+            // query.organizationId let any logged-in user read another org's
+            // users.
+            organizationId: this.request?.user?.organization?.uuid,
             teamId: query.teamId,
             query: query.q,
             userId: query.userId,
@@ -498,13 +536,23 @@ export class CodeManagementController {
         },
     ) {
         return await this.getCurrentCodeManagementUserUseCase.execute({
-            organizationId: query.organizationId,
+            // Scope to the caller's own organization, not a query-supplied one.
+            organizationId: this.request?.user?.organization?.uuid,
             teamId: query.teamId,
         });
     }
 
     // NOT USED IN WEB - INTERNAL USE ONLY
-    @Get('/webhook-status')
+    // Not `/webhook-*`: in the cloud the load balancer sends `*/webhook*` to
+    // the webhooks service (see __tests__/webhook-path-routing.spec.ts).
+    @Get('/hook-status')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+        }),
+    )
     @ApiOperation({
         summary: 'Get webhook status',
         description: 'Checks if the repository webhook is active.',
@@ -519,6 +567,36 @@ export class CodeManagementController {
                 teamId: query.teamId,
             },
             repositoryId: query.repositoryId,
+        });
+    }
+
+    // Not `/webhook-*`: in the cloud the load balancer sends `*/webhook*` to
+    // the webhooks service (see __tests__/webhook-path-routing.spec.ts).
+    @Get('/hook-failures')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.CodeReviewSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'List webhook creation failures',
+        description:
+            'Repositories whose webhook could not be created during the last repository selection save, with the reason returned by the provider.',
+    })
+    @ApiQuery({ name: 'teamId', required: true })
+    @ApiOkResponse({ type: CodeManagementWebhookCreationFailuresResponseDto })
+    public async getWebhookCreationFailures(
+        @Query() query: { teamId: string },
+    ) {
+        const organizationId = this.request?.user?.organization?.uuid;
+
+        return this.getWebhookCreationFailuresUseCase.execute({
+            organizationAndTeamData: {
+                organizationId,
+                teamId: query.teamId,
+            },
         });
     }
 }

@@ -48,6 +48,8 @@ export interface ApiFileSuggestion {
     filePath?: string;
     language?: string;
     suggestionContent: string;
+    /** The whole explanation; suggestionContent is the short body shown on the PR. */
+    fullExplanation?: string;
     existingCode?: string;
     improvedCode?: string;
     oneSentenceSummary?: string;
@@ -62,6 +64,7 @@ export interface ApiFileSuggestion {
 export interface ApiPrLevelSuggestion {
     id: string;
     suggestionContent: string;
+    fullExplanation?: string;
     oneSentenceSummary?: string;
     label?: string;
     severity?: ApiSeverity;
@@ -93,7 +96,25 @@ export interface BusinessValidationResponse {
     command: string;
     repositoryName?: string;
     taskReference?: string;
+    /** One line per requirement, then the status. */
     result: string;
+    /** The same verdict, structured. Absent on servers older than the requirement-level verdict. */
+    verdict?: BusinessValidationVerdict;
+}
+
+/** Per task, the requirements with their state, evidence and action, plus changes not in the task. */
+export interface BusinessValidationVerdict {
+    status:
+        | 'compliant'
+        | 'issues_found'
+        | 'skipped'
+        | 'task_too_thin'
+        | 'task_missing'
+        | 'task_required';
+    passed: boolean;
+    reason?: string;
+    message?: string;
+    tasks: Array<Record<string, unknown>>;
 }
 
 export interface ReviewConfig {

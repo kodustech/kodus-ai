@@ -24,6 +24,7 @@ import {
 } from '@libs/core/workflow/domain/contracts/inbox-message.repository.contract';
 import { InboxStatus } from './repositories/schemas/inbox-message.model';
 import { createRabbitMQErrorHandlerWithFallback } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
+import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from './workflow-queue-arguments';
 import { runWithBoundedTimeout } from './run-with-bounded-timeout';
 import {
     ITaskProtectionService,
@@ -43,6 +44,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
     // Default ECS protection time in minutes
     private readonly JOB_PROTECTION_MINUTES = 60;
     private activeJobs = 0;
+    private protectionSync: Promise<void> = Promise.resolve();
+    private protectionSyncQueued = false;
 
     constructor(
         @Inject(JOB_PROCESSOR_SERVICE_TOKEN)
@@ -70,11 +73,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         ),
         queueOptions: {
             channel: 'channel-webhook',
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-dead-letter-exchange': 'workflow.exchange.dlx',
-                'x-dead-letter-routing-key': 'workflow.job.failed',
-            },
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.webhook.queue'],
         },
     })
     async handleWebhookProcessingJob(
@@ -103,11 +103,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         ),
         queueOptions: {
             channel: 'channel-code-review',
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-dead-letter-exchange': 'workflow.exchange.dlx',
-                'x-dead-letter-routing-key': 'workflow.job.failed',
-            },
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.code_review.queue'],
         },
     })
     async handleCodeReviewJob(
@@ -137,11 +134,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         ),
         queueOptions: {
             channel: 'channel-cli-code-review',
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-dead-letter-exchange': 'workflow.exchange.dlx',
-                'x-dead-letter-routing-key': 'workflow.job.failed',
-            },
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.cli_code_review.queue'],
         },
     })
     async handleCliCodeReviewJob(
@@ -170,11 +164,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         ),
         queueOptions: {
             channel: 'channel-check-implementation',
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-dead-letter-exchange': 'workflow.exchange.dlx',
-                'x-dead-letter-routing-key': 'workflow.job.failed',
-            },
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.check_implementation.queue'],
         },
     })
     async handleImplementationCheckJob(
@@ -221,13 +212,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         ),
         queueOptions: {
             channel: 'channel-ast-graph-build',
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-single-active-consumer': true,
-                'x-consumer-timeout': 25 * 60 * 1000,
-                'x-dead-letter-exchange': 'workflow.exchange.dlx',
-                'x-dead-letter-routing-key': 'workflow.job.failed',
-            },
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.ast_graph_build.queue'],
         },
     })
     async handleAstGraphBuildJob(
@@ -262,13 +248,8 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         ),
         queueOptions: {
             channel: 'channel-ast-graph-incremental',
-            arguments: {
-                'x-queue-type': 'quorum',
-                'x-single-active-consumer': true,
-                'x-consumer-timeout': 15 * 60 * 1000,
-                'x-dead-letter-exchange': 'workflow.exchange.dlx',
-                'x-dead-letter-routing-key': 'workflow.job.failed',
-            },
+            arguments:
+                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.ast_graph_incremental.queue'],
         },
     })
     async handleAstGraphIncrementalJob(
@@ -306,9 +287,7 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
     ): Promise<void> {
         this.activeJobs++;
         try {
-            await this.taskProtectionService.protectTask(
-                this.JOB_PROTECTION_MINUTES,
-            );
+            await this.syncTaskProtection();
             return await this.processWorkflowJob(
                 consumerId,
                 queueName,
@@ -316,9 +295,56 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
                 amqpMsg,
             );
         } finally {
-            await this.taskProtectionService.unprotectTask();
             this.activeJobs--;
+            await this.syncTaskProtection();
         }
+    }
+
+    /**
+     * Task protection is per ECS task, not per job: it must stay on while
+     * ANY job runs. Unprotecting whenever one job finished left the task
+     * scale-in/deploy eligible with other jobs still in flight, and those
+     * were SIGKILLed mid-review.
+     *
+     * Calls are chained so protect/unprotect requests reach the ECS agent
+     * in order, and each one reads `activeJobs` when it runs — the last
+     * request always reflects the current state. Requests coalesce: while a
+     * call is queued but not started, later requests reuse it (it will read
+     * the newer state), so at most one call is in flight and one queued no
+     * matter how many jobs start or finish. Every job start still issues or
+     * joins a protect, which keeps refreshing the protection expiry.
+     */
+    private syncTaskProtection(): Promise<void> {
+        if (this.protectionSyncQueued) {
+            return this.protectionSync;
+        }
+        this.protectionSyncQueued = true;
+
+        this.protectionSync = this.protectionSync.then(async () => {
+            this.protectionSyncQueued = false;
+            try {
+                if (this.activeJobs > 0) {
+                    await this.taskProtectionService.protectTask(
+                        this.JOB_PROTECTION_MINUTES,
+                    );
+                } else {
+                    await this.taskProtectionService.unprotectTask();
+                }
+            } catch (error) {
+                // The service logs its own HTTP failures; this only catches
+                // the unexpected, and keeps the chain alive for the next call.
+                this.logger.error({
+                    message: 'Failed to sync ECS task protection',
+                    context: WorkflowJobConsumer.name,
+                    error,
+                    metadata: {
+                        activeJobs: this.activeJobs,
+                        instanceId: this.instanceId,
+                    },
+                });
+            }
+        });
+        return this.protectionSync;
     }
 
     private async processWorkflowJob(

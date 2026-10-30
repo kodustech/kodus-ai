@@ -1,11 +1,47 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
+import { LLM } from '@libs/llm/llm';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
+import { createLogger } from '@libs/core/log/logger';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
-import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
+import { fileMatchesRulePath } from '@libs/common/utils/kody-rules/file-patterns';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import { BaseCodeReviewAgentProvider } from '@libs/code-review/infrastructure/agents/providers/base-code-review-agent.provider';
+import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
+import { mapAgentFindings } from '@libs/code-review/infrastructure/agents/collaborators/finding-mapper';
+import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
+import {
+    judgeKodyRulesSharded,
+    ruleAppliesToFile,
+    SHARD_CONCURRENCY_DEFAULT,
+    FILE_CONTENT_MAX_LINES,
+    FILE_CONTENT_BUDGET_CHARS,
+    inlineRuleReferences,
+    inlineLoadedReferences,
+    findUnresolvedReferenceRules,
+    shardViolationsWireSchema,
+    type RunJudge,
+    type RawShardViolation,
+    type ShardViolation,
+} from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
+import { resolveLanguageLabel } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
+import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
+import { buildDetectorCandidates } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
+import { checkClaims } from '@libs/code-review/infrastructure/agents/collaborators/claim-checker';
+import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
+import {
+    needOf,
+    retrieveForShard,
+    type RetrievedSlice,
+} from '@libs/code-review/infrastructure/agents/collaborators/rule-context.retriever';
+import {
+    AgentDegradedError,
+    buildKodyRulesPartialWarning,
+    buildPathMismatchWarning,
+    buildRuleContextUnavailableWarning,
+    type ReviewWarning,
+} from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
     ReviewAgentIdentity,
     ReviewAgentInput,
@@ -29,17 +65,22 @@ import {
  */
 @Injectable()
 export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
+    private readonly shardLogger = createLogger('KodyRulesShardedAgent');
+
     constructor(
-        promptRunnerService: PromptRunnerService,
         permissionValidationService: PermissionValidationService,
         observabilityService: ObservabilityService,
         @Optional()
         documentationSearchService?: DocumentationSearchExaService,
         @Optional()
         byokErrorCounter?: ByokErrorCounter,
+        // Resolves each rule's `@file:` citations from the Context OS
+        // (contextReferenceId). @Optional so unit tests can `new` the provider
+        // without it — absent = external refs simply aren't inlined.
+        @Optional()
+        private readonly externalReferenceLoaderService?: ExternalReferenceLoaderService,
     ) {
         super(
-            promptRunnerService,
             permissionValidationService,
             observabilityService,
             documentationSearchService,
@@ -107,41 +148,672 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             };
         }
 
-        // Kody Rules check explicit user-defined rules. Coverage recovery
-        // and second-chance still help — they push the agent to actually
-        // open the changed files when the main loop didn't reach all of
-        // them, and any new findings they produce keep their `ruleUuid`
-        // because the prompt of those passes carries the rules forward.
+        // DETERMINISTIC SHARDED PATH (issue #1449).
         //
-        // Synthesis-rescue is the one we MUST skip: its prompt is
-        // open-ended ("re-think the review") and emits findings against a
-        // generic schema (`label: bug|security|performance`) without
-        // `ruleUuid`. For a kody-rules run that path produces:
-        //   1. duplicate findings (same violation, re-worded), and
-        //   2. findings that lose `ruleUuid`, so they no longer bypass
-        //      the verifier — and the verifier doesn't have rules in its
-        //      prompt, so it confidently drops them as "hallucinated
-        //      rules". We've seen both happen on PR 25.
-        return super.execute({
-            ...input,
-            // Keep the filtered rules list on the passed-down input so
-            // buildUserPrompt / ruleUuid reconciliation still works.
-            kodyRules: rules,
-            skipSynthesisRescue: true,
+        // The old agentic loop (super.execute) let the LLM decide which files
+        // to open within a turn budget; on large PRs it starved and never read
+        // the violating file (measured: gpt-5.4 40%, kimi 58% occurrence-recall
+        // on the frozen github-cases set). We replace the traversal with a
+        // deterministic file×rule sweep: code iterates every changed file and
+        // issues ONE single-shot judgment per file with its path-applicable
+        // rules batched in, plus one whole-PR call for pull-request-scope rules.
+        // Coverage is now structural (the model only judges, never decides where
+        // to look). Validated at 91-100% occurrence-recall across gpt-5.4 /
+        // gpt-5.4-mini / kimi at ~same-or-lower cost.
+        const startTime = Date.now();
+
+        // Route each rule by its compiled shape (issue #1449, reshaped by #1831):
+        //   T0 mechanical (has a `detector`) → the regex runs in code and
+        //     ROUTES: it decides which (rule, file) pairs are worth an LLM
+        //     call. It no longer publishes anything on its own.
+        //   T1/T2 semantic (no detector) → the sharded single-shot LLM judge,
+        //     over every path-applicable file, exactly as before.
+        //
+        // Both streams then meet in the SAME judge, so a mechanical rule gets
+        // the same "does this really violate the rule, in this file's language
+        // and context?" question a semantic one gets. The detector publishing
+        // straight to the PR is what produced a 44.6% thumbs-down rate against
+        // the judge's 6.2% (issue #1831): a regex cannot see that the line it
+        // matched is JavaScript inside an .erb template, SQL inside a heredoc,
+        // or simply a language the rule was never about.
+        const mechanicalRules = rules.filter((r) => r.detector);
+
+        // T0 — run compiled detectors in code. Pure code, no LLM: this is still
+        // the cheap part, it just yields candidates instead of comments.
+        const detectorHits = buildDetectorCandidates(
+            mechanicalRules,
+            input.changedFiles,
+        );
+        const rulesWithHits = mechanicalRules.filter(
+            (r) => r.uuid && detectorHits.get(r.uuid)?.size,
+        ).length;
+        const candidateCount = [...detectorHits.values()].reduce(
+            (n, perFile) =>
+                n +
+                [...perFile.values()].reduce((m, lines) => m + lines.length, 0),
+            0,
+        );
+
+        const semanticRules = rules.filter((r) => !r.detector);
+
+        // Every rule the judge could have something to say about: the semantic
+        // ones always, plus the mechanical ones whose detector actually fired.
+        // A mechanical rule that matched nothing costs nothing — no shard is
+        // created for it — which is what keeps T0's cost argument intact.
+        const judgeRules = [
+            ...semanticRules,
+            ...mechanicalRules.filter(
+                (r) => r.uuid && detectorHits.get(r.uuid)?.size,
+            ),
+        ];
+
+        // ONE lookup for the whole review (issue #1826, KRC-22). The empty-read
+        // protection flips `available` on the instance itself, so a second
+        // instance built later would go on reading silence as evidence after
+        // the first had already caught the lookup lying. Absent means
+        // unavailable, never "assume a lookup": buildRepoLookup(undefined) is
+        // the fail-closed lookup whose accessors all throw.
+        const lookup = input.repoLookup ?? buildRepoLookup(undefined);
+
+        // Positive control, before anything trusts that lookup (KRC-22). Read a
+        // file this PR is known to have changed: empty content back from an
+        // allegedly available lookup means it is answering with silence, and
+        // every retrieval and claim check below would take that silence for
+        // evidence. Target the biggest patch among the files that still exist —
+        // a deleted file, or one with no patch, could legitimately read empty
+        // and would disable the lookup for a whole review on a false signal.
+        if (lookup.available) {
+            const probeTarget = (input.changedFiles ?? [])
+                .filter(
+                    (file) =>
+                        !!file?.filename &&
+                        file.status !== 'removed' &&
+                        (file.patch?.length ?? 0) > 0,
+                )
+                .sort(
+                    (a, b) => (b.patch?.length ?? 0) - (a.patch?.length ?? 0),
+                )[0]?.filename;
+            if (probeTarget) {
+                await lookup.probe(probeTarget);
+            }
+        }
+
+        let judgeViolations: ShardViolation[] = [];
+        let shardsRun = 0;
+        let shardsErrored = 0;
+        const contextWarnings: ReviewWarning[] = [];
+        let judgeModelName = 'unknown';
+        if (judgeRules.length > 0) {
+            const { byokConfig, main } = await resolveReviewAgentModel(
+                input,
+                this.permissionValidationService,
+                // Route the Kody-Rules review agent to its own task — falls back
+                // to the org's codeReview model when no override is set.
+                LLM_TASK.kodyRulesReview,
+            );
+            judgeModelName = main.modelName;
+
+            // Resolve the org's Kody Language into a human-readable label
+            // (e.g. "pt-BR" -> "Portuguese (Brazil)") via the SAME helper
+            // every other review agent uses (prompt-builder.ts), and thread
+            // it into the sharded judge below. Without this, both shard
+            // prompts are static English strings with no language
+            // templating, so a PR-scope kody-rules finding's
+            // suggestionContent ships in raw English regardless of the
+            // org's configured language — the exact bug reported on
+            // a customer GitLab MR (file-scope findings get a second
+            // chance via formatSuggestionContent downstream; PR-scope ones
+            // do not — see kody-rules-sharded.judge.ts's ShardedJudgeInput
+            // doc comment).
+            const languageLabel = resolveLanguageLabel(
+                input.languageResultPrompt,
+            );
+            this.shardLogger.log({
+                message: `[AGENT] ${this.getIdentity().name} (sharded) using model: ${main.modelName} for PR#${input.prNumber} (${semanticRules.length} semantic, ${mechanicalRules.length} mechanical rules; ${rulesWithHits} with detector hits -> ${candidateCount} candidate line(s) to confirm)`,
+                context: this.getIdentity().name,
+            });
+
+            // Single-shot structured call on the LOCAL (Vercel) stack — no tools,
+            // no loop. One model = the org's BYOK model or our
+            // managed default (kimi-k2.7-code via Moonshot); there is no 2nd-model
+            // fallback (removed in 04b-05), only the same-model latency guard.
+            // See runStructuredReviewCall for the model policy. runAiSdkLLMInSpan
+            // (inside the helper) emits the `tu`-stamped LLM-usage span so the
+            // sharded path's tokens still reach the user-facing token analytics.
+            const runJudge: RunJudge = async ({ system, user, filename }) => {
+                const parsed = await LLM.run({
+                    byokConfig: byokConfig ?? undefined,
+                    // Wire schema, NOT the zod object: zodSchema() would
+                    // re-derive `required` from the zod input side and
+                    // reintroduce the OpenAI-strict 400. See the
+                    // shardViolationsWireSchema doc.
+                    schema: shardViolationsWireSchema,
+                    // The shard model (managed kimi-k2.7) answers a bare `[]` for
+                    // "no violations" or `[{…}]` when it found some, instead of the
+                    // `{violations:…}` envelope — valid JSON of the wrong shape that
+                    // fails the wire schema. Opt into deterministic re-shape so `[]`
+                    // becomes a clean `{violations:[]}` (no false "rules not
+                    // applied", no wasted re-ask) and a bare array with real
+                    // violations is recovered rather than dropped (#1786 / prod
+                    // audit 2026-09).
+                    recoverEnvelopeShape: true,
+                    system,
+                    user,
+                    runName: 'kodus-rules-review-agent.shard',
+                    organizationId:
+                        input.organizationAndTeamData?.organizationId,
+                    attrs: {
+                        prNumber: input.prNumber,
+                        agentName: this.getIdentity().name,
+                        ...(filename ? { file: filename } : {}),
+                    },
+                });
+                return ((parsed as any)?.violations ??
+                    []) as RawShardViolation[];
+            };
+
+            // T2a — inline the rule's own `sourcePath` (IDE-sync / centralized)
+            // via the sandbox read so the judge sees the full convention.
+            let rulesForJudge = await inlineRuleReferences(
+                judgeRules,
+                input.remoteCommands?.read?.bind(input.remoteCommands),
+                this.shardLogger,
+            );
+
+            // T2b — inline the `@file:` citations authored in the rule BODY.
+            // Current-arch rules store these as a `contextReferenceId` (Context
+            // OS), NOT an inline field, and the review path reads rules raw — so
+            // the sharded judge used to see the bare "@file:X" marker and judge
+            // blind. Resolve them through the same loader the PR-level path uses
+            // (contextReferenceId -> ContextPack -> file content, same or cross
+            // repo). Best-effort: any failure degrades to the rule text alone.
+            rulesForJudge = await this.inlineContextOsReferences(
+                rulesForJudge,
+                input,
+            );
+
+            // ── issue #1826, step 1: the file shard carries its file whole ──
+            //
+            // The judge sees one file's hunks plus about three lines around
+            // them, so the largest class of broken rule — "is this import used
+            // later in the file", "is this function too long", "does this class
+            // have a docstring" — cannot be judged at all, and #1724 is what
+            // that looks like when the model answers anyway.
+            //
+            // Unconditional on purpose. It is not gated on a rule declaring a
+            // need, because a declaration can be wrong in the direction that
+            // silently stops judging the rule, and because the shard is already
+            // per-file: the file is the unit it was built around. Nothing here
+            // knows a language, which matters when the customer's rules may
+            // target any of them.
+            //
+            // Fail-soft everywhere: no sandbox, an unreadable path, or a file
+            // over the prompt budget all degrade to exactly today's hunk-only
+            // shard for that file.
+            const fileContents = new Map<string, string>();
+            if (lookup.available) {
+                const fileLevelRules = rulesForJudge.filter(
+                    (r) => r.scope !== KodyRulesScope.PULL_REQUEST,
+                );
+                const hasFileLevelRule = new Map<string, boolean>();
+                for (const file of input.changedFiles ?? []) {
+                    hasFileLevelRule.set(
+                        file.filename,
+                        fileLevelRules.some((r) =>
+                            ruleAppliesToFile(file.filename, r.path),
+                        ),
+                    );
+                }
+                const readable = (input.changedFiles ?? []).filter(
+                    (file) =>
+                        // An added file is already whole inside its own diff;
+                        // sending it twice buys nothing and doubles the prompt.
+                        file.status !== 'added' &&
+                        file.status !== 'removed' &&
+                        hasFileLevelRule.get(file.filename) === true,
+                );
+
+                let cursor = 0;
+                await Promise.all(
+                    Array.from(
+                        {
+                            length: Math.min(
+                                SHARD_CONCURRENCY_DEFAULT,
+                                readable.length || 1,
+                            ),
+                        },
+                        async () => {
+                            while (cursor < readable.length) {
+                                const file = readable[cursor++];
+                                try {
+                                    const text = await lookup.read(
+                                        file.filename,
+                                        1,
+                                        FILE_CONTENT_MAX_LINES,
+                                    );
+                                    if (
+                                        text?.trim() &&
+                                        text.length <=
+                                            FILE_CONTENT_BUDGET_CHARS
+                                    ) {
+                                        fileContents.set(file.filename, text);
+                                    }
+                                } catch (err) {
+                                    this.shardLogger.warn({
+                                        message: `[kody-rules] could not read ${file.filename} for PR#${input.prNumber}; that shard falls back to the diff alone: ${err instanceof Error ? err.message : String(err)}`,
+                                        context: this.getIdentity().name,
+                                        metadata: {
+                                            organizationAndTeamData:
+                                                input.organizationAndTeamData,
+                                            prNumber: input.prNumber,
+                                            filename: file.filename,
+                                        },
+                                    });
+                                }
+                            }
+                        },
+                    ),
+                );
+            }
+
+            // Retrieve, per file, the repository slices the rules declared they
+            // need (issue #1826), and record the ones we could NOT retrieve.
+            // A rule that said the hunk is not enough, judged on the hunk
+            // anyway, is the blind judgment this feature exists to remove — so
+            // an unmet need takes that rule out of that file's shard and is
+            // reported instead of being absorbed in silence.
+            const changedFilenames = (input.changedFiles ?? []).map(
+                (file) => file.filename,
+            );
+            const contextSlices = new Map<string, RetrievedSlice[]>();
+            const unmetRules = new Map<string, Set<string>>();
+            // A rule can be met in one file and unmet in another; it counts as
+            // skipped only where it was never judged at all.
+            const metSomewhere = new Set<string>();
+            const unmetSomewhere = new Map<string, Partial<IKodyRule>>();
+
+            const contextRules = rulesForJudge.filter(
+                (r) =>
+                    r.scope !== KodyRulesScope.PULL_REQUEST &&
+                    needOf(r) !== 'diff-only',
+            );
+
+            // A PR-scope rule that declares a need is served by NOTHING: the
+            // whole-PR pass is one call over the diff, and retrieval here is
+            // per changed file. Silence is the wrong answer to that — the
+            // author asked for context and would never learn it was ignored.
+            // The classifier is told to answer `diff-only` for PR scope, so
+            // reaching here means it did not, and that is worth seeing.
+            const prScopeWithNeed = rulesForJudge.filter(
+                (r) =>
+                    r.scope === KodyRulesScope.PULL_REQUEST &&
+                    needOf(r) !== 'diff-only',
+            );
+            if (prScopeWithNeed.length) {
+                this.shardLogger.warn({
+                    message: `[kody-rules] ${prScopeWithNeed.length} PR-scope rule(s) declare a context need that the whole-PR pass cannot serve for PR#${input.prNumber}; they are judged on the PR diff alone`,
+                    context: this.getIdentity().name,
+                    metadata: {
+                        organizationAndTeamData: input.organizationAndTeamData,
+                        prNumber: input.prNumber,
+                        rules: prScopeWithNeed.map((r) => ({
+                            uuid: r.uuid,
+                            title: r.title,
+                            need: needOf(r),
+                        })),
+                    },
+                });
+            }
+
+            for (const file of contextRules.length
+                ? (input.changedFiles ?? [])
+                : []) {
+                const applicable = contextRules.filter((r) =>
+                    ruleAppliesToFile(file.filename, r.path),
+                );
+                if (applicable.length === 0) continue;
+
+                const retrieved = await retrieveForShard({
+                    file,
+                    rules: applicable,
+                    lookup,
+                    changedFilenames,
+                    logger: this.shardLogger,
+                    // Step 1 above already read this file and will render it
+                    // whole on the shard prompt. Retrieving it a second time
+                    // as a `full-file` slice put two copies of the same text
+                    // in one prompt, under two contradictory instructions.
+                    wholeFileAlreadyOnPage: fileContents.has(file.filename),
+                });
+
+                if (retrieved.slices.length) {
+                    contextSlices.set(file.filename, retrieved.slices);
+                }
+                const unmetUuids = new Set(
+                    retrieved.unmet
+                        .map((r) => r.uuid)
+                        .filter((uuid): uuid is string => !!uuid),
+                );
+                if (unmetUuids.size) {
+                    unmetRules.set(file.filename, unmetUuids);
+                }
+                for (const rule of applicable) {
+                    if (!rule.uuid) continue;
+                    if (unmetUuids.has(rule.uuid)) {
+                        unmetSomewhere.set(rule.uuid, rule);
+                    } else {
+                        metSomewhere.add(rule.uuid);
+                    }
+                }
+            }
+
+            const skippedRules = [...unmetSomewhere.entries()]
+                .filter(([uuid]) => !metSomewhere.has(uuid))
+                .map(([, rule]) => rule);
+
+            if (skippedRules.length > 0) {
+                const skippedTitles = skippedRules.map(
+                    (rule) => rule.title || rule.uuid || 'untitled rule',
+                );
+
+                // Every rule this review had was skipped, so there is nothing
+                // left to judge. Reporting that as a completed review would
+                // hand the org a green check for a review that evaluated none
+                // of its rules — the same lie the all-shards-failed escalation
+                // below exists to prevent, so it escalates the same way and the
+                // message names what was skipped (KRC-31).
+                if (skippedRules.length === judgeRules.length) {
+                    // Carry the notice on the error: a thrown agent is dropped
+                    // by allSettled, and the escalation message itself renders
+                    // only for a FAILED review — kody-rules is not critical, so
+                    // this review is partial and the message alone would never
+                    // reach the PR (Verifier round 2, gap 2).
+                    throw new AgentDegradedError(
+                        `Kody Rules could not be evaluated: all ${skippedRules.length} rule(s) need repository context this review could not retrieve (${lookup.unavailableReason || 'context unavailable'}), so none was applied to this PR. Skipped: ${skippedTitles.join(', ')}.`,
+                        [
+                            buildRuleContextUnavailableWarning({
+                                skippedRuleTitles: skippedTitles,
+                                modelName: main.modelName,
+                                agentName: this.getIdentity().name,
+                            }),
+                        ],
+                    );
+                }
+
+                contextWarnings.push(
+                    buildRuleContextUnavailableWarning({
+                        skippedRuleTitles: skippedTitles,
+                        modelName: main.modelName,
+                        agentName: this.getIdentity().name,
+                    }),
+                );
+                this.shardLogger.warn({
+                    message: `[kody-rules] ${skippedRules.length} rule(s) were NOT judged for PR#${input.prNumber}: the repository context they declared they need could not be retrieved. Skipped: ${skippedTitles.join(', ')}.`,
+                    context: this.getIdentity().name,
+                    metadata: {
+                        organizationAndTeamData: input.organizationAndTeamData,
+                        prNumber: input.prNumber,
+                        skippedRuleUuids: skippedRules.map((r) => r.uuid),
+                        skippedRuleTitles: skippedTitles,
+                        lookupAvailable: lookup.available,
+                        unavailableReason: lookup.unavailableReason,
+                    },
+                });
+            }
+
+            // Open the Langfuse root observation the sharded judge runs under.
+            // Every OTHER review agent runs inside runAgentWithTrace (via the
+            // base provider's agentic loop); this override bypassed super.execute
+            // and with it that wrapper, so the shard `generateText` spans emitted
+            // detached — no named trace, no org/team/PR/session tags — and the
+            // agent showed ZERO traces in Langfuse. Wrapping the judge here nests
+            // every shard span under a `kodus-rules-review-agent` trace, tagged
+            // like the generalist. No-op passthrough when tracing is disabled.
+            const result = await runAgentWithTrace(
+                {
+                    traceName: this.getIdentity().name,
+                    organizationId:
+                        input.organizationAndTeamData?.organizationId,
+                    teamId: input.organizationAndTeamData?.teamId,
+                    prNumber: input.prNumber,
+                    repositoryId: input.repositoryId,
+                },
+                // Sanitized span input: shape only, never the file patches.
+                {
+                    prNumber: input.prNumber,
+                    semanticRules: semanticRules.length,
+                    mechanicalRules: mechanicalRules.length,
+                    detectorCandidates: candidateCount,
+                    changedFiles: input.changedFiles?.length ?? 0,
+                },
+                () =>
+                    judgeKodyRulesSharded({
+                        changedFiles: input.changedFiles,
+                        rules: rulesForJudge,
+                        runJudge,
+                        prTitle: input.prTitle,
+                        prBody: input.prBody,
+                        logger: this.shardLogger,
+                        languageLabel,
+                        detectorHits,
+                        contextSlices,
+                        unmetRules,
+                        fileContents,
+                        // Issue #1313 Fase 1b: this override bypasses
+                        // super.execute (see class docstring) and never went
+                        // through base-code-review-agent.provider.ts, so
+                        // without this line kody-rules stays permanently
+                        // blind to its own prior-round decisions.
+                        previousDecisions: input.previousDecisions,
+                    }),
+            );
+            judgeViolations = result.violations;
+            shardsRun = result.shardsRun;
+            shardsErrored = result.shardsErrored;
+
+            // Escalate a TOTAL shard failure. When every judge shard errored
+            // (e.g. an OpenAI-strict wire-schema 400 for a BYOK org, which
+            // 400s every shard identically — the #1523/#1526 regression), the
+            // judge path returns zero violations and the review used to
+            // complete "successfully" with only warn logs — a green review
+            // that evaluated none of its semantic kody-rules. Throw so the
+            // orchestrator's allSettled marks this agent PARTIAL_ERROR
+            // (surfaced by execution health) instead of silently reporting a
+            // healthy, rule-free review. A partial shard failure still
+            // degrades to the surviving shards' findings, as before.
+            // The message reaches the PR logs UI and the check text, so it
+            // states what happened and what to do — the reasoning above is for
+            // whoever reads this code, and the diagnostic breadcrumbs
+            // (wire-schema 400 / provider outage / model unavailability) are in
+            // the shard warn logs.
+            if (shardsRun > 0 && shardsErrored === shardsRun) {
+                // Since #1831 a mechanical rule is confirmed by this same judge,
+                // so a T0-only org reaches this escalation for the first time.
+                // That is correct — the judge failing now genuinely means those
+                // rules were NOT applied, where before the regex had already
+                // decided — but the message must not claim "semantic" rules the
+                // org may not have.
+                const kind =
+                    semanticRules.length > 0 ? 'Kody Rules' : 'mechanical Kody Rules';
+                throw new Error(
+                    `Kody Rules could not be evaluated: all ${shardsRun} rule check(s) failed to run. Your ${kind} were not applied to this PR.`,
+                );
+            }
+
+            // Surface a PARTIAL shard failure (some shards died while others
+            // posted). We deliberately do NOT throw — the surviving shards'
+            // findings still ship — but a silent degrade is exactly the
+            // "one shard dead while the other posts" shape of the wire-schema
+            // regression: the review looks healthy yet a subset of semantic
+            // kody-rules were never evaluated, and today that only shows up as
+            // an `, N errored` fragment in an info line (easy to miss, not
+            // alertable). Emit a structured WARN with the counts so the
+            // partial degrade is greppable/alertable per-execution.
+            if (shardsErrored > 0 && shardsErrored < shardsRun) {
+                contextWarnings.push(
+                    buildKodyRulesPartialWarning({
+                        failed: shardsErrored,
+                        total: shardsRun,
+                        modelName: main.modelName,
+                        agentName: this.getIdentity().name,
+                    }),
+                );
+                this.shardLogger.warn({
+                    message: `[kody-rules] PARTIAL judge-shard failure for PR#${input.prNumber}: ${shardsErrored}/${shardsRun} shard(s) errored — the surviving ${shardsRun - shardsErrored} shard(s) posted, but the semantic kody-rules on the failed shard(s) were NOT evaluated. Review degraded (not failed). Check the shard warn logs for the cause (wire-schema 400 / provider blip / model unavailability).`,
+                    context: this.getIdentity().name,
+                    metadata: {
+                        prNumber: input.prNumber,
+                        shardsRun,
+                        shardsErrored,
+                        shardsSucceeded: shardsRun - shardsErrored,
+                    },
+                });
+            }
+        }
+
+        // One stream now: everything the judge confirmed. Detector hits reach
+        // the PR only through it (issue #1831), so downstream mapping / verify /
+        // dedup see a single, uniformly-confirmed set of findings — which also
+        // means the claim check below covers BOTH streams for free.
+        //
+        // This is the only merit check this path has: it bypasses super.execute
+        // and with it the agentic finder's `verify` gate, so between the model's
+        // word and the published comment nothing else looks. A finding that
+        // asserts something about the repository gets that assertion refuted
+        // here, before mapping, and is dropped when the repository disagrees or
+        // when we could not look at all (issue #1826).
+        const claimCheck = await checkClaims({
+            violations: judgeViolations,
+            changedFiles: input.changedFiles ?? [],
+            // The same instance the retrieval above used, so a mid-review flip
+            // reaches the claim check too (KRC-22).
+            lookup,
+            logger: this.shardLogger,
+            organizationId: input.organizationAndTeamData?.organizationId,
         });
+
+        for (const { violation, reason } of claimCheck.dropped) {
+            this.shardLogger.warn({
+                message: `[kody-rules] discarded a finding for PR#${input.prNumber}: ${reason}`,
+                context: this.getIdentity().name,
+                metadata: {
+                    // Without the org/team the discard log cannot be attributed
+                    // to a customer, which is the whole point of keeping it.
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    prNumber: input.prNumber,
+                    ruleUuid: violation.ruleUuid,
+                    filename: violation.relevantFile,
+                    claimKind: violation.claimKind,
+                    reason,
+                },
+            });
+        }
+
+        const allViolations: ShardViolation[] = [...claimCheck.kept];
+
+        // Reuse the shared finding→CodeSuggestion mapping (ruleUuid
+        // reconciliation, path canonicalization, kody-rule severity) so verify
+        // / dedup downstream behave exactly as with the agentic path.
+        const mapped = mapAgentFindings(
+            { findings: { suggestions: allViolations } },
+            {
+                changedFiles: input.changedFiles,
+                kodyRules: rules,
+                prNumber: input.prNumber,
+                isKodyRules: true,
+                identityName: this.getIdentity().name,
+                labelPolicy: {
+                    categoryLabel: this.getCategoryLabel(),
+                    allowedLabels: this.getAllowedSuggestionLabels(input),
+                    supportsMixed: this.supportsMixedLabels(),
+                },
+                logger: this.shardLogger,
+            },
+        );
+
+        if (mapped.droppedForPath > 0) {
+            contextWarnings.push(
+                buildPathMismatchWarning({
+                    count: mapped.droppedForPath,
+                    modelName: judgeModelName,
+                    agentName: this.getIdentity().name,
+                }),
+            );
+        }
+
+        const durationMs = Date.now() - startTime;
+        // How hard the repository was actually consulted. A review that
+        // retrieved nothing and refuted nothing looks identical to a clean PR
+        // in every other line of this log; `lookupFailures > 0` while the
+        // lookup still reports available is the shape of a silently degraded
+        // review, and it is the only place that distinction is visible.
+        // `input.repoLookup` is injected by the caller, so this must survive a
+        // lookup built before `stats` existed. A crash here would fail the
+        // whole review to write a log line — the counters are diagnostics, and
+        // diagnostics never get to be load-bearing.
+        const ls = lookup.stats ?? {
+            grep: 0,
+            read: 0,
+            exists: 0,
+            failures: 0,
+        };
+        const lookupSummary = lookup.available
+            ? `lookup ${ls.grep} grep / ${ls.read} read / ${ls.exists} exists${ls.failures ? `, ${ls.failures} FAILED` : ''}`
+            : `lookup unavailable (${lookup.unavailableReason})`;
+
+        this.shardLogger.log({
+            message: `[AGENT] ${this.getIdentity().name} (sharded) done for PR#${input.prNumber}: ${mapped.suggestions.length} suggestions (${judgeViolations.length} confirmed across ${shardsRun} shards${shardsErrored ? `, ${shardsErrored} errored` : ''}${claimCheck.dropped.length ? `, ${claimCheck.dropped.length} discarded by the claim check` : ''}; ${candidateCount} detector candidate(s) offered; ${lookupSummary}) in ${durationMs}ms`,
+            context: this.getIdentity().name,
+            metadata: {
+                organizationAndTeamData: input.organizationAndTeamData,
+                prNumber: input.prNumber,
+                shardsRun,
+                shardsErrored,
+                suggestions: mapped.suggestions.length,
+                claimsDropped: claimCheck.dropped.length,
+                lookupAvailable: lookup.available,
+                lookupUnavailableReason: lookup.unavailableReason || undefined,
+                lookupGrep: ls.grep,
+                lookupRead: ls.read,
+                lookupExists: ls.exists,
+                lookupFailures: ls.failures,
+            },
+        });
+
+        return {
+            suggestions: mapped.suggestions,
+            agentName: this.getIdentity().name,
+            turnsUsed: shardsRun,
+            durationMs,
+            ...(contextWarnings.length ? { warnings: contextWarnings } : {}),
+        };
     }
 
     /**
-     * Override to include the request's rules in the category prompt. The
-     * formatted rule section is derived from `input.kodyRules` each call
-     * instead of from instance state, so concurrent reviews cannot see
-     * each other's rule set.
+     * The category prompt of the AGENTIC path, which this provider no longer
+     * takes: `execute` above returns from the sharded judge and never calls
+     * `super.execute`, and `getCategoryPrompt` is reached only through the
+     * base provider's `promptMeta`, which only `super.execute` calls. It stays
+     * because the base declares it abstract, and because the specs exercise the
+     * rule composition through it.
+     *
+     * It said "Investigate with tools: Use readFile/grep to verify" (issue
+     * #1826). Nothing in this provider gives the model a tool — `RunJudge`
+     * takes a system string and a user string and returns JSON. Text promising
+     * a capability that does not exist is worse than no text: it is the reason
+     * the model asserted "this import is unused" as if it had checked (#1724).
+     * Anything the judge needs is retrieved by code and inlined before the call.
+     *
+     * The rule section is derived from `input.kodyRules` each call rather than
+     * from instance state, so concurrent reviews cannot see each other's rules.
      */
     protected getCategoryPrompt(input: ReviewAgentInput): string {
         const rules = (
-            (input as ReviewAgentInput & {
-                kodyRules?: Partial<IKodyRule>[];
-            }).kodyRules || []
+            (
+                input as ReviewAgentInput & {
+                    kodyRules?: Partial<IKodyRule>[];
+                }
+            ).kodyRules || []
         ).filter(
             (r) => r.type !== KodyRulesType.MEMORY && r.status === 'active',
         );
@@ -154,7 +826,7 @@ You validate code against the team's custom rules listed below. Your ONLY job is
 ### How to analyze:
 1. **Read each rule carefully**: Understand what the rule requires and what path patterns it applies to.
 2. **Check applicability**: Only check a rule if the changed files match its path pattern (if specified).
-3. **Investigate with tools**: Use readFile/grep to verify whether the changed code complies with each rule.
+3. **Judge from what you were given**: the changed lines, plus whatever repository context was retrieved and inlined for you above. You have no tools; if the evidence for a rule is not on this page, do not assert it.
 4. **Use examples**: If a rule has examples, compare the changed code against them.
 5. **Report violations only**: Do NOT report code that correctly follows the rules.
 
@@ -209,9 +881,9 @@ You validate code against the team's custom rules listed below. Your ONLY job is
             ? `\n  <Commits>\n${commits
                   .map(
                       (c, i) =>
-                          `    ${i + 1}. ${(c.sha || '').substring(0, 8)} ${(
-                              c.message || ''
-                          ).split('\n')[0]}`,
+                          `    ${i + 1}. ${(c.sha || '').substring(0, 8)} ${
+                              (c.message || '').split('\n')[0]
+                          }`,
                   )
                   .join(
                       '\n',
@@ -276,14 +948,99 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
     <Rule>Check EVERY rule against the diffs and use tools to investigate further if needed.</Rule>
     <Rule>For PR-level rules (e.g., "must have tests", "PR description requirements"), evaluate the PR as a whole — check the PR title, description, and the full list of changed files. Do NOT attach these to a specific file.</Rule>
     <Rule>For file-level rules, check the diff of each applicable file and report with file path and line numbers.</Rule>
-    <Rule>If a rule has a Reference file, use readFile to read it and understand the expected pattern before checking.</Rule>
+    <Rule>A rule's Reference file is already inlined below it — read it there. There is no tool to fetch one.</Rule>
     <Rule>Only report actual violations — not code that follows the rules.</Rule>
     <Rule>Include the rule title in the suggestionContent so the team knows which rule was violated.</Rule>
     <Rule>If you spot a real issue that does NOT map to any listed rule, DROP IT. Your scope is only team rules. Other agents cover generic bugs, security, performance.</Rule>
-    <Rule>Only flag lines that are present in the &lt;Diffs&gt; above. readFile/grep return the FULL file including code this PR did not touch — surrounding lines are context only. Never report a violation whose evidence (existingCode / relevantLines) lies outside the diff hunks.</Rule>
+    <Rule>Only flag lines that are present in the &lt;Diffs&gt; above. Any repository context inlined for you is context only — never report a violation whose evidence (existingCode / relevantLines) lies outside the diff hunks.</Rule>
     <Rule>Commit-hygiene rules (e.g. "don't mix mechanical and behavioral changes", "separate commits and call out which are mechanical") MUST be judged against the &lt;Commits&gt; list, NOT the aggregated diff or the PR description. Seeing several commits' changes together, or an incremental push that is purely mechanical, is NOT a violation — you are just viewing more than one commit at once, or a subset. This rule is HIGH-PRECISION and targets only WHOLESALE mechanical changes — project/file-wide reformatting, mass renames, or import re-sorting — that are bundled into the SAME commit as unrelated behavioral logic. The following are NOT violations and must NOT be reported: incidental comments or docstrings, local whitespace/indentation, and formatting that is a normal part of implementing the change in that commit; a commit that is entirely mechanical (e.g. "fix lint", "style: formatting"); or mechanical changes already isolated in their own commit. When in doubt, do NOT report.</Rule>
   </Rules>
 </ReviewTask>`;
+    }
+
+    /**
+     * Resolve each rule's `@file:` citations from the Context OS
+     * (`contextReferenceId`) and inline the fetched content into the rule text,
+     * so the sharded judge sees the authoritative convention instead of the bare
+     * marker. Uses the SAME loader the PR-level path uses (handles same- and
+     * cross-repo via `getRepositoryContentFile`). No-op when the loader isn't
+     * wired (unit tests) or no rule carries a `contextReferenceId`. Best-effort:
+     * any failure degrades to the rule text alone.
+     */
+    private async inlineContextOsReferences(
+        rules: Partial<IKodyRule>[],
+        input: ReviewAgentInput,
+    ): Promise<Partial<IKodyRule>[]> {
+        if (!this.externalReferenceLoaderService) return rules;
+        // Pre-filter: only rules that actually cite an external reference reach
+        // the loader — each resolution is an (uncached) network round-trip, so
+        // don't pay it for rules that carry no contextReferenceId.
+        const refRules = rules.filter((r) => r.contextReferenceId);
+        if (refRules.length === 0) return rules;
+
+        try {
+            const analysisContext = {
+                organizationAndTeamData: input.organizationAndTeamData,
+                repository: input.repositoryId
+                    ? {
+                          id: input.repositoryId,
+                          name:
+                              input.repositoryFullName?.split('/').pop() ??
+                              input.repositoryFullName,
+                      }
+                    : undefined,
+                // `getRepositoryContentFile` fetches from `head.ref` (fallback
+                // `base.ref`) and dereferences both objects — a bare `{ number }`
+                // throws "Cannot read properties of undefined (reading 'ref')".
+                // We only carry the base branch here (the reviewed head branch's
+                // ref isn't on the agent input), so point both at it: reference
+                // files are the established convention, which lives on the base
+                // branch anyway.
+                pullRequest: {
+                    number: input.prNumber,
+                    head: { ref: input.baseBranch },
+                    base: { ref: input.baseBranch },
+                },
+            } as any;
+
+            const { referencesMap } =
+                await this.externalReferenceLoaderService.loadReferencesForRules(
+                    refRules,
+                    analysisContext,
+                );
+
+            // Surface rules whose reference failed to resolve — otherwise the
+            // judge-blind degradation is invisible (inlineLoadedReferences logs
+            // only on success, and the loader swallows per-rule fetch errors).
+            const unresolved = findUnresolvedReferenceRules(
+                refRules,
+                referencesMap,
+            );
+            if (unresolved.length > 0) {
+                this.shardLogger.warn({
+                    message: `[kody-rules-shard] ${unresolved.length} rule(s) with a contextReferenceId resolved ZERO references for PR#${input.prNumber}; judging those without their referenced file(s)`,
+                    context: this.getIdentity().name,
+                    metadata: {
+                        organizationAndTeamData: input.organizationAndTeamData,
+                        prNumber: input.prNumber,
+                        ruleUuids: unresolved.map((r) => r.uuid),
+                    },
+                });
+            }
+
+            return inlineLoadedReferences(rules, referencesMap, this.shardLogger);
+        } catch (err) {
+            this.shardLogger.warn({
+                message: `[kody-rules-shard] Context OS reference load failed for PR#${input.prNumber}; judging without external refs: ${err instanceof Error ? err.message : String(err)}`,
+                context: this.getIdentity().name,
+                metadata: {
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    prNumber: input.prNumber,
+                    err,
+                },
+            });
+            return rules;
+        }
     }
 
     /**
@@ -304,6 +1061,19 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
             return changedPaths.some((filePath) =>
                 this.matchesPathPattern(filePath, rule.path!),
             );
+        });
+
+        this.shardLogger.log({
+            message: `[kody-rules-eval] ${applicableRules.length}/${rules.length} rule(s) selected for the kody-rules agent (${changedFiles.length} changed file(s))`,
+            context: KodyRulesAgentProvider.name,
+            metadata: {
+                selectedRules: applicableRules.map((r) => ({
+                    uuid: r.uuid,
+                    title: r.title,
+                    path: r.path,
+                })),
+                droppedByPath: rules.length - applicableRules.length,
+            },
         });
 
         if (applicableRules.length === 0) return '';
@@ -337,10 +1107,11 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
                 const anchor = rule.sourceAnchor
                     ? ` (section: ${rule.sourceAnchor})`
                     : '';
-                const toolHint =
-                    'use readFile to read this file from the current repository; if the file lives in another repo, use readReference with repo="owner/repo" and path="path"';
+                // No tool hint here. `inlineLoadedReferences` has already put
+                // this file's content into the rule, so pointing the model at a
+                // fetch it cannot perform only invites it to pretend it did.
                 parts.push(
-                    `**Reference**: \`${rule.sourcePath}\`${anchor} — ${toolHint} for the full pattern/convention`,
+                    `**Reference**: \`${rule.sourcePath}\`${anchor} — its content is inlined with this rule`,
                 );
             }
 
@@ -365,8 +1136,6 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
      * root-level files like `foo.ts` or `src/foo.ts`.
      */
     private matchesPathPattern(filePath: string, pattern: string): boolean {
-        if (filePath === pattern) return true;
-        if (pattern.endsWith('/') && filePath.startsWith(pattern)) return true;
-        return isFileMatchingGlob(filePath, [pattern]);
+        return fileMatchesRulePath(filePath, pattern);
     }
 }

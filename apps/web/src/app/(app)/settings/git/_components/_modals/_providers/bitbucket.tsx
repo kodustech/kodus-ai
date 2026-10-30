@@ -22,7 +22,7 @@ import { Input } from "@components/ui/input";
 import { magicModal } from "@components/ui/magic-modal";
 import { Switch } from "@components/ui/switch";
 import { useAsyncAction } from "@hooks/use-async-action";
-import { AxiosError } from "axios";
+import { setIntegrationError } from "src/core/utils/extract-error-message";
 import { Save } from "lucide-react";
 import { AuthMode } from "src/core/types";
 
@@ -71,10 +71,7 @@ export const BitbucketModal = (props: Props) => {
                 magicModal.hide();
             } catch (error) {
                 magicModal.unlock();
-
-                if (error instanceof AxiosError && error.status === 400) {
-                    setError({ message: "Invalid Token or Username" });
-                }
+                setIntegrationError(error, setError);
             }
         },
     );

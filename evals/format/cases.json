@@ -1,0 +1,777 @@
+[
+  {
+    "id": "en-US/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US"
+  },
+  {
+    "id": "en-US/minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US"
+  },
+  {
+    "id": "pt-BR/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "pt-BR/minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "pt-BR"
+  },
+  {
+    "id": "zh-CN/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "zh-CN/minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "zh-CN"
+  },
+  {
+    "id": "es-ES/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "es-ES"
+  },
+  {
+    "id": "es-ES/minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "es-ES"
+  },
+  {
+    "id": "en-US-one-sentence/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
+    "batch": "gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "batch": "minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "batch": "minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "variant": "en-US-one-sentence"
+  },
+  {
+    "id": "en-US-one-sentence/minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "batch": "minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "variant": "en-US-one-sentence"
+  }
+]

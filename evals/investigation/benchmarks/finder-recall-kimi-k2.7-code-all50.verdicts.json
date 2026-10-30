@@ -1,0 +1,163 @@
+{
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com": {
+  "g3|f0": true
+ },
+ "feat-2fa-backup-codes-cal-com": {},
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "g0|f0": true,
+  "g2|f1": true
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor": {
+  "g0|f1": true,
+  "g1|f2": true,
+  "g2|f4": true
+ },
+ "dual-storage-architecture-grafana-codex": {
+  "g0|f4": true,
+  "g0|f8": true,
+  "g1|f0": true,
+  "g1|f1": true,
+  "g1|f2": true,
+  "g1|f5": true,
+  "g1|f6": true,
+  "g1|f7": true,
+  "g2|f3": true,
+  "g2|f9": true
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry": {
+  "g0|f1": true,
+  "g2|f0": true
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry": {
+  "g0|f2": true
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry": {
+  "g0|f0": true,
+  "g0|f1": true
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor": {
+  "g0|f0": true,
+  "g0|f3": true,
+  "g1|f1": true,
+  "g1|f2": true
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor": {
+  "g1|f0": true
+ },
+ "github-oauth-security-enhancement-sentry": {
+  "g2|f0": true
+ },
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor": {
+  "g0|f0": true,
+  "g0|f2": true
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com": {
+  "g0|f3": true,
+  "g1|f0": true,
+  "g2|f1": true,
+  "g3|f3": true
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak": {},
+ "anonymous-add-configurable-device-limit-grafana-codex": {},
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor": {
+  "g0|f1": true,
+  "g0|f11": true,
+  "g4|f9": true,
+  "g4|f7": true
+ },
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry": {
+  "g0|f0": true,
+  "g0|f2": true,
+  "g3|f1": true
+ },
+ "implement-access-token-context-encoding-framework-keycloak": {
+  "g0|f0": true,
+  "g0|f1": true
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com": {
+  "g0|f4": true,
+  "g1|f6": true
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry": {},
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry": {},
+ "replays-self-serve-bulk-delete-system-sentry": {},
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak": {},
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak": {},
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor": {
+  "g0|f0": true,
+  "g0|f1": true
+ },
+ "feature-localization-fallbacks-server-side-discourse-cursor": {},
+ "async-import-of-the-appstore-packages-cal-com": {
+  "g1|f0": true,
+  "g1|f1": true,
+  "g1|f2": true,
+  "g1|f3": true,
+  "g1|f4": true
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com": {},
+ "authzservice-improve-authz-caching-grafana-codex": {},
+ "unified-storage-performance-optimizations-grafana-codex": {
+  "g0|f0": true
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak": {
+  "g0|f0": true
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak": {
+  "g0|f0": true
+ },
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak": {},
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com": {
+  "g0|f1": true,
+  "g1|f3": true
+ },
+ "advanced-query-processing-architecture-grafana-codex": {},
+ "advanced-sql-analytics-framework-grafana-codex": {
+  "g0|f0": true,
+  "g0|f1": true
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com": {
+  "g0|f0": true,
+  "g0|f2": true,
+  "g0|f3": true,
+  "g0|f4": true
+ },
+ "database-performance-optimizations-grafana-codex": {
+  "g0|f0": true,
+  "g0|f1": true,
+  "g0|f2": true
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com": {
+  "g1|f2": true
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry": {
+  "g0|f0": true
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor": {
+  "g0|f0": true
+ },
+ "fixing-re-authentication-with-passkeys-keycloak": {},
+ "frontend-asset-optimization-grafana-codex": {},
+ "implement-recovery-key-support-for-user-storage-providers-keycloak": {
+  "g0|f0": true,
+  "g0|f2": true
+ },
+ "notification-rule-processing-engine-grafana-codex": {
+  "g1|f0": true,
+  "g1|f3": true
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor": {
+  "g1|f0": true,
+  "g1|f1": true
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex": {},
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry": {
+  "g0|f0": true
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com": {
+  "g1|f0": true
+ },
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor": {
+  "g0|f0": true
+ }
+}

@@ -1,8 +1,35 @@
 {
     "schema_version": 1,
-    "generated_at": "2026-06-16T16:39:33.332Z",
+    "generated_at": "2026-10-23T18:39:31.119Z",
     "source": "manual",
     "features": {
+        "conditional-pr-approval": {
+            "name": "Conditional PR approval",
+            "stage": "beta",
+            "description": "Limit automatic approval by PR label or author, require a person for sensitive paths, and let Kody assess risk using the change and available code history. Available on Teams and Enterprise plans.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
+        "custom-agents": {
+            "name": "Custom review agents",
+            "stage": "beta",
+            "description": "Define your own reviewers with their instructions, the files they look at, the tools they may use and how their comments appear, and run them next to Kody on every pull request.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
+        "deterministic-evidence": {
+            "name": "Deterministic evidence in review",
+            "stage": "beta",
+            "description": "Kody reads the checks your own CI already ran and runs a small set of security rules over the changed lines, then folds those findings into the same review instead of reporting them separately.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
         "github-enterprise-server-pat": {
             "name": "GitHub Enterprise Server (PAT auth)",
             "stage": "beta",
@@ -10,6 +37,32 @@
             "audience": [
                 "cloud",
                 "self-hosted"
+            ]
+        },
+        "heavy-review": {
+            "name": "Heavy review (deeper pass)",
+            "stage": "alpha",
+            "description": "An opt-in deeper review that re-runs the finder multiple times to surface more real bugs, for the changes where catching everything matters more than speed.",
+            "audience": [
+                "cloud",
+                "self-hosted"
+            ]
+        },
+        "kodus-provider": {
+            "name": "Kodus as a provider (prepaid credits)",
+            "stage": "alpha",
+            "description": "Pick a curated model and let Kodus run it on its own provider accounts — no API key to manage, usage billed from a prepaid credit balance you top up as you go.",
+            "documentation_url": "how_to_use/en/byok#kodus-credits",
+            "audience": [
+                "cloud"
+            ]
+        },
+        "kodus-trace-review-context": {
+            "name": "Kodus Trace review context",
+            "stage": "alpha",
+            "description": "Use sanitized decisions distilled from local coding-agent sessions as repository-scoped context for Kody code reviews.",
+            "audience": [
+                "cloud"
             ]
         }
     }

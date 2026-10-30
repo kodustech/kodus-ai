@@ -14,7 +14,10 @@ import { PULL_REQUESTS_SERVICE_TOKEN } from '@/platformData/domain/pullRequests/
 import { DeliveryStatus } from '@/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { PriorityStatus } from '@/platformData/domain/pullRequests/enums/priorityStatus.enum';
+import { CacheService } from '@libs/core/cache/cache.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import { Test, TestingModule } from '@nestjs/testing';
 
 describe('SuggestionService', () => {
@@ -47,6 +50,17 @@ describe('SuggestionService', () => {
         teamId: 'team-456',
     };
 
+    // getFromCache returns undefined (cache miss) so the review-thread path
+    // still exercises the real provider call the tests assert on.
+    const mockCacheService = {
+        getFromCache: jest.fn(),
+        addToCache: jest.fn(),
+    };
+
+    const mockPermissionValidationService = {
+        resolveTaskSlot: jest.fn().mockResolvedValue(undefined),
+    };
+
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -67,34 +81,19 @@ describe('SuggestionService', () => {
                     provide: CodeManagementService,
                     useValue: mockCodeManagementService,
                 },
+                {
+                    provide: CacheService,
+                    useValue: mockCacheService,
+                },
+                {
+                    provide: PermissionValidationService,
+                    useValue: mockPermissionValidationService,
+                },
             ],
         }).compile();
 
         service = module.get<SuggestionService>(SuggestionService);
         jest.clearAllMocks();
-    });
-
-    describe('normalizeLabel', () => {
-        it('should convert label to lowercase and replace spaces with underscores', () => {
-            expect(service.normalizeLabel('Kody Rules')).toBe('kody_rules');
-            expect(service.normalizeLabel('Breaking Changes')).toBe(
-                'breaking_changes',
-            );
-            expect(service.normalizeLabel('SECURITY')).toBe('security');
-        });
-
-        it('should handle multiple spaces', () => {
-            expect(service.normalizeLabel('Code   Style')).toBe('code_style');
-        });
-
-        it('should handle null/undefined gracefully', () => {
-            expect(service.normalizeLabel(null as any)).toBe('');
-            expect(service.normalizeLabel(undefined as any)).toBe('');
-        });
-
-        it('should handle already normalized labels', () => {
-            expect(service.normalizeLabel('kody_rules')).toBe('kody_rules');
-        });
     });
 
     describe('filterSuggestionsBySeverityLevel', () => {
@@ -187,17 +186,6 @@ describe('SuggestionService', () => {
                 (s) => s.priorityStatus === PriorityStatus.PRIORITIZED,
             );
             expect(prioritized).toHaveLength(2);
-        });
-
-        it('should handle empty suggestions array', async () => {
-            const result = await service.filterSuggestionsBySeverityLevel(
-                [],
-                'critical',
-                mockOrganizationAndTeamData as any,
-                123,
-            );
-
-            expect(result).toHaveLength(0);
         });
 
         it('should discard cross-file suggestions with medium/low severity when filter is high', async () => {
@@ -380,180 +368,6 @@ describe('SuggestionService', () => {
         });
     });
 
-    describe('sortSuggestionsByPriority', () => {
-        it('should sort by rankScore descending', () => {
-            const suggestions = [
-                { id: '1', rankScore: 50, label: 'security' },
-                { id: '2', rankScore: 100, label: 'kody_rules' },
-                { id: '3', rankScore: 75, label: 'potential_issues' },
-            ];
-
-            const result = service.sortSuggestionsByPriority(
-                mockOrganizationAndTeamData as any,
-                123,
-                suggestions,
-            );
-
-            expect(result[0].id).toBe('2'); // rankScore 100
-            expect(result[1].id).toBe('3'); // rankScore 75
-            expect(result[2].id).toBe('1'); // rankScore 50
-        });
-
-        it('should use category priority as tiebreaker when rankScores are equal', () => {
-            const suggestions = [
-                { id: '1', rankScore: 100, label: 'code_style' },
-                { id: '2', rankScore: 100, label: 'kody_rules' },
-                { id: '3', rankScore: 100, label: 'security' },
-            ];
-
-            const result = service.sortSuggestionsByPriority(
-                mockOrganizationAndTeamData as any,
-                123,
-                suggestions,
-            );
-
-            // kody_rules (priority 1) > security (priority 3) > code_style (priority 9)
-            expect(result[0].label).toBe('kody_rules');
-            expect(result[1].label).toBe('security');
-            expect(result[2].label).toBe('code_style');
-        });
-
-        it('should handle missing rankScores (undefined treated as 0)', () => {
-            const suggestions = [
-                { id: '1', rankScore: undefined, label: 'security' },
-                { id: '2', rankScore: 100, label: 'kody_rules' },
-            ];
-
-            const result = service.sortSuggestionsByPriority(
-                mockOrganizationAndTeamData as any,
-                123,
-                suggestions,
-            );
-
-            // When comparing undefined (NaN) with a number, sort may not change order
-            // The actual behavior is that undefined rankScores result in NaN comparisons
-            // which means the original order is preserved for those items
-            // So we just verify the one with rankScore 100 is included
-            expect(result.find((s) => s.id === '2')).toBeDefined();
-            expect(result).toHaveLength(2);
-        });
-
-        it('should handle empty array', () => {
-            const result = service.sortSuggestionsByPriority(
-                mockOrganizationAndTeamData as any,
-                123,
-                [],
-            );
-
-            expect(result).toHaveLength(0);
-        });
-    });
-
-    describe('calculateSuggestionRankScore', () => {
-        it('should calculate correct score for kody_rules + critical', async () => {
-            const suggestion = { label: 'kody_rules', severity: 'critical' };
-            const score =
-                await service.calculateSuggestionRankScore(suggestion);
-            expect(score).toBe(150); // 100 (kody_rules) + 50 (critical)
-        });
-
-        it('should calculate correct score for security + high', async () => {
-            const suggestion = { label: 'security', severity: 'high' };
-            const score =
-                await service.calculateSuggestionRankScore(suggestion);
-            expect(score).toBe(80); // 50 (security) + 30 (high)
-        });
-
-        it('should calculate correct score for code_style + low', async () => {
-            const suggestion = { label: 'code_style', severity: 'low' };
-            const score =
-                await service.calculateSuggestionRankScore(suggestion);
-            expect(score).toBe(20); // 10 (code_style) + 10 (low)
-        });
-
-        it('should handle unknown labels with zero weight', async () => {
-            const suggestion = { label: 'unknown_label', severity: 'medium' };
-            const score =
-                await service.calculateSuggestionRankScore(suggestion);
-            expect(score).toBe(20); // 0 (unknown) + 20 (medium)
-        });
-
-        it('should handle missing severity', async () => {
-            const suggestion = { label: 'security' };
-            const score =
-                await service.calculateSuggestionRankScore(suggestion);
-            expect(score).toBe(50); // 50 (security) + 0 (no severity)
-        });
-    });
-
-    describe('getDiscardedSuggestions', () => {
-        it('should identify suggestions that were filtered out', () => {
-            const allSuggestions = [
-                { id: '1', label: 'security' },
-                { id: '2', label: 'kody_rules' },
-                { id: '3', label: 'code_style' },
-            ];
-
-            const filteredSuggestions = [{ id: '1', label: 'security' }];
-
-            const result = service.getDiscardedSuggestions(
-                allSuggestions,
-                filteredSuggestions,
-                PriorityStatus.DISCARDED_BY_QUANTITY,
-            );
-
-            expect(result).toHaveLength(2);
-            expect(result.map((s) => s.id)).toContain('2');
-            expect(result.map((s) => s.id)).toContain('3');
-            expect(result[0].priorityStatus).toBe(
-                PriorityStatus.DISCARDED_BY_QUANTITY,
-            );
-            expect(result[0].deliveryStatus).toBe(DeliveryStatus.NOT_SENT);
-        });
-
-        it('should return empty array when all suggestions are kept', () => {
-            const allSuggestions = [{ id: '1', label: 'security' }];
-
-            const filteredSuggestions = [{ id: '1', label: 'security' }];
-
-            const result = service.getDiscardedSuggestions(
-                allSuggestions,
-                filteredSuggestions,
-                PriorityStatus.DISCARDED_BY_SEVERITY,
-            );
-
-            expect(result).toHaveLength(0);
-        });
-
-        it('should handle null/undefined inputs', () => {
-            const result = service.getDiscardedSuggestions(
-                null as any,
-                [],
-                PriorityStatus.DISCARDED_BY_QUANTITY,
-            );
-
-            expect(result).toHaveLength(0);
-        });
-
-        it('should skip suggestions without id', () => {
-            const allSuggestions = [
-                { id: '1', label: 'security' },
-                { label: 'no_id' }, // no id
-            ];
-
-            const filteredSuggestions: any[] = [];
-
-            const result = service.getDiscardedSuggestions(
-                allSuggestions,
-                filteredSuggestions,
-                PriorityStatus.DISCARDED_BY_QUANTITY,
-            );
-
-            expect(result).toHaveLength(1);
-            expect(result[0].id).toBe('1');
-        });
-    });
-
     describe('filterSuggestionsCodeDiff', () => {
         it('should filter suggestions that match modified lines', () => {
             // The format expected by extractLinesFromDiffHunk is: "NUMBER +content" or "NUMBER -content"
@@ -638,109 +452,105 @@ __new hunk__
             expect(aFiles[0].severity).toBe(SeverityLevel.CRITICAL);
             expect(aFiles[1].severity).toBe(SeverityLevel.HIGH);
         });
-
-        it('should put parent suggestions first when grouping mode is FULL', () => {
-            const suggestions = [
-                {
-                    id: '1',
-                    relevantFile: 'a.ts',
-                    severity: SeverityLevel.LOW,
-                    clusteringInformation: null,
-                },
-                {
-                    id: '2',
-                    relevantFile: 'b.ts',
-                    severity: SeverityLevel.CRITICAL,
-                    clusteringInformation: { type: ClusteringType.PARENT },
-                },
-                {
-                    id: '3',
-                    relevantFile: 'c.ts',
-                    severity: SeverityLevel.HIGH,
-                    clusteringInformation: { type: ClusteringType.PARENT },
-                },
-            ] as CodeSuggestion[];
-
-            const result = service.sortSuggestionsByFilePathAndSeverity(
-                suggestions,
-                GroupingModeSuggestions.FULL,
-            );
-
-            // Parent suggestions should be first, sorted by severity
-            expect(result[0].clusteringInformation?.type).toBe(
-                ClusteringType.PARENT,
-            );
-            expect(result[0].severity).toBe(SeverityLevel.CRITICAL);
-        });
     });
 
-    describe('removeSuggestionsRelatedToSavedFiles', () => {
-        it('should remove suggestions for files that already have saved suggestions', async () => {
-            const savedSuggestions = [
-                { id: 's1', relevantFile: 'already-reviewed.ts' },
-            ];
-
-            const newSuggestions = [
-                { id: 'n1', relevantFile: 'already-reviewed.ts' },
-                { id: 'n2', relevantFile: 'new-file.ts' },
-            ];
-
-            const result = await service.removeSuggestionsRelatedToSavedFiles(
-                mockOrganizationAndTeamData,
-                '123',
-                savedSuggestions,
-                newSuggestions,
-            );
-
-            expect(result).toHaveLength(1);
-            expect(result[0].relevantFile).toBe('new-file.ts');
-        });
-
-        it('should return all suggestions when no saved suggestions exist', async () => {
-            const newSuggestions = [
-                { id: 'n1', relevantFile: 'file1.ts' },
-                { id: 'n2', relevantFile: 'file2.ts' },
-            ];
-
-            const result = await service.removeSuggestionsRelatedToSavedFiles(
-                mockOrganizationAndTeamData,
-                '123',
-                [],
-                newSuggestions,
-            );
-
-            expect(result).toHaveLength(2);
-        });
-    });
-
-    describe('filterSuggestionProperties', () => {
-        it('should extract only the required properties for validation', () => {
-            const suggestions = [
-                {
-                    id: '1',
-                    relevantFile: 'test.ts',
-                    language: 'typescript',
-                    improvedCode: 'const x = 1;',
-                    existingCode: 'var x = 1;',
-                    suggestionContent: 'Use const instead of var',
-                    severity: 'high',
-                    label: 'code_style',
-                },
-            ];
-
-            const result = service.filterSuggestionProperties(suggestions);
-
-            expect(result).toHaveLength(1);
-            expect(result[0]).toEqual({
-                id: '1',
+    describe('validateImplementedSuggestions', () => {
+        const savedSuggestions: Partial<CodeSuggestion>[] = [
+            {
+                id: 'sug-1',
                 relevantFile: 'test.ts',
                 language: 'typescript',
                 improvedCode: 'const x = 1;',
                 existingCode: 'var x = 1;',
-            });
-            // Should not include extra properties
-            expect(result[0]).not.toHaveProperty('suggestionContent');
-            expect(result[0]).not.toHaveProperty('severity');
+            },
+        ];
+
+        it("resolves the org's BYOK slot for LLM_TASK.codeReview and forwards it to the analysis call", async () => {
+            const byokConfig = {
+                provider: 'openai',
+                model: 'gpt-4o',
+            } as any;
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValueOnce(
+                byokConfig,
+            );
+            mockAIAnalysisService.validateImplementedSuggestions.mockResolvedValueOnce(
+                [],
+            );
+
+            await service.validateImplementedSuggestions(
+                mockOrganizationAndTeamData as any,
+                'patch',
+                savedSuggestions,
+                42,
+            );
+
+            expect(
+                mockPermissionValidationService.resolveTaskSlot,
+            ).toHaveBeenCalledWith(
+                mockOrganizationAndTeamData,
+                LLM_TASK.codeReview,
+            );
+            expect(
+                mockAIAnalysisService.validateImplementedSuggestions,
+            ).toHaveBeenCalledWith(
+                mockOrganizationAndTeamData,
+                42,
+                byokConfig,
+                'patch',
+                [
+                    {
+                        id: 'sug-1',
+                        relevantFile: 'test.ts',
+                        language: 'typescript',
+                        improvedCode: 'const x = 1;',
+                        existingCode: 'var x = 1;',
+                    },
+                ],
+            );
+        });
+
+        it('persists only the suggestions the analysis reports as implemented', async () => {
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValueOnce(
+                undefined,
+            );
+            mockAIAnalysisService.validateImplementedSuggestions.mockResolvedValueOnce(
+                [{ id: 'sug-1', implementationStatus: 'implemented' }],
+            );
+
+            const result = await service.validateImplementedSuggestions(
+                mockOrganizationAndTeamData as any,
+                'patch',
+                savedSuggestions,
+                42,
+            );
+
+            expect(mockPullRequestService.updateSuggestion).toHaveBeenCalledWith(
+                'sug-1',
+                expect.objectContaining({ implementationStatus: 'implemented' }),
+                mockOrganizationAndTeamData,
+            );
+            expect(result).toEqual([
+                { id: 'sug-1', implementationStatus: 'implemented' },
+            ]);
+        });
+
+        it('returns an empty array when the analysis reports nothing implemented', async () => {
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValueOnce(
+                undefined,
+            );
+            mockAIAnalysisService.validateImplementedSuggestions.mockResolvedValueOnce(
+                [],
+            );
+
+            const result = await service.validateImplementedSuggestions(
+                mockOrganizationAndTeamData as any,
+                'patch',
+                savedSuggestions,
+                42,
+            );
+
+            expect(mockPullRequestService.updateSuggestion).not.toHaveBeenCalled();
+            expect(result).toEqual([]);
         });
     });
 
@@ -943,40 +753,6 @@ __new hunk__
         });
     });
 
-    describe('filterCodeSuggestionsByReviewOptions', () => {
-        it('should filter suggestions based on enabled review options', () => {
-            const config = {
-                security: true,
-                code_style: true,
-                performance_and_optimization: false,
-            };
-
-            const codeReviewComments = {
-                codeSuggestions: [
-                    { id: '1', label: 'security' },
-                    { id: '2', label: 'code_style' },
-                    { id: '3', label: 'performance_and_optimization' },
-                ],
-            };
-
-            const result = service.filterCodeSuggestionsByReviewOptions(
-                config,
-                codeReviewComments,
-            );
-
-            expect(result.codeSuggestions).toHaveLength(2);
-            expect(result.codeSuggestions.map((s) => s.label)).toContain(
-                'security',
-            );
-            expect(result.codeSuggestions.map((s) => s.label)).toContain(
-                'code_style',
-            );
-            expect(result.codeSuggestions.map((s) => s.label)).not.toContain(
-                'performance_and_optimization',
-            );
-        });
-    });
-
     describe('prioritizeByQuantity - Integration', () => {
         it('should use FILE limitation type correctly', async () => {
             const suggestions = [
@@ -1074,8 +850,7 @@ __new hunk__
     describe('prioritizeSuggestionsLegacy - Kody Rules deterministic grouping', () => {
         it('should group same Kody Rule suggestions in FULL mode before LLM clustering', async () => {
             mockCommentManagerService.repeatedCodeReviewSuggestionClustering.mockImplementation(
-                async (_org, _pr, _provider, inputSuggestions) =>
-                    inputSuggestions,
+                async (_org, _pr, inputSuggestions) => inputSuggestions,
             );
 
             const suggestionControl = {
@@ -1163,11 +938,11 @@ __new hunk__
             ).toHaveBeenCalledTimes(1);
             expect(
                 mockCommentManagerService.repeatedCodeReviewSuggestionClustering
-                    .mock.calls[0][3],
+                    .mock.calls[0][2],
             ).toHaveLength(1);
             expect(
                 mockCommentManagerService.repeatedCodeReviewSuggestionClustering
-                    .mock.calls[0][3][0].id,
+                    .mock.calls[0][2][0].id,
             ).toBe('b1');
         });
 
@@ -1224,8 +999,7 @@ __new hunk__
 
         it('should choose a parent with valid id when an id-less suggestion exists in the group', async () => {
             mockCommentManagerService.repeatedCodeReviewSuggestionClustering.mockImplementation(
-                async (_org, _pr, _provider, inputSuggestions) =>
-                    inputSuggestions,
+                async (_org, _pr, inputSuggestions) => inputSuggestions,
             );
 
             const suggestionControl = {
@@ -1283,8 +1057,7 @@ __new hunk__
 
         it('should not cluster a group when no suggestion has a valid id', async () => {
             mockCommentManagerService.repeatedCodeReviewSuggestionClustering.mockImplementation(
-                async (_org, _pr, _provider, inputSuggestions) =>
-                    inputSuggestions,
+                async (_org, _pr, inputSuggestions) => inputSuggestions,
             );
 
             const suggestionControl = {

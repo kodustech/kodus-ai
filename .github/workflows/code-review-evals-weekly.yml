@@ -1,0 +1,184 @@
+name: "Evals: weekly quality (every tier-0 model)"
+
+# How good is each review step on every model customers run? Asked every
+# Friday with the release train, so the answer is in Discord before the 10h
+# release meeting (evals/README.md, "When it runs").
+#
+#   every tier-0 model  the controlled set of every eval, against that model's floor
+#
+# The full sets are not planned: their datasets are still changing, so they run
+# on demand (evals/weekly.js --set=full).
+#
+# A run below the floor is measured again before it counts (evals/weekly.js,
+# the nightly's verdicts). A model with no floor yet is measured and reported
+# as such, never as a pass. The PR summary's contract runs on every model too:
+# summaries once died in prod for every client while reviews kept working.
+#
+# A red model is a per-model decision (hold it, fall back, tell the customers on
+# it), not a reason to stop the whole release.
+#
+# Models: tier0() in evals/shared/tier0-models.js. The matrix: evals/weekly.js --plan.
+# Quality signals are reported from main only: a run dispatched on a branch is
+# a proof, and would otherwise replace the result the panel shows.
+#
+# Secrets (repo-level): BYOK_OPENAI_API_KEY, BYOK_ANTHROPIC_API_KEY,
+# BYOK_GOOGLE_API_KEY, BYOK_FIREWORKS_API_KEY, BYOK_OPENROUTER_API_KEY,
+# DISCORD_WEBHOOK_TESTS (falls back to DISCORD_WEBHOOK_INTERNAL / DISCORD_WEBHOOK).
+
+permissions:
+    contents: read
+    actions: read
+    id-token: write # quality signal (report-signal action, WIF)
+
+on:
+    schedule:
+        # Friday 03:00 UTC = 00:00 BRT — same slot as the release train
+        # (selfhosted-build-push.yml).
+        - cron: "0 3 * * 5"
+    workflow_dispatch:
+        inputs:
+            only_model:
+                description: "One tier-0 model id (e.g. gpt-6-sol); empty = all tier-0"
+                required: false
+                default: ""
+                type: string
+            only_part:
+                description: "One part of evals/weekly.js PARTS (e.g. finder); empty = all"
+                required: false
+                default: ""
+                type: string
+
+concurrency:
+    group: code-review-evals-weekly
+    cancel-in-progress: false
+
+env:
+    # The nightly's judge, for the evals a judge scores (finder, conversation).
+    JUDGE_MODEL: gpt-5.6-luna
+    JUDGE_REASONING_EFFORT: low
+
+jobs:
+    plan:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        outputs:
+            jobs: ${{ steps.plan.outputs.jobs }}
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - id: plan
+              env:
+                  ONLY_MODEL: ${{ inputs.only_model }}
+                  ONLY_PART: ${{ inputs.only_part }}
+              # The registries are dependency-free CJS, so no install is needed.
+              run: |
+                  jobs=$(node -e '
+                    const { plan } = require("./evals/weekly");
+                    const only = (v) => (process.env[v] || "").trim();
+                    const picked = plan().filter((j) => (!only("ONLY_MODEL") || j.model === only("ONLY_MODEL")) && (!only("ONLY_PART") || j.part === only("ONLY_PART")));
+                    console.log(JSON.stringify(picked));
+                  ')
+                  test "$jobs" != "[]" || { echo "::error::nothing to run for that model and part"; exit 1; }
+                  echo "jobs=$jobs" >> "$GITHUB_OUTPUT"
+                  echo "$jobs"
+
+    measure:
+        needs: plan
+        name: "${{ matrix.job.part }} · ${{ matrix.job.model }} · ${{ matrix.job.set }}"
+        runs-on: ubuntu-latest
+        # Kimi throttles long tool loops; a review part on a slow model, measured
+        # twice when below the floor, takes hours.
+        timeout-minutes: 300
+        strategy:
+            fail-fast: false
+            matrix:
+                job: ${{ fromJSON(needs.plan.outputs.jobs) }}
+        env:
+            MODEL: ${{ matrix.job.model }}
+            SET: ${{ matrix.job.set }}
+            ONLY: ${{ matrix.job.only }}
+            TESTS: ${{ matrix.job.tests }}
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+            - name: Install deps
+              run: pnpm install --frozen-lockfile
+            # The reviews check real PRs out of their mirrors (evals/shared/repo-mirror.js).
+            - uses: ./.github/actions/eval-sandbox
+              with:
+                  repositories: "true"
+            - name: Create environment.ts (gitignored EE config)
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+            - name: Measure (again when below the floor)
+              id: run
+              env:
+                  BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  BYOK_ANTHROPIC_API_KEY: ${{ secrets.BYOK_ANTHROPIC_API_KEY }}
+                  BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
+                  BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
+                  BYOK_OPENROUTER_API_KEY: ${{ secrets.BYOK_OPENROUTER_API_KEY }}
+                  JUDGE_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  # The platform's OpenAI key, under production's name: the
+                  # review's embedder (the dedup's semantic tier) reads it.
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+              run: |
+                  set -- --model="$MODEL" --set="$SET" --only="$ONLY" --out=weekly
+                  [ "$TESTS" = "true" ] && set -- "$@" --tests
+                  node evals/weekly.js "$@"
+            - name: Report signals
+              if: always() && github.ref == 'refs/heads/main' && hashFiles('weekly/rows.json') != ''
+              uses: ./.github/actions/report-signal
+              with:
+                  rows: weekly/rows.json
+                  gcp_wif_provider: ${{ vars.GCP_WIF_PROVIDER }}
+                  gcp_sa_email: ${{ vars.GCP_SA_EMAIL }}
+                  gcp_project: ${{ vars.GCP_PROJECT }}
+            - uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: weekly-${{ strategy.job-index }}
+                  path: weekly/
+                  if-no-files-found: ignore
+                  retention-days: 90
+
+    report:
+        needs: [plan, measure]
+        if: always() && needs.plan.result == 'success'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v6.0.2
+            # Every job dying before its upload is the week that most needs the
+            # message, and download-artifact fails the step when nothing matches.
+            - uses: actions/download-artifact@v4
+              continue-on-error: true
+              with:
+                  pattern: weekly-*
+                  path: weekly-results
+            - name: Report
+              id: report
+              # The planned jobs: one that died before its upload shows as not measured.
+              env:
+                  JOBS: ${{ needs.plan.outputs.jobs }}
+              run: node evals/weekly.js --report=weekly-results --expected="$JOBS"
+            - name: Notify Discord
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_TESTS || secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: ${{ steps.report.outputs.status }}
+                  title: ${{ steps.report.outputs.title }}
+                  description: |
+                      ${{ steps.report.outputs.description }}
+                      [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+                  nodetail: "true"
+            - name: Fail when a step is red
+              if: steps.report.outputs.status == 'failure'
+              run: exit 1

@@ -1,5 +1,5 @@
 import { FormControl } from "@components/ui/form-control";
-import { Textarea } from "@components/ui/textarea";
+import { Input } from "@components/ui/input";
 import { useSuspenseGetLLMProviders } from "@services/organizationParameters/hooks";
 import { Controller, useFormContext } from "react-hook-form";
 
@@ -24,13 +24,14 @@ export const ByokBaseURLInput = () => {
                     </FormControl.Label>
 
                     <FormControl.Input>
-                        <Textarea
+                        <Input
                             id={field.name}
+                            size="md"
+                            type="url"
                             value={field.value ?? ""}
                             error={fieldState.error}
                             onChange={field.onChange}
-                            className="max-h-26 min-h-20"
-                            placeholder="Provide your base URL"
+                            placeholder="https://your-endpoint.example.com/v1"
                         />
                     </FormControl.Input>
 

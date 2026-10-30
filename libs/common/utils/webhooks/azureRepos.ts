@@ -55,12 +55,14 @@ export class AzureReposMappedPlatform implements IMappedPlatform {
             url: pullRequest.url,
             head: {
                 ref: pullRequest.sourceRefName ?? '',
+                sha: pullRequest.lastMergeSourceCommit?.commitId ?? '',
                 repo: {
                     fullName: pullRequest.repository?.name ?? '',
                 },
             },
             base: {
                 ref: pullRequest.targetRefName ?? '',
+                sha: pullRequest.lastMergeTargetCommit?.commitId,
                 repo: {
                     fullName: pullRequest.repository?.name ?? '',
                     defaultBranch: pullRequest.repository?.defaultBranch ?? '',

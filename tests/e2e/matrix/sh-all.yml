@@ -15,6 +15,17 @@ scenarios:
     - code-review-basic
     - command-review
     - kody-rules-create-and-apply
+    # Repo-file rule sync (customer case): .kody/rules template imported
+    # verbatim + multi-glob path enforced on a file matching the 2nd glob.
+    # github-only (needs mergePR).
+    - kody-rules-file-sync
+    - kody-rules-lifecycle
+    # Detection semantics (no review step, cheap): root AGENTS.md,
+    # nested CLAUDE.md scoped to its subdir, lowercase claude.md.
+    - rule-file-detection
+    # Cross-process event delivery: execution updates emitted in the worker
+    # must reach the API's SSE stream (CrossProcessEventsBridge).
+    - pr-execution-sse
     - license-attribution
     # Cockpit analytics availability (github × license-paid cell only via
     # appliesTo): proves the analytics warehouse is up (API) AND the /cockpit

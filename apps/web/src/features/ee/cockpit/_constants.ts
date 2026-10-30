@@ -4,15 +4,18 @@ export type TabValue = keyof typeof tabs;
 // (suggestions by category/repository) were absorbed as implementation-rate
 // versions inside the review tab.
 export const tabs = {
-    "flow-metrics": "Flow metrics",
     "kodus-review": "Kodus Review",
+    // Pull requests checked against their task (Business Logic runs).
+    "intent": "Delivered as asked",
     "productivity": "Productivity",
+    "code-areas": "Code hotspots",
 } satisfies Record<string, string>;
 
 // URL search-param keys that carry the dashboard's current view, so it
 // can be deep-linked/shared. The URL is the source of truth; cookies
 // only provide the cross-session default when a param is absent.
 export const COCKPIT_PARAM = {
+    areaRepository: "areaRepo",
     repository: "repository",
     start: "start",
     end: "end",

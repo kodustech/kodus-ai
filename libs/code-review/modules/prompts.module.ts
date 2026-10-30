@@ -12,6 +12,10 @@ import { PromptExternalReferenceManagerService } from '@libs/ai-engine/infrastru
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module';
+import { TraceContextModule } from '@libs/cli-review/trace-context.module';
+import { FeatureGateModule } from '@libs/feature-gate/modules/feature-gate.module';
+import { OrganizationModule } from '@libs/organization/modules/organization.module';
+import { CodeReviewCoreModule } from '@libs/code-review/modules/code-review-core.module';
 
 @Module({
     imports: [
@@ -19,6 +23,10 @@ import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module';
         forwardRef(() => ContextReferenceModule),
         forwardRef(() => IntegrationConfigModule),
         forwardRef(() => AIEngineModule),
+        FeatureGateModule,
+        forwardRef(() => OrganizationModule),
+        TraceContextModule,
+        forwardRef(() => CodeReviewCoreModule),
     ],
     providers: [
         {

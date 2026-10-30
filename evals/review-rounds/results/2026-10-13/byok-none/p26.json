@@ -1,0 +1,1497 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:33:04.206Z",
+  "updatedAt": "2026-10-13T22:15:06.633Z",
+  "complete": true,
+  "selectedCases": [
+    "P26-denylist-sanitizer-moved",
+    "P26-denylist-sanitizer-moved-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 15,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 20,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P26-denylist-sanitizer-moved · profile-denylist-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P26-denylist-sanitizer-moved · locale-without-region-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P26-denylist-sanitizer-moved-control · profile-denylist-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P26-denylist-sanitizer-moved-control · locale-without-region-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 371752,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale unconditionally dereferences parts[1].toUpperCase(), but when the input has no region segment (e.g. 'en', 'de' or '') the split yields a single-element array and parts[1] is undefined, so the call throws a TypeError. WHY: req.body.locale is user-controlled (checkProfileFields line 40 -> updateProfile line 64), so a caller sending {\"locale\":\"en\"} triggers an unhandled non-HttpError (500) instead of the intended 400 'unsupported locale'. HOW: guard for the missing region segment and raise an HttpError before formatting.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/users/profile.controller.ts: line 13 dereferences parts[1].toUpperCase() unconditionally. normalizeLocale is called at line 40 from checkProfileFields, which runs at line 65 in updateProfile on sanitizeProfileUpdate(req.body) — user-controlled. Inputs without a region segment ('en', 'de', '') yield a one-element split array, so parts[1] is undefined and .toUpperCase() throws a TypeError (500), bypassing the intended HttpError(400) at line 41. Root cause and failure path are accurate; not a repeat of the prior denylist decision (index 10).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: checkProfileFields only runs its validations when the value is a string (`typeof patch.avatarUrl === 'string'`, same for displayName/bio/locale), so any non-string value skips the length checks, the avatar-CDN allowlist and the locale allowlist and is then written to the users row by usersRepo.update, which writes every key of the patch. WHY: a member can POST `{\"avatarUrl\": [\"https://evil.example/x\"]}` or `{\"locale\": [\"xx\"]}`; the array is not a string, so checkAvatarUrl/SUPPORTED_LOCALES never run, the array is persisted, and any downstream consumer that coerces it (String(), new URL(), fetch()) sees an off-CDN URL — defeating the CDN allowlist — and stores a value that violates the User type (`avatarUrl: string | null`, `locale: string`). HOW: reject non-null, non-string values instead of silently skipping them, e.g. `if (patch.avatarUrl !== undefined && patch.avatarUrl !== null) { if (typeof patch.avatarUrl !== 'string') throw new HttpError(400, 'avatarUrl must be a string'); patch.avatarUrl = checkAvatarUrl(patch.avatarUrl); }` and likewise for displayName, bio and locale (null allowed only for avatarUrl to clear it).",
+          "keep": true,
+          "rationale": "Confirmed: checkProfileFields (lines 36-43) only runs checkAvatarUrl / SUPPORTED_LOCALES checks under `typeof === 'string'` guards, so a non-string value (e.g. `{\"avatarUrl\": [\"https://evil.example/x\"]}`) skips them entirely. sanitizeProfileUpdate (lines 55-61) only deletes id/role/passwordHash and returns every other key, and usersRepo.update (users.repo.ts:20) writes the whole patch object (`data: patch`), so the array is persisted, violating the User type and defeating the CDN/locale allowlists. There is no upstream zod/schema validation on req.body in updateProfile. This is a distinct failure from PreviousDecision round-a-P26 (which is about denylist vs allowlist of editable *fields* — even applying that allowlist would still pass a non-string avatarUrl through), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "sanitizeProfileUpdate|checkProfileFields|usersRepo.update|checkAvatarUrl|SUPPORTED_LOCALES"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update",
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "updateProfile|profile.controller"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When the input has no region segment (e.g. `en`, `de`, or `''`), `normalizeLocale` dereferences `parts[1].toUpperCase()` while `parts[1]` is `undefined`, so the user-controlled `req.body.locale` path (`checkProfileFields` line 40 -> `updateProfile` line 64) throws an unhandled non-`HttpError` (500) instead of the intended 400 `unsupported locale`. Guard for the missing region segment and raise an `HttpError` before formatting."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 36,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `checkProfileFields` only validates values when they are strings, a member can POST a non-string `avatarUrl` or `locale` that bypasses the length checks, `checkAvatarUrl`, and `SUPPORTED_LOCALES`, after which `usersRepo.update` persists every patch key and any downstream coercion (`String()`, `new URL()`, `fetch()`) can see an off-CDN URL and store a value violating the `User` type (`avatarUrl: string | null`, `locale: string`). Reject non-null, non-string values with an `HttpError` 400 instead of silently skipping them, applying the same check to `displayName`, `bio`, and `locale` while allowing `null` only for `avatarUrl` to clear it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 288858,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale calls parts[1].toUpperCase() without checking that a second segment exists, so a locale string with no '-' or '_' (e.g. 'en' or 'pt') makes parts[1] undefined and throws a TypeError. WHY: updateProfile -> checkProfileFields:40 calls this for any string locale, so a request like { \"locale\": \"en\" } crashes the handler with an unhandled 500 instead of the intended 400 'unsupported locale'. HOW: guard the missing segment, e.g. `const [lang = '', region = ''] = input.replace(/_/g, '-').split('-');` then build the string, and let the SUPPORTED_LOCALES check reject malformed input.",
+          "keep": true,
+          "rationale": "normalizeLocale (line 12-13) splits the input and unconditionally calls parts[1].toUpperCase(). For a locale with no '-'/'_' (e.g. 'en', 'pt'), parts[1] is undefined and .toUpperCase() throws a TypeError. updateProfile -> checkProfileFields:40 invokes normalizeLocale for any string locale, so {\"locale\":\"en\"} throws instead of producing the intended 400. No prior decision covers this specific crash (the related one is about the denylist sanitizer). Root cause and failure path are both real.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "updateProfile|checkProfileFields",
+                "path": "src/users"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A locale string with no `-` or `_`, such as `en` or `pt`, leaves `parts[1]` undefined and makes `normalizeLocale` throw a `TypeError`, so `updateProfile` -> `checkProfileFields:40` returns an unhandled 500 for a `locale` value of `en` instead of the intended 400 `unsupported locale`. Guard the missing segment before calling `parts[1].toUpperCase()` and throw `HttpError(400, ...)` for malformed input."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 294469,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale accesses parts[1] without checking it exists, so a locale string with no '-' or '_' separator (e.g. \"en\", \"fr\", \"EN\") makes parts[1] undefined and parts[1].toUpperCase() throws a TypeError. WHY: updateProfile → checkProfileFields calls this for any string locale, so a plain invalid locale returns an unhandled 500 instead of a clean 400. HOW: guard the missing segment and throw HttpError(400) when the locale is not language-region shaped.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/users/profile.controller.ts:11-14: for a separator-less locale like \"en\", split('-') returns [\"en\"], parts[1] is undefined, and parts[1].toUpperCase() throws a TypeError. checkProfileFields (lines 39-43) calls normalizeLocale for any string locale, and updateProfile (lines 63-68) has no try/catch, so the request produces an unhandled 500 instead of a 400. The failure path is reachable from a normal caller with a plain invalid locale string. No previous review decision covers this crash (the denylist-sanitizer entry is a distinct issue), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale|checkProfileFields|updateProfile"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: checkProfileFields only runs its length/CDN/locale checks when the field is a string, so non-string values (e.g. {displayName: 123}, {avatarUrl: {}}, {locale: 42}) skip every validation and are written verbatim by usersRepo.update. WHY: the repo writes every key of patch to the users row, so a caller can persist a value of the wrong type, breaking the User string contract and bypassing the avatar-host and locale allowlists. HOW: reject non-string values for the validated fields (throw HttpError(400)) instead of silently skipping them, e.g. `if ('displayName' in patch && typeof patch.displayName !== 'string') throw new HttpError(400, 'displayName must be a string');` and likewise for bio/avatarUrl/locale.",
+          "keep": true,
+          "rationale": "Confirmed: checkProfileFields guards all checks with `typeof patch.X === 'string'`, so non-string values skip validation entirely. usersRepo.update writes every key of patch (explicitly commented), and patch derives from req.body (Record<string, unknown>) with no upstream type validation in sanitizeProfileUpdate. Thus {displayName:123}, {avatarUrl:{}}, {locale:42} are persisted verbatim, breaking the User string contract and bypassing the avatar-host/locale allowlists. Not a repeat of the earlier allowlist entry (which addressed mass-assignment of protected keys, a different failure that would not fix this type-bypass).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 26,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "marked": false,
+          "text": "A locale string with no '-' or '_' separator such as `en`, `fr`, or `EN` leaves `parts[1]` undefined, so `parts[1].toUpperCase()` throws a `TypeError`, and since `updateProfile` → `checkProfileFields` calls this for any string locale, a plain invalid locale becomes an unhandled 500 instead of a clean 400. Guard the missing segment in `normalizeLocale` and throw `HttpError(400)` when the locale is not language-region shaped."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "marked": false,
+          "text": "Non-string values for `displayName`, `bio`, `avatarUrl`, or `locale` such as `{displayName: 123}`, `{avatarUrl: {}}`, or `{locale: 42}` skip every check because `checkProfileFields` only validates strings, and `usersRepo.update` writes every key of `patch` to the users row, so wrong-typed values persist, break the `User` string contract, and bypass the avatar-host and locale allowlists. Reject non-string values for these validated fields with `HttpError(400)` instead of silently skipping them."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 240834,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale splits on '-' and unconditionally dereferences parts[1], so a locale without a region separator (e.g. \"en\", \"de\", or \"\") makes parts[1] undefined and throws a TypeError at parts[1].toUpperCase(). WHY: checkProfileFields passes req.body.locale straight into this function (line 40), so a normal request body like {\"locale\":\"en\"} raises an unhandled TypeError and returns a 500 instead of the intended 400 validation error. HOW: guard the split and reject/normalize inputs that do not contain a language-region pair, e.g. `const parts = input.replace('_', '-').split('-'); if (parts.length < 2 || !parts[0] || !parts[1]) throw new HttpError(400, 'locale must be a language-region tag');`.",
+          "keep": true,
+          "rationale": "Confirmed. normalizeLocale (lines 11-14) unconditionally dereferences parts[1] after splitting on '-'. updateProfile (line 63-65) passes req.body through sanitizeProfileUpdate (which only strips id/role/passwordHash) into checkProfileFields, which at line 39-40 calls normalizeLocale whenever patch.locale is a string. A request body like {\"locale\":\"en\"} yields parts=[\"en\"], so parts[1] is undefined and parts[1].toUpperCase() throws a TypeError, producing an unhandled 500 instead of the intended 400. No upstream guard or schema validation exists. This is a distinct problem from the earlier mass-assignment decision (which concerned the denylist in sanitizeProfileUpdate, not the locale split), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "checkProfileFields|normalizeLocale"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 60,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: Every check in checkProfileFields is guarded by `typeof x === 'string'`, so a request that sends displayName/bio/avatarUrl/locale as a non-string (object, array, number) skips the length limit, the avatar-CDN allowlist and the supported-locale check, and the raw value is written to the users row by usersRepo.update. WHY: a client can persist type-inconsistent values (e.g. `locale: {}`, `avatarUrl: [\"http://evil\"]`) that bypass the CDN/locale allowlists and later break consumers that assume these columns are strings (e.g. `user.locale.split('-')`). HOW: reject non-string values when the key is present, e.g. `if (patch.displayName !== undefined && typeof patch.displayName !== 'string') throw new HttpError(400, 'displayName must be a string');` and likewise for bio/avatarUrl/locale.",
+          "keep": true,
+          "rationale": "Confirmed. src/users/profile.controller.ts:30-43 guards each field with `typeof x === 'string'`, so non-string values (e.g. locale: {}, avatarUrl: [\"http://evil\"]) bypass the length limit, the avatar-CDN allowlist and the supported-locale check. usersRepo.update (src/users/users.repo.ts:20) writes the patch object directly as `data` to the users row, so the raw non-string value is persisted. The root cause is factually accurate and the failure path is reachable. This is a different problem than PreviousDecision #10 (denylist permitting extra/protected fields), which concerns field injection, not type-inconsistency of the editable fields, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update",
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A locale like `en`, `de`, or an empty string leaves `parts[1]` undefined, so `normalizeLocale` throws a `TypeError` at `parts[1].toUpperCase()`; because `checkProfileFields` passes `req.body.locale` straight through at line 40, a normal body with `locale: 'en'` returns an unhandled 500 instead of the intended 400 validation error. Guard the split so inputs without a language-region pair are rejected, throwing `HttpError(400, 'locale must be a language-region tag')` when `parts.length < 2` or either part is empty."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 29,
+          "severity": "critical",
+          "linkedById": false,
+          "marked": false,
+          "text": "A request that sends `displayName`, `bio`, `avatarUrl`, or `locale` as an object, array, or number skips every `typeof x === 'string'` guard, so the length limit, avatar-CDN allowlist, and supported-locale check are bypassed and the raw value is written to the users row by `usersRepo.update`, letting clients persist values like `locale: {}` or `avatarUrl: ['http://evil']` that break consumers such as `user.locale.split('-')`. Reject non-string values when the key is present, throwing `HttpError(400, '<field> must be a string')` for `displayName`, `bio`, `avatarUrl`, and `locale` before the existing checks."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 457044,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale calls parts[1].toUpperCase() without checking that the input contains a '-', so a single-segment value such as \"en\", \"de\", or \"\" makes parts[1] undefined and throws a TypeError. WHY: the value comes straight from req.body.locale in updateProfile, and a raw TypeError is not an HttpError, so a request with locale:\"en\" crashes into a 500/unhandled rejection instead of returning 400. HOW: guard against a missing region segment, e.g. split into [language, region] and throw an HttpError(400) when region is absent before calling toUpperCase().",
+          "keep": true,
+          "rationale": "Confirmed: normalizeLocale (line 13) accesses parts[1].toUpperCase() on the split result; for a single-segment input like \"en\" parts[1] is undefined and this throws a raw TypeError. The input originates from req.body.locale (via updateProfile -> sanitizeProfileUpdate -> checkProfileFields line 40), and checkProfileFields only guards typeof === 'string', not the presence of a region. The TypeError is not an HttpError, so it propagates as a 500 rather than the intended 400. The claim is technically accurate and no previous decision addresses this locale path (the denylist decision concerns sanitizeProfileUpdate, a different problem).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale|req.body.locale|locale",
+                "path": "src/users"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": true,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A value such as `\"en\"`, `\"de\"`, or `\"\"` from `req.body.locale` leaves `parts[1]` undefined, so `normalizeLocale` throws a raw `TypeError` that is not an `HttpError` and `updateProfile` returns a 500/unhandled rejection instead of a 400. Split the input into `[language, region]` and throw `new HttpError(400, ...)` when a segment is missing before calling `toUpperCase()`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P26-denylist-sanitizer-moved-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 263405,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: sanitizeProfileUpdate uses a denylist (id/role/passwordHash) while usersRepo.update writes every key of the patch to the row (users.repo.ts:20, `data: patch`), so sensitive User columns not in the denylist — plan, emailVerified, email, organizationId — pass straight through. WHY: a caller can PUT {\"plan\":\"pro\"} to grant themselves a free Pro plan, {\"emailVerified\":true} to bypass email verification, or {\"organizationId\":\"...\"} to move themselves into another tenant. HOW: build the patch from an allowlist of editable fields instead of deleting protected ones.",
+          "keep": true,
+          "rationale": "Confirmed. sanitizeProfileUpdate (profile.controller.ts:55-61) only deletes id/role/passwordHash from a copy of the raw request body, then updateProfile (line 64-66) passes the resulting patch straight to usersRepo.update, which explicitly 'Writes every key of patch to the users row' (users.repo.ts:19-20, `data: patch`). Sensitive User columns declared at users.repo.ts:3-15 (plan, emailVerified, email, organizationId) are not in the denylist, so a caller can PUT {\"plan\":\"pro\"} or {\"organizationId\":\"...\"} and have it persisted. The root cause and failure path are factually accurate, and no upstream validation constrains these keys. This is a different operation from all PreviousReviewDecisions entries (which concern src/reports/*), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "users.repo.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "usersRepo|async update|data: patch|class.*Repo",
+                "path": "src/users"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/users"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale assumes the input always has a second '-' segment and dereferences parts[1].toUpperCase() unconditionally. WHY: a request with {\"locale\":\"en\"} (or any single-segment/empty locale) makes parts = [\"en\"], so parts[1] is undefined and `.toUpperCase()` throws a TypeError, turning a bad-input request into an uncaught 500 instead of the intended 400. HOW: guard that both segments exist before formatting and throw HttpError(400) when they don't.",
+          "keep": true,
+          "rationale": "normalizeLocale (lines 11-14) does `input.replace('_','-').split('-')` then unconditionally dereferences parts[1].toUpperCase(). For a single-segment locale like \"en\" (or empty string), split returns [\"en\"], so parts[1] is undefined and .toUpperCase() throws a TypeError. The only caller path — updateProfile at line 64-65 -> checkProfileFields (line 39-42) — guards merely with `typeof patch.locale === 'string'`, so {\"locale\":\"en\"} reaches normalizeLocale unvalidated, producing an uncaught 500 instead of the intended 400. Root cause and failure path are factually correct; no previous review decision concerns this file or symbol.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "checkProfileFields|sanitizeProfileUpdate",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 28,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 52,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `sanitizeProfileUpdate` uses a denylist (`id`/`role`/`passwordHash`) while `usersRepo.update` writes every key of the patch to the row (`users.repo.ts:20`, `data: patch`), sensitive `User` columns such as `plan`, `emailVerified`, `email`, and `organizationId` pass straight through, letting a caller `PUT {\"plan\":\"pro\"}` to grant a free Pro plan, `{\"emailVerified\":true}` to bypass email verification, or `{\"organizationId\":\"...\"}` to move themselves into another tenant. Build the patch from an allowlist of editable fields instead of deleting protected ones."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A request with `{\"locale\":\"en\"}` (or any single-segment/empty locale) makes `parts` = `[\"en\"]`, so `parts[1]` is `undefined` and `.toUpperCase()` throws a `TypeError`, turning a bad-input request into an uncaught 500 instead of the intended 400. Guard that both segments exist before formatting and throw `HttpError(400)` when they don't."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P26-denylist-sanitizer-moved-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 108799,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale throws a TypeError when the input has no '-' separator because parts[1] is undefined and parts[1].toUpperCase() is called on it. WHY: updateProfile passes any string locale from req.body into checkProfileFields, so a request like {locale:\"en\"} (or \"pt\", or \"\") crashes with an unhandled TypeError/500 instead of returning the intended 400 unsupported-locale response. HOW: guard the missing segment, e.g. build the parts and default the region, or return early with an HttpError(400) when parts.length < 2.",
+          "keep": true,
+          "rationale": "Confirmed: normalizeLocale (lines 11-14) splits on '-' and unconditionally calls parts[1].toUpperCase(). For an input with no '-' separator (e.g. \"en\", \"pt\", or \"\"), parts has length 1, parts[1] is undefined, and undefined.toUpperCase() throws a TypeError. updateProfile (line 63-65) passes any string from req.body.locale through checkProfileFields (line 39-40) into normalizeLocale, so a request like {locale:\"en\"} crashes with an unhandled TypeError/500 instead of the intended HttpError(400) unsupported-locale response. The root cause and failure path are accurate; no prior review decision covers this file or issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale|checkProfileFields"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 80,
+                "path": "src/users/profile.controller.ts",
+                "startLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: PROTECTED_FIELDS strips only id, role and passwordHash, so caller-supplied plan, organizationId and emailVerified (all fields of the User type) survive sanitizeProfileUpdate and are written to the row. WHY: usersRepo.update explicitly 'writes every key of patch' (users.repo.ts:19-20), letting a member POST {plan:'pro'} to self-upgrade billing or {organizationId:...} to move to another tenant — a mass-assignment privilege/tenant escalation. HOW: add the remaining privilege/tenant fields to the allowlist of forbidden keys (plan, organizationId, emailVerified, email) or switch to an explicit allowlist of editable fields (displayName, bio, avatarUrl, locale).",
+          "keep": true,
+          "rationale": "Verified against source: PROTECTED_FIELDS strips only id/role/passwordHash (profile.controller.ts:53), while the User type (users.repo.ts:3-15) also includes plan, organizationId, email, emailVerified. checkProfileFields only validates displayName/bio/avatarUrl/locale, so those privilege/tenant fields survive sanitizeProfileUpdate, and usersRepo.update writes every key of patch (users.repo.ts:19-20). A member can thus POST {plan:'pro'} or {organizationId:...} for privilege/tenant escalation. Reachable via updateProfile. No PreviousReviewDecision covers this file/operation, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "PROTECTED_FIELDS|sanitizeProfileUpdate|update\\(",
+                "path": "src/users"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/users/users.repo.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "src/users",
+                "pattern": "plan|organizationId|emailVerified|email",
+                "glob": "*.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 22,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "marked": false,
+          "text": "A locale without a `-` separator makes `parts[1]` undefined, so `parts[1].toUpperCase()` throws a TypeError and any request like `{locale:\"en\"}` crashes with a 500 instead of the intended 400. Guard the missing segment by returning an `HttpError(400)` when `parts.length < 2` or either part is empty."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 53,
+          "severity": "critical",
+          "linkedById": false,
+          "marked": false,
+          "text": "Caller-supplied `plan`, `organizationId`, and `emailVerified` survive `sanitizeProfileUpdate` and are written to the row by `usersRepo.update` in `users.repo.ts:19-20`, letting a member self-upgrade billing or move to another tenant. Add these privilege and tenant fields to `PROTECTED_FIELDS`, or switch to an explicit allowlist of editable fields such as `displayName`, `bio`, `avatarUrl`, and `locale`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P26-denylist-sanitizer-moved-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 141398,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale calls parts[1].toUpperCase() without checking that a region segment exists, so input without a '-' (e.g. \"en\") or an empty string makes parts[1] undefined and throws a raw TypeError. WHY: updateProfile passes req.body.locale straight to checkProfileFields → normalizeLocale, so a request like {locale:\"en\"} throws an unhandled TypeError and returns a 500 instead of the intended 400. HOW: validate both segments before formatting and reject the unsupported value with HttpError(400).",
+          "keep": true,
+          "rationale": "Verified in src/users/profile.controller.ts: line 13 dereferences parts[1] unconditionally. For input \"en\" (or \"\"), split('-') yields a single-element array, so parts[1] is undefined and .toUpperCase() throws a raw TypeError. The only guard, checkProfileFields (line 39), merely checks typeof === 'string' before calling normalizeLocale (line 40), and updateProfile (line 65) passes req.body-derived locale directly into it. So a request {locale:\"en\"} throws an unhandled TypeError → 500 instead of HttpError(400). No previous decision touches this file, so it is not a repeat. The root cause and failure path are both accurate; cannot refute.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale|checkProfileFields"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: PROTECTED_FIELDS strips only id/role/passwordHash, but usersRepo.update writes every key of the patch to the users row, leaving plan, organizationId, emailVerified and email self-assignable. WHY: an authenticated member can call updateProfile with {plan:'pro'} to upgrade their own plan for free, or {organizationId:'other-org'} to move themselves into another workspace — a broken access-control / mass-assignment flaw. HOW: add the other privileged columns to PROTECTED_FIELDS (or switch to an explicit allowlist of editable fields).",
+          "keep": true,
+          "rationale": "Confirmed mass-assignment. PROTECTED_FIELDS strips only id/role/passwordHash (profile.controller.ts:53), and sanitizeProfileUpdate returns the rest of req.body unchanged. usersRepo.update passes the entire patch as `data: patch` (users.repo.ts:20), and the User type (users.repo.ts:3-15) contains plan, organizationId, email, and emailVerified. Thus an authenticated member can set {plan:'pro'} or {organizationId:'other-org'} on their own row — a real broken access-control flaw. Not a repeat of any prior decision (all prior entries concern src/reports/*).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update",
+                "path": "src/users",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "plan|organizationId|emailVerified",
+                "path": "src/users",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/users.repo.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Input without a region segment (e.g. `en`) or an empty string leaves `parts[1]` undefined, so `normalizeLocale` throws a raw `TypeError` that surfaces as a 500 instead of the intended 400 when `updateProfile` passes `req.body.locale` through `checkProfileFields`. Validate both segments before formatting and reject the unsupported value with `HttpError(400)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 53,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `usersRepo.update` writes every key of the patch, leaving `plan`, `organizationId`, `emailVerified`, and `email` out of `PROTECTED_FIELDS` lets any authenticated member call `updateProfile` with `{plan:'pro'}` or `{organizationId:'other-org'}` to upgrade their own plan for free or move themselves into another workspace. Add those privileged columns to `PROTECTED_FIELDS`, or switch to an explicit allowlist of editable fields."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P26-denylist-sanitizer-moved-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 164781,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale assumes the input contains a '-'/'_' separator and calls parts[1].toUpperCase(), but for a locale without a region subtag (e.g. 'en', 'fr') split('-') returns a one-element array, so parts[1] is undefined and toUpperCase() throws a TypeError. WHY: checkProfileFields passes any string locale into it, so PATCH { \"locale\": \"en\" } throws a non-HttpError that becomes a 500 instead of the intended 400 'unsupported locale'. HOW: guard against a missing region part before formatting.",
+          "keep": true,
+          "rationale": "Confirmed. `normalizeLocale` (lines 11-14) splits on '-'/'_' and unconditionally calls `parts[1].toUpperCase()`. For a locale without a region subtag (e.g. 'en', 'fr'), `split('-')` returns a one-element array, so `parts[1]` is `undefined` and `.toUpperCase()` throws a TypeError. `checkProfileFields` (lines 39-41) passes any string locale straight into it, so PATCH { \"locale\": \"en\" } crashes with a non-HttpError, yielding a 500 rather than the intended 400 'unsupported locale'. The prior review decisions all concern src/reports/* and do not cover this file or function, so this is a distinct, unrefuted defect.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: sanitizeProfileUpdate only strips id, role and passwordHash, but the patch is passed unchanged to usersRepo.update, which writes every key to the row (users.repo.ts:20). WHY: the User model also has plan ('free'|'pro'), emailVerified, organizationId and email, so a caller can PATCH their own profile with { \"plan\": \"pro\" } or { \"emailVerified\": true } and escalate their plan / bypass email verification (mass assignment). HOW: replace the denylist with an allowlist of the fields a profile may change.",
+          "keep": true,
+          "rationale": "Confirmed. src/users/users.repo.ts defines User with plan ('free'|'pro'), emailVerified, organizationId, and email (lines 5-9). usersRepo.update (line 20) writes every key of the patch straight into the row via db.users.update({ data: patch }). sanitizeProfileUpdate (profile.controller.ts:55-61) only deletes id, role, passwordHash, and checkProfileFields (lines 29-44) validates only displayName/bio/avatarUrl/locale without rejecting unknown keys. So a caller can PATCH their own profile with { plan: 'pro' } or { emailVerified: true } and have it persisted — a real mass-assignment escalation. No guard upstream prevents it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "users.repo.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "usersRepo|export const usersRepo|update",
+                "glob": "**/users.repo.*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update\\(",
+                "path": "src/users"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "plan|emailVerified|organizationId|passwordHash|role",
+                "glob": "**/*.ts",
+                "path": "src/users"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/users.repo.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: updateProfile dereferences the value returned by usersRepo.update (line 67) without the null guard that getProfile applies to its lookup (line 48), and the repo only asserts the return type with `as Promise<User>` while its sibling findById is explicitly `User | null`. WHY: if db.users.update returns null when no row matches (e.g. a valid token whose account was deleted, or a delete racing the request), `user.displayName` throws a TypeError and the request fails with a 500 instead of a 404. HOW: add the same guard getProfile uses before building the response.",
+          "keep": true,
+          "rationale": "The cited code is accurate: getProfile (line 47-48) guards its findById result with a 404 check, while updateProfile (line 66-67) dereferences the usersRepo.update result with no guard. In users.repo.ts, update is typed only via an unchecked cast `as Promise<User>` (line 20), whereas the sibling findById is cast to `User | null` (line 18) — the same file/pattern the finding points to. The underlying db.users.update behavior is not visible in the repo, so I cannot actively refute that it may return null (or otherwise fail) when no row matches for a valid token whose account was deleted or raced by a delete. The failure path (TypeError -> 500 instead of 404) is concrete and consistent with the getProfile guard the codebase already applies. No PreviousReviewDecisions entry concerns src/users, so this is not a repeat. The finding survives.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 90
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update|findById",
+                "path": "src/users"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/users.repo.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "users|update|findOne",
+                "path": "src/db.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 53,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `sanitizeProfileUpdate` only deletes `id`, `role`, and `passwordHash` before passing the patch to `usersRepo.update`, which writes every key to the row (`users.repo.ts:20`), a caller can PATCH their own profile with `{ \"plan\": \"pro\" }` or `{ \"emailVerified\": true }` to escalate their plan or bypass email verification since the `User` model also has `plan` ('free'|'pro'), `emailVerified`, `organizationId`, and `email`. Replace the denylist with an allowlist of the fields a profile may change."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `normalizeLocale` assumes a '-'/'_' separator and calls `parts[1].toUpperCase()`, a locale without a region subtag such as `en` or `fr` makes `split('-')` return a one-element array, so `parts[1]` is `undefined` and `toUpperCase()` throws a `TypeError`; since `checkProfileFields` passes any string locale into it, PATCH `{ \"locale\": \"en\" }` becomes a 500 instead of the intended 400 `'unsupported locale'`. Guard against a missing region part before formatting."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/users/profile.controller.ts",
+          "line": 66,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`updateProfile` dereferences the value returned by `usersRepo.update` (line 67) without the null guard `getProfile` applies to its lookup (line 48), and the repo only asserts the return type with `as Promise<User>` while its sibling `findById` is explicitly `User | null`, so if `db.users.update` returns null when no row matches (for example, a valid token whose account was deleted or a delete racing the request), `user.displayName` throws a `TypeError` and the request fails with a 500 instead of a 404. Add the same guard `getProfile` uses before building the response."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P26-denylist-sanitizer-moved-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 190017,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale calls parts[1].toUpperCase() without checking that a separator exists, so input with no '-' or '_' leaves parts[1] undefined and throws TypeError. WHY: checkProfileFields invokes normalizeLocale for any string locale, so PATCH /profile with locale:'en' (or '') crashes with an unhandled TypeError/500 instead of returning a 400 validation error. HOW: guard the missing segment, e.g. default the region to '' or throw an HttpError(400) when parts.length < 2.",
+          "keep": true,
+          "rationale": "Confirmed: normalizeLocale splits on '-' after replacing the first '_'; for input without a separator (e.g. 'en' or '') parts[1] is undefined, so parts[1].toUpperCase() throws a TypeError. checkProfileFields (line 39-42) calls normalizeLocale for any string locale before validating against SUPPORTED_LOCALES, and updateProfile passes req.body through it, so PATCH /profile with locale:'en' crashes with an unhandled error rather than a 400. The root cause and failure path are correct and not covered by any previous review decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: sanitizeProfileUpdate only deletes the blacklisted fields ['id','role','passwordHash'], leaving other sensitive User columns writable. WHY: usersRepo.update writes every key of the patch to the users row (see src/users/users.repo.ts:20), so a caller can send {plan:'pro'}, {emailVerified:true}, {email:'attacker@evil'} or {organizationId:'<another tenant>'} and escalate billing/privileges, change their own email for account takeover, or move into another tenant's organization. HOW: replace the blacklist with a whitelist of self-editable fields (displayName, bio, avatarUrl, locale) and build the patch from only those keys.",
+          "keep": true,
+          "rationale": "Verified: sanitizeProfileUpdate (src/users/profile.controller.ts:55-61) only deletes ['id','role','passwordHash'], and updateProfile passes the resulting patch straight to usersRepo.update (line 66). users.repo.ts:20 explicitly writes every key of the patch to the users row, and the User type (lines 3-15) includes sensitive columns not blacklisted: organizationId, email, emailVerified, and plan. No upstream schema/middleware restricting the body was found (grep for updateProfile/sanitizeProfileUpdate/route registration returned only the controller). So a caller can send {plan:'pro'}, {emailVerified:true}, {email:'attacker@evil'} or {organizationId:'<other tenant>'} and have them persisted — the described privilege/billing escalation, account takeover, and cross-tenant move are reachable. The finding's root cause and failure path are accurate; it does not duplicate any PreviousReviewDecisions entry (all concern src/reports/*).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 100
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/users.repo.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "updateProfile|sanitizeProfileUpdate|checkProfileFields",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "profile\\.controller|profileController|/profile"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: checkProfileFields guards every rule with `typeof … === 'string'`, so a non-string value for displayName/bio/locale/avatarUrl skips validation entirely, and usersRepo.update (documented as writing every key of the patch) persists it into the users row. WHY: a client can send e.g. `displayName` as an array/object/number, bypassing the 64-char limit and writing a value that violates the `User.displayName: string` contract, breaking downstream consumers. HOW: reject non-string values explicitly, e.g. `if ('displayName' in patch && typeof patch.displayName !== 'string') throw new HttpError(400, 'displayName must be a string');` and the same for bio/locale/avatarUrl before the length/normalization checks.",
+          "keep": true,
+          "rationale": "Confirmed. checkProfileFields guards each rule with `typeof … === 'string'`, so a non-string displayName/bio/locale/avatarUrl (array/object/number) bypasses all length, URL and locale checks. sanitizeProfileUpdate only strips PROTECTED_FIELDS (id/role/passwordHash), leaving such values in the patch, and usersRepo.update is documented and implemented to write every key of the patch into the users row. No zod/body-validation schema exists in src/users, so nothing upstream rejects non-string values before persistence, producing a User row that violates the string contract. The described failure path is real and reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "checkProfileFields|usersRepo|update\\(",
+                "glob": "*.ts",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 80,
+                "path": "src/users/users.repo.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "updateProfile|checkProfileFields|sanitizeProfileUpdate",
+                "glob": "*.ts",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "zod|z\\.object|schema|validate",
+                "glob": "src/users/*.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 3
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/users/profile.controller.ts",
+          "line": 52,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "text": "Because `sanitizeProfileUpdate` only deletes `id`, `role`, and `passwordHash`, other sensitive `User` columns remain writable: `usersRepo.update` writes every key of the patch to the users row (src/users/users.repo.ts:20), so a caller can send `{plan:'pro'}`, `{emailVerified:true}`, `{email:'attacker@evil'}`, or `{organizationId:'<another tenant>'}` to escalate billing/privileges, change their own email for account takeover, or move into another tenant's organization. Replace the blacklist with a whitelist of self-editable fields (`displayName`, `bio`, `avatarUrl`, `locale`) and build the patch from only those keys."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `normalizeLocale` calls `parts[1].toUpperCase()` without checking for a separator, a locale without `-` or `_` leaves `parts[1]` undefined and throws a `TypeError`; since `checkProfileFields` invokes it for any string locale, `PATCH /profile` with `locale:'en'` or `''` returns an unhandled `TypeError`/500 instead of a 400 validation error. Guard the missing segment by throwing `HttpError(400)` when `parts.length < 2` or by defaulting the region to `''`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/users/profile.controller.ts",
+          "line": 30,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `checkProfileFields` guards every rule with `typeof … === 'string'`, non-string values for `displayName`, `bio`, `locale`, or `avatarUrl` skip validation entirely and `usersRepo.update` persists them into the users row, letting a client send an array/object/number that bypasses the 64-character `MAX_DISPLAY_NAME` limit and violates the `User.displayName: string` contract for downstream consumers. Reject non-string values explicitly before the length and normalization checks, for example with `HttpError(400, 'displayName must be a string')` when `'displayName' in patch` and `typeof patch.displayName !== 'string'`, and apply the same check to `bio`, `locale`, and `avatarUrl`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

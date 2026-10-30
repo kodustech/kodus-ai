@@ -1,0 +1,6 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "resolvedModel": "accounts/fireworks/models/deepseek-v4-flash-0731",
+  "finishReason": "stop",
+  "raw": "{\"findings\":[{\"title\":\"Add function returns subtraction instead of addition\",\"severity\":\"high\"}]}"
+}

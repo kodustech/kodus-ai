@@ -30,7 +30,7 @@ const pricingFromMillions = (opts: {
     const withTier = (def: number, tieredPerM?: number) => ({
         default: def,
         ...(tieredPerM !== undefined
-            ? { tier: { threshold: 200_000, rate: perToken(tieredPerM) ?? 0 } }
+            ? { tiers: [{ threshold: 200_000, rate: perToken(tieredPerM) ?? 0 }] }
             : {}),
     });
     return {
@@ -233,8 +233,8 @@ describe('CostEstimateUseCase', () => {
                 },
             ]).map((r) => ({
                 ...r,
-                byTier: {
-                    le: {
+                byTier: [
+                    {
                         input: 0,
                         output: 0,
                         total: 0,
@@ -242,7 +242,7 @@ describe('CostEstimateUseCase', () => {
                         cacheRead: 0,
                         cacheWrite: 0,
                     },
-                    gt: {
+                    {
                         input: r.input,
                         output: r.output,
                         total: r.input + r.output,
@@ -250,7 +250,7 @@ describe('CostEstimateUseCase', () => {
                         cacheRead: r.cacheRead ?? 0,
                         cacheWrite: r.cacheWrite ?? 0,
                     },
-                },
+                ],
             }));
             tokenUsageService.getUsageByPr.mockResolvedValue(rows);
             pullRequestsService.findOne
@@ -278,13 +278,14 @@ describe('CostEstimateUseCase', () => {
                 cacheWriteTokens: 50_000,
             });
 
-            // 14-day cost in the gt bucket only:
-            //   uncachedInput = 1M - 200K = 800K → 800K × $4/M = $3.20
+            // 14-day cost in the gt bucket only (input_tokens includes cacheRead
+            // AND cacheWrite → subtract both from the full-price pool):
+            //   uncachedInput = 1M - 200K - 50K = 750K → 750K × $4/M = $3.00
             //   cacheRead     = 200K × $0.40/M = $0.08
             //   cacheWrite    = 50K × $0 (no tier rate → 0) = $0
             //   output        = 500K × $18/M = $9.00
-            //   total         = $12.28
-            const cost14 = 3.2 + 0.08 + 0 + 9.0;
+            //   total         = $12.08
+            const cost14 = 3.0 + 0.08 + 0 + 9.0;
             const monthly = cost14 * (30 / 14);
 
             expect(result.estimatedMonthlyCost).toBe(
@@ -341,8 +342,8 @@ describe('CostEstimateUseCase', () => {
                     model: 'gemini-3.1-pro',
                     prNumber: 1,
                     // Tier-aware model with all calls in gt.
-                    byTier: {
-                        le: {
+                    byTier: [
+                    {
                             input: 0,
                             output: 0,
                             total: 0,
@@ -350,7 +351,7 @@ describe('CostEstimateUseCase', () => {
                             cacheRead: 0,
                             cacheWrite: 0,
                         },
-                        gt: {
+                    {
                             input: 500_000,
                             output: 100_000,
                             total: 600_000,
@@ -358,7 +359,7 @@ describe('CostEstimateUseCase', () => {
                             cacheRead: 0,
                             cacheWrite: 0,
                         },
-                    },
+                ],
                 },
                 {
                     input: 500_000,

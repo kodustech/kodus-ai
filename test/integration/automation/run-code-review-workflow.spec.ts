@@ -4,7 +4,6 @@ import { RunCodeReviewAutomationUseCase } from '@libs/ee/automation/runCodeRevie
 import { GithubService } from '@libs/platform/infrastructure/adapters/services/github/github.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { PlatformIntegrationFactory } from '@libs/platform/infrastructure/adapters/services/platformIntegration.factory';
-import { CodeAnalysisOrchestrator } from '@libs/ee/codeBase/codeAnalysisOrchestrator.service';
 import { INTEGRATION_CONFIG_SERVICE_TOKEN } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { AUTOMATION_SERVICE_TOKEN } from '@libs/automation/domain/automation/contracts/automation.service';
 import { TEAM_AUTOMATION_SERVICE_TOKEN } from '@libs/automation/domain/teamAutomation/contracts/team-automation.service';
@@ -18,7 +17,6 @@ import { INTEGRATION_SERVICE_TOKEN } from '@libs/integrations/domain/integration
 import { AUTH_INTEGRATION_SERVICE_TOKEN } from '@libs/integrations/domain/authIntegrations/contracts/auth-integration.service.contracts';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { LLM_ANALYSIS_SERVICE_TOKEN } from '@libs/code-review/infrastructure/adapters/services/llmAnalysis.service';
-import { KODY_RULES_ANALYSIS_SERVICE_TOKEN } from '@libs/ee/codeBase/kodyRulesAnalysis.service';
 import { WebhookContextService } from '@libs/platform/application/services/webhook-context.service';
 
 // --- MOCK DEFINITIONS ---
@@ -90,23 +88,7 @@ describe('Code Review Workflow Logic Integrity (No AST)', () => {
     const mockMCPManagerService = { createKodusMCPIntegration: jest.fn() };
 
     // Mock do LLM Analysis (Onde a AST era usada)
-    const mockLLMAnalysisService = {
-        analyzeCodeWithAI: jest.fn(),
-        analyzeCodeWithAI_v2: jest.fn().mockResolvedValue({
-            codeSuggestions: [
-                {
-                    relevantFile: 'test.ts',
-                    suggestionContent: 'Better code',
-                    relevantLinesStart: 1,
-                    relevantLinesEnd: 2,
-                },
-            ],
-        }),
-    };
-
-    const mockKodyRulesAnalysisService = {
-        analyzeCodeWithAI: jest.fn(),
-    };
+    const mockLLMAnalysisService = {};
 
     beforeAll(async () => {
         const module: TestingModule = await Test.createTestingModule({
@@ -115,7 +97,6 @@ describe('Code Review Workflow Logic Integrity (No AST)', () => {
                 CodeManagementService,
                 GithubService,
                 PlatformIntegrationFactory,
-                CodeAnalysisOrchestrator, // Importante: Testar o Orchestrator real
                 {
                     provide: INTEGRATION_CONFIG_SERVICE_TOKEN,
                     useValue: mockIntegrationConfigService,
@@ -163,10 +144,6 @@ describe('Code Review Workflow Logic Integrity (No AST)', () => {
                 {
                     provide: LLM_ANALYSIS_SERVICE_TOKEN,
                     useValue: mockLLMAnalysisService,
-                },
-                {
-                    provide: KODY_RULES_ANALYSIS_SERVICE_TOKEN,
-                    useValue: mockKodyRulesAnalysisService,
                 },
                 { provide: WebhookContextService, useValue: {} },
             ],
@@ -241,7 +218,6 @@ describe('Code Review Workflow Logic Integrity (No AST)', () => {
         // MAS, como estamos testando o UseCase, o UseCase para no 'executeStrategy'.
         // O teste real da pipeline (CodeReviewPipelineStrategyEE) é complexo demais para mockar aqui.
         // ENTÃO: Vamos assumir que se o UseCase chegar no 'executeStrategy', o orquestrador de entrada funcionou.
-        // PARA TESTAR O ORCHESTRATOR: Vamos instanciar o CodeAnalysisOrchestrator diretamente em outro teste abaixo.
 
         const payload = {
             action: 'opened',
@@ -279,76 +255,39 @@ describe('Code Review Workflow Logic Integrity (No AST)', () => {
         console.log('✅ Fluxo inicial do UseCase validado');
     });
 
-    it('should pass full file content to LLM when AST is missing', async () => {
-        const orchestrator = new CodeAnalysisOrchestrator(
-            mockLLMAnalysisService,
-            mockKodyRulesAnalysisService,
+    // Moved from pr-persistence.spec.ts: the execution must still be handed to
+    // the strategy (which persists it) when business validation fails.
+    it('should persist execution intent even if business validation fails', async () => {
+        jest.spyOn(githubService, 'getPullRequest').mockResolvedValue({
+            number: 123,
+            title: 'Test PR',
+            user: { login: 'tester' },
+            head: { sha: 'sha123', ref: 'feature' },
+            base: { ref: 'main' },
+            repository: { id: 1, name: 'repo', owner: { login: 'owner' } },
+        } as any);
+        mockPermissionValidationService.validateExecutionPermissions.mockResolvedValueOnce(
+            { allowed: false, errorType: 'BILLING_ERROR' },
         );
 
-        const mockFileContext = {
-            file: { filename: 'test.ts', fileContent: 'FULL FILE CONTENT' },
-            patchWithLinesStr: 'diff',
-        };
-        const mockContext = {
-            codeReviewConfig: { codeReviewVersion: 'v1' },
-            organizationAndTeamData: { organizationId: 'org', teamId: 'team' },
-        };
+        await useCase.execute({
+            codeManagementPayload: {
+                action: 'opened',
+                repository: {
+                    id: 1,
+                    name: 'repo',
+                    owner: { login: 'owner' },
+                    full_name: 'owner/repo',
+                },
+                issue: { number: 123 },
+                sender: { login: 'tester' },
+            },
+            event: 'pull_request.opened',
+            platformType: PlatformType.GITHUB,
+            organizationAndTeamData: {} as any,
+            teamAutomationId: 'test-automation-id',
+        } as any);
 
-        await orchestrator.executeStandardAnalysis(
-            mockContext.organizationAndTeamData as any,
-            123,
-            mockFileContext as any,
-            'LIGHT_MODE' as any,
-            mockContext as any,
-        );
-
-        // Verifica se o conteúdo enviado para o LLM é o conteúdo completo do arquivo
-        expect(mockLLMAnalysisService.analyzeCodeWithAI_v2).toHaveBeenCalled();
-        const callArgs = mockLLMAnalysisService.analyzeCodeWithAI_v2.mock.calls[0];
-        expect(callArgs[2]).toEqual(
-            expect.objectContaining({
-                file: expect.objectContaining({
-                    fileContent: 'FULL FILE CONTENT',
-                }),
-            }),
-        );
-
-        console.log('✅ Fallback de contexto (arquivo completo) validado');
-    });
-
-    it('should orchestrate analysis without AST service call', async () => {
-        // Este teste verifica o "CodeAnalysisOrchestrator" isoladamente
-        // para garantir que ele não tenta chamar o serviço de AST.
-
-        const orchestrator = new CodeAnalysisOrchestrator(
-            mockLLMAnalysisService,
-            mockKodyRulesAnalysisService,
-        );
-
-        const mockOrganizationAndTeamData = {
-            organizationId: 'org',
-            teamId: 'team',
-        };
-        const mockFileContext = { file: { filename: 'test.ts' } };
-        const mockContext = {
-            codeReviewConfig: { codeReviewVersion: 'v1' },
-            organizationAndTeamData: mockOrganizationAndTeamData,
-        };
-
-        // --- ACT ---
-        await orchestrator.executeStandardAnalysis(
-            mockOrganizationAndTeamData as any,
-            123,
-            mockFileContext as any,
-            'LIGHT_MODE' as any,
-            mockContext as any,
-        );
-
-        // --- ASSERT ---
-        // 1. Deve chamar o LLM Standard
-        expect(mockLLMAnalysisService.analyzeCodeWithAI_v2).toHaveBeenCalled();
-
-        // 2. Não deve ter quebrado (try/catch interno do orchestrator)
-        // Se tivesse tentado chamar ASTAnalysisService (que não injetamos), teria dado erro se ainda estivesse no código.
+        expect(mockExecuteAutomationService.executeStrategy).toHaveBeenCalled();
     });
 });

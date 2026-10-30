@@ -9,6 +9,8 @@ import {
     IsIn,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
+import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { PULL_REQUEST_AUTHOR_POLICIES } from './pull-request-author-policy.constants';
 
 export class EnrichedPullRequestsQueryDto {
@@ -34,6 +36,27 @@ export class EnrichedPullRequestsQueryDto {
     @Min(1)
     @ApiPropertyOptional()
     page?: number = 1;
+
+    /**
+     * Opaque resume point, echoed back from the previous response's
+     * `pagination.nextCursor`.
+     *
+     * `page` cannot express where the previous page stopped. Filling a page
+     * loops over batches and discards rows that fail a post-query filter, so a
+     * page of 30 can consume 60 or 300 executions; `(page - 1) * limit` then
+     * restarts inside the window that page already served. The cursor carries
+     * the position of the last execution actually READ.
+     *
+     * `page` is still honoured when no cursor is given — first page, an old
+     * client, or a deliberate jump to an offset.
+     */
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        description:
+            'Resume point from the previous response (pagination.nextCursor). Takes precedence over `page`.',
+    })
+    cursor?: string;
 
     @IsOptional()
     @IsBoolean()
@@ -77,4 +100,100 @@ export class EnrichedPullRequestsQueryDto {
             'Filter pull requests by author policy: all, reviewable (not excluded), or excluded.',
     })
     authorPolicy?: (typeof PULL_REQUEST_AUTHOR_POLICIES)[number];
+
+    @IsOptional()
+    @IsString()
+    @IsIn(Object.values(AutomationStatus))
+    @ApiPropertyOptional({
+        enum: AutomationStatus,
+        description: 'Filter by the execution review status.',
+    })
+    status?: AutomationStatus;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        description: 'Only executions created on/after this ISO date.',
+    })
+    createdAtFrom?: string;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        description: 'Only executions created on/before this ISO date.',
+    })
+    createdAtTo?: string;
+
+    @IsOptional()
+    @IsString()
+    @Transform(({ value }) =>
+        typeof value === 'string' ? value.trim().toLowerCase() : value,
+    )
+    @IsIn(Object.values(SeverityLevel))
+    @ApiPropertyOptional({
+        enum: SeverityLevel,
+        description:
+            'Only PRs with at least one delivered suggestion of this severity.',
+    })
+    severity?: SeverityLevel;
+
+    @IsOptional()
+    @IsString()
+    @Transform(({ value }) =>
+        typeof value === 'string' ? value.trim().toLowerCase() : value,
+    )
+    @ApiPropertyOptional({
+        description:
+            'Only PRs with at least one delivered suggestion of this category (label).',
+    })
+    category?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    @Type(() => String)
+    @Transform(({ value }) => {
+        if (value === undefined || value === null || value === '') {
+            return undefined;
+        }
+        const normalized = String(value).trim().toLowerCase();
+        if (normalized === 'true') return true;
+        if (normalized === 'false') return false;
+        return undefined;
+    })
+    @ApiPropertyOptional({
+        description:
+            'Only PRs that delivered at least one critical or high suggestion.',
+    })
+    needsAttention?: boolean;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        description:
+            "Filter to PRs authored by the current user ('me') — matched by git identity.",
+    })
+    author?: string;
+
+    /**
+     * The PULL REQUEST's own state, which is not the same thing as `status`
+     * above — that one is the state of Kody's review run. Someone looking for
+     * "what still needs a human" wants this one, and until now the screen had
+     * no way to express it.
+     *
+     * Note the data is only as fresh as the last webhook we processed for the
+     * PR: a close event we never received leaves the record `open` forever.
+     * Measured against GitHub, recent PRs are reliable and the error grows
+     * with age, so this filter leans on the list's existing ordering (most
+     * recent execution first) to keep those stale records at the bottom
+     * rather than silently dropping rows by age.
+     */
+    @IsOptional()
+    @IsString()
+    @IsIn(['open', 'closed'])
+    @ApiPropertyOptional({
+        enum: ['open', 'closed'],
+        description:
+            "The pull request's own state — NOT the review status. `open` is the reviewable backlog.",
+    })
+    prState?: 'open' | 'closed';
 }

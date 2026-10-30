@@ -41,7 +41,7 @@ const REVIEW_CADENCE_COPY: Record<
     [ReviewCadenceType.AUTO_PAUSE]: {
         label: "⏸️ Auto-Pause Mode",
         description:
-            "Kody reviews the first push automatically, then pauses if you make 3+ pushes in 15 minutes. Use @kody resume to continue.",
+            "Kody reviews the first push automatically, then pauses if you make 3+ pushes in 15 minutes. Use @kody start-review to continue.",
     },
     [ReviewCadenceType.MANUAL]: {
         label: "✋ Manual Review",

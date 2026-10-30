@@ -36,8 +36,7 @@ export function pathToApiUrl(
 
     let hostName = process.env.WEB_HOSTNAME_API;
     if (hostName === "localhost") {
-        hostName =
-            process.env.GLOBAL_API_CONTAINER_NAME || "kodus_api";
+        hostName = process.env.GLOBAL_API_CONTAINER_NAME || "kodus_api";
     }
     const port = process.env.WEB_PORT_API;
 
@@ -192,21 +191,22 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         "reviewCadence",
         "baseBranches",
         "ignoredTitleKeywords",
-        "ideRulesSyncEnabled",
-        // Action picked in the toggle-off confirmation modal. Without it
-        // here, the stripper would silently drop the field and the
-        // backend would never see whether the user chose keep / pause /
-        // delete — which produced the production bug where rules stayed
-        // ACTIVE after the user chose Delete.
-        "ideSyncDisableAction",
+        "repoInstructionsEnabled",
         "ignorePaths",
         "reviewOptions",
         "kodusConfigFileOverridesWebPreferences",
         "pullRequestApprovalActive",
+        "approvalLabels",
+        "approvalAuthors",
+        "approvalRiskActive",
+        "approvalRiskInstructions",
+        "approvalSensitivePaths",
         "suggestionControl",
         "summary",
         "isRequestChangesActive",
         "kodyRulesGeneratorEnabled",
+        "kodyRulesAutoPauseEnabled",
+        "kodyLearningExcludedReviewers",
         "kodyKnowledgeApproval",
         "runOnDraft",
         "codeReviewVersion",
@@ -215,10 +215,27 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         // silently drop the field and the backend would never persist the
         // selected model.
         "byokModel",
+        // Id-based BYOK override (the model selector now writes THIS, not the
+        // legacy name). Missing from this allowlist, every per-repo/dir model
+        // pick was silently dropped on save — the model never persisted, the
+        // routing "Per repository" mirror stayed empty, and reviews kept using
+        // the inherited model.
+        "byokModelId",
         // New v2 prompt overrides for categories/severity customization
         "v2PromptOverrides",
         // Preview-environment (Alpha) playbook config
         "environment",
+        // Cross-repo context (#1576). Without it the stripper would drop
+        // the field and the UI save would never persist linked repos.
+        "linkedRepositories",
+        "deterministicEvidence",
+        // Business Logic settings (task source, criteria, what fails the
+        // check). Without it here the stripper would drop every edit.
+        "businessLogic",
+        // Custom agents and the skills and docs linked to them. Without them
+        // here the agent screens saved nothing and reported success.
+        "customAgents",
+        "knowledge",
     ];
 
     expectedKeys.forEach((key) => {
@@ -235,10 +252,8 @@ export const codeReviewConfigRemovePropertiesNotInType = (
 export const waitFor = (ms: number) =>
     new Promise((resolve) => setTimeout(resolve, ms));
 
-// Trailing comma on the generic <T,> disambiguates from JSX for
-// SWC/Turbopack's edge-runtime parser when this module is imported
-// from middleware.ts.
-export const unformatConfig = <T,>(node: FormattedConfig<T>): T => {
+// This module is also imported from middleware.ts in the edge runtime.
+export const unformatConfig = <T>(node: FormattedConfig<T>): T => {
     const unformattedConfig: Partial<T> = {};
 
     (Object.keys(node) as (keyof T)[]).forEach((key) => {

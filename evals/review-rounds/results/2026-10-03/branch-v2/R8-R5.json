@@ -1,0 +1,701 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "judge": "gpt-5.6-luna",
+  "judgeReasoningEffort": "low",
+  "reps": 3,
+  "engine": {
+    "commit": "14439a95335f07c92cb445ccea3069a9b2904e30",
+    "sourceDigest": "3771942b8bf2db18620b87904bc4b42afc4f16b763723e5f4808fe5910a9c7d3"
+  },
+  "startedAt": "2026-10-03T16:45:17.503Z",
+  "updatedAt": "2026-10-03T17:23:18.478Z",
+  "complete": true,
+  "selectedCases": [
+    "R5-unrelated-same-area",
+    "R8-consequence-kody-rule-prior"
+  ],
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 8,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R5-unrelated-same-area · swapped-args [deliver]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      },
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 3,
+        "n": 3,
+        "delivered": 3
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 342876,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: the FailedError constructor arguments are swapped — the call passes (String(err), chargeId) while the constructor signature is (chargeId, cause). WHY: the FailedError.chargeId field ends up holding the stringified error and cause ends up holding the charge id, so any caller/log that reads err.chargeId to identify the failed charge gets the wrong value and the original error is lost. HOW: restore the correct order matching the constructor, `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: FailedError is defined as `constructor(readonly chargeId: string, readonly cause?: unknown)` (src/billing/errors.ts:4). The call `throw new FailedError(String(err), chargeId)` (src/billing/status.ts:11) passes arguments in the wrong order, so chargeId holds the stringified error and cause holds the charge id. The claim is factually accurate and describes a real wrong-value bug for any consumer reading err.chargeId. This is a different problem from the earlier NotReadyError-propagation decision (which concerns line 8/9), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The FailedError constructor arguments are swapped: the call passes (String(err), chargeId) while the constructor signature is (chargeId, cause), so FailedError.chargeId holds the stringified error and cause holds the charge id, causing callers/logs reading err.chargeId to get the wrong value and lose the original error. Restore the correct order with `throw new FailedError(chargeId, err);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 269339,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The arguments to FailedError are passed in swapped order — `new FailedError(String(err), chargeId)` feeds `String(err)` into the `chargeId` parameter and the real charge id into `cause`. WHY: `FailedError` is declared as `constructor(readonly chargeId: string, readonly cause?: unknown)`, so `failedError.chargeId` now holds the stringified original error and `failedError.cause` holds the charge id, silently corrupting the identifying field for any consumer (logging, dedup/retry keyed on chargeId) and discarding the underlying error object. HOW: Restore the original argument order and pass the error itself as the cause.",
+          "keep": true,
+          "rationale": "Verified in src/billing/errors.ts:4 that FailedError is declared as `constructor(readonly chargeId: string, readonly cause?: unknown)`. src/billing/status.ts:11 calls `new FailedError(String(err), chargeId)`, feeding the stringified error into chargeId and the real charge id into cause — a genuine argument-order bug that corrupts the identifying field. This is not a repeat of the prior decision (round-a-propagate), which concerned NotReadyError propagation and is already implemented at lines 8-9; the current finding is a different defect in the same operation.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError|constructor\\(readonly chargeId"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The arguments to FailedError are passed in swapped order — `new FailedError(String(err), chargeId)` feeds `String(err)` into the `chargeId` parameter and the real charge id into `cause`, silently corrupting `failedError.chargeId` for consumers keyed on it (logging, dedup/retry) and discarding the underlying error object. Restore the original argument order and pass the error itself as the cause."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R5-unrelated-same-area",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 514623,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The arguments to FailedError are swapped — the changed line passes `String(err)` as the first parameter and `chargeId` as the second, but FailedError's constructor is `constructor(readonly chargeId: string, readonly cause?: unknown)`, so the first parameter is `chargeId` and the second is `cause`. WHY: The thrown FailedError now exposes the stringified gateway error as its `chargeId` field and the actual charge id as `cause`, so any consumer (logging, monitoring, or the caller identifying which charge failed) reading `err.chargeId` gets the wrong value; `Error.message` (set via `super(chargeId)`) also changes from the charge id to `String(err)`. HOW: Restore the correct order: `throw new FailedError(chargeId, err);`.",
+          "keep": true,
+          "rationale": "Confirmed: FailedError's constructor (src/billing/errors.ts:4) is `constructor(readonly chargeId: string, readonly cause?: unknown) { super(chargeId); }`, but the call at src/billing/status.ts:11 passes `String(err)` as the first argument and `chargeId` as the second. The arguments are genuinely swapped, so `err.chargeId` holds the stringified gateway error and `Error.message` (via super(chargeId)) no longer reflects the charge id. This is a real behavior bug, not style. It is also not a repeat of the previous decision, which concerned propagating NotReadyError (now implemented at lines 8-9) — a different problem in the same function.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "The call to `FailedError` swaps the constructor arguments. Per the callee contract at src/billing/status.ts (errors.ts:4) — `constructor(readonly chargeId: string, readonly cause?: unknown) { super(chargeId); }` — the first parameter must be the `chargeId` string and the second the underlying error. The changed line passes `String(err)` as `chargeId` and the real `chargeId` as `cause`, so `Error.message` ends up as `String(err)` and the charge id and cause are transposed. This is a genuine regression on the sole changed line (this defect was already captured in the existing findings, so it is restated here only for completeness). The swap is the only defect on this line: `fetchStatus` is called only from poller.ts:11 (`pollCharge`), which rethrows non-`NotReadyError` errors, and no code reads `.chargeId`/`.cause`.",
+          "keep": true,
+          "rationale": "The constructor at errors.ts:4 is `constructor(readonly chargeId: string, readonly cause?: unknown) { super(chargeId); }`, so arg 1 = chargeId (and drives Error.message via super), arg 2 = cause. Line 11 `new FailedError(String(err), chargeId)` passes `String(err)` first and the real `chargeId` second, so the `chargeId`/`cause` fields are transposed and `Error.message` becomes `String(err)`. The transposition claim is factually correct and verifiable; it is a behavior defect (wrong field/message assignment), not style. It is a different problem from the PreviousReviewDecisions entry, which concerns NotReadyError being misclassified as terminal (a different failure in the same function), so it is not a repeat. No refutation found.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class FailedError|class NotReadyError|constructor",
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "FailedError|\\.chargeId|\\.cause|fetchStatus",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The changed line swaps the arguments to FailedError, whose constructor is constructor(readonly chargeId: string, readonly cause?: unknown), so String(err) becomes chargeId and the real chargeId becomes cause; consumers reading err.chargeId get the stringified gateway error and Error.message (set via super(chargeId)) changes from the charge id to String(err). Restore the correct order so chargeId is first and err is the cause."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The call to FailedError swaps the constructor arguments despite the callee contract at src/billing/status.ts (errors.ts:4) — constructor(readonly chargeId: string, readonly cause?: unknown) { super(chargeId); } — so String(err) is passed as chargeId and the real chargeId as cause, making Error.message String(err), transposing charge id and cause, and creating a genuine regression on the sole changed line. Restore the correct order; this is the only defect on the line since fetchStatus is called only from poller.ts:11 (pollCharge), which rethrows non-NotReadyError errors, and no code reads .chargeId/.cause."
+        }
+      ],
+      "claims": [
+        {
+          "id": "swapped-args",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 290418,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now lets NotReadyError propagate unchanged (lines 8-10), which activates pollCharge's resubmit branch that calls the non-idempotent gw.submit. WHY: NotReadyError is documented as 'the gateway has the charge but has not settled it yet (transient)' (errors.ts:2) and Gateway.submit is documented as 'NOT idempotent: every call creates a new charge' (gateway.ts:3-4), so the newly-reachable resubmit in pollCharge (poller.ts:14) creates a duplicate charge for a charge the gateway already holds. Before this change fetchStatus always threw FailedError, so the NotReadyError branch was unreachable and no duplicate could be created. HOW: make the resubmit conditional on the gateway genuinely not having the charge (or make submit idempotent) — e.g. in pollCharge treat a transient NotReadyError as 'still pending' (return a pending state) and only resubmit when the gateway reports it never received the charge, instead of resubmitting on every NotReadyError.",
+          "keep": true,
+          "rationale": "Confirmed: status.ts:8-10 propagates NotReadyError, making poller.ts:13-16's resubmit branch reachable for the first time (previously fetchStatus threw FailedError, so that branch was dead). NotReadyError is documented (errors.ts:2) as the gateway already holding the charge, and submit (gateway.ts:3) is documented as non-idempotent, so the newly reachable resubmit creates a duplicate charge — a concrete wrong outcome. This is not a repeat of the earlier round-a-propagate entry: that entry addressed error classification (retryable→terminal), whereas this finding describes a distinct consequence (duplicate charge creation) that arises precisely because that suggestion was applied, which the rules classify as a DIFFERENT problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nfetchStatus now lets NotReadyError propagate unchanged (lines 8-10), which activates pollCharge's resubmit branch that calls the non-idempotent gw.submit; since NotReadyError means the gateway has the charge but has not settled it (errors.ts:2) and Gateway.submit creates a new charge on every call (gateway.ts:3-4), the newly reachable resubmit in pollCharge (poller.ts:14) can create a duplicate charge, whereas before this change fetchStatus always threw FailedError and that branch was unreachable. Make the resubmit conditional on the gateway genuinely not having the charge (or make submit idempotent) — e.g. in pollCharge treat a transient NotReadyError as still pending and return a pending state, and only resubmit when the gateway reports it never received the charge instead of on every NotReadyError."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 389914,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now re-throws NotReadyError unchanged (status.ts:8-9), which makes pollCharge's previously-dead catch branch run `await gw.submit(charge.payload)` (poller.ts:13-15) for a charge the gateway already holds. WHY: NotReadyError is defined as 'the gateway has the charge but has not settled it yet (transient)' (errors.ts:2) and Gateway.submit is 'NOT idempotent: every call creates a new charge' (gateway.ts:3), so every poll tick where the charge is still unsettled submits again and creates an additional charge — duplicate/double billing, repeating on each tick until settlement. HOW: only resubmit when the gateway genuinely never received the charge; for the transient 'not settled' NotReadyError, wait for the next tick instead of calling the non-idempotent submit (or make submit idempotent / keyed by charge id).",
+          "keep": true,
+          "rationale": "The technical claim is supported by the code. status.ts:8-9 now re-throws NotReadyError unchanged (the change implemented from the earlier decision), which activates the previously-dead NotReadyError branch in poller.ts:13-15 that calls gw.submit(charge.payload). errors.ts:2 defines NotReadyError as 'the gateway has the charge but has not settled it yet (transient)' and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge'. pollCharge runs on every tick (poller.ts:5-9), and there is no idempotency key or guard (confirmed by grep: no other callers/guards), so each tick while the charge is unsettled creates another charge — duplicate billing. This is NOT a repeat of the earlier decision (round-a-propagate), whose failure was a retryable error being wrongly made terminal; this finding's failure (duplicate charge creation from applying that fix) is a distinct consequence of applying the earlier suggestion in a different operation, so it is not the same problem. The only residual uncertainty is a semantic contradiction in the repo (poller.ts:7's comment claims NotReadyError means 'never received it', contradicting errors.ts:2); since the finding relies on the code's own definition and no guard prevents the duplicate submit, it cannot be refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|fetchStatus|NotReadyError",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 27,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nfetchStatus now re-throws NotReadyError unchanged (status.ts:8-9), causing pollCharge's previously-dead catch branch to run await gw.submit(charge.payload) (poller.ts:13-15) for a charge the gateway already holds; because NotReadyError means 'the gateway has the charge but has not settled it yet (transient)' (errors.ts:2) and Gateway.submit is 'NOT idempotent: every call creates a new charge' (gateway.ts:3), every poll tick where the charge is still unsettled submits again and creates an additional charge, causing duplicate/double billing until settlement. Only resubmit when the gateway genuinely never received the charge; for the transient not-settled NotReadyError, wait for the next tick instead of calling the non-idempotent submit (or make submit idempotent / keyed by charge id)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 471677,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError from fetchStatus (status.ts:8-9) makes pollCharge's resubmit branch reachable, and that branch calls `gw.submit()` — documented in gateway.ts:3 as NOT idempotent (\"every call creates a new charge\"). WHY: errors.ts:1 defines NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\", so for every not-yet-settled tick the poller now creates an additional charge, i.e. duplicate charges / double billing; previously this path was unreachable because all errors were collapsed into FailedError. HOW: make the resubmit idempotent (pass the existing charge id as an idempotency key) or, if NotReadyError really means \"already received, not settled\", have the poller wait/retry the status instead of resubmitting; also reconcile the contradictory comments in errors.ts:1 vs poller.ts:7.",
+          "keep": true,
+          "rationale": "Verified: status.ts:8-9 re-throws NotReadyError, making poller.ts:13-15's resubmit branch reachable (previously dead since fetchStatus collapsed all errors to FailedError). That branch calls gw.submit(charge.payload), documented in gateway.ts:3 as NOT idempotent ('every call creates a new charge'), while errors.ts:1 defines NotReadyError as 'gateway has the charge but has not settled it yet.' For an unsettled charge, resubmitting therefore creates a duplicate charge — a concrete double-billing path, not style. The contradictory comments (errors.ts:1 vs poller.ts:7) are exactly the ambiguity the finding surfaces, so it is not refuted. This is a DIFFERENT failure from the earlier round-a-propagate decision (which complained a retryable error was made terminal); this is a new consequence of applying that fix, so it is a revision, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now re-throws NotReadyError unchanged (status.ts:8-10), which makes pollCharge's `err instanceof NotReadyError` branch (poller.ts:13-15) reachable for the first time; that branch calls `gw.submit`, and the Gateway contract states submit is NOT idempotent — \"every call creates a new charge\" (gateway.ts:3). WHY: NotReadyError's own definition is \"The gateway has the charge but has not settled it yet (transient)\" (errors.ts:1), so resubmitting creates a duplicate charge / double billing for a charge the gateway already holds; previously this path was dead because fetchStatus wrapped NotReadyError into FailedError. HOW: Do not resubmit on NotReadyError — it means the charge already exists, so the poller should keep polling/return a pending state instead of calling submit (or make submit idempotent with an idempotency key). This revises the earlier \"propagate NotReadyError unchanged\" suggestion: propagation is only safe if the downstream resubmit is removed or made idempotent.",
+          "keep": true,
+          "rationale": "The claim is verified by the code: status.ts:8-10 re-throws NotReadyError unchanged, making poller.ts:13-15's `err instanceof NotReadyError` branch reachable, which calls gw.submit. gateway.ts:3 documents submit as NOT idempotent (\"every call creates a new charge\"), and errors.ts:1 defines NotReadyError as \"The gateway HAS the charge but has not settled it yet (transient).\" Together these establish a concrete double-billing path. This is NOT a repeat of the earlier decision (round-a-propagate), which raised the opposite failure — NotReadyError being wrapped into a terminal FailedError and losing retryability. This finding is a distinct consequence that exists BECAUSE the earlier propagation suggestion was applied (propagation enables the resubmit), which the rules explicitly classify as a different problem rather than a repeat. The trigger requires the gateway to throw NotReadyError while holding the charge, which the error contract explicitly describes, so the path is not refutable as unreachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nThe re-thrown NotReadyError from fetchStatus (status.ts:8-9) makes pollCharge's resubmit branch reachable, and since gw.submit() is documented as non-idempotent in gateway.ts:3, every not-yet-settled tick now creates a duplicate charge — NotReadyError per errors.ts:1 means the gateway already holds the charge. Make the resubmit idempotent by passing the existing charge id as an idempotency key (or have the poller wait/retry status instead), and reconcile the contradictory comments in errors.ts:1 vs poller.ts:7."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nfetchStatus now re-throws NotReadyError unchanged (status.ts:8-10), making pollCharge's `err instanceof NotReadyError` branch (poller.ts:13-15) reachable, and that branch calls gw.submit, which is non-idempotent per gateway.ts:3. Since NotReadyError means the gateway already holds the charge (errors.ts:1), keep polling or return a pending state instead of resubmitting (or make submit idempotent with an idempotency key) — propagation is only safe if the downstream resubmit is removed or made idempotent."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

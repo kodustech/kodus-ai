@@ -46,7 +46,10 @@ describe('groupIssuesByFile', () => {
     it('groups issues by file path', () => {
         const grouped = groupIssuesByFile(issues);
 
-        expect(Array.from(grouped.keys())).toEqual(['src/app.ts', 'src/lib.ts']);
+        expect(Array.from(grouped.keys())).toEqual([
+            'src/app.ts',
+            'src/lib.ts',
+        ]);
         expect(grouped.get('src/app.ts')).toHaveLength(2);
         expect(grouped.get('src/lib.ts')).toHaveLength(1);
     });
@@ -93,9 +96,7 @@ describe('generateFixPromptAll', () => {
         const grouped = groupIssuesByFile(issues);
         const prompt = generateFixPromptAll(grouped);
 
-        expect(prompt).toContain(
-            'Fix the following 3 issues across 2 files.',
-        );
+        expect(prompt).toContain('Fix the following 3 issues across 2 files.');
         expect(prompt).toContain('## File 1/2: src/app.ts (2 issues)');
         expect(prompt).toContain('## File 2/2: src/lib.ts (1 issue)');
         expect(prompt).toContain('1. CRITICAL at line 10');
@@ -110,9 +111,7 @@ describe('generateFixPromptAll', () => {
         const grouped = groupIssuesByFile([issues[2]]);
         const prompt = generateFixPromptAll(grouped);
 
-        expect(prompt).toContain(
-            'Fix the following 1 issue across 1 file.',
-        );
+        expect(prompt).toContain('Fix the following 1 issue across 1 file.');
         expect(prompt).toContain('## File 1/1: src/lib.ts (1 issue)');
         expect(prompt).toContain(
             'Please apply all 1 fix across the 1 file above.',

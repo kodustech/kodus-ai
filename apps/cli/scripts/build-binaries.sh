@@ -1,7 +1,7 @@
 #!/bin/bash
 # Gera binários standalone (não precisa de Node.js instalado)
 
-yarn global add pkg
+pnpm add -g pkg
 
 # Build para todas plataformas
 pkg . \

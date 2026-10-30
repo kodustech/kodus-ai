@@ -8,7 +8,9 @@ type RequestWithRetry = <T>(
 ) => Promise<T>;
 
 export class RealTrialApi implements ITrialApi {
-    constructor(private readonly requester: RequestWithRetry = requestWithRetry) {}
+    constructor(
+        private readonly requester: RequestWithRetry = requestWithRetry,
+    ) {}
 
     async getStatus(fingerprint: string): Promise<TrialStatus> {
         return this.requester<TrialStatus>(

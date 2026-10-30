@@ -58,7 +58,9 @@ describe('update command helpers', () => {
         );
 
         expect(hints.join('\n')).toContain('npm config get registry');
-        expect(hints.join('\n')).toContain('--registry https://registry.npmjs.org/');
+        expect(hints.join('\n')).toContain(
+            '--registry https://registry.npmjs.org/',
+        );
         expect(hints.join('\n')).toContain('curl -fsSL');
     });
 
@@ -73,6 +75,8 @@ describe('update command helpers', () => {
         );
 
         expect(hints[0]).toContain('Try running manually');
-        expect(hints.join('\n')).not.toContain('--registry https://registry.npmjs.org/');
+        expect(hints.join('\n')).not.toContain(
+            '--registry https://registry.npmjs.org/',
+        );
     });
 });

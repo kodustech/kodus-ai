@@ -1,0 +1,55 @@
+diff --git a/libs/code-review/pipeline/stages/agent-review.stage.ts b/libs/code-review/pipeline/stages/agent-review.stage.ts
+index 1ed59941c..29121e438 100644
+--- a/libs/code-review/pipeline/stages/agent-review.stage.ts
++++ b/libs/code-review/pipeline/stages/agent-review.stage.ts
+@@ -1188,18 +1188,25 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
+             let severityNormalized: Partial<CodeSuggestion>[] =
+                 repeatCheck.kept;
+ 
++            const dedup = await this.dedupSuggestionStreams(
++                severityNormalized,
++                prNumber,
++                context,
++                telemetryMeta,
++            );
++            let deduped = dedup.deduped;
+             // A custom agent's own severity floor and comment limit apply
+             // whatever the team's filter is (#2172), and also before dedup:
+             // a finding dropped after it had absorbed a native one would take
+             // the native comment with it.
+             if (customAgentsById.size > 0) {
+-                const belowAgentFloor = severityNormalized.filter(
++                const belowAgentFloor = deduped.filter(
+                     (s) =>
+                         customAgentSeverityVerdict(s, customAgentsById) ===
+                         false,
+                 );
+                 if (belowAgentFloor.length) {
+-                    severityNormalized = severityNormalized.filter(
++                    deduped = deduped.filter(
+                         (s) => !belowAgentFloor.includes(s),
+                     );
+                     for (const s of belowAgentFloor) {
+@@ -1212,20 +1219,13 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
+                     }
+                 }
+                 const capped = capCustomAgentComments(
+-                    severityNormalized,
++                    deduped,
+                     customAgentsById,
+                 );
+-                severityNormalized = capped.kept;
++                deduped = capped.kept;
+                 allDiscarded.push(...capped.overflow);
+             }
+ 
+-            const dedup = await this.dedupSuggestionStreams(
+-                severityNormalized,
+-                prNumber,
+-                context,
+-                telemetryMeta,
+-            );
+-            let deduped = dedup.deduped;
+             const dedupTrace = dedup.dedupTrace;
+ 
+             // NOTE: Kody Rule link enrichment happens AFTER the content

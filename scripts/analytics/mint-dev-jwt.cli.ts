@@ -125,7 +125,7 @@ async function main() {
             expiresIn: args.expires as unknown as number,
         });
         // Print ONLY the token on stdout so the caller can do:
-        //   JWT=$(yarn -s analytics:mint-dev-jwt --email ...)
+        //   JWT=$(pnpm -s analytics:mint-dev-jwt --email ...)
         process.stdout.write(token + '\n');
     } finally {
         await client.end();

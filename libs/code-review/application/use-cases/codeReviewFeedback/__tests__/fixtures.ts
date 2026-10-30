@@ -52,7 +52,7 @@ export function createSamplePullRequestWithSuggestions(
 export function createSampleComment(
     overrides?: Partial<{
         id: number;
-        threadId?: number;
+        threadId?: number | string;
         notes?: { id: number }[];
         reactions: { thumbsUp: number; thumbsDown: number };
     }>,

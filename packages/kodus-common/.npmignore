@@ -1,9 +1,0 @@
-*
-
-!package.json
-!README.md
-!LICENSE
-!.npmignore
-
-!dist/
-!dist/**

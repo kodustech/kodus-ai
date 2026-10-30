@@ -8,6 +8,7 @@ import {
     registerIntegration,
     registerRepo,
 } from "../lib/onboarding.js";
+import { assertHealthyExecution } from "../lib/execution-health.js";
 import {
     fetchOrgLicense,
     provisionFreshTrialOrg,
@@ -60,7 +61,7 @@ export const trialManagedReview: Scenario = {
     priority: "P0",
     appliesTo: {
         target: ["cloud"],
-        provider: ["github"],
+        provider: ["github", "github-app"],
         license: ["trial"],
     },
     // Onboarding (~3-5 min incl. kody-rules generation) + 600s pipeline-start
@@ -175,6 +176,16 @@ export const trialManagedReview: Scenario = {
                     `Trial must NOT trigger a BYOK/trial-ended notice, but Kody posted one: ${JSON.stringify(review.licenseBlockedNotice)}`,
                 );
 
+                // Execution HEALTH: the trial managed-LLM review can post
+                // findings while an agent/stage crashed (partial_error). A
+                // trial user's first impression must not be a silently
+                // degraded review — assert the execution settled `success`.
+                const executionStatus = await assertHealthyExecution(
+                    ctx,
+                    session,
+                    pr.number,
+                );
+
                 return {
                     email,
                     organizationId: session.organizationId,
@@ -182,6 +193,7 @@ export const trialManagedReview: Scenario = {
                     prNumber: pr.number,
                     prUrl: pr.url,
                     review,
+                    executionStatus,
                     subscriptionStatus: license.subscriptionStatus,
                 };
             } finally {

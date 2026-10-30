@@ -1,8 +1,17 @@
+import pLimit from 'p-limit';
+
 import { CodeReviewContextPackService } from '@libs/ai-engine/infrastructure/adapters/services/context/code-review-context-pack.service';
 import { AnalysisContext } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
+
+/**
+ * Max concurrent per-rule reference loads. Each load is a ContextPack build with
+ * (currently uncached) `getRepositoryContentFile` round-trips, so we fan out to
+ * cut review latency but cap it so a rule-heavy org doesn't hammer the git API.
+ */
+const REFERENCE_LOAD_CONCURRENCY = 4;
 
 export interface LoadedReference {
     filePath: string;
@@ -92,7 +101,15 @@ export class ExternalReferenceLoaderService {
                             typeof (entry as Record<string, unknown>)
                                 .filePath === 'string' &&
                             typeof (entry as Record<string, unknown>)
-                                .content === 'string'
+                                .content === 'string' &&
+                            // Reject empty/whitespace-only content: it inlines
+                            // nothing downstream, so keeping it would leave a
+                            // map entry that reads as "resolved" while the rule
+                            // is actually judged blind.
+                            (
+                                (entry as Record<string, unknown>)
+                                    .content as string
+                            ).trim().length > 0
                         ) {
                             references.push({
                                 filePath: (entry as Record<string, unknown>)
@@ -163,23 +180,33 @@ export class ExternalReferenceLoaderService {
         const referencesMap = new Map<string, LoadedReference[]>();
         const mcpResultsMap = new Map<string, Record<string, unknown>>();
 
-        for (const rule of rules) {
-            if (rule.uuid) {
-                const { references, augmentations } = await this.loadReferences(
-                    rule as IKodyRule,
-                    context,
-                );
-                if (references.length > 0) {
-                    referencesMap.set(rule.uuid, references);
-                }
-                if (augmentations.size > 0) {
-                    mcpResultsMap.set(
-                        rule.uuid,
-                        Object.fromEntries(augmentations),
-                    );
-                }
-            }
-        }
+        // Per-rule loads are independent network round-trips; run them with
+        // bounded concurrency instead of strictly serially. `loadReferences`
+        // swallows its own errors, so one failing rule never rejects the batch.
+        // Map writes are synchronous (single-threaded), so no locking needed.
+        const limit = pLimit(REFERENCE_LOAD_CONCURRENCY);
+        await Promise.all(
+            rules
+                .filter((rule) => rule.uuid)
+                .map((rule) =>
+                    limit(async () => {
+                        const { references, augmentations } =
+                            await this.loadReferences(
+                                rule as IKodyRule,
+                                context,
+                            );
+                        if (references.length > 0) {
+                            referencesMap.set(rule.uuid as string, references);
+                        }
+                        if (augmentations.size > 0) {
+                            mcpResultsMap.set(
+                                rule.uuid as string,
+                                Object.fromEntries(augmentations),
+                            );
+                        }
+                    }),
+                ),
+        );
 
         return { referencesMap, mcpResultsMap };
     }

@@ -1,8 +1,7 @@
-import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
-import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     CodeReviewConfig,
@@ -20,6 +19,15 @@ export const COMMENT_MANAGER_SERVICE_TOKEN = Symbol.for(
 );
 
 export interface ICommentManagerService {
+    postApprovalReason(
+        organizationAndTeamData: OrganizationAndTeamData,
+        prNumber: number,
+        repository: { name: string; id: string },
+        reason: string,
+        kind: 'approve' | 'hold',
+        /** Update Kody's earlier reason note, but never open one. */
+        options?: { onlyIfPresent?: boolean },
+    ): Promise<void>;
     createInitialComment(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
@@ -29,7 +37,7 @@ export interface ICommentManagerService {
         platformType: string,
         codeReviewConfig?: CodeReviewConfig,
         pullRequestMessages?: IPullRequestMessages,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
+        previousGitlabNote?: { commentId: number; noteId: number },
     ): Promise<{ commentId: number; noteId: number; threadId?: number }>;
 
     processEndReviewMessageTemplate(
@@ -50,11 +58,14 @@ export interface ICommentManagerService {
         organizationAndTeamData: OrganizationAndTeamData,
         languageResultPrompt: string,
         summaryConfig: SummaryConfig,
-        byokConfig?: BYOKConfig,
         isCommitRun?: boolean,
         prPreview?: boolean,
         externalPromptContext?: any,
         platformType?: PlatformType,
+        lineComments?: CommentResult[],
+        prLevelCommentResults?: CommentResult[],
+        /** The team's own task id format, so its ids survive a replaced description. */
+        taskIdPattern?: string,
     ): Promise<string>;
 
     updateOverallComment(
@@ -68,10 +79,14 @@ export interface ICommentManagerService {
         codeReviewConfig?: CodeReviewConfig,
         threadId?: number,
         finalCommentBody?: string,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
+        linkedRepositoriesMetadata?: import('@libs/ee/linked-repositories').LinkedRepositoriesReviewMetadata,
+        reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
+        singleAgentRun?: boolean,
+        approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
     ): Promise<void>;
 
     updateSummarizationInPR(
@@ -79,7 +94,6 @@ export interface ICommentManagerService {
         prNumber: number,
         repository: { name: string; id: string },
         summary: string,
-        dryRun: CodeReviewPipelineContext['dryRun'],
     ): Promise<void>;
 
     createLineComments(
@@ -88,9 +102,11 @@ export interface ICommentManagerService {
         repository: { name: string; id: string; language: string },
         lineComments: Comment[],
         language: string,
-        dryRun: CodeReviewPipelineContext['dryRun'],
         suggestionCopyPrompt?: boolean,
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
+        platformType?: PlatformType,
+        onPromptReplyError?: (error: Error) => void,
+        reviewedCommit?: string,
     ): Promise<{
         lastAnalyzedCommit: any;
         commits: any[];
@@ -100,9 +116,8 @@ export interface ICommentManagerService {
     repeatedCodeReviewSuggestionClustering(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        provider: LLMModelProvider,
         suggestions: any[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<any>;
 
     enrichParentSuggestionsWithRelated(
@@ -116,7 +131,8 @@ export interface ICommentManagerService {
         prLevelSuggestions: ISuggestionByPR[],
         language: string,
         suggestionCopyPrompt?: boolean,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
+        platformType?: PlatformType,
+        onPromptReplyError?: (error: Error) => void,
     ): Promise<{ commentResults: Array<CommentResult> }>;
 
     findLastReviewComment(
@@ -144,10 +160,12 @@ export interface ICommentManagerService {
         codeReviewConfig?: CodeReviewConfig,
         endReviewMessage?: string,
         pullRequestMessagesConfig?: IPullRequestMessages,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
         prLevelCommentResults?: Array<CommentResult>,
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
+        reviewWarnings?: import('@libs/code-review/infrastructure/agents/engine/review-warnings').ReviewWarning[],
+        approvalDecision?: import('@libs/code-review/domain/approval/approval-decision').ApprovalDecision,
     ): Promise<void>;
 }

@@ -176,17 +176,15 @@ describe('repoConfigService.listRepositories', () => {
     });
 
     it('lists selected repositories for the current team', async () => {
-        mockApiConfig.getSelectedRepositories = vi
-            .fn()
-            .mockResolvedValue([
-                {
-                    id: 'repo-1',
-                    name: 'cli',
-                    full_name: 'kodustech/cli',
-                    organizationName: 'kodustech',
-                    selected: true,
-                },
-            ] as any);
+        mockApiConfig.getSelectedRepositories = vi.fn().mockResolvedValue([
+            {
+                id: 'repo-1',
+                name: 'cli',
+                full_name: 'kodustech/cli',
+                organizationName: 'kodustech',
+                selected: true,
+            },
+        ] as any);
 
         const result = await repoConfigService.listRepositories();
 

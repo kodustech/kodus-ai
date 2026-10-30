@@ -1,12 +1,20 @@
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
-import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    FileChange,
+    Repository,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.type';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
+import {
+    CheckEvidence,
+    CheckEvidenceSupport,
+    GetCheckEvidenceParams,
+} from '../types/codeManagement/checkEvidence.type';
 import { GitCloneParams } from '../types/codeManagement/gitCloneParams.type';
 import {
     CodeManagementIssue,
@@ -25,6 +33,7 @@ import {
 } from '../types/codeManagement/pullRequests.type';
 import { Repositories } from '../types/codeManagement/repositories.type';
 import { RepositoryFile } from '../types/codeManagement/repositoryFile.type';
+import { RepositoryAccessDiagnosis } from '../types/codeManagement/repositoryAccessDiagnosis.type';
 import { ICommonPlatformIntegrationService } from './common.interface';
 
 type GitActor = {
@@ -62,6 +71,34 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     supportsIssues?(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<boolean>;
+
+    /**
+     * Read the CI results the customer's own pipeline produced for a commit.
+     * Optional: implemented per provider, and at two depths — every host can
+     * report check names and pass/fail, only some expose per-line findings.
+     * The facade degrades to no evidence rather than failing the review.
+     */
+    getCheckEvidence?(params: GetCheckEvidenceParams): Promise<CheckEvidence[]>;
+    /**
+     * Unified-diff hunks for specific paths, when the host's file listing
+     * omitted them. GitHub drops `patch` once a file's diff passes a size
+     * limit — which is exactly what a dependency bump does — and the raw diff
+     * media type is the only surface that still carries the hunks. Optional:
+     * a host without it simply keeps the gap, as it does today.
+     */
+    getFilePatches?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id?: string; name: string; owner?: string };
+        prNumber: number;
+        paths: string[];
+    }): Promise<Array<{ path: string; patch: string }>>;
+    /**
+     * What this host can actually report. Absent means status-only, which is
+     * the conservative reading of "the reader exists but says nothing more".
+     */
+    supportsCheckEvidence?(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CheckEvidenceSupport>;
 
     findRepositoryByName(params: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -107,6 +144,7 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        includeLabels?: boolean;
     }): Promise<PullRequest | null>;
     getRepositories(params: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -143,6 +181,18 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
 
     getFilesByPullRequestId(params): Promise<any[] | null>;
     getChangedFilesSinceLastCommit(params: any): Promise<any | null>;
+    /**
+     * The PR's diff as it stood when `headSha` was its head: from the merge
+     * base of `baseBranch` and `headSha` to `headSha`. Null when the host
+     * can't give it whole (commit gone, response capped, no such API).
+     */
+    getPullRequestFilesAtCommit(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; project?: { id: string } };
+        prNumber: number;
+        baseBranch: string;
+        headSha: string;
+    }): Promise<FileChange[] | null>;
     createReviewComment(params: any): Promise<any | null>;
     createCommentInPullRequest(params): Promise<any[] | null>;
     getRepositoryContentFile(params: any): Promise<any | null>;
@@ -183,6 +233,26 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     ): Promise<IntegrationConfigEntity | null>;
     getDefaultBranch(params: any): Promise<string>;
     getPullRequestReviewComment(params: any): Promise<any | null>;
+    /**
+     * Recent review + conversation comments for a whole repository, newest
+     * first, grouped by pull request.
+     *
+     * OPTIONAL: only providers with a repository-level comment listing can
+     * answer this in a bounded number of calls (GitHub can; GitLab, Bitbucket
+     * and Azure DevOps expose comments per merge/pull request only). Callers
+     * must fall back to the per-PR walk when it is absent -- see issue #1686.
+     */
+    getRecentRepositoryComments?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+        filters?: { startDate?: string; endDate?: string };
+        limit?: number;
+    }): Promise<Array<{
+        pr: { pull_number: number };
+        generalComments: any[];
+        reviewComments: any[];
+        files: { filename: string }[];
+    }> | null>;
     createResponseToComment(params: any): Promise<any | null>;
     updateDescriptionInPullRequest(params: any): Promise<any | null>;
     getAuthenticationOAuthToken(params: any): Promise<string>;
@@ -200,6 +270,12 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        /**
+         * Throw a `RepositoryListingError` instead of returning `[]` when the
+         * repository cannot be listed, so a failure is not read as a
+         * repository without the files.
+         */
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]>;
     getCloneParams(params: any): Promise<GitCloneParams>;
     mergePullRequest(params: any): Promise<any>;
@@ -301,6 +377,28 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         repositoryId: string;
     }): Promise<boolean>;
 
+    /**
+     * Read-only check of what the stored credential can do on one selected
+     * repository. Never throws; anything the provider does not report is
+     * `unknown`. Optional so a provider without it degrades to `unknown`.
+     */
+    /**
+     * Whether one user can push to the repository (GitLab: Developer or
+     * above; GitHub: write or admin). Undefined when the provider can't say.
+     */
+    userCanWrite?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name?: string; owner?: string };
+        userId?: string | number;
+        /** GitHub reads the permission by login. */
+        login?: string;
+    }): Promise<boolean | undefined>;
+
+    diagnoseRepositoryAccess?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis>;
+
     formatReviewCommentBody(params: {
         suggestion: any;
         repository: { name: string; language: string };
@@ -342,6 +440,13 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         repository: Partial<Repository>;
         prNumber: number;
     }): Promise<PullRequestReviewState | null>;
+
+    dismissOwnPullRequestApprovals?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number>;
 
     addReactionToPR?(params: {
         organizationAndTeamData: OrganizationAndTeamData;

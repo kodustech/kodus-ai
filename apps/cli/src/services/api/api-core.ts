@@ -209,6 +209,10 @@ function getDefaultApiErrorMessage(
         return `Kodus API could not process the request (${endpointPath}).`;
     }
 
+    if (statusCode === 413) {
+        return `Request payload too large for the Kodus API (${endpointPath}). Reduce the request size or narrow the review scope.`;
+    }
+
     if (statusCode === 429) {
         return 'Rate limit exceeded. Please try again later.';
     }
@@ -349,9 +353,15 @@ export async function request<T>(
     const isJson = contentType.includes('application/json');
 
     if (!response.ok) {
+        // Non-JSON error bodies (gateway/CDN block pages, empty bodies) carry
+        // no usable payload — synthesizing `Request failed with status N`
+        // produced a bare, unactionable message (e.g. "Request failed with
+        // status 403") that also passed verbatim through
+        // normalizeApiErrorMessage because it is ASCII. Passing an empty
+        // payload lets the contextual per-status fallback surface instead.
         const rawError = isJson
             ? await response.json().catch(() => ({ message: 'Request failed' }))
-            : { message: `Request failed with status ${response.status}` };
+            : {};
         const errorData: ApiErrorPayload =
             rawError &&
             typeof rawError === 'object' &&
@@ -495,7 +505,7 @@ export async function requestBinary(
         const isJson = contentType.includes('application/json');
         const rawError = isJson
             ? await response.json().catch(() => ({ message: 'Request failed' }))
-            : { message: `Request failed with status ${response.status}` };
+            : {};
         const errorData: ApiErrorPayload =
             rawError &&
             typeof rawError === 'object' &&

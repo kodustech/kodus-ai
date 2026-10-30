@@ -1,5 +1,6 @@
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { createLogger } from '@libs/core/log/logger';
+import { WORKFLOW_JOB_QUEUE_ARGUMENTS } from '@libs/core/workflow/infrastructure/workflow-queue-arguments';
 import {
     Injectable,
     OnApplicationBootstrap,
@@ -9,63 +10,37 @@ import {
 type QueueBinding = {
     queue: string;
     routingKey: string;
-    queueArgs?: Record<string, any>;
 };
 
+// Queue ARGUMENTS deliberately live in WORKFLOW_JOB_QUEUE_ARGUMENTS (shared
+// with the @RabbitSubscribe consumers) — a local copy here drifted from the
+// consumers' args once already, and asserting a queue with divergent args
+// closes the channel with 406 PRECONDITION_FAILED in an endless
+// reconnect loop that unregisters every consumer.
 const WORKFLOW_JOB_QUEUES: QueueBinding[] = [
     {
         queue: 'workflow.jobs.code_review.queue',
         routingKey: 'workflow.jobs.*.CODE_REVIEW',
-        queueArgs: {
-            'x-queue-type': 'quorum',
-            'x-dead-letter-exchange': 'workflow.exchange.dlx',
-            'x-dead-letter-routing-key': 'workflow.job.failed',
-        },
     },
     {
         queue: 'workflow.jobs.cli_code_review.queue',
         routingKey: 'workflow.jobs.*.CLI_CODE_REVIEW',
-        queueArgs: {
-            'x-queue-type': 'quorum',
-            'x-dead-letter-exchange': 'workflow.exchange.dlx',
-            'x-dead-letter-routing-key': 'workflow.job.failed',
-        },
     },
     {
         queue: 'workflow.jobs.webhook.queue',
         routingKey: 'workflow.jobs.*.WEBHOOK_PROCESSING',
-        queueArgs: {
-            'x-queue-type': 'quorum',
-            'x-dead-letter-exchange': 'workflow.exchange.dlx',
-            'x-dead-letter-routing-key': 'workflow.job.failed',
-        },
     },
     {
         queue: 'workflow.jobs.check_implementation.queue',
         routingKey: 'workflow.jobs.*.CHECK_SUGGESTION_IMPLEMENTATION',
-        queueArgs: {
-            'x-queue-type': 'quorum',
-            'x-dead-letter-exchange': 'workflow.exchange.dlx',
-            'x-dead-letter-routing-key': 'workflow.job.failed',
-        },
     },
     {
         queue: 'workflow.jobs.ast_graph_build.queue',
         routingKey: 'workflow.jobs.*.AST_GRAPH_BUILD',
-        queueArgs: {
-            'x-queue-type': 'quorum',
-            'x-dead-letter-exchange': 'workflow.exchange.dlx',
-            'x-dead-letter-routing-key': 'workflow.job.failed',
-        },
     },
     {
         queue: 'workflow.jobs.ast_graph_incremental.queue',
         routingKey: 'workflow.jobs.*.AST_GRAPH_INCREMENTAL',
-        queueArgs: {
-            'x-queue-type': 'quorum',
-            'x-dead-letter-exchange': 'workflow.exchange.dlx',
-            'x-dead-letter-routing-key': 'workflow.job.failed',
-        },
     },
 ];
 
@@ -257,10 +232,25 @@ export class RabbitMQDLQInitializer implements OnApplicationBootstrap {
 
     private async bindQueuesToDelayedExchange(channel: any): Promise<void> {
         for (const qb of WORKFLOW_JOB_QUEUES) {
-            // Only bind — do NOT assertQueue here because the queues are already
-            // declared by @RabbitSubscribe with specific arguments (x-dead-letter-exchange,
-            // x-queue-type, etc.). Re-declaring with different args closes the channel
-            // with PRECONDITION_FAILED.
+            // Assert the queue with the SAME arguments @RabbitSubscribe uses
+            // (single-sourced in WORKFLOW_JOB_QUEUE_ARGUMENTS) BEFORE
+            // binding. A bind-only call assumes the @RabbitSubscribe consumer
+            // already declared the queue on this channel — but on a fresh
+            // RabbitMQ volume or a reconnect where the consumers haven't
+            // re-declared yet, that race makes bindQueue fail with 404
+            // NOT_FOUND. The binding is then silently lost (and in the
+            // addSetup path the throw aborts consumer registration), so
+            // CODE_REVIEW jobs are published to an unbound/absent queue and
+            // the review never runs. Because the args are shared with the
+            // consumers, assertQueue is idempotent — it creates the queue
+            // when missing and is a no-op when the consumer already made it,
+            // WITHOUT the PRECONDITION_FAILED that a divergent redeclare
+            // would cause. This makes the initializer self-sufficient instead
+            // of ordering-dependent.
+            await channel.assertQueue(qb.queue, {
+                durable: true,
+                arguments: { ...WORKFLOW_JOB_QUEUE_ARGUMENTS[qb.queue] },
+            });
             await channel.bindQueue(
                 qb.queue,
                 'workflow.exchange.delayed',

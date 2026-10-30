@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ApiResponseBaseDto } from './api-response.dto';
 
 export class CodeReviewAutomationLabelDto {
@@ -141,6 +141,21 @@ export class CodeReviewConfigDataDto {
     @ApiProperty()
     pullRequestApprovalActive: boolean;
 
+    @ApiPropertyOptional({ type: String, isArray: true })
+    approvalLabels?: string[];
+
+    @ApiPropertyOptional({ type: String, isArray: true })
+    approvalAuthors?: string[];
+
+    @ApiPropertyOptional()
+    approvalRiskActive?: boolean;
+
+    @ApiPropertyOptional()
+    approvalRiskInstructions?: string;
+
+    @ApiPropertyOptional({ type: String, isArray: true })
+    approvalSensitivePaths?: string[];
+
     @ApiProperty()
     isRequestChangesActive: boolean;
 
@@ -172,10 +187,16 @@ export class CodeReviewConfigDataDto {
     summary: ReviewSummaryDto;
 
     @ApiProperty()
-    ideRulesSyncEnabled: boolean;
+    repoInstructionsEnabled: boolean;
 
     @ApiProperty()
     kodyRulesGeneratorEnabled: boolean;
+
+    @ApiProperty({ required: false })
+    kodyRulesAutoPauseEnabled?: boolean;
+
+    @ApiProperty({ type: [String], required: false })
+    kodyLearningExcludedReviewers?: string[];
 
     @ApiProperty({ type: CustomMessagesDto })
     customMessages: CustomMessagesDto;
@@ -186,6 +207,26 @@ export class CodeReviewConfigDataDto {
         additionalProperties: true,
     })
     v2PromptOverrides: Record<string, unknown>;
+
+    @ApiProperty({
+        type: 'array',
+        required: false,
+        description:
+            'Sibling repositories Kody may consult during review (cross-repo context).',
+        items: {
+            type: 'object',
+            properties: {
+                repository: { type: 'string' },
+                instructions: { type: 'string' },
+                ref: { type: 'string' },
+            },
+        },
+    })
+    linkedRepositories?: Array<{
+        repository: string;
+        instructions?: string;
+        ref?: string;
+    }>;
 }
 
 export class CodeReviewConfigResponseDto extends ApiResponseBaseDto {
@@ -253,34 +294,4 @@ export class CodeReviewParameterDto {
 export class CodeReviewParameterResponseDto extends ApiResponseBaseDto {
     @ApiProperty({ type: CodeReviewParameterDto })
     data: CodeReviewParameterDto;
-}
-
-export class CodeReviewPresetDataDto {
-    @ApiProperty()
-    id: string;
-
-    @ApiProperty()
-    name: string;
-
-    @ApiProperty({
-        type: Object,
-        description: 'Preset configuration map (schema varies by key).',
-        additionalProperties: true,
-    })
-    configs: Record<string, unknown>;
-
-    @ApiProperty()
-    isSelected: boolean;
-
-    @ApiProperty({
-        type: Object,
-        isArray: true,
-        description: 'Repository bindings for this preset.',
-    })
-    repositories: Record<string, unknown>[];
-}
-
-export class CodeReviewPresetResponseDto extends ApiResponseBaseDto {
-    @ApiProperty({ type: CodeReviewPresetDataDto })
-    data: CodeReviewPresetDataDto;
 }

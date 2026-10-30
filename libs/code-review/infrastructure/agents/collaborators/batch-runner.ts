@@ -77,6 +77,10 @@ export async function runChunkedReview(
         const allSuggestions: Partial<CodeSuggestion>[] = [];
         const allDiscardedBySeverity: Partial<CodeSuggestion>[] = [];
         const allDiscardedByVerify: Partial<CodeSuggestion>[] = [];
+        const allDiscardedByVerifyError: Partial<CodeSuggestion>[] = [];
+        // A batch that ended without finishing makes the whole agent's review
+        // incomplete: its files were not fully looked at (#2171).
+        let cutShort: ReviewAgentOutput['finishReason'] | undefined;
         const allWarnings: ReviewWarning[] = [...(parentWarnings ?? [])];
         let totalTurns = 0;
         const batchErrors: Error[] = [];
@@ -133,6 +137,14 @@ export async function runChunkedReview(
                 }
                 if (batchResult.discardedByVerify) {
                     allDiscardedByVerify.push(...batchResult.discardedByVerify);
+                }
+                if (batchResult.discardedByVerifyError) {
+                    allDiscardedByVerifyError.push(
+                        ...batchResult.discardedByVerifyError,
+                    );
+                }
+                if (batchResult.hitHardLimit && !cutShort) {
+                    cutShort = batchResult.finishReason ?? 'max-steps';
                 }
                 if (batchResult.warnings?.length) {
                     allWarnings.push(...batchResult.warnings);
@@ -229,6 +241,9 @@ export async function runChunkedReview(
             suggestions: allSuggestions,
             discardedBySeverity: allDiscardedBySeverity,
             discardedByVerify: allDiscardedByVerify,
+            discardedByVerifyError: allDiscardedByVerifyError,
+            hitHardLimit: cutShort !== undefined,
+            finishReason: cutShort ?? 'stop',
             agentName: identity.name,
             agentCategory,
             agentReplicaIndex: input.agentReplicaIndex,

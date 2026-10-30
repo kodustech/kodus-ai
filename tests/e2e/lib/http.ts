@@ -61,6 +61,44 @@ export function wafBypassHeader(url: string): Record<string, string> {
     return {};
 }
 
+// Session-cookie jar, keyed by the bearer access token.
+//
+// The cloud matrix reaches the API through the web app's `/api/proxy/api`
+// route, which is the SINGLE authority on the upstream `Authorization`
+// header: it derives the Bearer from the NextAuth SESSION COOKIE and DELETES
+// any client-sent Authorization when there's no session (see
+// apps/web/.../api/proxy/api/[...path]/route.ts). A raw `Authorization:
+// Bearer <token>` therefore never reaches the backend through the proxy —
+// requests must carry the NextAuth session cookie instead. The cloud login
+// flow establishes that cookie (see establishWebSession in onboarding.ts) and
+// registers it here against the access token; every request that carries that
+// exact bearer then also gets the cookie, with no per-call-site changes.
+// Keyed by access token so concurrent cloud tenants on the SAME host don't
+// cross-contaminate cookies. Direct (local / self-hosted) targets never
+// register anything, so this is a no-op there.
+const sessionCookieJar = new Map<string, { cookie: string; host: string }>();
+
+export function registerSessionCookie(
+    accessToken: string,
+    cookie: string,
+    host: string,
+): void {
+    sessionCookieJar.set(accessToken, { cookie, host });
+}
+
+function bearerToken(
+    headers: Record<string, string> | undefined,
+): string | undefined {
+    if (!headers) return undefined;
+    for (const [k, v] of Object.entries(headers)) {
+        if (k.toLowerCase() === "authorization") {
+            const m = /^Bearer\s+(.+)$/i.exec(v);
+            return m?.[1];
+        }
+    }
+    return undefined;
+}
+
 // Internal: one attempt of the actual fetch. Extracted so the retry
 // branch below can re-issue without duplicating the (mildly tedious)
 // AbortController + body-encoding + content-type ceremony.
@@ -72,9 +110,36 @@ async function attempt<T>(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+    const headers: Record<string, string> = {
+        ...(opts.headers ?? {}),
+        ...wafBypassHeader(url),
+    };
+    // Attach the NextAuth session cookie for the registered bearer so proxied
+    // cloud calls authenticate (the proxy reads the cookie, not the Bearer).
+    // Host-scoped: the cookie is a credential for the web host that issued it
+    // and must NEVER ride along to a different host (e.g. a github.com /
+    // gitlab.com provider call that happens to reuse a bearer) — same
+    // defensive posture as wafBypassHeader.
+    const token = bearerToken(opts.headers);
+    const entry = token ? sessionCookieJar.get(token) : undefined;
+    if (entry) {
+        let sameHost = false;
+        try {
+            sameHost = new URL(url).host === entry.host;
+        } catch {
+            sameHost = false;
+        }
+        if (sameHost) {
+            const existing = headers.Cookie ?? headers.cookie;
+            headers.Cookie = existing
+                ? `${existing}; ${entry.cookie}`
+                : entry.cookie;
+        }
+    }
+
     const init: RequestInit = {
         method: opts.method ?? "GET",
-        headers: { ...(opts.headers ?? {}), ...wafBypassHeader(url) },
+        headers,
         signal: controller.signal,
         ...(opts.redirect ? { redirect: opts.redirect } : {}),
     };
@@ -164,6 +229,78 @@ const TRANSPORT_RETRIES = 5;
 const RATE_LIMIT_RETRIES = 6;
 const RETRY_AFTER_CAP_MS = 60_000;
 
+// GitHub does NOT use 429 for its rate limits — it answers 403 and puts the
+// reason in the headers. That is why the Retry-After handling above never
+// fired for GitHub: the matrix saw a bare 403, the runner classified it as
+// "quota exhausted", and SKIPPED the whole cell. On the 2026-08-07 release
+// gate that cost five P0 cells; the github×free and github×community-byok
+// columns executed nothing at all.
+//
+// Most of those are SECONDARY limits (content-creation bursts on the
+// abuse-flagged bot accounts), which GitHub asks us to retry within ~60s.
+// Waiting is strictly better than losing the coverage. PRIMARY limits reset
+// on the hour, which is NOT worth waiting for inside a job — those still
+// surface as the rate-limit error and skip.
+//
+// Cap: how long we are willing to sit still for quota. Anything beyond it is
+// reported rather than waited out.
+const GITHUB_QUOTA_WAIT_CAP_MS = Number(
+    process.env.E2E_GITHUB_QUOTA_WAIT_CAP_MS ?? 5 * 60_000,
+);
+
+/**
+ * Wait implied by a GitHub rate-limit response, or null when this is not a
+ * rate-limit response (a plain 403 for missing scopes must NOT be retried —
+ * it would turn a permission bug into a silent 5-minute stall).
+ */
+export function githubRateLimitWaitMs(
+    resp: Pick<HttpResponse<unknown>, "status" | "headers" | "raw">,
+    now: number = Date.now(),
+): number | null {
+    if (resp.status !== 403 && resp.status !== 429) return null;
+
+    const remaining = resp.headers.get("x-ratelimit-remaining");
+    const looksSecondary =
+        /secondary rate limit|abuse detection/i.test(resp.raw ?? "");
+    const looksPrimary = remaining === "0";
+    // A retry-after on a 403 is GitHub explicitly telling us to wait.
+    const retryAfter = resp.headers.get("retry-after");
+
+    if (!looksSecondary && !looksPrimary && !retryAfter) return null;
+
+    if (retryAfter) {
+        const secs = Number(retryAfter);
+        if (Number.isFinite(secs) && secs >= 0) return secs * 1_000;
+    }
+    const reset = resp.headers.get("x-ratelimit-reset");
+    if (reset) {
+        const resetMs = Number(reset) * 1_000;
+        if (Number.isFinite(resetMs)) return Math.max(0, resetMs - now);
+    }
+    // Secondary limit with no guidance: GitHub's documented advice is ~60s.
+    return looksSecondary ? 60_000 : null;
+}
+
+// Which limit was hit and how far over: without these a 429 cannot tell a
+// burst from an exhausted hourly quota, or this run from another consumer of
+// the same account (2026-10-28 gitlab cell, 12 minutes of 429).
+const RATE_LIMIT_HEADERS = [
+    "retry-after",
+    "ratelimit-name",
+    "ratelimit-limit",
+    "ratelimit-observed",
+    "ratelimit-remaining",
+    "ratelimit-resettime",
+];
+
+export function describeRateLimitHeaders(headers: Headers): string {
+    const parts = RATE_LIMIT_HEADERS.flatMap((name) => {
+        const value = headers.get(name);
+        return value ? [`${name}=${value}`] : [];
+    });
+    return parts.length ? ` [${parts.join(" ")}]` : "";
+}
+
 function retryAfterMs(resp: HttpResponse<unknown>, attempt: number): number {
     const header = resp.headers.get("retry-after");
     if (header) {
@@ -192,11 +329,32 @@ export async function http<T = unknown>(
                 const delay = retryAfterMs(resp, rateLimitHits);
                 rateLimitHits++;
                 log.info(
-                    `[http] 429 on ${opts.method ?? "GET"} ${url} (rate-limit ${rateLimitHits}/${RATE_LIMIT_RETRIES}) — waiting ${delay}ms`,
+                    `[http] 429 on ${opts.method ?? "GET"} ${url} (rate-limit ${rateLimitHits}/${RATE_LIMIT_RETRIES}) — waiting ${delay}ms${describeRateLimitHeaders(resp.headers)}`,
                 );
                 await new Promise((r) => setTimeout(r, delay));
                 i--; // this loop turn didn't consume a transport retry
                 continue;
+            }
+            // GitHub's 403-shaped rate limits. Waiting out a short reset buys
+            // back a cell we would otherwise report as unverified; a long one
+            // (primary quota, resets hourly) is handed back to the caller so
+            // it surfaces as the rate-limit error and skips honestly.
+            if (resp.status === 403 && rateLimitHits < RATE_LIMIT_RETRIES) {
+                const wait = githubRateLimitWaitMs(resp);
+                if (wait !== null && wait <= GITHUB_QUOTA_WAIT_CAP_MS) {
+                    rateLimitHits++;
+                    log.info(
+                        `[http] GitHub rate limit on ${opts.method ?? "GET"} ${url} (${rateLimitHits}/${RATE_LIMIT_RETRIES}) — waiting ${Math.round(wait / 1000)}s for the reset instead of dropping the cell`,
+                    );
+                    await new Promise((r) => setTimeout(r, wait));
+                    i--;
+                    continue;
+                }
+                if (wait !== null) {
+                    log.info(
+                        `[http] GitHub rate limit on ${url} needs ${Math.round(wait / 1000)}s — beyond the ${Math.round(GITHUB_QUOTA_WAIT_CAP_MS / 1000)}s cap, surfacing instead of stalling the job`,
+                    );
+                }
             }
             return resp;
         } catch (err) {

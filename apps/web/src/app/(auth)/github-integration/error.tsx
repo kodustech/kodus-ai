@@ -2,7 +2,13 @@
 
 import { useEffect } from "react";
 import { Button } from "@components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from "@components/ui/card";
 import { AlertCircle, RefreshCw } from "lucide-react";
 
 export default function GithubIntegrationError({
@@ -23,21 +29,23 @@ export default function GithubIntegrationError({
                     <div className="bg-danger/10 rounded-full p-2">
                         <AlertCircle className="text-danger size-5" />
                     </div>
-                    <CardTitle>The GitHub integration could not be loaded.</CardTitle>
+                    <CardTitle>
+                        The GitHub integration could not be loaded.
+                    </CardTitle>
                 </CardHeader>
 
                 <CardContent>
                     <p className="text-text-secondary text-sm">
-                        We encountered an error while resolving the installation. This
-                        might be a temporary issue. Try again, or contact support if it
-                        persists.
+                        We encountered an error while resolving the
+                        installation. This might be a temporary issue. Try
+                        again, or contact support if it persists.
                     </p>
                 </CardContent>
 
                 <CardFooter className="justify-end">
                     <Button
                         size="md"
-                        variant="primary"
+                        variant="primary-dark"
                         leftIcon={<RefreshCw />}
                         onClick={reset}>
                         Try again

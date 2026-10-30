@@ -4,6 +4,10 @@ import { pathToApiUrl } from "src/core/utils/helpers";
 import { isSelfHosted } from "src/core/utils/self-hosted";
 
 import type {
+    CreditAutoTopUp,
+    CreditBalance,
+    CreditCheckoutResult,
+    CreditLedgerEntry,
     OrganizationLicense,
     Plan,
     PlanType,
@@ -12,7 +16,7 @@ import type {
     TrialUnlock,
     TrialUnlockSignals,
 } from "./types";
-import { billingFetch } from "./utils";
+import { billingFetch, billingRequest } from "./utils";
 
 type OrganizationMember = {
     id: string | number;
@@ -20,27 +24,69 @@ type OrganizationMember = {
     login?: string | null;
     username?: string | null;
     displayName?: string | null;
+    /** Absent on responses from an API older than the bot-aware member list. */
+    type?: "user" | "bot";
+};
+
+export type OrganizationMemberListResult =
+    | { status: "ok"; members: Array<OrganizationMember> }
+    | { status: "unavailable"; members: [] };
+
+/**
+ * Use as the fallback whenever the member list can't be fetched. Never treat an
+ * `unavailable` result as "the organization is empty" — that is what made a
+ * failed lookup look like everyone had left the git org.
+ */
+export const MEMBERS_UNAVAILABLE: OrganizationMemberListResult = {
+    status: "unavailable",
+    members: [],
+};
+
+/**
+ * Tolerates the pre-status response shape so a rolling deploy where the web app
+ * is ahead of the API does not report every member as removed from the org.
+ */
+const toMemberListResult = (
+    response: unknown,
+): OrganizationMemberListResult => {
+    if (Array.isArray(response)) {
+        return response.length > 0
+            ? { status: "ok", members: response as Array<OrganizationMember> }
+            : { status: "unavailable", members: [] };
+    }
+
+    const result = response as OrganizationMemberListResult | undefined;
+
+    if (result?.status === "ok" && Array.isArray(result.members)) {
+        return { status: "ok", members: result.members };
+    }
+
+    return { status: "unavailable", members: [] };
 };
 
 export const getOrganizationMembers = async (params: { teamId: string }) => {
-    return authorizedFetch<Array<OrganizationMember>>(
+    const response = await authorizedFetch<unknown>(
         pathToApiUrl("/code-management/organization-members"),
         {
             params: { teamId: params.teamId },
         },
     );
+
+    return toMemberListResult(response);
 };
 
 export const refreshOrganizationMembers = async (params: {
     teamId: string;
 }) => {
-    return authorizedFetch<Array<OrganizationMember>>(
+    const response = await authorizedFetch<unknown>(
         pathToApiUrl("/code-management/organization-members/refresh"),
         {
             method: "POST",
             params: { teamId: params.teamId },
         },
     );
+
+    return toMemberListResult(response);
 };
 
 export const startTeamTrial = async (params: {
@@ -104,10 +150,17 @@ export const createManageBillingLink = async (params: { teamId: string }) => {
     );
 };
 
-export const getUsersWithLicense = async (params: { teamId: string }) => {
+export type UserWithLicense = {
+    git_id: string;
+    status?: "active" | "inactive";
+};
+
+export const getUsersWithLicense = async (
+    params: { teamId: string },
+): Promise<Array<UserWithLicense>> => {
     if (isSelfHosted) {
         try {
-            return await authorizedFetch<Array<{ git_id: string; status?: 'active' | 'inactive' }>>(
+            return await authorizedFetch<Array<UserWithLicense>>(
                 pathToApiUrl("/license/users"),
             );
         } catch {
@@ -116,9 +169,39 @@ export const getUsersWithLicense = async (params: { teamId: string }) => {
     }
 
     const organizationId = await getOrganizationId();
-    return billingFetch<Array<{ git_id: string }>>(`users-with-license`, {
+    return billingFetch<Array<UserWithLicense>>(`users-with-license`, {
         params: { organizationId, teamId: params.teamId },
     });
+};
+
+export type PruneSeatsResult = {
+    status: "ok" | "members_unavailable";
+    candidates: string[];
+    revoked: string[];
+    failed: string[];
+};
+
+export const getRemovableSeats = async (params: { teamId: string }) => {
+    return authorizedFetch<PruneSeatsResult>(
+        pathToApiUrl("/license/removable-seats"),
+        { params: { teamId: params.teamId } },
+    );
+};
+
+export const pruneRemovedSeats = async (params: {
+    teamId: string;
+    gitIds?: string[];
+}) => {
+    return authorizedFetch<PruneSeatsResult>(
+        pathToApiUrl("/license/prune-seats"),
+        {
+            method: "POST",
+            body: JSON.stringify({
+                teamId: params.teamId,
+                gitIds: params.gitIds,
+            }),
+        },
+    );
 };
 
 export const getPlans = () =>
@@ -276,5 +359,88 @@ export const migrateToFree = async (params: {
             organizationId: params.organizationId,
             teamId: params.teamId,
         }),
+    });
+};
+
+// ── Prepaid credits ("Kodus as the provider") ────────────────────────────
+
+export const getCreditBalance = async (params: {
+    teamId: string;
+}): Promise<CreditBalance | null> => {
+    const organizationId = await getOrganizationId();
+    return billingFetch<CreditBalance | null>(`credits/balance`, {
+        method: "GET",
+        params: { organizationId, teamId: params.teamId },
+    });
+};
+
+export const listCreditLedger = async (params: {
+    teamId: string;
+    limit?: number;
+    before?: string;
+}): Promise<CreditLedgerEntry[]> => {
+    const organizationId = await getOrganizationId();
+    const page = await billingFetch<{ entries: CreditLedgerEntry[] } | null>(
+        `credits/ledger`,
+        {
+            method: "GET",
+            params: {
+                organizationId,
+                teamId: params.teamId,
+                limit: params.limit ?? 25,
+                ...(params.before ? { before: params.before } : {}),
+            },
+        },
+    );
+    return page?.entries ?? [];
+};
+
+// Mutations go through `billingRequest` (throws with the HTTP status): the UI
+// must tell a 409 "no saved card" apart from a saved setting.
+export const updateCreditAutoTopUp = async (params: {
+    teamId: string;
+    enabled: boolean;
+    thresholdUsd?: number;
+    amountUsd?: number;
+}): Promise<CreditAutoTopUp> => {
+    const organizationId = await getOrganizationId();
+    return billingRequest<CreditAutoTopUp>(`credits/auto-topup`, {
+        method: "POST",
+        body: { organizationId, ...params },
+    });
+};
+
+export const createCreditPaymentMethodCheckout = async (params: {
+    teamId: string;
+}): Promise<{ url: string }> => {
+    const organizationId = await getOrganizationId();
+    return billingRequest<{ url: string }>(`credits/payment-method/checkout`, {
+        method: "POST",
+        body: { organizationId, teamId: params.teamId },
+    });
+};
+
+export const removeCreditPaymentMethod = async (params: {
+    teamId: string;
+}): Promise<CreditAutoTopUp> => {
+    const organizationId = await getOrganizationId();
+    return billingRequest<CreditAutoTopUp>(`credits/payment-method`, {
+        method: "DELETE",
+        params: { organizationId, teamId: params.teamId },
+    });
+};
+
+export const createCreditCheckout = async (params: {
+    teamId: string;
+    creditUsd: number;
+}): Promise<CreditCheckoutResult> => {
+    const organizationId = await getOrganizationId();
+    return billingRequest<CreditCheckoutResult>(`credits/checkout`, {
+        method: "POST",
+        body: {
+            organizationId,
+            teamId: params.teamId,
+            creditUsd: params.creditUsd,
+        },
     });
 };

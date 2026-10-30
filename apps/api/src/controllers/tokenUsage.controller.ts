@@ -13,8 +13,10 @@ import {
     DailyUsageByPrResultContract,
     DailyUsageResultContract,
     TokenUsageQueryContract,
+    UsageByAreaResultContract,
     UsageByDeveloperResultContract,
     UsageByPrResultContract,
+    UsageByReviewResultContract,
     UsageSummaryReportContract,
 } from '@libs/analytics/domain/token-usage/types/tokenUsage.types';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
@@ -54,8 +56,10 @@ import {
     DailyUsageByDeveloperResponseDto,
     DailyUsageByPrResponseDto,
     DailyUsageResponseDto,
+    UsageByAreaResponseDto,
     UsageByDeveloperResponseDto,
     UsageByPrResponseDto,
+    UsageByReviewResponseDto,
     UsageSummaryResponseDto,
 } from '../dtos/token-usage-response.dto';
 
@@ -194,6 +198,46 @@ export class TokenUsageController {
 
         const mapped = this.mapDtoToContract(query, organizationId);
         return await this.tokenUsageService.getDailyUsageByPr(mapped);
+    }
+
+    @Get('tokens/by-review')
+    @ApiOperation({
+        summary: 'Get token usage by review run',
+        description:
+            'Return token usage aggregated per individual review run (correlationId). A PR reviewed more than once yields one row per run.',
+    })
+    @ApiOkResponse({ type: UsageByReviewResponseDto })
+    async getUsageByReview(
+        @Query() query: TokenUsageQueryDto,
+    ): Promise<UsageByReviewResultContract[]> {
+        const organizationId = this.request?.user?.organization?.uuid;
+
+        if (!organizationId) {
+            throw new BadRequestException('organizationId not found in request');
+        }
+
+        const mapped = this.mapDtoToContract(query, organizationId);
+        return await this.tokenUsageService.getUsageByReview(mapped);
+    }
+
+    @Get('tokens/by-area')
+    @ApiOperation({
+        summary: 'Get token usage by process area',
+        description:
+            'Return token usage aggregated by the area of the review process that spent it (review, kody_rules, cross_file, …).',
+    })
+    @ApiOkResponse({ type: UsageByAreaResponseDto })
+    async getUsageByArea(
+        @Query() query: TokenUsageQueryDto,
+    ): Promise<UsageByAreaResultContract[]> {
+        const organizationId = this.request?.user?.organization?.uuid;
+
+        if (!organizationId) {
+            throw new BadRequestException('organizationId not found in request');
+        }
+
+        const mapped = this.mapDtoToContract(query, organizationId);
+        return await this.tokenUsageService.getUsageByArea(mapped);
     }
 
     @Get('tokens/by-developer')
@@ -338,6 +382,7 @@ export class TokenUsageController {
             end,
             timezone: query.timezone || 'UTC',
             developer: query.developer,
+            repositoryId: query.repositoryId,
             models: query.models,
             byok: byokBoolean,
         };

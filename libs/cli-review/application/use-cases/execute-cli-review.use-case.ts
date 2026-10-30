@@ -1,7 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { IdGenerator } from '@libs/core/utils/id-generator';
 import { createLogger } from '@libs/core/log/logger';
-import { LLMModelProvider } from '@kodus/kodus-common/llm';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { normalizeReviewDirective } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import {
@@ -10,6 +9,7 @@ import {
 } from '@libs/cli-review/domain/types/cli-review.types';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { CliInputConverter } from '@libs/cli-review/infrastructure/converters/cli-input.converter';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CliReviewPipelineContext } from '@libs/cli-review/pipeline/context/cli-review-pipeline.context';
 import { CliReviewPipelineStrategy } from '@libs/cli-review/pipeline/strategy/cli-review-pipeline.strategy';
 import { PipelineExecutor } from '@libs/core/infrastructure/pipeline/services/pipeline-executor.service';
@@ -37,12 +37,19 @@ import {
 } from '@libs/automation/domain/teamAutomation/contracts/team-automation.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { deepMerge } from '@libs/common/utils/deep';
+import { resolveKodyLearningSettings } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import { KodyRulesValidationService } from '@libs/ee/kodyRules/service/kody-rules-validation.service';
 import { CodeReviewPipelineObserver } from '@libs/code-review/infrastructure/observers/code-review-pipeline.observer';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
+import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 interface GitContext {
     remote?: string;
@@ -94,6 +101,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
     constructor(
         private readonly converter: CliInputConverter,
         private readonly pipelineStrategy: CliReviewPipelineStrategy,
+        private readonly codeManagementService: CodeManagementService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
         @Inject(AUTOMATION_EXECUTION_SERVICE_TOKEN)
@@ -104,6 +112,8 @@ export class ExecuteCliReviewUseCase implements IUseCase {
         private readonly kodyRulesService: IKodyRulesService,
         private readonly kodyRulesValidationService: KodyRulesValidationService,
         private readonly pipelineObserver: CodeReviewPipelineObserver,
+        @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
     ) {}
 
     async execute(params: ExecuteCliReviewInput): Promise<CliReviewResponse> {
@@ -175,15 +185,18 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 config: codeReviewConfig,
                 repositoryId: resolvedRepoId,
                 repositoryName: resolvedRepoName,
+                instructionsBaseRef,
             } = isTrialMode
                 ? {
-                      config: this.getDefaultConfig(true),
+                      config: this.getDefaultConfig(),
                       repositoryId: 'global',
                       repositoryName: null,
+                      instructionsBaseRef: undefined,
                   }
                 : await this.loadUserConfigWithRules(
                       organizationAndTeamData,
                       gitContext,
+                      changedFiles,
                   );
 
             // 4. Create pipeline context
@@ -193,6 +206,12 @@ export class ExecuteCliReviewUseCase implements IUseCase {
             const effectiveConfig = isFastMode
                 ? { ...codeReviewConfig, reviewMode: 'fast' as const }
                 : codeReviewConfig;
+
+            const resolvedPlatform = await this.resolveCliPlatform(
+                organizationAndTeamData,
+                gitContext,
+                isTrialMode,
+            );
 
             const context: CliReviewPipelineContext = {
                 // CLI-specific fields
@@ -231,7 +250,14 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     title: 'CLI Review',
                     base: {
                         repo: { fullName: 'cli/cli-review' },
-                        ref: 'main',
+                        // With instructions on, an unresolved branch stays
+                        // unknown so the review skips them and logs why,
+                        // instead of reading another branch's files.
+                        ref:
+                            instructionsBaseRef ??
+                            (effectiveConfig?.repoInstructionsEnabled
+                                ? undefined
+                                : 'main'),
                     },
                     repository: {} as any,
                     isDraft: false,
@@ -242,11 +268,10 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                         total_lines_changed: 0,
                     },
                 } as any,
-                dryRun: { enabled: false },
                 teamAutomationId: 'cli-automation',
                 origin: 'cli',
                 action: 'review',
-                platformType: (gitContext?.inferredPlatform || 'github') as any,
+                platformType: resolvedPlatform as any,
 
                 // Git context for cross-file analysis (CLI mode)
                 gitContext: gitContext
@@ -364,16 +389,130 @@ export class ExecuteCliReviewUseCase implements IUseCase {
     }
 
     /**
+     * Whether coding-agent instructions are on for this CLI review, and the
+     * branch to read them from. Resolved as a PR review resolves them: the
+     * stored levels, the repository's kodus-config.yml and the directory the
+     * changed files fall in. A CLI review has no pull request, so the branch
+     * is the repository's default branch, asked of the git host. When the
+     * lookup fails the repository's stored setting stands and `baseRef` is
+     * `undefined` (instructions skipped, with the stage's log).
+     */
+    private async resolveRepoInstructions(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: { id: string; name?: string | null },
+        parameter: CodeReviewParameter,
+        changedFiles: FileChange[],
+    ): Promise<{ enabled: boolean; baseRef?: string }> {
+        const stored = resolveKodyLearningSettings(
+            parameter,
+            repository.id,
+        ).repoInstructionsEnabled;
+        if (!repository.id || repository.id === 'global') {
+            return { enabled: stored };
+        }
+        const metadata = {
+            organizationAndTeamData,
+            repositoryId: repository.id,
+        };
+
+        let defaultBranch: string | undefined;
+        try {
+            defaultBranch =
+                (await this.codeManagementService.getDefaultBranch({
+                    organizationAndTeamData,
+                    repository: { id: repository.id, name: repository.name },
+                })) || undefined;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve the default branch for coding-agent instructions in the CLI review',
+                context: ExecuteCliReviewUseCase.name,
+                error,
+                metadata,
+            });
+        }
+        if (!defaultBranch) return { enabled: stored };
+
+        let enabled = stored;
+        try {
+            const merged =
+                await this.codeBaseConfigService.getMergedCodeReviewConfigs(
+                    organizationAndTeamData,
+                    { id: repository.id, name: repository.name ?? '' },
+                    parameter,
+                    defaultBranch,
+                    changedFiles,
+                );
+            enabled = merged?.repoInstructionsEnabled === true;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    "Could not merge kodus-config.yml and directory settings for coding-agent instructions in the CLI review; using the repository's stored setting",
+                context: ExecuteCliReviewUseCase.name,
+                error,
+                metadata: { ...metadata, stored },
+            });
+        }
+        return { enabled, baseRef: enabled ? defaultBranch : undefined };
+    }
+
+    /**
+     * Platform backing this CLI review.
+     *
+     * The CLI infers it from the remote's hostname, which only works for the
+     * known SaaS hosts — every self-managed instance (GitLab CE/EE, Bitbucket
+     * Server, Forgejo, GHES) arrives undefined. This used to fall back to the
+     * literal 'github', which is doubly wrong: it names a platform the
+     * organization may not use, and it does not even match PlatformType.GITHUB
+     * ('GITHUB'), so the repository lookup it feeds could never hit (#1541).
+     *
+     * Ask the team's connected integration instead — the same fallback the
+     * CodeManagementService methods apply when the caller names no platform.
+     */
+    private async resolveCliPlatform(
+        organizationAndTeamData: OrganizationAndTeamData,
+        gitContext?: GitContext,
+        isTrialMode?: boolean,
+    ): Promise<PlatformType | undefined> {
+        if (gitContext?.inferredPlatform) {
+            return gitContext.inferredPlatform;
+        }
+
+        // Anonymous traffic has no integration row to look up.
+        if (isTrialMode) {
+            return undefined;
+        }
+
+        try {
+            return (
+                (await this.codeManagementService.getTypeIntegration(
+                    organizationAndTeamData,
+                )) ?? undefined
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not resolve the platform for the CLI review',
+                context: ExecuteCliReviewUseCase.name,
+                error,
+                metadata: { organizationAndTeamData },
+            });
+            return undefined;
+        }
+    }
+
+    /**
      * Load user's code review configuration from database,
      * including kody rules resolved for the repository matched by git remote.
      */
     private async loadUserConfigWithRules(
         organizationAndTeamData: OrganizationAndTeamData,
         gitContext?: GitContext,
+        changedFiles: FileChange[] = [],
     ): Promise<{
         config: CodeReviewConfig;
         repositoryId: string;
         repositoryName: string | null;
+        instructionsBaseRef?: string;
     }> {
         try {
             const [params, kodyRulesEntity] = await Promise.all([
@@ -414,9 +553,21 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     paramObj.configValue?.repositories,
                 );
 
+            // Fail-safe: a CLI review is still a review — reconcile the rules'
+            // lock state with the current plan before applying them, in case
+            // the plan-change webhook was missed. Reuses the entity already
+            // loaded above; no `limited` here, so the sync resolves the plan.
+            const syncedEntity =
+                await this.kodyRulesService.syncRulesWithPlanLimit(
+                    organizationAndTeamData,
+                    { entity: kodyRulesEntity },
+                );
+            const effectiveRules =
+                (syncedEntity ?? kodyRulesEntity)?.toObject()?.rules || [];
+
             const { standardRules, memoryRules } =
                 this.kodyRulesValidationService.filterKodyRules(
-                    kodyRulesEntity?.toObject()?.rules || [],
+                    effectiveRules,
                     repositoryId,
                 );
 
@@ -435,6 +586,13 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 });
             }
 
+            const instructions = await this.resolveRepoInstructions(
+                organizationAndTeamData,
+                { id: repositoryId, name: repositoryName },
+                paramObj.configValue,
+                changedFiles,
+            );
+
             return {
                 config: {
                     ...normalizedConfig,
@@ -444,9 +602,13 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                             : 'en-US',
                     kodyRules: standardRules,
                     kodyMemoryRules: memoryRules,
+                    // Resolved as PR reviews resolve it; the rest of this
+                    // config is global only.
+                    repoInstructionsEnabled: instructions.enabled,
                 } as any as CodeReviewConfig,
                 repositoryId,
                 repositoryName,
+                instructionsBaseRef: instructions.baseRef,
             };
         } catch (error) {
             this.logger.warn({
@@ -589,7 +751,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
      * Get default code review configuration
      * For trial mode, force Gemini 2.5 Flash (cheaper and faster)
      */
-    private getDefaultConfig(isTrialMode: boolean = false): CodeReviewConfig {
+    private getDefaultConfig(): CodeReviewConfig {
         const defaults = getDefaultKodusConfigFile();
 
         const config = {
@@ -599,11 +761,10 @@ export class ExecuteCliReviewUseCase implements IUseCase {
             languageResultPrompt: 'en-US',
         } as any as CodeReviewConfig;
 
-        // Force Gemini Flash for trial users (cost optimization)
-        if (isTrialMode) {
-            config.llmProvider = LLMModelProvider.GEMINI_2_5_FLASH;
-        }
-
+        // NOTE: config.llmProvider is never read by the review pipeline (the
+        // model is resolved from the org's BYOK slot, or the managed DeepSeek
+        // default for trial via trialDefaultModel). The old "force Gemini Flash
+        // for trial" assignment here did nothing and was removed.
         return config;
     }
 

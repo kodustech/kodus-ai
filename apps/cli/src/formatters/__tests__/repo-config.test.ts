@@ -52,7 +52,9 @@ describe('repo config formatter', () => {
         expect(output).toContain('Automated review: enabled');
         expect(output).toContain('[repository overrides global]');
         expect(output).toContain('Auto approve: disabled');
-        expect(output).toContain('Minimum severity level: critical [global overrides default]');
+        expect(output).toContain(
+            'Minimum severity level: critical [global overrides default]',
+        );
         expect(output).toContain(
             'Ignored file patterns: **/*.lock, dist/** [repository overrides global]',
         );
@@ -92,9 +94,7 @@ describe('repo config formatter', () => {
         expect(output).toContain('Patterns');
         expect(output).toContain('· Automated review: enabled');
         expect(output).toContain('+ Auto approve: disabled -> enabled');
-        expect(output).toContain(
-            '+ Minimum severity level: critical -> high',
-        );
+        expect(output).toContain('+ Minimum severity level: critical -> high');
         expect(output).toContain(
             '+ Base branch patterns: main -> main, release/*',
         );

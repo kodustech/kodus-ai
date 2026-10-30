@@ -1,5 +1,9 @@
 import { PullRequestsRepository } from './pullRequests.repository';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import {
+    MAX_PATCH_BYTES_PER_FILE,
+    TRUNCATED_DIFF_MARKER,
+} from '@libs/platformData/domain/pullRequests/utils/diff-budget';
 
 /**
  * Regression coverage for the cross-organization data leak that allowed
@@ -37,6 +41,306 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         repo = new PullRequestsRepository(model as any);
     });
 
+    describe('setApprovalReasonDeliveryFailure', () => {
+        it('writes only the targeted PR and clears only an existing notice', async () => {
+            model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 1 });
+            const failure = {
+                decision: 'hold' as const,
+                reason: 'A person must approve.',
+                occurredAt: '2026-10-24T00:00:00.000Z',
+            };
+
+            expect(
+                await repo.setApprovalReasonDeliveryFailure(
+                    'org-A',
+                    'repo-alpha',
+                    7,
+                    failure,
+                ),
+            ).toBe(true);
+            expect(model.updateOne).toHaveBeenNthCalledWith(
+                1,
+                {
+                    organizationId: 'org-A',
+                    'repository.id': 'repo-alpha',
+                    number: 7,
+                },
+                { $set: { approvalReasonDeliveryFailure: failure } },
+            );
+
+            await repo.setApprovalReasonDeliveryFailure(
+                'org-A',
+                'repo-alpha',
+                7,
+                null,
+            );
+            expect(model.updateOne).toHaveBeenNthCalledWith(
+                2,
+                {
+                    organizationId: 'org-A',
+                    'repository.id': 'repo-alpha',
+                    number: 7,
+                    approvalReasonDeliveryFailure: { $ne: null },
+                },
+                { $set: { approvalReasonDeliveryFailure: null } },
+            );
+        });
+
+        it('reports a missing PR when a failed delivery cannot be recorded', async () => {
+            model.updateOne = jest.fn().mockResolvedValue({ matchedCount: 0 });
+
+            expect(
+                await repo.setApprovalReasonDeliveryFailure(
+                    'org-A',
+                    'repo-alpha',
+                    7,
+                    {
+                        decision: 'hold',
+                        reason: 'A person must approve.',
+                        occurredAt: '2026-10-24T00:00:00.000Z',
+                    },
+                ),
+            ).toBe(false);
+        });
+    });
+
+    describe('appendPrLevelSuggestions (atomic append)', () => {
+        it('pushes onto the resolved document and touches nothing else', async () => {
+            // The document the identity lookup resolved is the target, and the
+            // append happens in one statement: rebuilding the array from a
+            // snapshot is what dropped a concurrent writer's append (#2076
+            // review).
+            findOneAndUpdate.mockResolvedValue(null);
+            const entity = {
+                uuid: 'pr-uuid',
+                organizationId: 'org-A',
+            } as any;
+
+            await repo.appendPrLevelSuggestions(entity, [
+                { id: 'new' } as any,
+            ]);
+
+            expect(findOneAndUpdate).toHaveBeenCalledTimes(1);
+            const [filter, update, options] = findOneAndUpdate.mock.calls[0];
+            expect(filter).toEqual({
+                _id: 'pr-uuid',
+                organizationId: 'org-A',
+            });
+            expect(update).toEqual({
+                $push: { prLevelSuggestions: { $each: [{ id: 'new' }] } },
+                $set: { updatedAt: expect.any(String) },
+            });
+            expect(options).toEqual({ new: true });
+        });
+    });
+
+    describe('findNumbersByRepositoryId (token-usage repo filter)', () => {
+        const mockFind = (docs: Array<{ number: number }>) => {
+            const findExec = jest.fn().mockResolvedValue(docs);
+            const lean = jest.fn().mockReturnValue({ exec: findExec });
+            const limit = jest.fn().mockReturnValue({ lean });
+            const sort = jest.fn().mockReturnValue({ limit });
+            model.find = jest.fn().mockReturnValue({ sort });
+            return { find: model.find as jest.Mock, sort, limit };
+        };
+
+        it('filters by org + repository.id, projects only the number, and caps the result', async () => {
+            const { find, sort, limit } = mockFind([
+                { number: 7 },
+                { number: 9 },
+            ]);
+
+            const numbers = await repo.findNumbersByRepositoryId(
+                'org-A',
+                'repo-alpha',
+            );
+
+            expect(numbers).toEqual([7, 9]);
+            const [filter, projection] = find.mock.calls[0];
+            expect(filter).toEqual({
+                'organizationId': 'org-A',
+                'repository.id': 'repo-alpha',
+            });
+            expect(projection).toEqual({ number: 1 });
+            // Newest first, bounded so a huge repo can't blow up the $in.
+            expect(sort).toHaveBeenCalledWith({ createdAt: -1 });
+            expect(limit).toHaveBeenCalledWith(10_000);
+        });
+
+        it('bounds by createdAt when an `until` date is given', async () => {
+            const { find } = mockFind([]);
+            const until = new Date('2026-06-30');
+
+            await repo.findNumbersByRepositoryId('org-A', 'r', until);
+
+            expect(find.mock.calls[0][0]).toEqual({
+                'organizationId': 'org-A',
+                'repository.id': 'r',
+                'createdAt': { $lte: until },
+            });
+        });
+    });
+
+    describe('findPRNumbersByTitleAndOrganization (PR list title search)', () => {
+        it('matches the typed title as literal text, case-insensitive', async () => {
+            const findExec = jest.fn().mockResolvedValue([]);
+            const maxTimeMS = jest.fn().mockReturnValue({ exec: findExec });
+            const lean = jest.fn().mockReturnValue({ maxTimeMS });
+            model.find = jest.fn().mockReturnValue({ lean });
+
+            await repo.findPRNumbersByTitleAndOrganization(
+                'fix(api) .*',
+                'org-A',
+                ['r1'],
+            );
+
+            const [filter] = model.find.mock.calls[0];
+            expect(filter).toEqual({
+                'organizationId': 'org-A',
+                'title': { $regex: 'fix\\(api\\) \\.\\*', $options: 'i' },
+                'repository.id': { $in: ['r1'] },
+            });
+            // The escaped pattern is valid and matches only the literal text.
+            const rx = new RegExp(filter.title.$regex, 'i');
+            expect(rx.test('FIX(API) .* in billing')).toBe(true);
+            expect(rx.test('fix api anything')).toBe(false);
+        });
+    });
+
+    describe('findManyByNumbersAndRepositoryIds (PR list hydration)', () => {
+        const mockFind = (docs: any[]) => {
+            const findExec = jest.fn().mockResolvedValue(docs);
+            const maxTimeMS = jest.fn().mockReturnValue({ exec: findExec });
+            const lean = jest.fn().mockReturnValue({ maxTimeMS });
+            model.find = jest.fn().mockReturnValue({ lean });
+            return { find: model.find as jest.Mock, maxTimeMS };
+        };
+
+        it('queries with bounded $in on both keys instead of an $or per pair', async () => {
+            const { find, maxTimeMS } = mockFind([]);
+
+            await repo.findManyByNumbersAndRepositoryIds(
+                [
+                    { number: 1, repositoryId: 'r1' },
+                    { number: 2, repositoryId: 'r1' },
+                    { number: 1, repositoryId: 'r2' },
+                ],
+                'org-A',
+            );
+
+            const [filter, projection] = find.mock.calls[0];
+            expect(filter).toEqual({
+                'organizationId': 'org-A',
+                'number': { $in: [1, 2] },
+                'repository.id': { $in: ['r1', 'r2'] },
+            });
+            expect(filter.$or).toBeUndefined();
+            expect(projection).toEqual({
+                files: 0,
+                commits: 0,
+                prLevelSuggestions: 0,
+            });
+            expect(maxTimeMS).toHaveBeenCalledWith(50_000);
+        });
+
+        it('returns only the exact requested pairs, not the $in cross-product', async () => {
+            mockFind([
+                { number: 1, repository: { id: 'r1' } },
+                { number: 2, repository: { id: 'r1' } },
+                { number: 2, repository: { id: 'r2' } }, // cross-product, not requested
+            ]);
+
+            const result = await repo.findManyByNumbersAndRepositoryIds(
+                [
+                    { number: 1, repositoryId: 'r1' },
+                    { number: 2, repositoryId: 'r1' },
+                    { number: 1, repositoryId: 'r2' },
+                ],
+                'org-A',
+            );
+
+            expect(
+                result.map((pr: any) => `${pr.repository.id}:${pr.number}`),
+            ).toEqual(['r1:1', 'r1:2']);
+        });
+
+        it('skips the query for an empty criteria list', async () => {
+            const { find } = mockFind([]);
+            expect(
+                await repo.findManyByNumbersAndRepositoryIds([], 'org-A'),
+            ).toEqual([]);
+            expect(find).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('findPullRequestsWithDeliveredSuggestions', () => {
+        it('projects the read fields before unwinding files/suggestions', async () => {
+            const option = jest.fn().mockReturnValue({ exec });
+            aggregate.mockReturnValue({ option });
+            exec.mockResolvedValue([]);
+
+            await repo.findPullRequestsWithDeliveredSuggestions(
+                'org-A',
+                [1, 2],
+                'open',
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            expect(Object.keys(pipeline[0])).toEqual(['$match']);
+            expect(pipeline[1].$project).toEqual({
+                'number': 1,
+                'organizationId': 1,
+                'status': 1,
+                'provider': 1,
+                'repository.id': 1,
+                'repository.name': 1,
+                'files.suggestions.id': 1,
+                'files.suggestions.deliveryStatus': 1,
+                'files.suggestions.comment': 1,
+            });
+            expect(pipeline[2]).toEqual({ $unwind: '$files' });
+            expect(option).toHaveBeenCalledWith({ maxTimeMS: 50_000 });
+        });
+    });
+
+    describe('findPullRequestsWithoutDeliveredSuggestionsForApproval', () => {
+        it('queries exact repository/PR pairs in bounded pages without loading file arrays', async () => {
+            const findExec = jest.fn().mockResolvedValue([]);
+            const maxTimeMS = jest.fn().mockReturnValue({ exec: findExec });
+            const lean = jest.fn().mockReturnValue({ maxTimeMS });
+            const limit = jest.fn().mockReturnValue({ lean });
+            const sort = jest.fn().mockReturnValue({ limit });
+            model.find = jest.fn().mockReturnValue({ sort });
+            const refs = Array.from({ length: 101 }, (_, index) => ({
+                repositoryId: index % 2 ? 'repo-b' : 'repo-a',
+                pullRequestNumber: index + 1,
+            }));
+
+            await repo.findPullRequestsWithoutDeliveredSuggestionsForApproval(
+                'org-A',
+                refs,
+                'open',
+            );
+
+            expect(model.find).toHaveBeenCalledTimes(2);
+            const [filter, projection] = model.find.mock.calls[0];
+            expect(filter).toMatchObject({
+                organizationId: 'org-A',
+                status: 'open',
+            });
+            expect(filter.$or).toHaveLength(100);
+            expect(filter.$or[0]).toEqual({
+                'repository.id': 'repo-a',
+                'number': 1,
+            });
+            expect(filter.$nor).toHaveLength(1);
+            expect(projection.files).toBeUndefined();
+            expect(sort).toHaveBeenCalledWith({ _id: 1 });
+            expect(limit).toHaveBeenNthCalledWith(1, 100);
+            expect(limit).toHaveBeenNthCalledWith(2, 1);
+        });
+    });
+
     describe('addFileToPullRequest', () => {
         it('includes organizationId in the Mongo filter', async () => {
             await repo.addFileToPullRequest(
@@ -68,12 +372,10 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         });
 
         it('uses the organizationId from the argument, not a hardcoded value', async () => {
-            await repo.addFileToPullRequest(
-                42,
-                'cal.com',
-                {} as any,
-                { organizationId: 'org-B', teamId: 'team-1' },
-            );
+            await repo.addFileToPullRequest(42, 'cal.com', {} as any, {
+                organizationId: 'org-B',
+                teamId: 'team-1',
+            });
 
             const filter = findOneAndUpdate.mock.calls[0][0];
             expect(filter.organizationId).toBe('org-B');
@@ -99,6 +401,28 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 'files.id': 'file-id-1',
             });
         });
+
+        it('uses the UUID suggestion generator when no id is provided', async () => {
+            const generatedId = '123e4567-e89b-12d3-a456-426614174000';
+            const newSuggestionId = jest
+                .spyOn(repo, 'newSuggestionId')
+                .mockReturnValue(generatedId);
+
+            await repo.addSuggestionToFile(
+                'file-id-1',
+                { suggestionContent: 'x' } as any,
+                42,
+                'cal.com',
+                ORG,
+            );
+
+            const update = findOneAndUpdate.mock.calls[0][1];
+            expect(newSuggestionId).toHaveBeenCalledTimes(1);
+            expect(update.$push['files.$.suggestions']).toMatchObject({
+                id: generatedId,
+                suggestionContent: 'x',
+            });
+        });
     });
 
     describe('updateFile', () => {
@@ -115,6 +439,61 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 'files.id': 'file-id-1',
                 'organizationId': 'org-A',
             });
+        });
+    });
+
+    describe('translateFileBulkOp (updateFile) — storage-level patch clamp', () => {
+        function translate(prUuid: string, data: Record<string, unknown>) {
+            return (repo as any).translateFileBulkOp(prUuid, 'org-A', {
+                kind: 'updateFile',
+                fileId: 'file-1',
+                data,
+            }) as {
+                updateOne: {
+                    filter: Record<string, unknown>;
+                    update: { $set: Record<string, unknown> };
+                };
+            };
+        }
+
+        it('escalates patchTruncated when the storage clamp cuts the patch (a later `false` in the same payload cannot clobber it)', async () => {
+            // Overwhelm MAX_PATCH_BYTES_PER_FILE so the storage-level clamp
+            // truncates the patch and must mark it truncated. The payload
+            // carries an explicit `patchTruncated: false` AFTER `patch` in
+            // insertion order; pre-fix the generic `$set[files.$.patchTruncated]`
+            // line would overwrite the escalation and the sub-document would
+            // claim a capped diff is complete (#1841).
+            const huge = 'a'.repeat(MAX_PATCH_BYTES_PER_FILE + 10);
+            const doc = translate('pr-uuid-clamp', {
+                status: 'modified',
+                patch: huge,
+                patchTruncated: false,
+            });
+
+            const flat = Object.keys(doc.updateOne.update.$set);
+            expect(flat).toContain('files.$.patchTruncated');
+            expect(doc.updateOne.update.$set['files.$.patchTruncated']).toBe(
+                true,
+            );
+            expect(doc.updateOne.update.$set['files.$.patch']).toContain(
+                TRUNCATED_DIFF_MARKER,
+            );
+        });
+
+        it('passes through the payload patchTruncated when the storage clamp does not cut the patch', async () => {
+            const small = 'a'.repeat(100);
+            const doc = translate('pr-uuid-noclamp', {
+                status: 'modified',
+                patch: small,
+                patchTruncated: false,
+            });
+
+            // No clamp fired, so the payload's explicit `false` flows through
+            // unchanged — the flag reflects the actual diff completeness.
+            expect(doc.updateOne.update.$set['files.$.patchTruncated']).toBe(
+                false,
+            );
+            expect(doc.updateOne.update.$set['files.$.patch']).toBe(small);
         });
     });
 
@@ -158,6 +537,280 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         });
     });
 
+    describe('findSuggestionsByPRAndFilenames (issue #1313 — PrDecisionStore read)', () => {
+        it('includes organizationId AND repository.fullName in the FIRST $match (multi-tenant + cross-repo scope)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findSuggestionsByPRAndFilenames(
+                42,
+                'kodustech/kodus-ai',
+                ['src/foo.ts'],
+                'org-A',
+                'sent' as any,
+            );
+
+            expect(aggregate).toHaveBeenCalledTimes(1);
+            const pipeline = aggregate.mock.calls[0][0];
+            const firstMatch = pipeline[0]?.$match;
+            expect(firstMatch).toMatchObject({
+                'number': 42,
+                'repository.fullName': 'kodustech/kodus-ai',
+                'organizationId': 'org-A',
+            });
+        });
+
+        it('filters files by the given filenames via $in (never returns suggestions from unrelated files)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findSuggestionsByPRAndFilenames(
+                42,
+                'kodustech/kodus-ai',
+                ['src/a.ts', 'src/b.ts'],
+                'org-A',
+                'sent' as any,
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            const fileMatch = pipeline.find(
+                (stage: any) => stage.$match?.['files.path'],
+            )?.$match;
+            expect(fileMatch).toEqual({
+                'files.path': { $in: ['src/a.ts', 'src/b.ts'] },
+            });
+        });
+
+        it('scopes to the given deliveryStatus (never returns unsent/failed suggestions)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findSuggestionsByPRAndFilenames(
+                42,
+                'kodustech/kodus-ai',
+                ['src/a.ts'],
+                'org-A',
+                'sent' as any,
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            const capStage = pipeline.find(
+                (stage: any) => stage.$addFields?.['files.suggestions'],
+            )?.$addFields['files.suggestions'];
+            const filterCond = capStage.$slice[0].$sortArray.input.$filter.cond;
+            expect(filterCond).toEqual({
+                $eq: ['$$suggestion.deliveryStatus', 'sent'],
+            });
+        });
+
+        // Perf hardening (Kody PR #1895 review): files.suggestions accumulates
+        // one entry per review round, so this caps per file BEFORE $unwind
+        // instead of fetching a long-lived PR's whole suggestion history and
+        // discarding most of it in JS (BuildPreviousReviewDecisionsUseCase's
+        // own cap). Filter-then-sort-then-slice, in that order, so an
+        // unrelated never-sent suggestion can never push a real SENT one out
+        // of the kept window.
+        it('caps files.suggestions to the most recent 5 PER FILE before unwinding, filtering deliveryStatus before the sort/slice', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findSuggestionsByPRAndFilenames(
+                42,
+                'kodustech/kodus-ai',
+                ['src/a.ts'],
+                'org-A',
+                'sent' as any,
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            const addFieldsIndex = pipeline.findIndex(
+                (stage: any) => stage.$addFields?.['files.suggestions'],
+            );
+            const unwindSuggestionsIndex = pipeline.findIndex(
+                (stage: any) => stage.$unwind === '$files.suggestions',
+            );
+            expect(addFieldsIndex).toBeGreaterThanOrEqual(0);
+            expect(addFieldsIndex).toBeLessThan(unwindSuggestionsIndex);
+
+            const capStage =
+                pipeline[addFieldsIndex].$addFields['files.suggestions'];
+            expect(capStage.$slice[1]).toBe(5);
+            expect(capStage.$slice[0].$sortArray.sortBy).toEqual({
+                createdAt: -1,
+            });
+            // Filter (deliveryStatus) must be the innermost step — applied
+            // BEFORE sortArray/slice, not after. $ifNull guards a file
+            // pushed without a `suggestions` key at all (addFileToPullRequest
+            // $push'es whatever IFile it's given).
+            expect(capStage.$slice[0].$sortArray.input.$filter.input).toEqual({
+                $ifNull: ['$files.suggestions', []],
+            });
+        });
+
+        it('short-circuits without querying Mongo when filenames is empty', async () => {
+            const result = await repo.findSuggestionsByPRAndFilenames(
+                42,
+                'kodustech/kodus-ai',
+                [],
+                'org-A',
+                'sent' as any,
+            );
+
+            expect(result).toEqual([]);
+            expect(aggregate).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('findSuggestionsOnPR (PrDecisionStore read, whole PR)', () => {
+        const run = async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+            await repo.findSuggestionsOnPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+                40,
+            );
+            return aggregate.mock.calls[0][0];
+        };
+
+        it('includes organizationId AND repository.fullName in the FIRST $match (multi-tenant + cross-repo scope)', async () => {
+            const pipeline = await run();
+            expect(pipeline[0]?.$match).toEqual({
+                'number': 42,
+                'repository.fullName': 'kodustech/kodus-ai',
+                'organizationId': 'org-A',
+            });
+        });
+
+        it('reads every file of the PR (no file filter), only the given deliveryStatus', async () => {
+            const pipeline = await run();
+            expect(
+                pipeline.some((stage: any) => stage.$match?.['files.path']),
+            ).toBe(false);
+            expect(pipeline).toContainEqual({
+                $match: { 'files.suggestions.deliveryStatus': 'sent' },
+            });
+        });
+
+        it('keeps the most recent `limit` — sorted newest first, then limited, inside the query', async () => {
+            const pipeline = await run();
+            const sort = pipeline.findIndex((stage: any) => stage.$sort);
+            const limit = pipeline.findIndex((stage: any) => stage.$limit);
+            expect(pipeline[sort]).toEqual({ $sort: { createdAt: -1 } });
+            expect(pipeline[limit]).toEqual({ $limit: 40 });
+            expect(limit).toBe(sort + 1);
+        });
+    });
+
+    describe('findPrLevelSuggestionsByPR (issue #1313 Fase 1b — PR-level PrDecisionStore read)', () => {
+        it('keeps the most recent `limit` PR-level suggestions when given one (default 5)', async () => {
+            (exec as jest.Mock).mockResolvedValue([]);
+            await repo.findPrLevelSuggestionsByPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+                40,
+            );
+            await repo.findPrLevelSuggestionsByPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+            );
+            const sliceOf = (call: number) =>
+                JSON.stringify(aggregate.mock.calls[call][0]).match(
+                    /"\$slice":\[.*?,(\d+)\]/,
+                )?.[1];
+            expect(sliceOf(0)).toBe('40');
+            expect(sliceOf(1)).toBe('5');
+        });
+
+        it('includes organizationId AND repository.fullName in the FIRST $match (multi-tenant + cross-repo scope)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findPrLevelSuggestionsByPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+            );
+
+            expect(aggregate).toHaveBeenCalledTimes(1);
+            const pipeline = aggregate.mock.calls[0][0];
+            const firstMatch = pipeline[0]?.$match;
+            expect(firstMatch).toMatchObject({
+                'number': 42,
+                'repository.fullName': 'kodustech/kodus-ai',
+                'organizationId': 'org-A',
+            });
+        });
+
+        it('unwinds prLevelSuggestions (NOT files.suggestions — a separate top-level array)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findPrLevelSuggestionsByPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            expect(
+                pipeline.some((s: any) => s.$unwind === '$prLevelSuggestions'),
+            ).toBe(true);
+            expect(pipeline.some((s: any) => s.$unwind === '$files')).toBe(
+                false,
+            );
+        });
+
+        it('scopes to the given deliveryStatus (never returns unsent/failed suggestions)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findPrLevelSuggestionsByPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            const capStage = pipeline.find(
+                (stage: any) => stage.$addFields?.prLevelSuggestions,
+            )?.$addFields.prLevelSuggestions;
+            const filterCond = capStage.$slice[0].$sortArray.input.$filter.cond;
+            expect(filterCond).toEqual({
+                $eq: ['$$suggestion.deliveryStatus', 'sent'],
+            });
+        });
+
+        it('caps prLevelSuggestions to the most recent 5 before unwinding (same growth risk as files.suggestions)', async () => {
+            (exec as jest.Mock).mockResolvedValueOnce([]);
+
+            await repo.findPrLevelSuggestionsByPR(
+                42,
+                'kodustech/kodus-ai',
+                'org-A',
+                'sent' as any,
+            );
+
+            const pipeline = aggregate.mock.calls[0][0];
+            const addFieldsIndex = pipeline.findIndex(
+                (stage: any) => stage.$addFields?.prLevelSuggestions,
+            );
+            const unwindIndex = pipeline.findIndex(
+                (stage: any) => stage.$unwind === '$prLevelSuggestions',
+            );
+            expect(addFieldsIndex).toBeGreaterThanOrEqual(0);
+            expect(addFieldsIndex).toBeLessThan(unwindIndex);
+
+            const capStage =
+                pipeline[addFieldsIndex].$addFields.prLevelSuggestions;
+            expect(capStage.$slice[1]).toBe(5);
+            expect(capStage.$slice[0].$sortArray.sortBy).toEqual({
+                createdAt: -1,
+            });
+        });
+    });
+
     describe('regression — distinct orgs, same PR# + repo name', () => {
         // Simulates what happened in production: 8 different orgs running
         // benchmarks against the same forked repos (cal.com, sentry, ...).
@@ -184,6 +837,29 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
             );
             expect(findOneAndUpdate.mock.calls[1][0].organizationId).toBe(
                 'org-B',
+            );
+        });
+    });
+
+    describe('sub-document id formats (#1846)', () => {
+        let model: any;
+        let repo: PullRequestsRepository;
+
+        beforeEach(() => {
+            model = {
+                findOneAndUpdate: jest.fn().mockReturnValue({ exec }),
+                aggregate: jest.fn().mockReturnValue({ exec }),
+            };
+            repo = new PullRequestsRepository(model as any);
+        });
+
+        it('keeps file ids ObjectId-shaped', () => {
+            expect(repo.newSubDocumentId()).toMatch(/^[0-9a-fA-F]{24}$/);
+        });
+
+        it('generates UUID-shaped suggestion ids the fine-tuning ingest accepts', () => {
+            expect(repo.newSuggestionId()).toMatch(
+                /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
             );
         });
     });

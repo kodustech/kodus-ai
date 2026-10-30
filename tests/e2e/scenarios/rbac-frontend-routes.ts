@@ -151,7 +151,7 @@ export const rbacFrontendRoutes: Scenario = {
     priority: "P0",
     appliesTo: {
         target: ["cloud", "self-hosted"],
-        provider: ["github"],
+        provider: ["github", "github-app"],
         license: ["trial", "paid", "license-paid"],
     },
     timeoutSec: 600,

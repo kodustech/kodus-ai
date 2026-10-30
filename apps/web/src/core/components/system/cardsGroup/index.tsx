@@ -24,7 +24,7 @@ import {
 } from "@services/integrations/fetch";
 import { INTEGRATION_CONFIG } from "@services/integrations/integrationConfig";
 import { getTeamsWithIntegrations } from "@services/teams/fetch";
-import { deleteCookie, setCookie } from "cookies-next";
+import { deleteCookie, setCookie } from "cookies-next/client";
 import integrationFactory from "src/core/integrations/integrationFactory";
 import { useAllTeams } from "src/core/providers/all-teams-context";
 import { AuthMode, IntegrationCategory, PlatformType } from "src/core/types";

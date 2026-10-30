@@ -7,6 +7,7 @@ import {
     IWorkflowJobRepository,
 } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
 import { IJobProcessorService } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
+import { IWorkflowJob } from '@libs/core/workflow/domain/interfaces/workflow-job.interface';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { RunCodeReviewAutomationUseCase } from '@libs/ee/automation/runCodeReview.use-case';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
@@ -24,6 +25,9 @@ import {
 } from '@libs/core/workflow/domain/contracts/rate-limit-gate.service.contract';
 import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
+import { isPrReviewInProgressError } from '@libs/code-review/domain/errors/pr-review-in-progress.error';
+import { CodeReviewHandlerService } from '@libs/code-review/infrastructure/adapters/services/codeReviewHandlerService.service';
+import { PrReviewDeferralService } from './pr-review-deferral.service';
 
 @Injectable()
 export class CodeReviewJobProcessorService implements IJobProcessorService {
@@ -38,6 +42,8 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
         private readonly prAuthorRecipientResolver: PrAuthorRecipientResolver,
         @Inject(RATE_LIMIT_GATE_SERVICE_TOKEN)
         private readonly rateLimitGate: IRateLimitGateService,
+        private readonly prReviewDeferralService: PrReviewDeferralService,
+        private readonly codeReviewHandlerService: CodeReviewHandlerService,
         @Optional()
         private readonly metricsCollector?: MetricsCollectorService,
     ) {}
@@ -51,7 +57,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
 
         const correlationId = job.correlationId;
 
-        this.logger.log({
+        this.logger.debug({
             message: `Processing Code Review Job ${jobId}`,
             context: CodeReviewJobProcessorService.name,
             metadata: { jobId, correlationId },
@@ -101,6 +107,97 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
 
             if (admission.kind === 'deferred') {
                 await this.byokConcurrencyGateService.deferJob(job, admission);
+                return;
+            }
+
+            // The gate gave up: no BYOK slot ever came free. Record it as a
+            // failure and tell the author. Returning quietly here would be
+            // indistinguishable from a review that ran and found nothing,
+            // which is exactly how four organizations went a full day
+            // without reviews and without an error.
+            if (admission.kind === 'exhausted') {
+                const error = new Error(
+                    `No BYOK concurrency slot became available after ${admission.deferredCount} attempts. ` +
+                        `Reviews for this model are queued behind a slot that is not being released.`,
+                );
+                error.name = 'ByokConcurrencySlotExhausted';
+
+                // Notify ONCE, keyed on the NOTIFICATION -- not on the job
+                // status.
+                //
+                // `process()` does not check status on entry, so a redelivery
+                // (a broker retry, or the stale-job reaper picking the row back
+                // up) runs this branch again and `notifyReviewFailed` reaches
+                // the pull request author a second time.
+                //
+                // Gating on `status === FAILED` looked like the fix and was a
+                // trap: `handleFailure` writes that status whether or not the
+                // author was ever told. A crash between the two, or a notify
+                // that failed inside its own catch, would leave the job FAILED
+                // and every later attempt skipping the notice -- recreating the
+                // "review failed and nobody was told" defect this branch exists
+                // to prevent. A marker written beside the notification cannot
+                // be set by the failure path.
+                //
+                // `job` is the row this method loaded at entry, so its metadata
+                // is current; no second read is needed.
+                const previousMetadata = (job.metadata ?? {}) as Record<
+                    string,
+                    any
+                >;
+                const alreadyNotified = Boolean(
+                    previousMetadata.byokSlotExhausted?.notifiedAt,
+                );
+
+                await this.handleFailure(jobId, error);
+
+                if (alreadyNotified) {
+                    this.logger.debug({
+                        message:
+                            'BYOK slot exhausted on a job whose author was already told — not notifying again',
+                        context: CodeReviewJobProcessorService.name,
+                        metadata: { jobId, correlationId },
+                    });
+                    return;
+                }
+
+                await this.notifyReviewFailed(job, error, correlationId);
+
+                await this.jobRepository
+                    .update(jobId, {
+                        metadata: {
+                            ...previousMetadata,
+                            byokSlotExhausted: {
+                                notifiedAt: new Date().toISOString(),
+                                deferredCount: admission.deferredCount,
+                            },
+                        },
+                    })
+                    .catch((markError) => {
+                        // Failing to record it means a redelivery may notify
+                        // again. That is the direction to fail in -- a repeat
+                        // is a nuisance, silence is the original bug -- but it
+                        // is logged rather than swallowed so a persistent
+                        // failure is not mistaken for mysterious duplicates.
+                        this.logger.warn({
+                            message:
+                                'Could not record that the exhausted-slot notice was sent — a redelivery may repeat it',
+                            context: CodeReviewJobProcessorService.name,
+                            error:
+                                markError instanceof Error
+                                    ? markError
+                                    : undefined,
+                            metadata: {
+                                jobId,
+                                correlationId,
+                                // The tenant this failure belongs to. Without
+                                // it the line lands in the same unattributable
+                                // bucket this branch already fixed elsewhere.
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                            },
+                        });
+                    });
                 return;
             }
 
@@ -155,6 +252,25 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // typed error, not the raw octokit shape.
             const error = classifyGitHubError(rawError) as Error;
 
+            // A user asked for this review and another run held the PR.
+            // Dropping it here is what made the request vanish (#1700), so
+            // wait for the holder and try again; only once the retry window
+            // is spent do we give up, and then we say so on the PR.
+            if (isPrReviewInProgressError(error)) {
+                const deferral = this.prReviewDeferralService.next(
+                    job,
+                    error.holderVisibleUntil,
+                );
+
+                if (deferral) {
+                    await this.prReviewDeferralService.defer(job, deferral);
+                    return;
+                }
+
+                await this.abandonBusyReview(job, error);
+                return;
+            }
+
             if (error.name === 'WorkflowPausedError') {
                 await this.jobRepository.update(jobId, {
                     status: JobStatus.WAITING_FOR_EVENT,
@@ -201,6 +317,45 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 }
             }
         }
+    }
+
+    /**
+     * The PR never freed up within the retry window. Answer the person who
+     * asked — silence here is indistinguishable from a review that ran and
+     * found nothing — and record the job as failed rather than completed so
+     * the drop is visible to metrics instead of counting as a success.
+     */
+    private async abandonBusyReview(
+        job: IWorkflowJob,
+        error: Error & { target?: unknown; gate?: string },
+    ): Promise<void> {
+        this.logger.error({
+            message: `Giving up on a code review command for job ${job.id} — the PR stayed busy`,
+            context: CodeReviewJobProcessorService.name,
+            error,
+            metadata: {
+                jobId: job.id,
+                correlationId: job.correlationId,
+                gate: error.gate,
+            },
+        });
+
+        try {
+            await this.codeReviewHandlerService.notifyCommandReviewRefused(
+                error.target as never,
+            );
+        } catch (notifyError) {
+            this.logger.error({
+                message:
+                    'Failed to tell the user their review request was dropped',
+                context: CodeReviewJobProcessorService.name,
+                error:
+                    notifyError instanceof Error ? notifyError : undefined,
+                metadata: { jobId: job.id },
+            });
+        }
+
+        await this.handleFailure(job.id, error);
     }
 
     async handleFailure(jobId: string, error: Error): Promise<void> {
@@ -260,9 +415,10 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
         correlationId: string,
     ): Promise<void> {
         try {
-            const jobPayload = (job?.payload ?? {}) as Partial<
-                EnqueueCodeReviewJobInput
-            > & { codeManagementPayload?: any };
+            const jobPayload = (job?.payload ??
+                {}) as Partial<EnqueueCodeReviewJobInput> & {
+                codeManagementPayload?: any;
+            };
             const organizationId =
                 jobPayload.organizationAndTeamData?.organizationId;
             if (!organizationId) return;
@@ -281,12 +437,10 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 {};
             const repo = cm.repository ?? pr.repository ?? {};
 
-            const prUrl: string =
-                pr.html_url ?? pr.web_url ?? pr.url ?? '';
+            const prUrl: string = pr.html_url ?? pr.web_url ?? pr.url ?? '';
             const repoName: string =
                 repo.full_name ?? repo.name ?? cm.repository?.full_name ?? '';
-            const author =
-                pr.user ?? pr.author ?? cm.actor ?? cm.sender ?? {};
+            const author = pr.user ?? pr.author ?? cm.actor ?? cm.sender ?? {};
             const authorEmail: string | undefined =
                 author?.email ?? author?.emailAddress;
             const authorLogin: string | undefined =
@@ -296,11 +450,10 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // catalog); only the PR author is passed as a directed recipient.
             const recipients: NotificationRecipient[] = [];
             if (authorEmail) {
-                const prAuthor =
-                    await this.prAuthorRecipientResolver.resolve(
-                        { email: authorEmail, login: authorLogin },
-                        organizationId,
-                    );
+                const prAuthor = await this.prAuthorRecipientResolver.resolve(
+                    { email: authorEmail, login: authorLogin },
+                    organizationId,
+                );
                 if (prAuthor) recipients.push(prAuthor);
             }
 
@@ -309,7 +462,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
 
             const reason = isAIEmptyBodyError
                 ? `The configured AI provider returned empty responses for several requests in a row. This is usually a transient provider issue. You can re-run the review or switch to a different model in Settings → AI Provider. (${error?.message || ''})`
-                : error?.message ?? 'unknown error';
+                : (error?.message ?? 'unknown error');
 
             await this.notificationService.emit({
                 event: NotificationEvent.REVIEW_FAILED,

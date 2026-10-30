@@ -1,0 +1,42 @@
+version: 1
+setup:
+  - docker network create kodus-backend-services 2>/dev/null || true
+  - docker network create shared-network 2>/dev/null || true
+  # build sequencial da imagem compartilhada (api/worker/webhooks usam a MESMA
+  # tag; build paralelo do compose up tem race de export — igual aos scripts do repo)
+  - docker compose -f docker-compose.dev.yml build kodus-api
+  - pnpm install
+  # apps/web has its own lockfile, so the root install above skips it; its
+  # container gets deps from a named volume, but jest runs on the host and
+  # resolves web imports from apps/web/node_modules. Must run before compose
+  # up, which would otherwise create that dir root-owned as a mountpoint.
+  - pnpm --dir apps/web install --frozen-lockfile
+  # The repo-lookup contract spec spawns ripgrep from PATH; the API image
+  # has it, the env's host (where jest runs) didn't. Same form as the tests
+  # workflow: no env prefix on sudo, which restricted sudoers would reject.
+  # Best effort: a missing rg fails one spec, a failed setup fails the env.
+  - command -v rg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep) || true
+files:
+  # .env.billing: run scripts/env/pull-billing-env.sh once (1Password, Stripe
+  # test mode). runo reads it from this worktree or the main checkout.
+  copy: [.env, .env.billing]
+services:
+  compose:
+    # the billing production runs, with a Stripe webhook forwarder, instead of
+    # none — the same overlay PR previews use
+    files: [docker-compose.dev.yml, docker-compose.billing.yml]
+    public: kodus-api
+    health: /health/simple
+    health_timeout: 1200
+data:
+  migrate: pnpm run migration:run
+  seed: pnpm run seed
+validate:
+  - name: lint
+    run: pnpm run lint
+  - name: test-rbac
+    run: pnpm run test:rbac
+limits:
+  instance: t3.xlarge  # 16 GiB, permitted by the isolated Ohio identity
+  disk: 100gb
+  idle_suspend: 10m

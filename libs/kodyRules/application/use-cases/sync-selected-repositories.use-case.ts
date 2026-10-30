@@ -24,9 +24,18 @@ export class SyncSelectedRepositoriesKodyRulesUseCase {
     async execute(params: {
         teamId: string;
         repositoriesIds?: Array<string | number>;
+        /**
+         * Explicit org id for callers that run OUTSIDE the request scope (e.g.
+         * finish-onboarding schedules this via setImmediate, after the HTTP
+         * response — by then `this.request` may be disposed). In-request callers
+         * can omit it and fall back to the request-scoped value.
+         */
+        organizationId?: string;
     }): Promise<void> {
         const organizationAndTeamData: OrganizationAndTeamData = {
-            organizationId: this.request.user?.organization?.uuid,
+            organizationId:
+                params.organizationId ??
+                this.request.user?.organization?.uuid,
             teamId: params.teamId,
         };
 

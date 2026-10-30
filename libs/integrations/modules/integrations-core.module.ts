@@ -6,6 +6,7 @@ import { IntegrationModel } from '../infrastructure/adapters/repositories/schema
 import { ProfileConfigModule } from '@libs/identity/modules/profileConfig.module';
 import { AuthIntegrationModule } from '@libs/integrations/modules/authIntegration.module';
 import { IntegrationConfigCoreModule } from './config-core.module';
+import { TeamModule } from '@libs/organization/modules/team.module';
 
 import { INTEGRATION_REPOSITORY_TOKEN } from '../domain/integrations/contracts/integration.repository.contracts';
 import { INTEGRATION_SERVICE_TOKEN } from '../domain/integrations/contracts/integration.service.contracts';
@@ -30,6 +31,7 @@ const UseCases = [
         IntegrationConfigCoreModule,
         forwardRef(() => ProfileConfigModule),
         AuthIntegrationModule,
+        forwardRef(() => TeamModule),
     ],
     providers: [
         ...UseCases,

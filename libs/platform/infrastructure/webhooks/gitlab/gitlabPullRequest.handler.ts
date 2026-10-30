@@ -19,7 +19,13 @@ import {
     isKodyMentionNonReview,
     isReviewCommand,
     parseReviewDirective,
+    parseCustomAgentCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
+import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
+import {
+    isGitlabDraftToReadyChange,
+    type GitlabDraftChangesLike,
+} from '@libs/common/utils/webhooks/gitlab-draft.utils';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
@@ -33,6 +39,69 @@ import {
 } from '@libs/platform/domain/platformIntegrations/interfaces/webhook-event-handler.interface';
 import { SavePullRequestUseCase } from '@libs/platformData/application/use-cases/pullRequests/save.use-case';
 import { CodeManagementService } from '../../adapters/services/codeManagement.service';
+
+type GitlabCodeReviewTriggerPayload = {
+    readonly object_attributes?: {
+        readonly action?: string;
+        readonly state?: string;
+        readonly last_commit?: { readonly id?: string | null } | null;
+        readonly oldrev?: string | null;
+    } | null;
+    readonly changes?: (GitlabDraftChangesLike & {
+        readonly description?: unknown;
+    }) | null;
+};
+
+export const shouldTriggerGitlabCodeReview = (
+    params: GitlabCodeReviewTriggerPayload,
+): boolean => {
+    const objectAttributes = params?.object_attributes || {};
+    const changes = params?.changes || {};
+
+    // Verify if it's a new MR
+    if (objectAttributes.action === 'open') {
+        return true;
+    }
+
+    // Verify if it's a new commit
+    const lastCommitId = objectAttributes.last_commit?.id;
+    const oldRev = objectAttributes.oldrev;
+
+    if (lastCommitId && oldRev && lastCommitId !== oldRev) {
+        return true;
+    }
+
+    // Verify if it's a merge
+    if (
+        objectAttributes.state === 'merged' ||
+        objectAttributes.action === 'merge'
+    ) {
+        return true;
+    }
+
+    // Verify if the PR is closed.
+    if (
+        objectAttributes.state === 'closed' ||
+        objectAttributes.action === 'close'
+    ) {
+        return true;
+    }
+
+    if (
+        objectAttributes.action === 'update' &&
+        isGitlabDraftToReadyChange(changes)
+    ) {
+        return true;
+    }
+
+    // Ignore if it's an update to the description
+    if (objectAttributes.action === 'update' && changes.description) {
+        return false;
+    }
+
+    // For all other cases, return false
+    return false;
+};
 
 /**
  * Handler for GitLab webhook events.
@@ -459,6 +528,31 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
             { host: extractGitlabHost(payload) },
         );
 
+        // `getContext` returns null for a project with no active automation --
+        // the merge-request path above has guarded this since it was written,
+        // and this path did not. A comment from an unintegrated project then
+        // threw `Cannot read properties of null (reading 'botUsername')` on
+        // the line below, which the consumer turned into a FAILED job: one
+        // TypeError, four error lines (handler, processor, router, consumer),
+        // and a comment webhook dropped. Production logged 11 of these in 40
+        // minutes.
+        //
+        // Nothing here is actionable without the context -- every branch below
+        // needs the bot username to even recognise a command -- so return the
+        // same way the sibling path does.
+        if (!context?.organizationAndTeamData) {
+            this.logger.warn({
+                message:
+                    'No active automation found for repository, skipping GitLab comment.',
+                context: GitLabMergeRequestHandler.name,
+                metadata: {
+                    mrNumber,
+                    projectId: payload?.project?.id,
+                },
+            });
+            return;
+        }
+
         try {
             // Note Hook fires only on new comments. GitLab 13.x omits
             // the action field, so treat missing action as 'create'.
@@ -480,8 +574,12 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                     return;
                 }
 
-                const isStartCommand = isReviewCommand(comment.body);
-                const isForceCommand = isForceReviewCommand(comment.body);
+                const botUsername = context.botUsername;
+                // `@kody -v <agent>` reviews the PR again with that custom agent only.
+                const customAgentSlug = parseCustomAgentCommand(comment.body, botUsername);
+                const isStartCommand =
+                    isReviewCommand(comment.body, botUsername) || !!customAgentSlug;
+                const isForceCommand = isForceReviewCommand(comment.body, botUsername);
                 const hasMarker = hasReviewMarker(comment.body);
 
                 if (isStartCommand && !hasMarker) {
@@ -500,8 +598,9 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                             action: 'synchronize',
                             origin: isForceCommand ? 'command-force' : 'command',
                             triggerCommentId: comment?.id,
-                            reviewDirective: parseReviewDirective(comment.body),
+                            reviewDirective: parseReviewDirective(comment.body, botUsername),
                             runtimeRequested: isRuntimeCommand(comment.body),
+                            onlyCustomAgent: customAgentSlug,
                         },
                     };
 
@@ -523,7 +622,8 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
                 if (
                     !isStartCommand &&
                     !hasMarker &&
-                    isKodyMentionNonReview(comment.body)
+                    (isKodyMentionNonReview(comment.body, botUsername) ||
+                        isNewThreadReply(PlatformType.GITLAB, params.event, payload))
                 ) {
                     this.chatWithKodyFromGitUseCase.execute(params);
                     return;
@@ -541,55 +641,10 @@ export class GitLabMergeRequestHandler implements IWebhookEventHandler {
         }
     }
 
-    private shouldTriggerCodeReviewForGitLab(params: any): boolean {
-        const objectAttributes = params?.object_attributes || {};
-        const changes = params?.changes || {};
-
-        // Verify if it's a new MR
-        if (objectAttributes.action === 'open') {
-            return true;
-        }
-
-        // Verify if it's a new commit
-        const lastCommitId = objectAttributes.last_commit?.id;
-        const oldRev = objectAttributes.oldrev;
-
-        if (lastCommitId && oldRev && lastCommitId !== oldRev) {
-            return true;
-        }
-
-        // Verify if it's a merge
-        if (
-            objectAttributes.state === 'merged' ||
-            objectAttributes.action === 'merge'
-        ) {
-            return true;
-        }
-
-        // Verify if the PR is closed.
-        if (
-            objectAttributes.state === 'closed' ||
-            objectAttributes.action === 'close'
-        ) {
-            return true;
-        }
-
-        // Ignore if it's an update to the description
-        if (objectAttributes.action === 'update' && changes.description) {
-            return false;
-        }
-
-        if (
-            objectAttributes.action === 'update' &&
-            changes?.draft &&
-            changes.draft.previous === true &&
-            changes.draft.current === false
-        ) {
-            return true;
-        }
-
-        // For all other cases, return false
-        return false;
+    private shouldTriggerCodeReviewForGitLab(
+        params: GitlabCodeReviewTriggerPayload,
+    ): boolean {
+        return shouldTriggerGitlabCodeReview(params);
     }
 
     private isNewCommitUpdate(payload: any): boolean {

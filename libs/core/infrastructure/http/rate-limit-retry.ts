@@ -22,6 +22,7 @@
  */
 
 import { createLogger } from '@libs/core/log/logger';
+import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 
 const logger = createLogger('rate-limit-retry');
 
@@ -62,12 +63,7 @@ export async function with429Retry<T>(
                 });
                 throw err;
             }
-            const delayMs = resolveDelayMs(
-                err,
-                attempt,
-                baseDelay,
-                maxDelay,
-            );
+            const delayMs = resolveDelayMs(err, attempt, baseDelay, maxDelay);
             logger.warn({
                 message: `${label}: 429 received, sleeping ${delayMs}ms before retry ${attempt + 2}/${maxAttempts}`,
                 context: 'with429Retry',
@@ -79,7 +75,7 @@ export async function with429Retry<T>(
     throw lastError;
 }
 
-function is429Error(err: unknown): boolean {
+export function is429Error(err: unknown): boolean {
     if (!err || typeof err !== 'object') return false;
     const anyErr = err as {
         status?: unknown;
@@ -95,8 +91,14 @@ function is429Error(err: unknown): boolean {
     ) {
         return true;
     }
-    const message =
-        typeof anyErr.message === 'string' ? anyErr.message : '';
+    // An adapter that already classified the failure as rate-limited has
+    // done this detection for us, and its `name` is no longer the SDK's.
+    // Without this, a translated error falls through to the text match
+    // below and only survives when the original status happened to be 429
+    // — a translated 502 would silently lose its retry.
+    if (isRateLimitError(err)) return true;
+
+    const message = typeof anyErr.message === 'string' ? anyErr.message : '';
     const name = typeof anyErr.name === 'string' ? anyErr.name : '';
     // @gitbeaker throws `GitbeakerRetryError` with status code in the
     // message text; bitbucket SDK throws `HTTPError: Too Many Requests`.
@@ -107,6 +109,36 @@ function is429Error(err: unknown): boolean {
         return true;
     }
     return false;
+}
+
+// Transport-level failures where the request never produced an HTTP
+// response: undici's bare `fetch failed`, connection resets, DNS blips,
+// timeouts. Like a 429, they mean "we could not fetch", NOT "the resource
+// is empty" — callers that swallow errors into an empty result must treat
+// these as fetch failures and rethrow, or a transient network hiccup
+// silently masquerades as "PR has no commits" and the review posts nothing
+// while reporting success (observed 2026-07-29, bitbucket cloud cell).
+export function isTransientFetchError(err: unknown): boolean {
+    if (!err || typeof err !== 'object') return false;
+    const anyErr = err as {
+        message?: unknown;
+        code?: unknown;
+        cause?: unknown;
+    };
+    const cause = (anyErr.cause ?? {}) as {
+        message?: unknown;
+        code?: unknown;
+    };
+    // Test messages AND codes: undici's timeout errors carry their
+    // UND_ERR_* identifier in `.code` while the message is prose
+    // ("Headers Timeout Error"), and when thrown through fetch() the
+    // useful detail lives on `.cause`.
+    const haystack = [anyErr.message, anyErr.code, cause.message, cause.code]
+        .filter((v): v is string => typeof v === 'string')
+        .join(' ');
+    return /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang ?up|network error|Recv failure|operation was aborted|UND_ERR|HeadersTimeout|BodyTimeout|ConnectTimeout|TimeoutError|Timeout Error/i.test(
+        haystack,
+    );
 }
 
 function resolveDelayMs(
@@ -127,13 +159,27 @@ function resolveDelayMs(
 
 function parseRetryAfter(err: unknown): number | null {
     if (!err || typeof err !== 'object') return null;
+    // Errors that already know the wait: GitLab's cooldown error carries
+    // `retryAfterMs`, a translated `RateLimitError` carries `resetAt`.
+    const { retryAfterMs, resetAt } = err as {
+        retryAfterMs?: unknown;
+        resetAt?: unknown;
+    };
+    if (typeof retryAfterMs === 'number' && retryAfterMs >= 0) {
+        return retryAfterMs;
+    }
+    if (resetAt instanceof Date && Number.isFinite(resetAt.getTime())) {
+        return Math.max(0, resetAt.getTime() - Date.now());
+    }
     const headers =
         (err as { headers?: Record<string, unknown> }).headers ??
         (err as { response?: { headers?: Record<string, unknown> } }).response
             ?.headers;
     if (!headers) return null;
     const raw =
-        headers['retry-after'] ?? headers['Retry-After'] ?? headers['RETRY-AFTER'];
+        headers['retry-after'] ??
+        headers['Retry-After'] ??
+        headers['RETRY-AFTER'];
     if (typeof raw !== 'string' && typeof raw !== 'number') return null;
     const asNumber = Number(raw);
     if (Number.isFinite(asNumber) && asNumber >= 0) {

@@ -4,6 +4,7 @@
  */
 
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
+import { splitRulePathGlobs } from '@libs/common/utils/kody-rules/file-patterns';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { environment } from '@libs/ee/configs/environment';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
@@ -112,7 +113,15 @@ export class KodyRulesValidationService {
         const globalRules: Partial<IKodyRule>[] = [];
 
         for (const rule of rules) {
-            if (rule.status !== KodyRulesStatus.ACTIVE) {
+            // A rule is enforced if it's ACTIVE, OR if the org is on a paid plan (!limited)
+            // and the rule was only auto-paused due to free plan quota (lockedByPlan).
+            const isEnforced =
+                rule.status === KodyRulesStatus.ACTIVE ||
+                (!limited &&
+                    rule.status === KodyRulesStatus.PAUSED &&
+                    rule.lockedByPlan === true);
+
+            if (!isEnforced) {
                 continue;
             }
 
@@ -351,8 +360,8 @@ export class KodyRulesValidationService {
             // rule's `inheritance.include` is `[]`, which the matcher
             // below reads as "inherit everywhere" — and so a rule
             // scoped to one directory would silently apply in every
-            // sibling directory of the same repo (reported by
-            // quintoandar/backend-services on rule b207a89c).
+            // sibling directory of the same repo (customer-reported
+            // on rule b207a89c).
             //
             // A directory-scoped rule (`rule.directoryId` set) must NOT
             // leak into a different directory unless that directory is
@@ -441,8 +450,12 @@ export class KodyRulesValidationService {
             return true;
         }
 
-        // Use glob matching to check if the file matches the rule's path pattern.
-        return isFileMatchingGlob(normalizedFilename, [rulePath]);
+        // Use glob matching to check if the file matches any of the rule's
+        // path patterns (comma-joined globs are OR-ed).
+        return isFileMatchingGlob(
+            normalizedFilename,
+            splitRulePathGlobs(rulePath),
+        );
     }
 
     /**
@@ -467,11 +480,19 @@ export class KodyRulesValidationService {
             return true;
         }
 
-        if (isFileMatchingGlob(normalizedFolder, [rulePath])) {
+        // Comma-joined globs are OR-ed: the folder matches if ANY of the
+        // individual patterns matches it.
+        return splitRulePathGlobs(rulePath).some((glob) =>
+            this.isFolderGlobMatch(glob, normalizedFolder),
+        );
+    }
+
+    private isFolderGlobMatch(glob: string, normalizedFolder: string): boolean {
+        if (isFileMatchingGlob(normalizedFolder, [glob])) {
             return true;
         }
 
-        const ruleBasePath = this.getGlobBasePath(rulePath);
+        const ruleBasePath = this.getGlobBasePath(glob);
 
         if (ruleBasePath === '') {
             return true;
@@ -486,7 +507,7 @@ export class KodyRulesValidationService {
         }
 
         if (
-            rulePath.startsWith('**') &&
+            glob.startsWith('**') &&
             normalizedFolder.endsWith('/' + ruleBasePath)
         ) {
             return true;

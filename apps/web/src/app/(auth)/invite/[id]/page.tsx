@@ -14,9 +14,9 @@ export const metadata: Metadata = {
 export default async function InvitePage({
     params,
 }: {
-    params: { id: string };
+    params: Promise<{ id: string }>;
 }) {
-    const { id } = params;
+    const { id } = await params;
     const userData = await getInviteData(id).catch((error) => {
         console.error(`Failed to get invite data for id ${id}:`, error);
         return null;

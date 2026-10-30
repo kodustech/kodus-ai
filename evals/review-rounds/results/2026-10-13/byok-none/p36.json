@@ -1,0 +1,738 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:40:41.808Z",
+  "updatedAt": "2026-10-13T22:21:37.012Z",
+  "complete": true,
+  "selectedCases": [
+    "P36-nonfinal-refs-all-scopes",
+    "P36-nonfinal-refs-all-scopes-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 10,
+        "violations": 5,
+        "rate": 0.5
+      },
+      "index-reference (#2039)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P36-nonfinal-refs-all-scopes · all-scope-nonfinal-new-site [deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 0
+      },
+      "P36-nonfinal-refs-all-scopes-control · all-scope-nonfinal-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 336458,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 359138,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 364696,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 425376,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new `scope.All` branch of liveDigests marks a digest live only when `r.Final` is true, so refs whose build is still uploading (Final == false) are treated as dead. WHY: Sweep deletes every in-scope blob whose digest is missing from the returned map (sweep.go:26-34), so an all-projects sweep deletes the blobs of in-progress uploads; when those builds finalize, their refs point at blobs that no longer exist — the exact data loss the per-project branch was fixed to avoid (lines 44-49 mark every ref live, per the comment 'Non-final refs belong to builds still uploading: their blobs stay.'). HOW: Mirror the per-project branch and mark every ref live.",
+          "keep": false,
+          "rationale": "This finding raises the exact problem already covered by PreviousReviewDecision round-a-P36-nonfinal-refs-all-scopes (internal/gc/live.go:30-35), whose suggestion was: liveDigests skips refs whose Final is false, so Sweep deletes the blobs of still-uploading builds; mark every ref digest as live. The candidate identifies the same failure (non-final refs treated as dead → Sweep deletes in-progress upload blobs → data loss in the same sweep operation), blaming the same `r.Final` guard at lines 34-36, which falls inside that entry's cited range. It only argues the applied fix landed on the per-project branch (lines 44-49) but not the scope.All branch — i.e., that the earlier fix is incomplete — which the rules explicitly say still counts as a repeat and must be dropped. No new/different operation or consequence is introduced.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|scope.All|r.Final",
+                "glob": "*.go"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 341082,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P36-nonfinal-refs-all-scopes-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 133730,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: the new scope.All branch only adds a digest to the live set when r.Final is true (line 34), whereas the existing ByProject branch marks every ref live. WHY: a non-final ref means the build that wrote it is still uploading (documented at line 15 and line 46); filtering it out makes Sweep treat that blob as dead and delete it (sweep.go:26-34), destroying blobs of in-flight builds during an all-project sweep — the exact case the per-project path deliberately protects. HOW: mirror the ByProject branch and keep non-final refs live: 'for _, r := range refs { live[r.Digest] = true }'.",
+          "keep": true,
+          "rationale": "Confirmed by code: live.go:33-37 only marks non-final refs live in the scope.All branch, while the ByProject branch (44-48) marks all refs live with the explicit comment that non-final refs belong to in-flight builds. sweep.go:26-34 deletes every blob not in the live set, so an all-project sweep would delete blobs of still-uploading builds — exactly the protection the per-project path provides and that Ref.Final's doc (line 15) describes. No upstream guard prevents this; liveDigests is the only producer of the live set. Not a repeat of any previous decision (all concern src/reports/*).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/sweep.go"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/gc/live.go",
+          "line": 33,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new `scope.All` branch marks a digest live only when `r.Final` is true (line 34), so Sweep treats blobs from builds still uploading (documented at line 15 and line 46) as dead and deletes them (sweep.go:26-34) during an all-project sweep. Mirror the `ByProject` branch and keep every ref live with `for _, r := range refs { live[r.Digest] = true }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P36-nonfinal-refs-all-scopes-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 239881,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new `scope.All` branch of liveDigests only marks refs with `r.Final == true` as live, whereas the pre-existing ByProject branch marks every ref live and its comment states that non-final refs belong to builds still uploading and their blobs must stay. WHY: A sweep with Scope{All:true} running while a build is still uploading will treat that build's non-final refs as dead and Sweep will delete the in-flight upload's blobs, causing data loss/build corruption — the exact outcome the sibling branch is written to prevent. HOW: Drop the `if r.Final` filter in the All branch so it mirrors the ByProject branch and marks every returned ref live.",
+          "keep": true,
+          "rationale": "Confirmed: liveDigests' scope.All branch (lines 32-38) marks a digest live only when r.Final is true, while the sibling ByProject branch (lines 44-48) marks every returned ref live and documents why ('Non-final refs belong to builds still uploading: their blobs stay'). Sweep (sweep.go:26-33) deletes every listed blob whose digest is absent from the live map, so a Scope{All:true} sweep concurrent with an in-flight upload would delete that upload's non-final blobs — data loss exactly of the kind the sibling branch is written to prevent. The Ref type contract (line 15-16: 'Final is false while the build that wrote the ref is still uploading') confirms non-final refs are live references, not garbage. Nothing in the code refutes the claim; no previous review decision addresses this issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 120
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|Scope\\{|ByProject|Final",
+                "glob": "*.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 60,
+                "path": "internal/gc/sweep.go",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "glob": "*.go",
+                "pattern": "func .*\\) All\\(|ByProject\\(ctx|Final:"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/gc/live.go",
+          "line": 32,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "A sweep with `Scope{All: true}` running while a build is still uploading treats that build's non-final refs as dead, so `Sweep` deletes the in-flight upload's blobs and causes data loss/build corruption — the exact outcome the `ByProject` branch is written to prevent. Drop the `if r.Final` filter in the `scope.All` branch so it mirrors `ByProject` and marks every returned ref live."
+        }
+      ],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P36-nonfinal-refs-all-scopes-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 89339,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new `scope.All` branch only marks refs with `r.Final == true` as live, while the `ByProject` branch below marks every ref and documents that non-final refs must be kept. WHY: With `Scope{All: true}`, Sweep (sweep.go:18-34) lists every project's blobs and deletes any digest absent from `live`, so blobs belonging to builds that are still uploading (non-final refs) are deleted, corrupting in-flight builds and losing data. HOW: Mark every ref live in the All branch too, matching the ByProject branch: `for _, r := range refs { live[r.Digest] = true }`.",
+          "keep": true,
+          "rationale": "Confirmed by reading the code: internal/gc/live.go:32-38 marks only refs with r.Final==true as live in the scope.All branch, whereas the ByProject branch (lines 44-48) marks every ref and explicitly documents that non-final refs (builds still uploading) must be kept. internal/gc/sweep.go:18-34 lists blobs for project \"\" (every project) when scope.All and deletes any digest absent from live, so blobs belonging to in-flight non-final builds would be deleted — real data loss. The asymmetry between the two branches is a genuine bug, and no PreviousReviewDecision addresses this file or failure.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "sweep.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "internal/gc"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|func Sweep",
+                "path": "internal/gc"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/sweep.go"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/gc/live.go",
+          "line": 32,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `Sweep` (sweep.go:18-34) deletes every blob whose digest is missing from `live`, marking only `r.Final == true` refs live in the `scope.All` branch removes blobs for builds that are still uploading, corrupting in-flight builds and losing data. Mark every ref live in that branch, as the `ByProject` branch does, so each `r.Digest` is set in `live`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P36-nonfinal-refs-all-scopes-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 86329,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: In the new `scope.All` branch, liveDigests marks a digest live only when `r.Final` is true, unlike the ByProject branch which marks every ref live so that blobs of still-uploading (non-final) builds are preserved. WHY: Sweep deletes every blob whose digest is missing from the returned set (sweep.go:26-29), so on an all-projects sweep it will delete blobs referenced only by in-progress builds, corrupting/losing uploads that have not yet been finalized. HOW: keep non-final refs live in this branch too, e.g. drop the `if r.Final` filter and do `live[r.Digest] = true` for every ref (mirroring lines 45-48).",
+          "keep": true,
+          "rationale": "Confirmed by code: in the scope.All branch, only refs with r.Final==true enter the live set, whereas the ByProject branch adds every ref and documents that non-final refs belong to uploading builds whose blobs must stay. Sweep deletes every blob whose digest is absent from live, so an all-projects sweep deletes blobs referenced only by in-progress builds — genuine data loss. No other guard preserves non-final refs, and the previous review decisions concern unrelated src/reports files, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/sweep.go",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "Final|liveDigests|scope.All|\\.All\\(",
+                "path": "internal/gc"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/gc/live.go",
+          "line": 32,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "In the new `scope.All` branch of `liveDigests`, marking a digest live only when `r.Final` is true means `Sweep` (sweep.go:26-29) deletes every blob whose digest is missing from the returned set, corrupting or losing blobs referenced only by still-uploading, non-final builds. Keep non-final refs live in this branch too by dropping the `if r.Final` filter and setting `live[r.Digest] = true` for every ref, mirroring lines 45-48."
+        }
+      ],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P36-nonfinal-refs-all-scopes-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 77954,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new scope.All branch keeps only refs where r.Final is true, whereas the per-project branch treats every ref (final and non-final) as live; the added `if r.Final` filter drops digests referenced only by non-final refs. WHY: Non-final refs are documented (lines 46-47) as belonging to builds that are still uploading, so a global sweep (scope.All) will list those blobs and Sweep deletes them (sweep.go:26-34), destroying blobs of in-flight builds — data loss/corruption. HOW: Keep all refs live in the All branch too, matching the per-project semantics: for _, r := range refs { live[r.Digest] = true }.",
+          "keep": true,
+          "rationale": "Confirmed. In live.go the scope.All branch (lines 33-36) only marks r.Final refs as live, while the per-project branch (lines 45-48) marks every ref live, with an explicit comment (lines 46-47) that non-final refs' blobs must stay because those builds are still uploading. Sweep (sweep.go:26-34) deletes every listed blob whose digest is absent from the live set; for scope.All, blobs.List is called with project=\"\" (all projects), so any blob referenced only by a non-final ref is deleted — destroying blobs of in-flight builds. This is a concrete data-loss path, not a style issue. The PriorReviewDecisions all target unrelated src/reports/* files, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "scope.All|func.*All\\(|r.Final",
+                "path": "internal/gc"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/sweep.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "func.*All\\(ctx|func.*ByProject\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|Final"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "internal/gc/live.go",
+          "line": 27,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The new `scope.All` branch in `internal/gc/live.go` keeps only refs where `r.Final` is true, so digests referenced only by non-final refs are omitted and then deleted by `Sweep` (`sweep.go:26-34`), causing data loss/corruption for in-flight builds (non-final refs are documented at lines 46-47). Keep all refs live in the `All` branch too, matching the per-project semantics with `for _, r := range refs { live[r.Digest] = true }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

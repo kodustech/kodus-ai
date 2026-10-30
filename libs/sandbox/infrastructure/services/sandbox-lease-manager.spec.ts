@@ -29,6 +29,12 @@ import {
     SandboxInstance,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { ConfigService } from '@nestjs/config';
+import * as localCleanup from './local-sandbox-cleanup.service';
+
+jest.mock('./local-sandbox-cleanup.service', () => ({
+    ...jest.requireActual('./local-sandbox-cleanup.service'),
+    deleteLocalSandbox: jest.fn(),
+}));
 
 // ─── Shared test helpers ─────────────────────────────────────────────────────
 
@@ -41,13 +47,20 @@ function makeMockLeaseRepo(): jest.Mocked<SandboxLeaseRepository> {
         findByPrKey: jest.fn().mockResolvedValue(null),
         findExpired: jest.fn().mockResolvedValue([]),
         delete: jest.fn().mockResolvedValue(undefined),
+        retire: jest.fn().mockResolvedValue(undefined),
         setKillAt: jest.fn().mockResolvedValue(undefined),
         clearKillAt: jest.fn().mockResolvedValue(undefined),
         findReadyToKill: jest.fn().mockResolvedValue([]),
+        claimCleanup: jest.fn().mockResolvedValue(null),
+        completeCleanup: jest.fn().mockResolvedValue(true),
+        failCleanup: jest.fn().mockResolvedValue(true),
+        resetStaleCleanup: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<SandboxLeaseRepository>;
 }
 
-function makeMockSandboxProvider(available = true): jest.Mocked<ISandboxProvider> {
+function makeMockSandboxProvider(
+    available = true,
+): jest.Mocked<ISandboxProvider> {
     const mockSandboxInstance: SandboxInstance = {
         remoteCommands: {
             grep: jest.fn().mockResolvedValue(''),
@@ -59,7 +72,9 @@ function makeMockSandboxProvider(available = true): jest.Mocked<ISandboxProvider
         type: 'e2b',
         sandboxId: 'mock-sandbox-id',
         repoDir: '/home/user/repo',
-        run: jest.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
+        run: jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
         readFile: jest.fn().mockResolvedValue(''),
         writeFile: jest.fn().mockResolvedValue(undefined),
     };
@@ -70,7 +85,9 @@ function makeMockSandboxProvider(available = true): jest.Mocked<ISandboxProvider
     } as jest.Mocked<ISandboxProvider>;
 }
 
-function makeMockConfigService(e2bKey: string | undefined = 'test-e2b-key'): jest.Mocked<ConfigService> {
+function makeMockConfigService(
+    e2bKey: string | undefined = 'test-e2b-key',
+): jest.Mocked<ConfigService> {
     return {
         get: jest.fn().mockReturnValue(e2bKey),
     } as unknown as jest.Mocked<ConfigService>;
@@ -99,6 +116,10 @@ describe('SandboxLeaseManager', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        (localCleanup.deleteLocalSandbox as jest.Mock).mockImplementation(
+            jest.requireActual('./local-sandbox-cleanup.service')
+                .deleteLocalSandbox,
+        );
         leaseRepo = makeMockLeaseRepo();
         sandboxProvider = makeMockSandboxProvider(true);
         configService = makeMockConfigService('test-e2b-key');
@@ -138,7 +159,14 @@ describe('SandboxLeaseManager', () => {
         expect(result.sandbox).toBeDefined();
 
         // updateReady called with prKey
-        expect(leaseRepo.updateReady).toHaveBeenCalledWith(prKey, expect.any(String));
+        // The third argument is the base branch, persisted so a joiner
+        // reconnecting to this sandbox can still ask git for the base ref.
+        expect(leaseRepo.updateReady).toHaveBeenCalledWith(
+            prKey,
+            expect.any(String),
+            undefined,
+            undefined,
+        );
 
         // Release: decrement lease
         leaseRepo.decrementLease.mockResolvedValue({
@@ -238,10 +266,9 @@ describe('SandboxLeaseManager', () => {
 
         // Joiner (second acquire) connected to existing sandbox via Sandbox.connect
         // (creator path — without cloneParams — uses null sandbox for initial CREATING→READY)
-        expect(Sandbox.connect).toHaveBeenCalledWith(
-            'e2b-poll-sandbox',
-            { apiKey: 'test-e2b-key' },
-        );
+        expect(Sandbox.connect).toHaveBeenCalledWith('e2b-poll-sandbox', {
+            apiKey: 'test-e2b-key',
+        });
 
         // Key invariant: createSandboxWithRepo NOT called without cloneParams
         // (manager falls back to null sandbox when no clone params supplied).
@@ -252,8 +279,8 @@ describe('SandboxLeaseManager', () => {
 
     // ─── Test 3: invalidate via PR-close (soft-drain + delete) ───────────
 
-    it('invalidate: sets Sandbox.setTimeout(60s) then deletes Mongo doc', async () => {
-        const prKey = 'org:repo:77';
+    it('invalidate: soft-drains 60s and retires the lease so the idle-kill cron kills the sandbox', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:77';
 
         leaseRepo.findByPrKey.mockResolvedValue({
             _id: prKey,
@@ -264,20 +291,67 @@ describe('SandboxLeaseManager', () => {
             expiresAt: new Date(Date.now() + 30 * 60 * 1000),
         } as any);
 
+        const before = Date.now();
         await manager.invalidate(prKey);
 
-        // Soft-drain: 60s timeout applied (not IDLE_TIMEOUT_MS which is for release)
         expect(Sandbox.setTimeout).toHaveBeenCalledWith(
             'e2b-to-invalidate',
             60_000,
             { apiKey: 'test-e2b-key' },
         );
 
-        // Mongo doc deleted after soft-drain
-        expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
+        // Sandboxes are created with onTimeout: 'pause', so the 60s timeout
+        // above only PAUSES the sandbox. Deleting the lease outright would
+        // leave nothing for the kill crons to find — a paused orphan forever.
+        expect(leaseRepo.delete).not.toHaveBeenCalled();
+        expect(leaseRepo.retire).toHaveBeenCalledWith(
+            prKey,
+            'e2b-to-invalidate',
+            expect.objectContaining({
+                idleKillAt: expect.any(Date),
+                busyKillAt: expect.any(Date),
+            }),
+        );
+        const { idleKillAt, busyKillAt, ownHolds } = leaseRepo.retire.mock
+            .calls[0][2] as any;
+        // Nobody holding it: dies after the 60s drain.
+        expect(idleKillAt.getTime()).toBeGreaterThanOrEqual(before + 60_000);
+        // A review still mid-flight (force-push/close during review) keeps
+        // it until the lease TTL — it must not die after 60s.
+        expect(busyKillAt.getTime()).toBeGreaterThanOrEqual(
+            before + 29 * 60 * 1000,
+        );
+        expect(ownHolds ?? 0).toBe(0);
+    });
 
-        // kill is NOT called synchronously (soft-drain, not immediate kill)
-        expect(Sandbox.kill).not.toHaveBeenCalled();
+    it('creator failure whose Sandbox.kill also fails retires the lease instead of dropping it', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:78';
+        leaseRepo.upsertAcquire.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'CREATING',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+        leaseRepo.updateReady.mockRejectedValueOnce(new Error('mongo down'));
+        (Sandbox.kill as jest.Mock).mockRejectedValueOnce(
+            new Error('TimeoutError'),
+        );
+
+        await expect(
+            manager.acquire(prKey, 'review', undefined, {
+                cloneUrl: 'https://github.com/org/repo.git',
+                branch: 'feature',
+                prNumber: 78,
+                platform: 'GITHUB' as any,
+            }),
+        ).rejects.toThrow('mongo down');
+
+        expect(leaseRepo.retire).toHaveBeenCalledWith(
+            prKey,
+            'mock-sandbox-id',
+            expect.objectContaining({ idleKillAt: expect.any(Date) }),
+        );
     });
 
     // ─── Test 4: NullSandbox fallback when provider unavailable ──────────
@@ -326,20 +400,34 @@ describe('SandboxLeaseManager', () => {
         ['only one segment', 'foo'],
         ['two segments', 'foo:bar'],
         ['five segments', 'a:b:c:d:e'],
-        ['UUID v4-shape but invalid hex', 'gggggggg-aaaa-aaaa-aaaa-aaaaaaaaaaaa:r:1'],
-    ])('rejects malformed prKey (%s) before any side-effect', async (_label, badKey) => {
-        const leaseRepo = makeMockLeaseRepo();
-        const configService = makeMockConfigService('test-e2b-key');
-        const sandboxProvider = makeMockSandboxProvider(true);
-        const manager = makeLeaseManager(leaseRepo, sandboxProvider, configService);
+        [
+            'UUID v4-shape but invalid hex',
+            'gggggggg-aaaa-aaaa-aaaa-aaaaaaaaaaaa:r:1',
+        ],
+    ])(
+        'rejects malformed prKey (%s) before any side-effect',
+        async (_label, badKey) => {
+            const leaseRepo = makeMockLeaseRepo();
+            const configService = makeMockConfigService('test-e2b-key');
+            const sandboxProvider = makeMockSandboxProvider(true);
+            const manager = makeLeaseManager(
+                leaseRepo,
+                sandboxProvider,
+                configService,
+            );
 
-        await expect(manager.acquire(badKey, 'review')).rejects.toThrow(/Invalid prKey/);
+            await expect(manager.acquire(badKey, 'review')).rejects.toThrow(
+                /Invalid prKey/,
+            );
 
-        // CRITICAL: NO Mongo write happened, NO sandbox was created.
-        // A malformed key MUST NOT pollute the lease collection.
-        expect(leaseRepo.upsertAcquire).not.toHaveBeenCalled();
-        expect(sandboxProvider.createSandboxWithRepo).not.toHaveBeenCalled();
-    });
+            // CRITICAL: NO Mongo write happened, NO sandbox was created.
+            // A malformed key MUST NOT pollute the lease collection.
+            expect(leaseRepo.upsertAcquire).not.toHaveBeenCalled();
+            expect(
+                sandboxProvider.createSandboxWithRepo,
+            ).not.toHaveBeenCalled();
+        },
+    );
 
     // ─── Test 6: orphan kill when post-create Mongo step fails ────────────
 
@@ -378,7 +466,9 @@ describe('SandboxLeaseManager', () => {
         } as any);
 
         // updateReady fails AFTER the sandbox was created
-        leaseRepo.updateReady.mockRejectedValue(new Error('Mongo connection lost'));
+        leaseRepo.updateReady.mockRejectedValue(
+            new Error('Mongo connection lost'),
+        );
 
         await expect(
             manager.acquire(prKey, 'review', undefined, cloneParams),
@@ -435,7 +525,12 @@ describe('SandboxLeaseManager', () => {
             } as any);
 
         jest.useFakeTimers();
-        const acquirePromise = manager.acquire(prKey, 'review', undefined, cloneParams);
+        const acquirePromise = manager.acquire(
+            prKey,
+            'review',
+            undefined,
+            cloneParams,
+        );
 
         // Fast-forward through the 60s backoff between attempt 1 and 2
         await jest.runAllTimersAsync();
@@ -534,9 +629,8 @@ describe('SandboxLeaseManager', () => {
         // killAt scheduled in Mongo — the killIdleSandboxes cron will sweep it.
         // No in-memory timer involved, so any worker can pick up the kill.
         expect(leaseRepo.setKillAt).toHaveBeenCalledTimes(1);
-        const [calledPrKey, calledKillAt] = (
-            leaseRepo.setKillAt as jest.Mock
-        ).mock.calls[0];
+        const [calledPrKey, calledKillAt] = (leaseRepo.setKillAt as jest.Mock)
+            .mock.calls[0];
         expect(calledPrKey).toBe(prKey);
         expect(calledKillAt).toBeInstanceOf(Date);
         const expectedAt = before + 30_000;
@@ -648,13 +742,254 @@ describe('SandboxLeaseManager', () => {
             cloneParams,
         );
 
-        // Stale lease was deleted before cold-start
-        expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
+        // Stale lease was retired (not dropped) before cold-start, so the
+        // idle-kill cron still owns the old sandbox — if it is gone the
+        // kill 404s and the retired doc is removed.
+        expect(leaseRepo.delete).not.toHaveBeenCalled();
+        expect(leaseRepo.retire).toHaveBeenCalledWith(
+            prKey,
+            'dead-sandbox-id',
+            expect.objectContaining({ ownHolds: 1 }),
+        );
+        // A co-tenant may still be using it after a transient connect
+        // error: it keeps the sandbox until the lease TTL.
+        const { busyKillAt } = leaseRepo.retire.mock.calls[0][2] as any;
+        expect(busyKillAt.getTime()).toBeGreaterThanOrEqual(
+            Date.now() + 29 * 60 * 1000,
+        );
         // Cold-start succeeded — fresh sandbox created
-        expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledWith(cloneParams);
+        expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledWith(
+            cloneParams,
+        );
         expect(result.sandboxId).toBe('fresh-sandbox-id');
         expect(result.wasCreated).toBe(true);
     });
+
+    // ─── Reconnect-path git sync (#1313 e2e validation, 2026-09-11) ───────
+    // A reused sandbox's checkout must be brought up to date with the
+    // CURRENT commit before it's handed back — see syncE2BSandboxRepo's
+    // docstring in e2b-sandbox.service.ts for the stale-checkout bug this
+    // closes.
+
+    it('joiner WITH cloneParams syncs the reused sandbox to the current commit', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:301';
+        const cloneParams = {
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber: 301,
+            platform: 'GITHUB' as any,
+        };
+
+        leaseRepo.upsertAcquire.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 2,
+            state: 'READY',
+            sandboxId: 'warm-sandbox-id',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        (Sandbox.connect as jest.Mock).mockResolvedValueOnce({
+            commands: { run },
+        });
+
+        const result = await manager.acquire(
+            prKey,
+            'review',
+            undefined,
+            cloneParams,
+        );
+
+        expect(result.sandbox).toBeDefined();
+        expect(result.wasCreated).toBe(false);
+        // The sync ran BEFORE the sandbox was handed back — exact command
+        // built by syncE2BSandboxRepo for a PR-mode, authenticated GitHub sync.
+        expect(run).toHaveBeenCalledWith(
+            expect.stringContaining(
+                "git -c http.extraHeader=\"$GIT_AUTH_HEADER\" fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD",
+            ),
+            expect.objectContaining({
+                envs: expect.objectContaining({ GIT_AUTH_HEADER: expect.any(String) }),
+            }),
+        );
+    });
+
+    it('joiner WITH cloneParams skips the destructive sync when another consumer is still active', async () => {
+        // leaseCount > 1 at connect time means some other in-flight run
+        // (e.g. round N's AgentReviewStage still reading files) holds this
+        // same lease — checkout -f + clean -fd would rewrite the ONE shared
+        // working tree out from under it, so the sync must be skipped.
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:303';
+        const cloneParams = {
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber: 303,
+            platform: 'GITHUB' as any,
+        };
+
+        leaseRepo.upsertAcquire.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 2,
+            state: 'READY',
+            sandboxId: 'warm-sandbox-id',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+        leaseRepo.findByPrKey.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 2,
+            state: 'READY',
+            sandboxId: 'warm-sandbox-id',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        (Sandbox.connect as jest.Mock).mockResolvedValueOnce({
+            commands: { run },
+        });
+
+        const result = await manager.acquire(
+            prKey,
+            'review',
+            undefined,
+            cloneParams,
+        );
+
+        expect(result.sandbox).toBeDefined();
+        expect(result.wasCreated).toBe(false);
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('joiner WITHOUT cloneParams never attempts a sync (nothing to sync to)', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:302';
+
+        leaseRepo.upsertAcquire.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 2,
+            state: 'READY',
+            sandboxId: 'warm-sandbox-id',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        const run = jest.fn();
+        (Sandbox.connect as jest.Mock).mockResolvedValueOnce({
+            commands: { run },
+        });
+
+        // No 4th arg — e.g. a non-review consumer that never has clone info.
+        const result = await manager.acquire(prKey, 'graph-build');
+
+        expect(result.sandbox).toBeDefined();
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('a failed sync is non-fatal — the reused sandbox is still returned with its stale checkout', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:303';
+        const cloneParams = {
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber: 303,
+            platform: 'GITHUB' as any,
+        };
+
+        leaseRepo.upsertAcquire.mockResolvedValueOnce({
+            _id: prKey,
+            leaseCount: 2,
+            state: 'READY',
+            sandboxId: 'warm-sandbox-id',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+
+        // commands.run itself throws (e.g. transient E2B network error) —
+        // must not propagate and fail the whole acquire.
+        const run = jest.fn().mockRejectedValue(new Error('network blip'));
+        (Sandbox.connect as jest.Mock).mockResolvedValueOnce({
+            commands: { run },
+        });
+
+        const result = await manager.acquire(
+            prKey,
+            'review',
+            undefined,
+            cloneParams,
+        );
+
+        expect(result.sandbox).toBeDefined();
+        expect(result.sandboxId).toBe('warm-sandbox-id');
+        expect(run).toHaveBeenCalledTimes(1);
+    });
+
+    it('records whether the review user was locked down at creation', async () => {
+        const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:41';
+        leaseRepo.upsertAcquire.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'CREATING',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        } as any);
+        leaseRepo.findByPrKey.mockResolvedValue({
+            _id: prKey,
+            leaseCount: 1,
+            state: 'READY',
+            sandboxId: 'mock-sandbox-id',
+        } as any);
+        sandboxProvider.createSandboxWithRepo.mockResolvedValueOnce({
+            ...(await sandboxProvider.createSandboxWithRepo({} as any)),
+            privilegesDropped: true,
+        });
+        await manager.acquire(prKey, 'review', undefined, {
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber: 41,
+            platform: 'GITHUB' as any,
+        });
+        expect(leaseRepo.updateReady).toHaveBeenCalledWith(
+            prKey,
+            'mock-sandbox-id',
+            undefined,
+            true,
+        );
+    });
+
+    it.each([
+        [true, true],
+        [undefined, false],
+        [false, false],
+    ])(
+        'a reconnected sandbox is locked down only when its creation recorded it (%s)',
+        async (recorded, expected) => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:42';
+            const doc = {
+                _id: prKey,
+                leaseCount: 2,
+                state: 'READY',
+                sandboxId: 'e2b-reused',
+                privilegesDropped: recorded,
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any;
+            leaseRepo.upsertAcquire.mockResolvedValue(doc);
+            leaseRepo.findByPrKey.mockResolvedValue(doc);
+            const { sandbox } = await manager.acquire(prKey, 'conversation');
+            expect(Sandbox.connect).toHaveBeenCalledWith('e2b-reused', {
+                apiKey: 'test-e2b-key',
+            });
+            expect(sandbox.privilegesDropped).toBe(expected);
+        },
+    );
 
     // ─── Test 9a: release accepts custom idleMs (review uses 30s) ────────
 
@@ -754,6 +1089,585 @@ describe('SandboxLeaseManager', () => {
         // Doc cleaned up
         expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
     });
+
+    // ─── Local sandbox cleanup tests ─────────────────────────────────────
+
+    describe('local sandbox cleanup', () => {
+        it('cleans local dir immediately when leaseCount reaches zero on release', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:42';
+            const os = require('os');
+            const path = require('path');
+            const localSandboxId = path.join(
+                os.tmpdir(),
+                'kodus-sandbox-abc123',
+            );
+
+            leaseRepo.upsertAcquire.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'CREATING',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: localSandboxId,
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            sandboxProvider.createSandboxWithRepo.mockResolvedValue({
+                type: 'local',
+                sandboxId: localSandboxId,
+                cleanup: jest.fn(),
+                remoteCommands: {} as any,
+                run: jest.fn(),
+                readFile: jest.fn(),
+                writeFile: jest.fn(),
+                repoDir: localSandboxId,
+            } as any);
+
+            const result = await manager.acquire(prKey, 'review', undefined, {
+                cloneUrl: 'https://github.com/org/repo.git',
+                authToken: 'token',
+                branch: 'feature',
+                prNumber: 42,
+                platform: 'GITHUB' as any,
+            });
+
+            leaseRepo.decrementLease.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 0,
+                state: 'READY',
+                sandboxId: localSandboxId,
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+            leaseRepo.claimCleanup.mockResolvedValue({
+                _id: prKey,
+                sandboxId: localSandboxId,
+                cleanupStatus: 'in_progress',
+            } as any);
+            leaseRepo.completeCleanup.mockResolvedValue(true);
+
+            await manager.release(result.leaseId);
+
+            expect(leaseRepo.claimCleanup).toHaveBeenCalledWith(
+                prKey,
+                localSandboxId,
+                true,
+            );
+            expect(leaseRepo.completeCleanup).toHaveBeenCalledWith(
+                prKey,
+                localSandboxId,
+            );
+            expect(leaseRepo.setKillAt).not.toHaveBeenCalled();
+            expect(Sandbox.setTimeout).not.toHaveBeenCalled();
+        });
+
+        it('does not delete a fresh lease with different sandboxId', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:43';
+            const os = require('os');
+            const path = require('path');
+            const oldSandboxId = path.join(os.tmpdir(), 'kodus-sandbox-old');
+
+            leaseRepo.claimCleanup.mockResolvedValue(null);
+
+            leaseRepo.decrementLease.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 0,
+                state: 'READY',
+                sandboxId: oldSandboxId,
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            leaseRepo.upsertAcquire.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'CREATING',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: oldSandboxId,
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+            sandboxProvider.createSandboxWithRepo.mockResolvedValue({
+                type: 'local',
+                sandboxId: oldSandboxId,
+                cleanup: jest.fn(),
+                remoteCommands: {} as any,
+                run: jest.fn(),
+                readFile: jest.fn(),
+                writeFile: jest.fn(),
+                repoDir: oldSandboxId,
+            } as any);
+
+            const result = await manager.acquire(prKey, 'review', undefined, {
+                cloneUrl: 'https://github.com/org/repo.git',
+                authToken: 'token',
+                branch: 'feature',
+                prNumber: 43,
+                platform: 'GITHUB' as any,
+            });
+
+            await manager.release(result.leaseId);
+
+            expect(leaseRepo.claimCleanup).toHaveBeenCalledWith(
+                prKey,
+                oldSandboxId,
+                true,
+            );
+            expect(leaseRepo.completeCleanup).not.toHaveBeenCalled();
+            expect(leaseRepo.failCleanup).not.toHaveBeenCalled();
+        });
+
+        it('skips local cleanup when concurrent acquire bumps leaseCount before claimCleanup', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:44';
+            const os = require('os');
+            const path = require('path');
+            const localSandboxId = path.join(os.tmpdir(), 'kodus-sandbox-race');
+
+            leaseRepo.upsertAcquire.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'CREATING',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: localSandboxId,
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+            sandboxProvider.createSandboxWithRepo.mockResolvedValue({
+                type: 'local',
+                sandboxId: localSandboxId,
+                cleanup: jest.fn(),
+                remoteCommands: {} as any,
+                run: jest.fn(),
+                readFile: jest.fn(),
+                writeFile: jest.fn(),
+                repoDir: localSandboxId,
+            } as any);
+
+            const result = await manager.acquire(prKey, 'review', undefined, {
+                cloneUrl: 'https://github.com/org/repo.git',
+                authToken: 'token',
+                branch: 'feature',
+                prNumber: 44,
+                platform: 'GITHUB' as any,
+            });
+
+            // After decrement, leaseCount is 0 but a concurrent acquire
+            // already bumped it back to 1 — claimCleanup with
+            // requireLeaseCountZero=true returns null (filter doesn't match).
+            leaseRepo.decrementLease.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 0,
+                state: 'READY',
+                sandboxId: localSandboxId,
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+            leaseRepo.claimCleanup.mockResolvedValue(null);
+
+            await manager.release(result.leaseId);
+
+            expect(leaseRepo.claimCleanup).toHaveBeenCalledWith(
+                prKey,
+                localSandboxId,
+                true,
+            );
+            expect(leaseRepo.completeCleanup).not.toHaveBeenCalled();
+        });
+
+        it('invalidates a READY local lease when cleanup claim loses a race', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:46';
+            const os = require('os');
+            const path = require('path');
+            const localSandboxId = path.join(
+                os.tmpdir(),
+                'kodus-sandbox-invalidate-race',
+            );
+
+            leaseRepo.findByPrKey
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 0,
+                    state: 'READY',
+                    sandboxId: localSandboxId,
+                } as any)
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 1,
+                    state: 'READY',
+                    sandboxId: localSandboxId,
+                } as any);
+            leaseRepo.claimCleanup.mockResolvedValue(null);
+
+            await manager.invalidate(prKey);
+
+            expect(leaseRepo.markInvalidated).toHaveBeenCalledWith(prKey);
+        });
+
+        it('creator failure on local sandbox preserves retry marker instead of deleting lease', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:45';
+            const os = require('os');
+            const path = require('path');
+            const localSandboxId = path.join(os.tmpdir(), 'kodus-sandbox-fail');
+            const cloneParams = {
+                cloneUrl: 'https://github.com/org/repo.git',
+                authToken: 'token',
+                branch: 'feature',
+                prNumber: 45,
+                platform: 'GITHUB' as any,
+            };
+
+            leaseRepo.upsertAcquire.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'CREATING',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            sandboxProvider.createSandboxWithRepo.mockResolvedValue({
+                type: 'local',
+                sandboxId: localSandboxId,
+                cleanup: jest.fn(),
+                remoteCommands: {} as any,
+                run: jest.fn(),
+                readFile: jest.fn(),
+                writeFile: jest.fn(),
+                repoDir: localSandboxId,
+            } as any);
+
+            // updateReady fails AFTER the local sandbox was created
+            leaseRepo.updateReady.mockRejectedValue(
+                new Error('Mongo connection lost'),
+            );
+
+            // Mock deleteLocalSandbox to throw so cleanup fails
+            (localCleanup.deleteLocalSandbox as jest.Mock).mockRejectedValue(
+                new Error('ENOENT: dir locked'),
+            );
+
+            // Mock claimCleanup to return a doc (sandboxId is on doc)
+            leaseRepo.claimCleanup.mockResolvedValue({
+                _id: prKey,
+                sandboxId: localSandboxId,
+                cleanupStatus: 'in_progress',
+            } as any);
+
+            await expect(
+                manager.acquire(prKey, 'review', undefined, cloneParams),
+            ).rejects.toThrow(/Mongo connection lost/);
+
+            expect(leaseRepo.claimCleanup).toHaveBeenCalledWith(
+                prKey,
+                localSandboxId,
+            );
+            expect(leaseRepo.failCleanup).toHaveBeenCalledWith(
+                prKey,
+                localSandboxId,
+                'ENOENT: dir locked',
+            );
+            expect(leaseRepo.delete).not.toHaveBeenCalled();
+        });
+
+        it('creator failure logs warning when sandboxId not on doc', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:46';
+            const os = require('os');
+            const path = require('path');
+            const localSandboxId = path.join(
+                os.tmpdir(),
+                'kodus-sandbox-orphan',
+            );
+            const cloneParams = {
+                cloneUrl: 'https://github.com/org/repo.git',
+                authToken: 'token',
+                branch: 'feature',
+                prNumber: 46,
+                platform: 'GITHUB' as any,
+            };
+
+            leaseRepo.upsertAcquire.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'CREATING',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            sandboxProvider.createSandboxWithRepo.mockResolvedValue({
+                type: 'local',
+                sandboxId: localSandboxId,
+                cleanup: jest.fn(),
+                remoteCommands: {} as any,
+                run: jest.fn(),
+                readFile: jest.fn(),
+                writeFile: jest.fn(),
+                repoDir: localSandboxId,
+            } as any);
+
+            // updateReady fails AFTER the local sandbox was created
+            leaseRepo.updateReady.mockRejectedValue(
+                new Error('Mongo connection lost'),
+            );
+
+            // Mock deleteLocalSandbox to throw so cleanup fails
+            (localCleanup.deleteLocalSandbox as jest.Mock).mockRejectedValue(
+                new Error('ENOENT: dir locked'),
+            );
+
+            // Mock claimCleanup to return null (sandboxId not on doc)
+            leaseRepo.claimCleanup.mockResolvedValue(null);
+
+            await expect(
+                manager.acquire(prKey, 'review', undefined, cloneParams),
+            ).rejects.toThrow(/Mongo connection lost/);
+
+            expect(leaseRepo.claimCleanup).toHaveBeenCalledWith(
+                prKey,
+                localSandboxId,
+            );
+            expect(leaseRepo.failCleanup).not.toHaveBeenCalled();
+            expect(leaseRepo.delete).not.toHaveBeenCalled();
+        });
+
+        it('acquire on INVALIDATED decrements leaseCount without deleting doc', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:47';
+            const os = require('os');
+            const path = require('path');
+            const localSandboxId = path.join(
+                os.tmpdir(),
+                'kodus-sandbox-invalidated',
+            );
+
+            leaseRepo.upsertAcquire.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 2,
+                state: 'INVALIDATED',
+                sandboxId: localSandboxId,
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            leaseRepo.decrementLease.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'INVALIDATED',
+            } as any);
+
+            await expect(manager.acquire(prKey, 'review')).rejects.toThrow(
+                /sandbox invalidated/,
+            );
+
+            // Must decrement the leaked leaseCount
+            expect(leaseRepo.decrementLease).toHaveBeenCalledWith(prKey);
+            // Must NOT delete the doc — creator may still need to observe INVALIDATED
+            expect(leaseRepo.delete).not.toHaveBeenCalled();
+            // Must NOT delete the local sandbox — active leases may still use it
+            expect(localCleanup.deleteLocalSandbox).not.toHaveBeenCalled();
+        });
+
+        it('acquire rejects a local lease with FAILED cleanup', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:48';
+            const os = require('os');
+            const path = require('path');
+            const localSandboxId = path.join(
+                os.tmpdir(),
+                'kodus-sandbox-failed',
+            );
+
+            leaseRepo.upsertAcquire.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: localSandboxId,
+                cleanupStatus: 'failed',
+            } as any);
+            leaseRepo.decrementLease.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 0,
+                state: 'READY',
+                sandboxId: localSandboxId,
+                cleanupStatus: 'failed',
+            } as any);
+
+            await expect(manager.acquire(prKey, 'review')).rejects.toThrow(
+                /cleanup previously failed/,
+            );
+            expect(leaseRepo.decrementLease).toHaveBeenCalledWith(prKey);
+        });
+
+        it('mid-create invalidation preserves lease doc when local cleanup fails', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:88';
+            const os = require('os');
+            const path = require('path');
+            const localSandboxId = path.join(
+                os.tmpdir(),
+                'kodus-sandbox-mid-create',
+            );
+            const cloneParams = {
+                cloneUrl: 'https://github.com/org/repo.git',
+                authToken: 'token',
+                branch: 'feature',
+                prNumber: 88,
+                platform: 'GITHUB' as any,
+            };
+
+            leaseRepo.upsertAcquire.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'CREATING',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            sandboxProvider.createSandboxWithRepo.mockResolvedValue({
+                type: 'local',
+                sandboxId: localSandboxId,
+                cleanup: jest.fn(),
+                remoteCommands: {} as any,
+                run: jest.fn(),
+                readFile: jest.fn(),
+                writeFile: jest.fn(),
+                repoDir: localSandboxId,
+            } as any);
+
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'INVALIDATED',
+                sandboxId: localSandboxId,
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            (localCleanup.deleteLocalSandbox as jest.Mock).mockRejectedValue(
+                new Error('Permission denied'),
+            );
+
+            await expect(
+                manager.acquire(prKey, 'review', undefined, cloneParams),
+            ).rejects.toThrow(/invalidated mid-create/);
+
+            expect(localCleanup.deleteLocalSandbox).toHaveBeenCalledWith(
+                localSandboxId,
+            );
+            // Finding 4 fix: lease doc preserved so reaper can retry
+            expect(leaseRepo.delete).not.toHaveBeenCalled();
+        });
+
+        it('acquire waits for cleanup IN_PROGRESS then retries', async () => {
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:50';
+
+            // First upsertAcquire returns doc with cleanupStatus IN_PROGRESS
+            // Second call (retry) returns normal CREATING doc
+            leaseRepo.upsertAcquire
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 1,
+                    state: 'READY',
+                    cleanupStatus: 'in_progress',
+                    sandboxId: '/tmp/kodus-sandbox-cleanup-wait',
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                } as any)
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 1,
+                    state: 'CREATING',
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                } as any);
+
+            // Poll finds doc gone (cleanup completed)
+            leaseRepo.findByPrKey.mockResolvedValue(null);
+
+            // Post-create check: READY
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: '',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            jest.useFakeTimers();
+            const acquirePromise = manager.acquire(prKey, 'review');
+            await jest.runAllTimersAsync();
+            const result = await acquirePromise;
+            jest.useRealTimers();
+
+            expect(result.sandbox).toBeDefined();
+            // Two upsertAcquire calls: first hit IN_PROGRESS, second succeeded
+            expect(leaseRepo.upsertAcquire).toHaveBeenCalledTimes(2);
+        });
+
+        it('acquire on IN_PROGRESS undoes the leaseCount increment before waiting', async () => {
+            // Regression: upsertAcquire() increments leaseCount on a doc that is
+            // being cleaned up. The wait path must decrement it immediately —
+            // cleanup's claim requires leaseCount <= 0, so holding the increment
+            // while polling would deadlock the very cleanup we're waiting for.
+            const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:51';
+
+            leaseRepo.upsertAcquire
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 1,
+                    state: 'READY',
+                    cleanupStatus: 'in_progress',
+                    sandboxId: '/tmp/kodus-sandbox-inprogress-undo',
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                } as any)
+                .mockResolvedValueOnce({
+                    _id: prKey,
+                    leaseCount: 1,
+                    state: 'CREATING',
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                } as any);
+
+            // Cleanup completes: doc gone on first poll.
+            leaseRepo.findByPrKey.mockResolvedValueOnce(null);
+            // Post-create check for the retry's creator path: READY.
+            leaseRepo.findByPrKey.mockResolvedValue({
+                _id: prKey,
+                leaseCount: 1,
+                state: 'READY',
+                sandboxId: '',
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            } as any);
+
+            jest.useFakeTimers();
+            const acquirePromise = manager.acquire(prKey, 'review');
+            await jest.runAllTimersAsync();
+            await acquirePromise;
+            jest.useRealTimers();
+
+            // The IN_PROGRESS branch must have released its increment. The
+            // creator retry (state CREATING, leaseCount 1) does not decrement,
+            // so exactly one decrement — the IN_PROGRESS undo — is expected.
+            expect(leaseRepo.decrementLease).toHaveBeenCalledWith(prKey);
+            expect(leaseRepo.decrementLease).toHaveBeenCalledTimes(1);
+        });
+    });
 });
 
 // ─── Test 5: Reaper cleans crashed-worker lease ───────────────────────────
@@ -761,6 +1675,11 @@ describe('SandboxLeaseManager', () => {
 describe('SandboxLeaseReaperService', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        (Sandbox.kill as jest.Mock).mockReset();
+        (Sandbox.kill as jest.Mock).mockResolvedValue(undefined);
+        (localCleanup.deleteLocalSandbox as jest.Mock).mockResolvedValue(
+            undefined,
+        );
     });
 
     it('reaper cleans ALL expired leases regardless of leaseCount (crashed-worker scenario)', async () => {
@@ -793,7 +1712,9 @@ describe('SandboxLeaseReaperService', () => {
         await reaper.reapExpiredLeases();
 
         // Sandbox.kill called with the expired sandbox ID
-        expect(Sandbox.kill).toHaveBeenCalledWith('e2b-123', { apiKey: 'test-e2b-key' });
+        expect(Sandbox.kill).toHaveBeenCalledWith('e2b-123', {
+            apiKey: 'test-e2b-key',
+        });
 
         // Mongo doc deleted
         expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:1');
@@ -844,8 +1765,12 @@ describe('SandboxLeaseReaperService', () => {
             'CRON:SANDBOX:IDLE_KILL',
             { ttl: 25_000 },
         );
-        expect(Sandbox.kill).toHaveBeenCalledWith('e2b-idle-1', { apiKey: 'test-e2b-key' });
-        expect(Sandbox.kill).toHaveBeenCalledWith('e2b-idle-2', { apiKey: 'test-e2b-key' });
+        expect(Sandbox.kill).toHaveBeenCalledWith('e2b-idle-1', {
+            apiKey: 'test-e2b-key',
+        });
+        expect(Sandbox.kill).toHaveBeenCalledWith('e2b-idle-2', {
+            apiKey: 'test-e2b-key',
+        });
         expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:1');
         expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:2');
         expect(mockLock.release).toHaveBeenCalledTimes(1);
@@ -874,24 +1799,173 @@ describe('SandboxLeaseReaperService', () => {
         expect(leaseRepo.delete).not.toHaveBeenCalled();
     });
 
-    it('killIdleSandboxes: continues deleting Mongo doc even when Sandbox.kill fails', async () => {
+    // ─── Concurrency and error isolation tests ──────────────────────────
+
+    it('reapExpiredLeases: processes with bounded concurrency (max 5 in-flight)', async () => {
+        const leaseRepo = makeMockLeaseRepo();
+        const configService = makeMockConfigService('test-e2b-key');
+
+        // Create 10 expired leases
+        const leases = Array.from({ length: 10 }, (_, i) => ({
+            _id: `org:repo:${i}`,
+            sandboxId: `e2b-${i}`,
+            state: 'READY',
+        }));
+        leaseRepo.findExpired.mockResolvedValue(leases as any);
+
+        let maxConcurrent = 0;
+        let currentConcurrent = 0;
+
+        (Sandbox.kill as jest.Mock).mockImplementation(async () => {
+            currentConcurrent++;
+            maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
+            await new Promise((r) => setTimeout(r, 10));
+            currentConcurrent--;
+        });
+
+        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
+        const mockDistributedLockService = {
+            acquire: jest.fn().mockResolvedValue(mockLock),
+        };
+
+        const reaper = new SandboxLeaseReaperService(
+            leaseRepo,
+            mockDistributedLockService as any,
+            configService,
+        );
+
+        await reaper.reapExpiredLeases();
+
+        // Max concurrency never exceeded 5
+        expect(maxConcurrent).toBeLessThanOrEqual(5);
+        // All 10 leases were processed
+        expect(leaseRepo.delete).toHaveBeenCalledTimes(10);
+    });
+
+    it('reapExpiredLeases: one item failing to kill does not block the other two, and its own lease is preserved for retry', async () => {
+        const leaseRepo = makeMockLeaseRepo();
+        const configService = makeMockConfigService('test-e2b-key');
+
+        leaseRepo.findExpired.mockResolvedValue([
+            { _id: 'org:repo:1', sandboxId: 'e2b-1', state: 'READY' },
+            { _id: 'org:repo:2', sandboxId: 'e2b-2', state: 'READY' },
+            { _id: 'org:repo:3', sandboxId: 'e2b-3', state: 'READY' },
+        ] as any);
+
+        // Second kill throws a non-"already-gone" error
+        (Sandbox.kill as jest.Mock)
+            .mockResolvedValueOnce(undefined)
+            .mockRejectedValueOnce(new Error('E2B 500'))
+            .mockResolvedValueOnce(undefined);
+
+        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
+        const mockDistributedLockService = {
+            acquire: jest.fn().mockResolvedValue(mockLock),
+        };
+
+        const reaper = new SandboxLeaseReaperService(
+            leaseRepo,
+            mockDistributedLockService as any,
+            configService,
+        );
+
+        await reaper.reapExpiredLeases();
+
+        // The two leases whose kill succeeded are deleted; the one whose
+        // kill genuinely failed is left in place (still expired) so the
+        // NEXT tick retries the kill instead of permanently orphaning the
+        // E2B sandbox with no Mongo trace left to reconcile against.
+        expect(leaseRepo.delete).toHaveBeenCalledTimes(2);
+        expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:1');
+        expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:3');
+        expect(leaseRepo.delete).not.toHaveBeenCalledWith('org:repo:2');
+    });
+
+    it('reapExpiredLeases: skips Sandbox.kill when no API key is configured', async () => {
+        const leaseRepo = makeMockLeaseRepo();
+        const configService = makeMockConfigService();
+        (configService.get as jest.Mock).mockReturnValue(undefined);
+
+        leaseRepo.findExpired.mockResolvedValue([
+            { _id: 'org:repo:1', sandboxId: 'e2b-1', state: 'READY' },
+        ] as any);
+
+        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
+        const mockDistributedLockService = {
+            acquire: jest.fn().mockResolvedValue(mockLock),
+        };
+
+        const reaper = new SandboxLeaseReaperService(
+            leaseRepo,
+            mockDistributedLockService as any,
+            configService,
+        );
+
+        await reaper.reapExpiredLeases();
+
+        // No kill attempted, but lease was still deleted
+        expect(Sandbox.kill).not.toHaveBeenCalled();
+        expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:1');
+    });
+
+    it('killIdleSandboxes: processes with bounded concurrency (max 5 in-flight)', async () => {
+        const leaseRepo = makeMockLeaseRepo();
+        const configService = makeMockConfigService('test-e2b-key');
+
+        // Create 10 idle leases ready to kill
+        const leases = Array.from({ length: 10 }, (_, i) => ({
+            _id: `org-uuid:repo:${i}`,
+            sandboxId: `e2b-idle-${i}`,
+            leaseCount: 0,
+            state: 'READY',
+            killAt: new Date(Date.now() - 1000),
+        }));
+        leaseRepo.findReadyToKill.mockResolvedValue(leases as any);
+
+        let maxConcurrent = 0;
+        let currentConcurrent = 0;
+
+        (Sandbox.kill as jest.Mock).mockImplementation(async () => {
+            currentConcurrent++;
+            maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
+            await new Promise((r) => setTimeout(r, 10));
+            currentConcurrent--;
+        });
+
+        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
+        const mockDistributedLockService = {
+            acquire: jest.fn().mockResolvedValue(mockLock),
+        };
+
+        const reaper = new SandboxLeaseReaperService(
+            leaseRepo,
+            mockDistributedLockService as any,
+            configService,
+        );
+
+        await reaper.killIdleSandboxes();
+
+        // Max concurrency never exceeded 5
+        expect(maxConcurrent).toBeLessThanOrEqual(5);
+        // All 10 leases were processed
+        expect(leaseRepo.delete).toHaveBeenCalledTimes(10);
+    });
+
+    it('killIdleSandboxes: treats E2B "already gone" as successful cleanup', async () => {
         const leaseRepo = makeMockLeaseRepo();
         const configService = makeMockConfigService('test-e2b-key');
 
         leaseRepo.findReadyToKill.mockResolvedValue([
             {
-                _id: 'org-uuid:repo:9',
-                sandboxId: 'e2b-already-gone',
+                _id: 'org-uuid:repo:1',
+                sandboxId: 'e2b-gone',
                 leaseCount: 0,
                 state: 'READY',
                 killAt: new Date(Date.now() - 1000),
-                createdAt: new Date(Date.now() - 60 * 1000),
-                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
             } as any,
-        ]);
+        ] as any);
 
-        // E2B already removed the sandbox (race with reaper, external kill, etc.)
-        (Sandbox.kill as jest.Mock).mockRejectedValueOnce(
+        (Sandbox.kill as jest.Mock).mockRejectedValue(
             new Error('sandbox not found'),
         );
 
@@ -908,9 +1982,350 @@ describe('SandboxLeaseReaperService', () => {
 
         await reaper.killIdleSandboxes();
 
-        // Doc deleted regardless — lease can't linger waiting for a sandbox
-        // that's already gone
-        expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:9');
-        expect(mockLock.release).toHaveBeenCalledTimes(1);
+        // Lease was deleted despite "not found" error
+        expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:1');
+    });
+
+    it('killIdleSandboxes: one item failing to kill does not block the other two, and its own lease is preserved for retry', async () => {
+        const leaseRepo = makeMockLeaseRepo();
+        const configService = makeMockConfigService('test-e2b-key');
+
+        leaseRepo.findReadyToKill.mockResolvedValue([
+            {
+                _id: 'org-uuid:repo:1',
+                sandboxId: 'e2b-1',
+                state: 'READY',
+                killAt: new Date(),
+            },
+            {
+                _id: 'org-uuid:repo:2',
+                sandboxId: 'e2b-2',
+                state: 'READY',
+                killAt: new Date(),
+            },
+            {
+                _id: 'org-uuid:repo:3',
+                sandboxId: 'e2b-3',
+                state: 'READY',
+                killAt: new Date(),
+            },
+        ] as any);
+
+        // Second kill throws a non-"already-gone" error
+        (Sandbox.kill as jest.Mock)
+            .mockResolvedValueOnce(undefined)
+            .mockRejectedValueOnce(new Error('E2B 500'))
+            .mockResolvedValueOnce(undefined);
+
+        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
+        const mockDistributedLockService = {
+            acquire: jest.fn().mockResolvedValue(mockLock),
+        };
+
+        const reaper = new SandboxLeaseReaperService(
+            leaseRepo,
+            mockDistributedLockService as any,
+            configService,
+        );
+
+        await reaper.killIdleSandboxes();
+
+        // The two leases whose kill succeeded are deleted; the one whose
+        // kill genuinely failed is left in place (killAt still <= now) so
+        // the NEXT 30s tick retries the kill instead of permanently
+        // orphaning the E2B sandbox with no lease left to reconcile against.
+        expect(leaseRepo.delete).toHaveBeenCalledTimes(2);
+        expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:1');
+        expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:3');
+        expect(leaseRepo.delete).not.toHaveBeenCalledWith('org-uuid:repo:2');
+    });
+
+    it('reaper force-cleans expired local lease with leaked leaseCount', async () => {
+        const leaseRepo = makeMockLeaseRepo();
+        const configService = makeMockConfigService('test-e2b-key');
+        const os = require('os');
+        const path = require('path');
+        const localSandboxId = path.join(os.tmpdir(), 'kodus-sandbox-stale');
+
+        leaseRepo.findExpired.mockResolvedValue([
+            {
+                _id: 'org:repo:stale',
+                sandboxId: localSandboxId,
+                state: 'READY',
+            } as any,
+        ]);
+        leaseRepo.findByPrKey.mockResolvedValue({
+            _id: 'org:repo:stale',
+            sandboxId: localSandboxId,
+            leaseCount: 1,
+            state: 'READY',
+        } as any);
+        leaseRepo.claimCleanup.mockResolvedValue({
+            _id: 'org:repo:stale',
+            sandboxId: localSandboxId,
+            cleanupStatus: 'in_progress',
+        } as any);
+        leaseRepo.completeCleanup.mockResolvedValue(true);
+
+        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
+        const mockDistributedLockService = {
+            acquire: jest.fn().mockResolvedValue(mockLock),
+        };
+
+        const reaper = new SandboxLeaseReaperService(
+            leaseRepo,
+            mockDistributedLockService as any,
+            configService,
+        );
+
+        await reaper.reapExpiredLeases();
+
+        expect(leaseRepo.findByPrKey).toHaveBeenCalledWith('org:repo:stale');
+        expect(leaseRepo.resetStaleCleanup).toHaveBeenCalledTimes(1);
+        expect(leaseRepo.resetStaleCleanup).toHaveBeenCalledWith(
+            'org:repo:stale',
+            expect.any(Date),
+        );
+        expect(leaseRepo.claimCleanup).toHaveBeenCalledWith(
+            'org:repo:stale',
+            localSandboxId,
+            false,
+        );
+        expect(leaseRepo.completeCleanup).toHaveBeenCalledWith(
+            'org:repo:stale',
+            localSandboxId,
+        );
+    });
+
+    it('idle local cleanup skips when concurrent acquire bumped leaseCount', async () => {
+        const leaseRepo = makeMockLeaseRepo();
+        const configService = makeMockConfigService('test-e2b-key');
+        const os = require('os');
+        const path = require('path');
+        const localSandboxId = path.join(os.tmpdir(), 'kodus-sandbox-race');
+
+        leaseRepo.findReadyToKill.mockResolvedValue([
+            {
+                _id: 'org:repo:race',
+                sandboxId: localSandboxId,
+                state: 'READY',
+            } as any,
+        ]);
+        // Concurrent acquire bumped leaseCount to 1
+        leaseRepo.findByPrKey.mockResolvedValue({
+            _id: 'org:repo:race',
+            sandboxId: localSandboxId,
+            leaseCount: 1,
+            state: 'READY',
+        } as any);
+
+        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
+        const mockDistributedLockService = {
+            acquire: jest.fn().mockResolvedValue(mockLock),
+        };
+
+        const reaper = new SandboxLeaseReaperService(
+            leaseRepo,
+            mockDistributedLockService as any,
+            configService,
+        );
+
+        await reaper.killIdleSandboxes();
+
+        expect(leaseRepo.findByPrKey).toHaveBeenCalledWith('org:repo:race');
+        expect(leaseRepo.claimCleanup).not.toHaveBeenCalled();
+        expect(leaseRepo.completeCleanup).not.toHaveBeenCalled();
+    });
+});
+
+// ─── Reconnect-path RemoteCommands (regression: blind reads bug) ──────────────
+//
+// The joiner/reconnect path (buildSandboxInstance) used to run sed/rg/find with
+// relative paths from the sandbox default CWD (/home/user) instead of the repo
+// root (/home/user/repo), and swallowed errors with `2>/dev/null || true` with
+// no log. Net effect: every reconnected review pass read '' for real files and
+// approved PRs blind. These tests pin the corrected behavior.
+describe('SandboxLeaseManager reconnect RemoteCommands (blind-read fix)', () => {
+    const REPO_DIR = '/home/user/repo';
+
+    function makeFakeE2bSandbox(
+        run: (cmd: string, opts?: any) => Promise<any>,
+    ): any {
+        return {
+            sandboxId: 'sbx-reconnect-1',
+            commands: { run: jest.fn(run) },
+            files: { read: jest.fn(), write: jest.fn() },
+        };
+    }
+
+    function buildReconnectCommands(fake: any) {
+        const manager = makeLeaseManager(
+            makeMockLeaseRepo(),
+            makeMockSandboxProvider(true),
+            makeMockConfigService('test-e2b-key'),
+        );
+        const instance = (manager as any).buildSandboxInstance(
+            fake,
+            'org:repo:225',
+            'lease-1',
+        );
+        return { manager, remoteCommands: instance.remoteCommands };
+    }
+
+    it('read resolves relative paths against the repo root, not the sandbox CWD', async () => {
+        const relPath = 'src/components/Button/Button.tsx';
+        // Simulate a real sandbox: the file only exists under REPO_DIR.
+        const fake = makeFakeE2bSandbox(async (cmd: string) => {
+            if (cmd.includes(`${REPO_DIR}/${relPath}`)) {
+                return {
+                    stdout: 'export function Button() {}\n',
+                    stderr: '',
+                    exitCode: 0,
+                };
+            }
+            return { stdout: '', stderr: '', exitCode: 0 }; // wrong CWD → nothing
+        });
+        const { remoteCommands } = buildReconnectCommands(fake);
+
+        const out = await remoteCommands.read(relPath, 100, 130);
+
+        expect(out).toContain('export function Button');
+        expect(fake.commands.run).toHaveBeenCalledWith(
+            expect.stringContaining(`${REPO_DIR}/${relPath}`),
+            expect.anything(),
+        );
+    });
+
+    it('grep runs inside the repo dir (cd $REPO_DIR)', async () => {
+        const fake = makeFakeE2bSandbox(async (cmd: string) =>
+            cmd.startsWith(`cd ${REPO_DIR} &&`)
+                ? { stdout: 'src/a.ts:1:hit\n', stderr: '', exitCode: 0 }
+                : { stdout: '', stderr: '', exitCode: 1 },
+        );
+        const { remoteCommands } = buildReconnectCommands(fake);
+
+        const out = await remoteCommands.grep('hit', '.', undefined);
+
+        expect(out).toContain('src/a.ts');
+        expect(fake.commands.run).toHaveBeenCalledWith(
+            expect.stringMatching(new RegExp(`^cd ${REPO_DIR} &&`)),
+            expect.anything(),
+        );
+    });
+
+    it('listDir cds into the repo root and lists RELATIVE paths', async () => {
+        // The reconnect path shares buildE2BRemoteCommands with the creator, so
+        // it inherits the shape `grep` already used: `cd <repo> && ... '<rel>'`.
+        // This test used to pin the ABSOLUTE form, which is exactly what made
+        // RepoLookup.exists — it compares repo-relative paths — answer false
+        // for every file that was in fact there (issue #1826).
+        const fake = makeFakeE2bSandbox(async (cmd: string) =>
+            cmd.startsWith(`cd ${REPO_DIR} &&`) && cmd.includes("'src'")
+                ? { stdout: 'src/a.ts\n', stderr: '', exitCode: 0 }
+                : { stdout: '', stderr: '', exitCode: 0 },
+        );
+        const { remoteCommands } = buildReconnectCommands(fake);
+
+        const out = await remoteCommands.listDir('src', 2);
+
+        expect(out).toBe('src/a.ts\n');
+        expect(out).not.toContain(REPO_DIR);
+    });
+
+    it('read propagates real errors instead of silently returning empty', async () => {
+        // Previously `2>/dev/null || true` masked this as empty stdout, exit 0.
+        const fake = makeFakeE2bSandbox(async () => ({
+            stdout: '',
+            stderr: "sed: can't read /home/user/repo/nope.ts: No such file or directory",
+            exitCode: 2,
+        }));
+        const { remoteCommands } = buildReconnectCommands(fake);
+
+        await expect(remoteCommands.read('nope.ts', 1, 10)).rejects.toThrow(
+            /No such file/,
+        );
+    });
+
+    it('read emits a [SANDBOX-READ] warning on an empty result (observability)', async () => {
+        const fake = makeFakeE2bSandbox(async () => ({
+            stdout: '',
+            stderr: '',
+            exitCode: 0,
+        }));
+        const { manager, remoteCommands } = buildReconnectCommands(fake);
+        const warnSpy = jest
+            .spyOn((manager as any).logger, 'warn')
+            .mockImplementation(() => undefined);
+
+        await remoteCommands.read('empty.ts', 1, 10);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringContaining('[SANDBOX-READ] Empty result'),
+            }),
+        );
+    });
+
+    it('read rejects absolute paths and ".." traversal (security guard)', async () => {
+        const { remoteCommands } = buildReconnectCommands(
+            makeFakeE2bSandbox(async () => ({
+                stdout: '',
+                stderr: '',
+                exitCode: 0,
+            })),
+        );
+
+        await expect(remoteCommands.read('/etc/passwd', 0, 0)).rejects.toThrow(
+            /Absolute/,
+        );
+        await expect(remoteCommands.read('../secrets', 0, 0)).rejects.toThrow(
+            /\.\./,
+        );
+    });
+
+    it('grep rejects absolute paths and ".." traversal (security guard)', async () => {
+        const run = jest.fn(async () => ({
+            stdout: '',
+            stderr: '',
+            exitCode: 1,
+        }));
+        const { remoteCommands } = buildReconnectCommands(
+            makeFakeE2bSandbox(run),
+        );
+
+        await expect(
+            remoteCommands.grep('x', '/etc', undefined),
+        ).rejects.toThrow(/Absolute/);
+        await expect(
+            remoteCommands.grep('x', '../secrets', undefined),
+        ).rejects.toThrow(/\.\./);
+        // The command must never have run for a rejected path.
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('empty read warning carries structured metadata (path, exitCode, org)', async () => {
+        const fake = makeFakeE2bSandbox(async () => ({
+            stdout: '',
+            stderr: 'boom',
+            exitCode: 3,
+        }));
+        const { manager, remoteCommands } = buildReconnectCommands(fake);
+        const warnSpy = jest
+            .spyOn((manager as any).logger, 'warn')
+            .mockImplementation(() => undefined);
+
+        // prKey passed by buildReconnectCommands is 'org:repo:225'.
+        await expect(remoteCommands.read('x.ts', 1, 10)).rejects.toThrow(
+            /boom/,
+        );
+        expect(warnSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org',
+                    path: 'x.ts',
+                    exitCode: 3,
+                }),
+            }),
+        );
     });
 });

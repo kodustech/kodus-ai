@@ -1,0 +1,3187 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "ef8ace6e81c2ad04800d9543336439a8767fa987",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-15T22:56:31.192Z",
+  "updatedAt": "2026-10-15T23:19:15.752Z",
+  "complete": true,
+  "selectedCases": [
+    "R7-refines-prior",
+    "K4-rule-repeats-declined-bug",
+    "P01-rule-skip-comment-incomplete",
+    "P11-rule-generated-client-line-retouched",
+    "P21-rule-unit-constants-out-of-40",
+    "P31-skip-before-title-set",
+    "P41-raise-breaks-batch-caller"
+  ],
+  "casesSourceDigest": "39c06b54e560bda79f9ea88b12e3b36d56fd9beb330c779d6abe2810a1f20359",
+  "summary": {
+    "measured": 35,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 30,
+        "violations": 2,
+        "rate": 0.067
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 3,
+        "violations": 2,
+        "rate": 0.667
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 25,
+        "violations": 2,
+        "rate": 0.08
+      },
+      "index-reference (#2039)": {
+        "n": 37,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R7-refines-prior · signal-not-passed-repeat [not_deliver, proposed]": {
+        "pass": 3,
+        "n": 5,
+        "delivered": 2
+      },
+      "K4-rule-repeats-declined-bug · finishRun-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K4-rule-repeats-declined-bug · finishBatch-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P01-rule-skip-comment-incomplete · skip-comment-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P11-rule-generated-client-line-retouched · generated-client-hand-edit-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P11-rule-generated-client-line-retouched · console-error-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P21-rule-unit-constants-out-of-40 · avatar-size-literal-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P21-rule-unit-constants-out-of-40 · staging-retention-literal-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P31-skip-before-title-set · skip-before-title-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P31-skip-before-title-set · scope-null-match-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P41-raise-breaks-batch-caller · renew-due-abort-linked [deliver_linked]": {
+        "pass": 1,
+        "n": 5,
+        "delivered": 3
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.8909090909090909,
+    "floor": 0.8,
+    "baseline": 0.903
+  },
+  "runs": 5,
+  "tokens": {
+    "in": 2388980,
+    "out": 117970,
+    "cacheRead": 2052162,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 35
+  },
+  "cases": [
+    {
+      "id": "R7-refines-prior",
+      "checks": "signal-not-passed-repeat: not posted",
+      "hits": 3,
+      "total": 5,
+      "detail": [
+        {
+          "what": "signal-not-passed-repeat",
+          "ok": false
+        },
+        {
+          "what": "signal-not-passed-repeat",
+          "ok": true
+        },
+        {
+          "what": "signal-not-passed-repeat",
+          "ok": false
+        },
+        {
+          "what": "signal-not-passed-repeat",
+          "ok": true
+        },
+        {
+          "what": "signal-not-passed-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "K4-rule-repeats-declined-bug",
+      "checks": "finishRun-repeat: not posted; finishBatch-new-site: posted",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        },
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        },
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        },
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        },
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P01-rule-skip-comment-incomplete",
+      "checks": "Kody Rule on a file new in the PR; the developer answered with a comment that documents nothing; stored implemented; 15 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "skip-comment-repeat",
+          "ok": true
+        },
+        {
+          "what": "skip-comment-repeat",
+          "ok": true
+        },
+        {
+          "what": "skip-comment-repeat",
+          "ok": true
+        },
+        {
+          "what": "skip-comment-repeat",
+          "ok": true
+        },
+        {
+          "what": "skip-comment-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P11-rule-generated-client-line-retouched",
+      "checks": "Kody Rule \"regenerate, do not hand-edit\" on a generated API client; the hand-edited line it flagged was edited by hand again this round; stored not_implemented; 10 earlier comments",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "generated-client-hand-edit-repeat",
+          "ok": true
+        },
+        {
+          "what": "console-error-unrelated",
+          "ok": true
+        },
+        {
+          "what": "generated-client-hand-edit-repeat",
+          "ok": true
+        },
+        {
+          "what": "console-error-unrelated",
+          "ok": true
+        },
+        {
+          "what": "generated-client-hand-edit-repeat",
+          "ok": true
+        },
+        {
+          "what": "console-error-unrelated",
+          "ok": true
+        },
+        {
+          "what": "generated-client-hand-edit-repeat",
+          "ok": true
+        },
+        {
+          "what": "console-error-unrelated",
+          "ok": true
+        },
+        {
+          "what": "generated-client-hand-edit-repeat",
+          "ok": true
+        },
+        {
+          "what": "console-error-unrelated",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P21-rule-unit-constants-out-of-40",
+      "checks": "Kody Rule (no magic literals for units and quantities) on a Go file new in the PR; stored not_implemented; more than 40 later comments push the earlier one out of the history",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "avatar-size-literal-repeat",
+          "ok": true
+        },
+        {
+          "what": "staging-retention-literal-new-site",
+          "ok": true
+        },
+        {
+          "what": "avatar-size-literal-repeat",
+          "ok": true
+        },
+        {
+          "what": "staging-retention-literal-new-site",
+          "ok": true
+        },
+        {
+          "what": "avatar-size-literal-repeat",
+          "ok": true
+        },
+        {
+          "what": "staging-retention-literal-new-site",
+          "ok": true
+        },
+        {
+          "what": "avatar-size-literal-repeat",
+          "ok": true
+        },
+        {
+          "what": "staging-retention-literal-new-site",
+          "ok": true
+        },
+        {
+          "what": "avatar-size-literal-repeat",
+          "ok": true
+        },
+        {
+          "what": "staging-retention-literal-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P31-skip-before-title-set",
+      "checks": "Bug finder; a skip check runs before the title it tests is assigned, so it never matches; the developer extracted the check into a helper and kept the order; stored implemented; 44 earlier comments",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "skip-before-title-repeat",
+          "ok": true
+        },
+        {
+          "what": "scope-null-match-unrelated",
+          "ok": true
+        },
+        {
+          "what": "skip-before-title-repeat",
+          "ok": true
+        },
+        {
+          "what": "scope-null-match-unrelated",
+          "ok": true
+        },
+        {
+          "what": "skip-before-title-repeat",
+          "ok": true
+        },
+        {
+          "what": "scope-null-match-unrelated",
+          "ok": true
+        },
+        {
+          "what": "skip-before-title-repeat",
+          "ok": true
+        },
+        {
+          "what": "scope-null-match-unrelated",
+          "ok": true
+        },
+        {
+          "what": "skip-before-title-repeat",
+          "ok": true
+        },
+        {
+          "what": "scope-null-match-unrelated",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P41-raise-breaks-batch-caller",
+      "checks": "Finder (Ruby): applying the earlier suggestion (implemented) introduced a new, different bug in a caller; must be posted and linked to the suggestion it revises; 3 earlier comments",
+      "hits": 1,
+      "total": 5,
+      "detail": [
+        {
+          "what": "renew-due-abort-linked",
+          "ok": true
+        },
+        {
+          "what": "renew-due-abort-linked",
+          "ok": false
+        },
+        {
+          "what": "renew-due-abort-linked",
+          "ok": false
+        },
+        {
+          "what": "renew-due-abort-linked",
+          "ok": false
+        },
+        {
+          "what": "renew-due-abort-linked",
+          "ok": false
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 68010,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController's signal is never passed to fetch — line 5 calls fetch(url) without { signal: controller.signal }, so controller.abort() has no effect. WHY: the 5s timeout is a no-op and getJson still hangs forever on a server that never answers, which is exactly the failure the timeout was added to prevent. HOW: pass the signal: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": true,
+          "rationale": "Confirmed: line 5 calls `fetch(url)` with no options, so the AbortController's signal is never wired to the request. `controller.abort()` at line 3 therefore has no effect and the 5s timeout cannot cancel a hanging fetch, defeating the timeout's purpose. This is a concrete, verified bug, not style. It is a distinct problem from the previous suggestion (which only asked to add a timeout) — the timeout was added but is ineffective, so this is a new bug in the applied fix, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 4,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-http",
+          "label": "bug",
+          "marked": false,
+          "file": "src/http/client.ts",
+          "line": 2,
+          "text": "**Revises an earlier Kody suggestion** on `src/http/client.ts:2` (2026-09-30 00:10 UTC).\n\nBecause `fetch(url)` on line 5 omits the AbortController's `signal`, `controller.abort()` has no effect, so the 5s timeout is a no-op and `getJson` can still hang forever on a server that never answers. Pass the signal to `fetch` by calling `fetch(url, { signal: controller.signal })`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 49414,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: the AbortController is created and aborted but never attached to fetch — `fetch(url)` is called without `signal: controller.signal`, so `controller.abort()` has no effect on the request. WHY: the 5s timeout is inert; when a server never responds the timer fires and aborts an unattached controller while the fetch remains pending, so the caller still hangs forever (the hang the earlier timeout suggestion was meant to fix). HOW: pass the signal into fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": false,
+          "rationale": "The technical claim is factually correct — the AbortController is never wired into fetch via `signal`, so `controller.abort()` is inert. BUT this is a repeat of PreviousReviewDecision `round-a-http` (Location src/http/client.ts:2-3), which raised the identical failure: getJson's fetch has no effective timeout, so a never-responding server hangs the caller forever. The finding names a new cause (signal not attached) but describes the exact same consequence (indefinite hang in the same operation) and argues the earlier suggested fix is incomplete. Per the rules, a finding that re-raises the problem a PreviousReviewDecisions entry already raised — including when it says the developer's fix is incomplete — must be dropped. The decision's Outcome was \"implemented\" and the current diff shows the AbortController change was applied, with no evidence it was reverted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 25
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56488,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: the `url` argument is passed straight to `fetch(url)` with no protocol/host allowlist or validation. WHY: if any caller derives this URL from user input, an attacker can request internal-only endpoints (e.g. cloud metadata `http://169.254.169.254/...` or localhost services), turning this into an SSRF primitive that returns the internal response body to the caller. HOW: validate the parsed URL's protocol against an allowlist (https/http) and reject private/loopback/link-local hosts before calling `fetch`, or restrict callers to a fixed base host.",
+          "keep": true,
+          "rationale": "The code at src/http/client.ts:5 passes `url` straight to `fetch(url)` with no protocol/host validation. This is a generic exported helper (getJson) with no other in-repo callers currently visible, so whether an attacker can actually reach it via user input is not determinable from this repo alone. The claim is a conditional SSRF-primitive concern (\"if any caller derives this URL from user input\"), and I cannot concretely refute it: no upstream guard or allowlist exists in the function. This is also distinct from the earlier timeout finding, which addressed a different failure (hangs). Not a refutation, so keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "getJson\\(|client\\.(get|fetch|request)",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "getJson",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: the AbortController is created and aborted after 5s but its `signal` is never passed to `fetch(url)`, so the timeout does nothing. WHY: `controller.abort()` only cancels a request whose signal was supplied to fetch; without `{ signal: controller.signal }` a server that never responds still hangs the caller indefinitely, so the added timeout fails to achieve its purpose. HOW: pass the signal to fetch, e.g. `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": false,
+          "rationale": "The finding is technically correct (fetch is called without the AbortController's signal, so the 5s abort does nothing and the caller can still hang). But this is the exact failure already raised by PreviousDecision round-a-http on this PR: \"getJson calls fetch with no timeout, so a server that never answers hangs the caller forever. Add a timeout (e.g. an AbortController aborted after 5s).\" Outcome: implemented. The current diff shows the developer applied that suggestion but left it incomplete (signal not passed to fetch). Judged by the failure (caller hangs when the server never answers) this is the same problem the entry raised, merely blaming the developer's incomplete fix — which the rules explicitly say to drop.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: `fetch(url)` is called without the abort signal and its response is parsed without checking `res.ok`, so the `try/finally` added here still lets `res.json()` throw on error responses. WHY: when the endpoint returns a non-2xx or non-JSON body (HTML error page, 204/empty body, truncated body), `await res.json()` rejects with a `SyntaxError` that propagates to the caller as a parse error instead of an HTTP/network error, and successful-looking error responses are returned to callers as parsed data. HOW: pass the signal and validate the response before parsing, e.g. `const res = await fetch(url, { signal: controller.signal }); if (!res.ok) throw new Error(`HTTP ${res.status}`); return await res.json();`.",
+          "keep": true,
+          "rationale": "Confirmed: src/http/client.ts:5-6 calls `fetch(url)` without passing `controller.signal` (so the 5s timeout never actually aborts the request) and returns `res.json()` without checking `res.ok`. On a non-2xx/non-JSON body the JSON parse rejects, propagating a SyntaxError instead of an HTTP error, and error responses can be returned as parsed data. The previous review decision (round-a-http) addressed a DIFFERENT problem (missing timeout / infinite hang); this finding is a distinct failure (no signal wired up + no res.ok check causing parse errors), not a repeat of that hang. The claim is factually supported by the cited lines.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "getJson\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "getJson|from ['\"].*client",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/http/client.ts",
+          "line": 4,
+          "text": "Because `fetch(url)` is called without the abort signal and the response is parsed without checking `res.ok`, a non-2xx or non-JSON body (HTML error page, 204/empty body, truncated body) makes `await res.json()` reject with a `SyntaxError` that reaches the caller as a parse error instead of an HTTP/network error, while successful-looking error responses are returned to callers as parsed data. Pass the signal and validate the response before parsing, e.g. `const res = await fetch(url, { signal: controller.signal }); if (!res.ok) throw new Error(`HTTP ${res.status}`); return await res.json();`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "security",
+          "marked": false,
+          "file": "src/http/client.ts",
+          "line": 5,
+          "text": "Because `url` is passed straight to `fetch(url)` with no protocol/host allowlist or validation, any caller that derives it from user input lets an attacker request internal-only endpoints (e.g. cloud metadata `http://169.254.169.254/...` or localhost services), turning this into an SSRF primitive that returns the internal response body to the caller. Validate the parsed URL's protocol against an allowlist (https/http) and reject private/loopback/link-local hosts before calling `fetch`, or restrict callers to a fixed base host."
+        }
+      ],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 27105,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController is created and aborted by the 5s timer, but its signal is never passed to fetch — `fetch(url)` is called without `{ signal: controller.signal }`, so the timeout is a no-op. WHY: A server that never answers still hangs the caller indefinitely, because `controller.abort()` cancels nothing; the intended 5s timeout never fires on the actual request. HOW: Pass the signal into fetch, e.g. `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": false,
+          "rationale": "The technical claim is accurate: line 5 calls `fetch(url)` without `{ signal: controller.signal }`, so the abort never cancels the request. BUT this is exactly the problem raised by PreviousReviewDecisions entry `round-a-http` (src/http/client.ts:2-3, bug, outcome implemented): \"getJson calls fetch with no timeout, so a server that never answers hangs the caller forever.\" The consequence is the same failure — indefinite hang in the same getJson operation — and the finding merely points out the developer's applied fix (AbortController) is incomplete. Per the repeat rule, a finding raising the same failure the prior entry already described, even when it blames the attempted fix, must be dropped. The prior suggestion is already on the PR.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R7-refines-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 70262,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController created on line 2 is never passed to fetch — line 5 calls `fetch(url)` without `{ signal: controller.signal }`, so `controller.abort()` on line 3 aborts nothing. WHY: A server that never responds still hangs the caller forever, because the 5s timer has no effect on the in-flight request (the applied timeout fix is incomplete). HOW: pass the signal into fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": false,
+          "rationale": "The claim is technically accurate (signal not passed to fetch), but it re-raises the exact failure already reported in PreviousReviewDecisions entry \"round-a-http\" (getJson hangs forever on a server that never answers; add a timeout via AbortController, Outcome: implemented). The current diff gives no evidence the applied change was reverted — the developer added the AbortController and timer but forgot to wire the signal, i.e. the same hang problem in the same operation, which the rule says must be dropped as a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/http/client.ts",
+          "claim": "WHAT: The AbortController created on line 2 is never connected to the request — line 5 calls fetch(url) without passing { signal: controller.signal }. WHY: controller.abort() fires after 5s but the in-flight fetch is not listening, so a server that never responds still hangs getJson forever, meaning the added timeout has no effect. HOW: pass the signal to fetch: `const res = await fetch(url, { signal: controller.signal });`.",
+          "keep": false,
+          "rationale": "The earlier PreviousReviewDecisions entry (round-a-http) already raised this exact failure: getJson calls fetch with no effective timeout, so a server that never answers hangs the caller forever. The current finding describes the same failure in the same operation (getJson hangs forever because the timeout is ineffective), merely blaming the attempted fix (signal not passed to fetch). Per the rules, a finding that raises again the problem a prior entry already raised — including when it argues the developer's fix is incomplete — must be dropped. The technical claim itself is factually correct (the signal is indeed not passed), but it is a repeat of the already-posted issue, not a new defect.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/http/client.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "signal-not-passed-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21208,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "text": "A batch's outputs can become visible before its progress is recorded, so the batch appears partially complete. Per rule [1], call `db.progress.update` before `db.results.insertMany` in `finishBatch`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21770,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "text": "Because `finishBatch` inserts results before recording progress, results can be visible for a job whose progress was not recorded, violating rule [1]. Call `db.progress.update` before `db.results.insertMany` in the same function so the order matches the rule."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43664,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "text": "In `finishBatch`, batch outputs can become visible while the job's progress was never recorded, since `db.results.insertMany` runs before `db.progress.update`. Swap the two calls so the progress update precedes the result insertion."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 57349,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-bug-progress",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "text": "In the new `finishBatch` function, `db.results.insertMany` runs before `db.progress.update`, so batch outputs can be persisted without progress being recorded. Call `db.progress.update(batch.id, 'done')` first, then `db.results.insertMany(batch.id, batch.outputs)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53062,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "text": "Because `db.results.insertMany` runs before `db.progress.update` in `finishBatch`, batch results can become visible while the batch's progress was never recorded. Call `db.progress.update` before `db.results.insertMany` so progress is recorded first."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4475,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4704,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3222,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3371,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 4308,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14100,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P11-rule-generated-client-line-retouched",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "text": "Using `console.error` instead of the shared logger strips the log entry of its structured transport and level, breaking the no-console-logging rule. Restore the `logger.warn` call from `src/lib/logger.ts` so application logging stays consistent."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "text": "Interpolating `invoiceId` and `err` into the message makes the context unparseable by log tooling. Pass them as named fields with `logger.warn('could not load invoice lines', { invoiceId, err })` so the structured log fields rule is satisfied."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23492,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P11-rule-generated-client-line-retouched",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-P11-rule-generated-client-line-retouched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "text": "This catch block now uses `console.error`, violating the \"No console logging in application code\" rule and regressing from the previous `logger.warn` call by dropping the structured field object. Use the shared logger instead, for example `logger.error` with the structured context."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "text": "This log call passes `invoiceId` and `err` as positional arguments, so the context is not captured as named fields and violates the \"Structured log fields\" rule. Pass `{ invoiceId, err }` as the second argument to the logger so the context is structured."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 13018,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P11-rule-generated-client-line-retouched",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-P11-rule-generated-client-line-retouched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "text": "The `console.error` call breaks the rule against console logging in application code. Replace it with `logger.warn` from `src/lib/logger.ts`, passing `invoiceId` and `err` as named fields."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "text": "Passing `invoiceId` and `err` as positional arguments breaks the structured log fields rule. Change the call to `logger.warn` with `{ invoiceId, err }` as the second argument so the context is passed as an object of named fields."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 68755,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P11-rule-generated-client-line-retouched",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-P11-rule-generated-client-line-retouched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "text": "Using `console.error` here violates Rule [1], which requires application code to log through `src/lib/logger.ts`, and the previous `logger.warn` call was reverted. Replace the `console.error` call with `logger.error`, keeping the context object intact."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "text": "Passing `invoiceId` and `err` as positional `console` arguments violates Rule [2], which requires log calls to pass context as an object of named fields so logs stay structured and queryable, and the prior `logger.warn` call used `{ invoiceId, err }`. Use the shared logger and `logger.error('could not load invoice lines', { invoiceId, err })`."
+        },
+        {
+          "sourceIndex": 2,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "text": "Logging `invoiceId` exposes a document identifier and violates Rule [43], which forbids document ids in logs. Drop `invoiceId` from the logged context or log a redacted/hashed reference so no document id reaches the log sink."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P11-rule-generated-client-line-retouched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28731,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/api/generated/billingClient.ts",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P11-rule-generated-client-line-retouched",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-P11-rule-generated-client-line-retouched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-console"
+          ],
+          "marked": false,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "text": "In `src/billing/invoiceLines.ts`, using `console.error` in the catch block violates the \"No console logging in application code\" rule, regresses the previous `logger.warn` call, and drops the structured context object. Replace it with `logger.error` from `src/lib/logger.ts` and pass the context as a named-field object containing `invoiceId` and `err`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-structured-logs"
+          ],
+          "marked": false,
+          "file": "src/billing/invoiceLines.ts",
+          "line": 15,
+          "text": "In `src/billing/invoiceLines.ts`, passing `invoiceId` and `err` as positional arguments violates the \"Structured log fields\" rule and prevents downstream log processing from indexing by field name. Call `logger.error` with the context as an object of named fields containing `invoiceId` and `err`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "generated-client-hand-edit-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "console-error-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15724,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "text": "The inline `72 * time.Hour` in `internal/uploads/cleanup.go` violates the \"Name magic numbers and units\" rule and hides the retention policy, making the cleanup cutoff hard to change in one place. Extract it to a named constant such as `abandonedUploadRetention` and use `now.Add(-abandonedUploadRetention)` for the cutoff."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14857,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "text": "Keeping the 72-hour retention window inline as a quantity/unit literal hides its purpose and violates the named-constant rule. Define `tmpRetention` as `72 * time.Hour` near `tmpPrefix` and use `now.Add(-tmpRetention)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15709,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "text": "The inline `72 * time.Hour` in `now.Add` hides why that retention period was chosen and where to change it, and rule [1] requires such durations to be named constants since 72 falls outside the 0/1/-1 exempt set. Declare `staleUploadRetention` as `72 * time.Hour` and use it in the `now.Add` call."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14627,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "text": "The inline `72 * time.Hour` in the cleanup logic encodes a retention policy that should live in a named constant such as `abandonedUploadTTL`, so the value is documented in one place and can be tuned without hunting through logic. Declare that constant near `tmpPrefix` and use it in `PurgeAbandoned`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P21-rule-unit-constants-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18488,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 29,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "internal/uploads/avatar.go",
+          "line": 30,
+          "label": "kody_rules",
+          "earlierId": "round-a-P21-rule-unit-constants-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "file": "internal/uploads/cleanup.go",
+          "line": 20,
+          "text": "Inlining the retention period as `-72 * time.Hour` in the cleanup logic violates the 'Name magic numbers and units' rule and hides the cutoff policy. Extract it into a named constant such as `const staleUploadAge = 72 * time.Hour` next to `tmpPrefix` and use that constant here so the policy is documented and changed in one place."
+        }
+      ],
+      "claims": [
+        {
+          "id": "avatar-size-literal-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "staging-retention-literal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 77471,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: `scopeOf` calls `match[1]` on the result of `RegExp.exec`, but `exec` returns `null` for any title that is not `type(scope): ...` (e.g. \"Fix typo\", \"feat: add x\"), and the `as RegExpExecArray` cast suppresses the null check. WHY: `scopeOf(entry.title)` is invoked on line 34 for every non-skipped commit, so the first commit whose title lacks a `(scope)` prefix throws `TypeError: Cannot read properties of null (reading '1')` and aborts the release/changelog generation. HOW: guard the null case, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "Confirmed: the regex `/^\\w+\\(([^)]+)\\):/` requires a `(scope)` prefix and returns null otherwise (e.g. \"Fix typo\", \"feat: add x\"). The `as RegExpExecArray` cast suppresses the null check, and line 34 calls scopeOf on every non-skipped commit, so a title lacking a scope throws TypeError and aborts changelog generation. Real crash path, no upstream guard. Not a duplicate of prior decisions (those concern skip-before-title, unrelated).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf calls match[1] on the result of RegExp.exec, but exec returns null for any title that does not match type(scope): (e.g. 'Merge pull request #12', 'fix typo', 'feat: x'). WHY: buildEntries calls scopeOf unconditionally on line 34 for every non-skipped entry, so a single non-conventional commit title throws TypeError: Cannot read properties of null and aborts the whole changelog generation. HOW: guard the match and default the scope, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "Confirmed: line 24 casts exec result to RegExpExecArray and line 25 dereferences match[1] without a null guard. exec returns null for any title lacking `type(scope):` form. buildEntries (line 34) calls scopeOf unconditionally for every non-skipped entry, and SKIP (line 5) only covers chore/Merge/ci/docs — so titles like `fix typo` or `feat: x` pass through and throw TypeError, aborting changelog generation. This is a real crash, not a repeat of the prior `skip-before-title-set` decision (that fixed the title assignment ordering; this is a distinct null-deref in scopeOf).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: The applied fix for the skip-before-title problem is still wrong — `entry` is created with `title: ''` on line 31 and `shouldSkip(entry)` is called on line 32 before `entry.title` is assigned on line 33, so the SKIP check always tests the empty string. WHY: `SKIP.some((re) => re.test(''))` is always false, so `chore:`, `ci:`, `docs(...):` and `Merge ` commits are never skipped and still pollute the changelog — the exact behavior the earlier review asked to fix. HOW: assign the title first, then test it, e.g. set `entry.title = commit.message.split('\\n')[0].trim();` before `if (shouldSkip(entry)) continue;`.",
+          "keep": false,
+          "rationale": "The code fact is accurate: line 32 tests `shouldSkip(entry)` while `entry.title` is still `''`, so SKIP never matches. However, this is precisely the problem already raised by PreviousReviewDecision round-a-P31-skip-before-title-set (scripts/release/changelog.ts:21-23): \"buildEntries runs the SKIP check on entry.title before the title is assigned... Assign the title from the first line of the commit message first, then test it against SKIP.\" Same failure (chore:/ci:/docs/Merge commits never skipped), same operation, same fix. Its Outcome is \"implemented\" but the current diff shows the fix was not actually applied — that is a stale/incorrect implementation of the SAME issue, which the rules say not to re-report. DROP as a duplicate of an existing review comment.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "scripts/release/changelog.ts",
+          "line": 24,
+          "text": "Because `scopeOf(entry.title)` runs on line 34 for every non-skipped commit in `scripts/release/changelog.ts`, and the `as RegExpExecArray` cast hides that `RegExp.exec` returns `null`, the first title without a `(scope)` prefix throws `TypeError: Cannot read properties of null (reading '1')` and aborts release/changelog generation. Remove the cast and guard the null case by returning `match ? match[1] : ''`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "scripts/release/changelog.ts",
+          "line": 24,
+          "text": "Since `buildEntries` calls `scopeOf` unconditionally on line 34 for every non-skipped entry in `scripts/release/changelog.ts`, any title that does not match `type(scope):` (such as `Merge pull request #12`, `fix typo`, or `feat: x`) makes `RegExp.exec` return `null`, so `match[1]` throws `TypeError: Cannot read properties of null` and aborts the whole changelog generation. Guard the match and default the scope by returning `match ? match[1] : ''`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 77411,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf casts the result of RegExp.exec to RegExpExecArray and immediately reads match[1], but exec returns null for any title that does not match the `word(scope):` pattern (e.g. `feat: add thing`, `Merge branch`), so match[1] throws TypeError. WHY: buildEntries calls scopeOf on the title of every commit that passes the skip check (line 34), so a single scope-less commit crashes the entire changelog build instead of producing output. HOW: guard the null result, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "Confirmed. scopeOf casts RegExp.exec to RegExpExecArray and reads match[1] with no null guard; exec returns null for titles without the `word(scope):` pattern. buildEntries line 33 assigns the real title, then line 34 unconditionally calls scopeOf on it for every commit (the SKIP check on line 32 tests the still-empty title and never skips), so a single scope-less commit such as `feat: add thing` throws TypeError and crashes the changelog build. This is a distinct bug from the earlier title-ordering decision (round-a-P31-skip-before-title-set), which concerns skipping, not the null deref.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "buildEntries|scopeOf",
+                "path": "scripts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf calls `RegExp.exec(title)` and casts the result with `as RegExpExecArray`, then unconditionally reads `match[1]`; exec returns null for any title that does not match `^\\w+\\(([^)]+)\\):` (e.g. `feat: add export` or a bare `fix: …`). WHY: buildEntries calls scopeOf on every non-skipped commit (line 34), so a single scope-less commit throws `TypeError: Cannot read properties of null (reading '1')` and aborts the entire changelog generation instead of just omitting the scope. HOW: guard the null result and fall back to an empty/other scope, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';` (or use `match?.[1] ?? ''`).",
+          "keep": true,
+          "rationale": "Confirmed. scopeOf casts the result of /^\\w+\\(([^)]+)\\):/ .exec(title) to RegExpExecArray and reads match[1] unconditionally. For any title lacking a scope (e.g. `feat: add export`), exec returns null, so match[1] throws TypeError. buildEntries calls scopeOf on every non-skipped commit at line 34, so one scope-less commit aborts changelog generation. The only relevant previous decision (round-a-P31) concerns the SKIP check running before the title is set — a different problem (nothing being skipped) in the same function; it does not cover the null-exec crash. Root cause and failure path both verified; keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "scopeOf|buildEntries"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "text": "Because `scopeOf` casts the result of `RegExp.exec` to `RegExpExecArray` and immediately reads `match[1]`, any title that does not match the `word(scope):` pattern (such as `feat: add thing` or `Merge branch`) throws a `TypeError`; since `buildEntries` calls `scopeOf` on every non-skipped commit at line 34, a single scope-less commit crashes the entire changelog build. Guard the null result so `scopeOf` returns an empty string when the regex does not match."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "text": "Because `scopeOf` calls `RegExp.exec(title)`, casts the result with `as RegExpExecArray`, and unconditionally reads `match[1]`, any title without the `^\\w+\\(([^)]+)\\):` pattern (such as `feat: add export` or a bare `fix: …`) throws `TypeError: Cannot read properties of null (reading '1')`; since `buildEntries` calls `scopeOf` on every non-skipped commit at line 34, one scope-less commit aborts the entire changelog generation. Guard the null result and fall back to an empty or other scope, for example with `match?.[1] ?? ''`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59034,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf reads match[1] from RegExp.exec without checking for null; exec returns null whenever the title has no 'type(scope):' prefix. WHY: any commit like 'fix typo' or 'initial commit' makes scopeOf throw 'Cannot read properties of null (reading 1)', aborting the entire changelog build. HOW: guard the null result and return a fallback scope (e.g. 'other').",
+          "keep": true,
+          "rationale": "The cited code (lines 23-26) unconditionally returns match[1] after exec without a null check. In buildEntries (line 33-34), scopeOf is called on every non-skipped commit's title. Titles like 'fix typo' or 'initial commit' have no 'type(scope):' prefix, so the regex returns null and match[1] throws 'Cannot read properties of null', aborting the changelog build. The PreviousReviewDecisions entry round-a-P31-skip-before-title-set concerns a different bug (SKIP check running before title assignment), not the null-exec dereference, so this is not a repeat. The claim is technically accurate and refutation is not possible.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: shouldSkip(entry) is called at line 32 while entry.title is still '' (assigned only at line 33), so the SKIP regexes always test the empty string and never match. WHY: chore:, ci:, docs(...) and Merge commits are never filtered out and all end up in the changelog. HOW: assign entry.title (and scope) from the commit message before calling shouldSkip.",
+          "keep": false,
+          "rationale": "The candidate finding is a repeat of PreviousReviewDecision index 22 (round-a-P31-skip-before-title-set), which was already posted on this exact pull request and describes the identical problem: buildEntries runs the SKIP check on entry.title before the title is assigned, so it tests the empty string and chore:/ci:/docs/Merge commits are never filtered. The current code (lines 32-34) indeed still calls shouldSkip(entry) before assigning entry.title, so the bug persists, but the rules explicitly require dropping a finding that re-raises the problem an earlier decision already raised on this PR — even when the fix is incomplete. Judge by the failure (unfiltered commits in the changelog), which is precisely what entry 22 describes.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: renderChangelog emits a `### ${scope}` heading for every entry, but buildEntries produces entries whose scope can be the empty string (any commit whose title does not match `^\\w+\\(...\\):` — e.g. `feat: x` or a plain title), so those entries are grouped under an empty `### ` heading. WHY: commits without a conventional `(scope)` are silently mis-grouped into a nameless section instead of a general/other bucket, producing a malformed changelog and dropping the scope label from the output. HOW: fall back to a default section name when scope is empty, e.g. compute `const scope = entry.scope || 'other';` in renderChangelog (or set a default in buildEntries).",
+          "keep": false,
+          "rationale": "Refuted. The claim asserts buildEntries produces entries whose scope is the empty string for non-conventional titles (e.g. `feat: x`), which then render under an empty `### ` heading. But scopeOf (lines 23-26) does `return match[1]` with no null guard. For a title lacking `(scope)`, the regex `/^\\w+\\(([^)]+)\\):/` does not match, so `match` is null and line 25 throws a TypeError — it never returns `''`. For matching titles, the capture group `[^)]+` requires at least one character, so the scope is never empty either. `entry.scope` is only ever set from scopeOf (line 34), so no entry can reach renderChangelog with an empty scope. The described failure path (nameless `### ` section / silently mis-grouped entries) is unreachable; the actual behavior is a crash. The root cause as stated is factually wrong.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "scopeOf|match\\[1\\]|scope",
+                "path": "scripts/release"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "scripts/release/changelog.ts",
+          "line": 24,
+          "text": "Any commit title without a `type(scope):` prefix, such as `fix typo` or `initial commit`, makes `scopeOf` throw `Cannot read properties of null (reading 1)` and aborts the entire changelog build. Guard the `RegExp.exec` result and return a fallback scope like `'other'` instead of indexing `match[1]` directly."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 51735,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: `scopeOf` dereferences `match[1]` after casting the result of `RegExp.exec` to `RegExpExecArray`, but `exec` returns `null` when the title does not match `/^\\w+\\(([^)]+)\\):/`. WHY: any commit whose first line is not a conventional-commit with a scope (e.g. \"fix typo\", \"bump deps\", \"feat: add x\") makes `match` null and `match[1]` throws `TypeError: Cannot read properties of null (reading '1')`, aborting `buildEntries` and failing the release/changelog generation. HOW: guard the match and default the scope to something stable, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match?.[1] ?? 'other';` (and drop the unsound cast).",
+          "keep": true,
+          "rationale": "Confirmed. In scripts/release/changelog.ts, scopeOf (line 23-26) casts RegExp.exec result to RegExpExecArray and dereferences match[1] unconditionally. buildEntries calls scopeOf(entry.title) at line 34 for every non-skipped commit. The regex /^\\w+\\(([^)]+)\\):/ only matches conventional commits WITH a scope; any other title (\"fix typo\", \"bump deps\", \"feat: add x\") makes exec return null, so match[1] throws TypeError and aborts buildEntries/changelog generation. The claimed failure path is real and reachable. Not covered by any prior decision (which concern other files/rules), and it is not a style issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: `scopeOf` casts the result of `RegExp.exec` to `RegExpExecArray` and unconditionally dereferences `match[1]`, but `exec` returns `null` when the title has no `type(scope):` prefix. WHY: for any commit title without a scope (e.g. `feat: add export`, `Fix bug`) `match` is `null` and `match[1]` throws `TypeError: Cannot read properties of null`, aborting the entire changelog build. HOW: guard the match and return an empty scope when there is no scope: `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';`.",
+          "keep": true,
+          "rationale": "Confirmed: scopeOf casts exec's result (which is null on no match) to RegExpExecArray and dereferences match[1] unconditionally. buildEntries (line 34) calls scopeOf for every non-skipped commit, so any title without a `type(scope):` prefix (e.g. `feat: add export`, `Fix bug`) throws TypeError and aborts the changelog build. Not a duplicate of the previous SKIP-ordering decision (round-a-P31), which addressed a different bug in the same file and does not guard this dereference.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "scopeOf|shouldSkip|SKIP",
+                "path": "scripts/release"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "text": "For any commit title without a `type(scope):` prefix, such as `feat: add export` or `Fix bug`, `RegExp.exec` returns `null` and dereferencing `match[1]` throws `TypeError: Cannot read properties of null`, aborting the entire changelog build. Guard the match in `scopeOf` and return an empty scope when there is no scope, dropping the `RegExpExecArray` cast."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "text": "Any commit whose first line is not a conventional-commit with a scope, such as `fix typo`, `bump deps`, or `feat: add x`, makes `match` null, so `match[1]` throws `TypeError: Cannot read properties of null (reading '1')`, aborting `buildEntries` and failing release/changelog generation. Guard the match in `scopeOf`, default the scope to `'other'`, and drop the unsound cast."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P31-skip-before-title-set",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53168,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "scripts/release/changelog.ts",
+          "claim": "WHAT: scopeOf casts the result of exec to RegExpExecArray and reads match[1] without checking for null, so it dereferences null whenever the title has no `scope(...)` segment. WHY: buildEntries calls scopeOf(entry.title) for every commit that is not skipped (line 34); any commit whose title lacks parentheses — e.g. \"fix: thing\", \"Add feature\", or a merge commit — makes exec return null and throws TypeError, crashing changelog generation. HOW: guard for the no-match case, e.g. `const match = /^\\w+\\(([^)]+)\\):/.exec(title); return match ? match[1] : '';` (and drop the unsafe cast).",
+          "keep": true,
+          "rationale": "Confirmed: scopeOf (line 24-25) casts exec's result to RegExpExecArray and reads match[1] with no null check. buildEntries line 34 calls it for every non-skipped commit, so any title lacking a `scope(...)` pattern (e.g. \"fix: thing\", \"Add feature\") returns null from exec and throws TypeError, crashing changelog generation. The previous decision (round-a-P31) addressed a different bug (SKIP checked before title assignment), not this null dereference, so this is a distinct problem in the same file, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "scripts/release/changelog.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "scripts/release/changelog.ts",
+          "line": 23,
+          "text": "Any commit whose title lacks a `scope(...)` segment — such as `fix: thing`, `Add feature`, or a merge commit — makes `exec` return `null`, so `scopeOf` dereferences `null` and throws a `TypeError` that crashes changelog generation through `buildEntries` (line 34). Guard for the no-match case and drop the unsafe `RegExpExecArray` cast."
+        }
+      ],
+      "claims": [
+        {
+          "id": "skip-before-title-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "scope-null-match-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 94494,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound for a missing row, so the `next if sub.nil?` guard in renew_due (line 25) is dead and the first deleted/stale id aborts the whole batch. WHY: renew_due's own comment says ids are queued the night before and some subscriptions may already be deleted; instead of skipping that id the method now raises, so all remaining valid subscriptions in the batch are never charged (lost revenue / unbilled customers). HOW: have renew_due rescue the not-found case and continue, e.g. wrap the body in `begin ... rescue SubscriptionNotFound ... next end` (or provide a non-raising lookup such as `@repo.find_by(id: id)` for the batch path) so one missing subscription does not stop the loop.",
+          "keep": true,
+          "rationale": "Confirmed by reading the file: line 12 `@repo.find_by(id: id) || raise(SubscriptionNotFound, ...)` means find_subscription never returns nil, so `next if sub.nil?` at line 25 is unreachable. The comment at lines 20-21 explicitly states ids are queued the night before and some subscriptions may have been deleted since, so a missing id is an expected condition. In renew_due that raises SubscriptionNotFound, aborting the `ids.each` loop and skipping all remaining valid subscriptions in the batch. The finding's root cause and failure path are concrete and correct. Note: this is a distinct consequence from the earlier round-a-P41 decision, which asked find_subscription to raise (to protect charge_now); the batch caller renew_due was not addressed by that change and now silently loses the skip semantics it relied on.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound on a missing row, which makes the `next if sub.nil?` guard in renew_due (line 25) unreachable, so the first already-deleted id aborts the entire batch loop. WHY: the method's own contract (comment lines 20-21) says queued ids may reference deleted subscriptions that should be skipped, so a single deleted subscription now prevents every remaining due subscription from being charged — a silent partial-run/lost-billing failure. HOW: keep find_subscription non-raising for the batch path, e.g. have renew_due use @repo.find_by directly with the existing nil skip (or add a non-raising lookup such as find_subscription_optional) and reserve the raising variant for charge_now.",
+          "keep": true,
+          "rationale": "The code confirms the claim: find_subscription (line 12) now raises SubscriptionNotFound on a missing row, so it never returns nil. In renew_due (lines 22-28) the `next if sub.nil?` guard is therefore unreachable, and the comment on lines 20-21 explicitly states queued ids may reference deleted subscriptions that should be skipped. An already-deleted id will raise and abort the whole `ids.each` loop, silently preventing all remaining due subscriptions from being charged. This is a genuine behavioral bug (partial-run/lost billing), not style. Note this is a DIFFERENT problem than PreviousDecision round-a-P41-raise-breaks-batch-caller, which asked to make find_subscription raise to fix charge_now's nil NoMethodError — this finding is the downstream consequence of applying that exact suggestion, i.e. the raising change broke the batch caller's existing nil-skip contract. So it is not a repeat of the earlier entry; it is a new bug the earlier fix introduced, and should be kept (revising that earlier suggestion).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb",
+                "startLine": 1,
+                "endLine": 45
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|find_by",
+                "path": "app"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P41-raise-breaks-batch-caller",
+          "label": "bug",
+          "marked": false,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "text": "**Revises an earlier Kody suggestion** on `app/services/renewal_service.rb:9` (2026-10-06 12:00 UTC).\n\nBecause `find_subscription` now raises `SubscriptionNotFound` on a missing row, the `next if sub.nil?` guard in `renew_due` (line 25) is unreachable, so the first already-deleted id aborts the batch and, contrary to the contract in comment lines 20-21, prevents every remaining due subscription from being charged. Keep `find_subscription` non-raising for the batch path by having `renew_due` use `@repo.find_by` directly with the existing nil skip, or add a non-raising lookup such as `find_subscription_optional`, while reserving the raising variant for `charge_now`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "text": "Since `find_subscription` now raises `SubscriptionNotFound` for a missing row, the `next if sub.nil?` guard in `renew_due` (line 25) is dead and the first deleted/stale id aborts the whole batch, leaving all remaining valid subscriptions uncharged despite the comment saying queued ids may already be deleted. Have `renew_due` rescue the not-found case and continue, e.g. wrap the body in `begin ... rescue SubscriptionNotFound ... next end`, or provide a non-raising lookup such as `@repo.find_by(id: id)` for the batch path, so one missing subscription does not stop the loop."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 81815,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: `renew_due` charges each subscription sequentially inside `ids.each`, and because `find_subscription` now raises on a missing row, a single stale id terminates the loop and drops all remaining charges for that run. WHY: the batch is sized by the night's queued ids, so one deleted subscription causes O(N) lost charge calls (and the corresponding billing/revenue) for the whole run instead of skipping one entry. HOW: use a non-raising lookup for the batch (as above) or `rescue SubscriptionNotFound; next` inside the loop so one missing subscription does not cancel the remaining charges.",
+          "keep": true,
+          "rationale": "Confirmed: `find_subscription` (line 11-13) now raises `SubscriptionNotFound` when the repo has no row, so the `next if sub.nil?` guard on line 25 is unreachable and the nil check is dead code. In `renew_due`, `find_subscription(id)` inside the `ids.each` loop will raise on a single stale/deleted id (comment on lines 20-21 explicitly acknowledges ids may have been deleted since queueing), propagating out of the method and aborting the loop, dropping all remaining charges for that run. This is a real data-loss/revenue bug. It is NOT a repeat of the previous decision: that entry fixed the nil-NoMethodError in `charge_now` by making the lookup raise; this finding reports a distinct consequence in a different operation (`renew_due`'s batch loop being aborted), i.e. a bug created by applying the earlier suggestion. KEEP.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: `find_subscription` now raises instead of returning nil, but `renew_due` still uses the old nil-returning contract — `sub = find_subscription(id); next if sub.nil?` — so `sub` is never nil and the `next` guard is dead code. WHY: `renew_due` is documented to receive ids queued the night before where some subscriptions may since have been deleted; the first deleted id now raises SubscriptionNotFound and aborts the entire loop, so every subscription later in the batch is silently never charged. HOW: make `renew_due` tolerant of the missing-subscription case instead of relying on a nil return, e.g. wrap the per-id lookup so a deleted subscription is skipped and the batch continues: `ids.each { |id| sub = @repo.find_by(id: id); next unless sub; @gateway.charge(...) }`, or `rescue SubscriptionNotFound; next` around the lookup inside the loop.",
+          "keep": true,
+          "rationale": "Confirmed by reading the file: line 12 `find_subscription` raises `SubscriptionNotFound`, so at line 25 `next if sub.nil?` is dead code and the comment at lines 20-21 explicitly states deleted subscriptions are expected. A deleted id therefore raises out of `ids.each` and aborts the batch, silently skipping every later subscription. This is a real, reachable failure path. It is NOT a repeat of PreviousDecision index 1: that entry addressed a NoMethodError on nil in `charge_now` and asked for `find_subscription` to raise; this finding is the distinct consequence of applying that suggestion — the raise now breaks the batch loop in `renew_due`, a different failure (loop abort / lost charges vs NoMethodError). Under the stated rules, a consequence of applying the earlier suggestion is a DIFFERENT problem, so it should be kept. The trigger (deleted subscription queued the night before) is explicitly documented as expected, not merely hypothetical.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|renew_due|find_by|SubscriptionNotFound",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: `find_subscription` now raises `SubscriptionNotFound` when the repo has no row, but `renew_due` still calls it and then guards with `next if sub.nil?`, so that guard is unreachable and the first deleted subscription raises out of the `ids.each` loop. WHY: `renew_due`'s documented contract is to skip subscriptions deleted since the ids were queued (see its comment) and charge the rest; instead one stale id aborts the entire nightly batch, so every remaining due subscription is silently never charged. HOW: give the batch path a non-raising lookup, e.g. add `def find_subscription_or_nil(id); @repo.find_by(id: id); end` and call that in `renew_due` (keeping the raising `find_subscription` for `charge_now`), or wrap the batch call in `rescue SubscriptionNotFound; next`.",
+          "keep": false,
+          "rationale": "The technical claim is factually correct: find_subscription now raises SubscriptionNotFound, making `next if sub.nil?` unreachable and letting one stale id abort the batch. But this is exactly the failure the earlier PreviousDecision (round-a-P41-raise-breaks-batch-caller, Outcome: implemented) raised — its ID literally names the batch-caller breakage caused by making find_subscription raise. The candidate describes the same failure (stale id aborts the nightly batch) arising as the consequence of applying that already-posted suggestion. Per the dedup rule, this is a repeat of an existing PR comment and must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "find_subscription|SubscriptionNotFound|renew_due"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 3,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "performance",
+          "marked": false,
+          "file": "app/services/renewal_service.rb",
+          "line": 22,
+          "text": "A single stale id aborts `ids.each` in `renew_due`, so every remaining subscription in that night's batch is silently never charged. Use a non-raising lookup such as `find_subscription_or_nil` (as above) or add `rescue SubscriptionNotFound; next` inside the loop so one missing subscription is skipped rather than cancelling the remaining charges."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "app/services/renewal_service.rb",
+          "line": 12,
+          "text": "Because `find_subscription` now raises `SubscriptionNotFound` instead of returning nil, the `next if sub.nil?` guard in `renew_due` is dead code and the first deleted id aborts the loop, silently dropping every later charge in the batch. Make `renew_due` tolerant of missing subscriptions by using a non-raising lookup or wrapping the per-id lookup with `rescue SubscriptionNotFound; next`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 41493,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: renew_due still relies on find_subscription returning nil for a deleted subscription, but find_subscription (line 12) now raises SubscriptionNotFound, so the raise propagates out of the `ids.each` loop on the first stale id. WHY: renew_due is explicitly documented to tolerate ids deleted since they were queued (lines 20-21) and guards with `next if sub.nil?` (line 25); with the raise-on-nil change that guard is unreachable, so one missing subscription aborts the batch and every remaining due subscription is silently left uncharged for that run. HOW: keep the raising accessor for charge_now and make the batch tolerant by rescuing per id, e.g. `ids.each do |id| begin; sub = find_subscription(id); rescue SubscriptionNotFound; next; end; @gateway.charge(customer: sub.customer_id, amount_cents: sub.plan.price_cents); end`, and drop the now-unreachable `next if sub.nil?`.",
+          "keep": false,
+          "rationale": "The finding is a repeat of PreviousDecision index 1 (Id: round-a-P41-raise-breaks-batch-caller, location renewal_service.rb:9-11, Outcome: implemented). That entry introduced the raising accessor and is literally named \"raise-breaks-batch-caller\" — its subject IS that making find_subscription raise breaks the batch caller. This candidate describes the exact same failure in the same operation: the raise propagates out of renew_due's loop and aborts the batch, leaving remaining subscriptions uncharged. It is the same crash/abort consequence the earlier entry set up, just re-framed with a new cause (unreachable nil guard). Per the review rules, this is not a different problem but the same failure already raised on this PR, so it must be dropped. (Note: the underlying technical claim about the code is factually correct — the guard is unreachable — but it is the already-posted issue.)",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 50761,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: find_subscription now raises SubscriptionNotFound on a missing row, but renew_due still assumes it can return nil — line 25's `next if sub.nil?` is now unreachable, and the raise escapes the `ids.each` loop. WHY: renew_due's own comment states ids are queued the night before so some subscriptions may have been deleted; the first deleted id now aborts the whole batch, silently leaving every remaining due subscription uncharged (lost revenue / missed renewals). HOW: skip missing subscriptions inside renew_due, e.g. `begin; sub = find_subscription(id); rescue SubscriptionNotFound; next; end`, or have find_subscription take a flag, or keep the nil-returning lookup for the batch path.",
+          "keep": true,
+          "rationale": "Confirmed: find_subscription (line 12) raises SubscriptionNotFound instead of returning nil, so line 25's `next if sub.nil?` is dead code and the raise escapes the `ids.each` loop. The comment at lines 20-21 explicitly acknowledges deleted subscriptions are expected in the batch. This is not a repeat of PreviousDecision 1: that entry concerned charge_now crashing with NoMethodError on a single lookup, fixed by making find_subscription raise. This finding describes a distinct failure — the batch renew_due aborting on the first deleted id, silently skipping all remaining due subscriptions (lost revenue) — a consequence of applying the earlier fix in a different operation. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "app/services/renewal_service.rb",
+          "line": 11,
+          "text": "Because `find_subscription` now raises `SubscriptionNotFound` instead of returning `nil`, the `next if sub.nil?` at line 25 is unreachable and the first deleted id aborts the whole `ids.each` loop, silently leaving every remaining due subscription uncharged. Handle missing subscriptions inside `renew_due` by rescuing `SubscriptionNotFound` and calling `next`, adding a flag to `find_subscription`, or keeping the nil-returning lookup for the batch path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P41-raise-breaks-batch-caller",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45028,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "app/services/renewal_service.rb",
+          "claim": "WHAT: renew_due now calls find_subscription, which raises SubscriptionNotFound instead of returning nil, so the guard `next if sub.nil?` (line 25) is unreachable dead code. WHY: the comment on line 20-21 states ids are queued the night before and some subscriptions may have been deleted since; the first deleted id now raises out of the loop, aborting the entire batch and leaving every remaining due subscription uncharged. HOW: make renew_due tolerate missing subscriptions, e.g. rescue SubscriptionNotFound inside the loop and continue (or have find_subscription return nil and let charge_now handle the raise itself).",
+          "keep": false,
+          "rationale": "The finding's technical claim is accurate: find_subscription now raises SubscriptionNotFound (line 12), so `next if sub.nil?` at line 25 is dead code, and a missing id aborts the batch. But this is precisely the failure PreviousDecision index 1 raised and that was implemented — it asked find_subscription to raise instead of returning nil, and the current code shows that change landed. The consequence the candidate describes (a raise from find_subscription breaking the caller/loop) is the same failure that decision produced. Per the rules, a finding whose consequence is the failure an entry already described is that entry again, so it must be dropped as a repeat of an implemented prior suggestion. (Note: the suggested fix also reverses that applied change, but the primary reason is duplication.)",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "app/services/renewal_service.rb",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "def find_subscription|SubscriptionNotFound|def charge_now|def renew_due"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "renew-due-abort-linked",
+          "expect": "deliver_linked",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    }
+  ]
+}

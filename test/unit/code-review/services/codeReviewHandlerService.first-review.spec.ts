@@ -1,16 +1,26 @@
 import { CodeReviewHandlerService } from '@libs/code-review/infrastructure/adapters/services/codeReviewHandlerService.service';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 
-const mockLogger = {
-    log: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
-};
+// Define the logger INSIDE the factory: the service calls createLogger() at
+// module-eval time (during the import above), which runs before a top-level
+// `const mockLogger` would initialize — referencing it there throws a TDZ
+// "Cannot access 'mockLogger' before initialization". Expose it back out and
+// grab it via requireMock so the assertions below still work.
+jest.mock('@libs/core/log/logger', () => {
+    const logger = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+    };
+    return { createLogger: () => logger, __mockLogger: logger };
+});
 
-jest.mock('@libs/core/log/logger', () => ({
-    createLogger: () => mockLogger,
-}));
+const mockLogger = (
+    jest.requireMock('@libs/core/log/logger') as {
+        __mockLogger: Record<string, jest.Mock>;
+    }
+).__mockLogger;
 
 /**
  * `captureFirstReviewIfNeeded` is the org-level "aha moment" milestone.

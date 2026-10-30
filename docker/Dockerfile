@@ -6,7 +6,7 @@
 # the `oven/bun:${BUN_VERSION}-debian` stage below.
 ARG BUN_VERSION=1.2.12
 
-FROM docker.io/library/node:22.22.2-slim AS base
+FROM docker.io/library/node:22.23.4-slim AS base
 WORKDIR /usr/src/app
 
 ARG API_CLOUD_MODE=false
@@ -41,8 +41,8 @@ FROM base AS deps
 # migration moved them out of package.json/.npmrc. Without it here, the frozen
 # install sees empty overrides and aborts (ERR_PNPM_LOCKFILE_CONFIG_MISMATCH).
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY packages/kodus-common ./packages/kodus-common
 
+# Install dependencies.
 # `--store-dir` points pnpm at a BuildKit cache mount so the
 # content-addressable store survives across builds. pnpm's store is safe
 # under concurrent access (atomic writes), so `sharing=shared` lets the
@@ -54,13 +54,7 @@ COPY packages/kodus-common ./packages/kodus-common
 # When the secret is absent (required=false), the repo-local .npmrc
 # copied above stays in effect — today that file only holds registry
 # URLs, no tokens, so builds still work unauthenticated.
-RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
-    --mount=type=cache,target=/pnpm-store,sharing=shared \
-    cd packages/kodus-common \
-  && pnpm install --store-dir /pnpm-store \
-  && pnpm run prepack
-
-# Install dependencies and link local packages.
+#
 # github_token (optional) authenticates @vscode/ripgrep's postinstall
 # download against the GitHub releases API — anonymous calls from shared
 # CI runner IPs are rate-limited (403) and abort the whole install. Empty
@@ -70,7 +64,6 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
     --mount=type=cache,target=/pnpm-store,sharing=shared \
     if [ -s /run/secrets/github_token ]; then export GITHUB_TOKEN="$(cat /run/secrets/github_token)"; fi \
  && pnpm install --frozen-lockfile --store-dir /pnpm-store
-RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
 
 FROM deps AS build
 ARG API_CLOUD_MODE=false
@@ -103,13 +96,6 @@ FROM base AS prod-deps
 # See deps stage: pnpm-workspace.yaml must be present for overrides/catalog to
 # resolve under --frozen-lockfile.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY packages/kodus-common ./packages/kodus-common
-
-RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
-    --mount=type=cache,target=/pnpm-store,sharing=shared \
-    cd packages/kodus-common \
-  && pnpm install --store-dir /pnpm-store \
-  && pnpm run prepack
 
 # --prod skips devDependencies (TypeScript, Nest CLI, Jest, ESLint, etc.)
 # since the `build` stage already produced the compiled output in
@@ -123,15 +109,6 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
     if [ -s /run/secrets/github_token ]; then export GITHUB_TOKEN="$(cat /run/secrets/github_token)"; fi \
  && pnpm install --frozen-lockfile --prod --store-dir /pnpm-store
 
-# Link local packages. Drop the nested node_modules/src/test that were
-# needed for `pnpm run prepack` but not at runtime — keeping them would
-# duplicate ~450MB inside the final image for no benefit. `dist/` and
-# `package.json` are what Node actually resolves.
-RUN rm -rf packages/kodus-common/node_modules \
-           packages/kodus-common/src \
-           packages/kodus-common/test
-RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
-
 # Dedicated stage for the bun binary. Using the official oven/bun image
 # instead of `curl bun.sh/install | bash` because:
 #   - Docker Hub CDN is more reliable for tagged images than GitHub releases
@@ -141,7 +118,39 @@ RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_
 # BUN_VERSION is declared as a global ARG at the top of this file.
 FROM docker.io/oven/bun:${BUN_VERSION}-debian AS bun-source
 
-FROM docker.io/library/node:22.22.2-slim AS runtime-common
+# The deterministic evidence pass (RunAnalyzersStage) shells out to these
+# inside the sandbox. Downloaded in their own stage so no curl lingers in the
+# runtime image — same pattern as the bun binary above. Pinned: an unpinned
+# scanner would change findings between reviews, and the versions here must
+# match e2b-sandbox/template.ts so the two sandbox providers cannot drift
+# apart. TARGETARCH matters because prod/QA build arm64 and self-hosted builds
+# both arches. Pinned to BUILDPLATFORM so the download runs natively and needs
+# no QEMU — only the fetched binary is target-arch.
+FROM --platform=$BUILDPLATFORM docker.io/library/debian:bookworm-slim AS analyzer-source
+ARG TARGETARCH
+ARG BETTERLEAKS_VERSION=1.8.1
+ARG OSV_SCANNER_VERSION=2.6.0
+ARG AST_GREP_VERSION=0.45.3
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+  && case "$TARGETARCH" in \
+       amd64) bl=linux_x64; ag=x86_64 ;; \
+       arm64) bl=linux_arm64; ag=aarch64 ;; \
+       *) echo "unsupported TARGETARCH '$TARGETARCH'" >&2; exit 1 ;; \
+     esac \
+  && curl -fsSL -o /tmp/betterleaks.tgz \
+       "https://github.com/betterleaks/betterleaks/releases/download/v${BETTERLEAKS_VERSION}/betterleaks_${BETTERLEAKS_VERSION}_${bl}.tar.gz" \
+  && tar -xzf /tmp/betterleaks.tgz -C / betterleaks \
+  && chmod +x /betterleaks && test -s /betterleaks \
+  && curl -fsSL -o /osv-scanner \
+       "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_${TARGETARCH}" \
+  && chmod +x /osv-scanner && test -s /osv-scanner \
+  && curl -fsSL -o /tmp/ast-grep.zip \
+       "https://github.com/ast-grep/ast-grep/releases/download/${AST_GREP_VERSION}/app-${ag}-unknown-linux-gnu.zip" \
+  && unzip -o /tmp/ast-grep.zip ast-grep -d / \
+  && chmod +x /ast-grep && test -s /ast-grep
+
+FROM docker.io/library/node:22.23.4-slim AS runtime-common
 LABEL org.opencontainers.image.source="https://github.com/kodustech/kodus-ai"
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
@@ -149,7 +158,7 @@ ENV NODE_ENV=production
 # Redeclare ARGs to make them available in this stage
 ARG API_CLOUD_MODE=false
 ARG RELEASE_VERSION=local
-ARG KODUS_GRAPH_VERSION=0.2.19
+ARG KODUS_GRAPH_VERSION=0.3.0
 
 # Set ENVs for runtime
 ENV API_CLOUD_MODE=${API_CLOUD_MODE}
@@ -204,6 +213,13 @@ CMD ["node", "dist/apps/api/main.js"]
 FROM runtime-common AS webhooks
 CMD ["node", "dist/apps/webhooks/main.js"]
 FROM runtime-common AS worker
+# Only the worker runs the code-review pipeline, so only it needs the analyzer.
+# RunAnalyzersStage resolves it from PATH.
+COPY --from=analyzer-source /betterleaks /usr/local/bin/betterleaks
+COPY --from=analyzer-source /osv-scanner /usr/local/bin/osv-scanner
+# Structural search for custom review agents (the `astGrep` tool). Only the
+# `ast-grep` name: on Linux `sg` is util-linux's setgroups.
+COPY --from=analyzer-source /ast-grep /usr/local/bin/ast-grep
 CMD ["node", "dist/apps/worker/main.js"]
 FROM runtime-common AS mcp-manager
 ENTRYPOINT ["/usr/local/bin/prod-entrypoint-mcp-manager"]

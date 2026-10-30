@@ -14,6 +14,7 @@ export enum IntegrationConfigKey {
     TEAM_PROJECT_MANAGEMENT_METHODOLOGY = 'team_project_management_methodology',
     CODE_MANAGEMENT_PAT = 'code_management_pat',
     USE_JQL_TO_VIEW_BOARD = 'use_jql_to_view_board',
+    WEBHOOK_CREATION_FAILURES = 'webhook_creation_failures',
 }
 
 export enum IntegrationConfigKeyProjectManagement {

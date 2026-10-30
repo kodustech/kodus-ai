@@ -1,0 +1,2010 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "high",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "879fa9a53edc7eb801ac44e2ce560dc24fa2545b",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-13T22:56:54.301Z",
+  "updatedAt": "2026-10-13T23:52:00.328Z",
+  "complete": true,
+  "selectedCases": [
+    "P33-rule-invalidation-new-callback",
+    "P33-rule-invalidation-new-callback-control",
+    "P34-rule-loading-default-new-component",
+    "P34-rule-loading-default-new-component-control",
+    "P40-rule-pii-on-structured-log-lines",
+    "P40-rule-pii-on-structured-log-lines-control",
+    "P42-rule-tenant-scope-after-decline",
+    "P42-rule-tenant-scope-after-decline-control"
+  ],
+  "summary": {
+    "measured": 40,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 40,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 54,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P33-rule-invalidation-new-callback · onError-invalidation-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P33-rule-invalidation-new-callback-control · onError-invalidation-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P34-rule-loading-default-new-component · next-invoice-default-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P34-rule-loading-default-new-component-control · next-invoice-default-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P40-rule-pii-on-structured-log-lines · pii-log-field-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P40-rule-pii-on-structured-log-lines-control · pii-log-field-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P42-rule-tenant-scope-after-decline · external-id-tenant-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P42-rule-tenant-scope-after-decline-control · external-id-tenant-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 83366,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "The newly added `onError` callback in `src/billing/useUpdateSeats.ts` lets the mutation settle before the seats query refetch completes on a failed save, so the UI can show rolled-back or stale seat data; this error path is distinct from the success-path callback flagged earlier. Return the `queryClient.invalidateQueries` promise for `queryKeys.seats(change.workspaceId)` so the mutation stays pending until the refetch settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 181001,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because the newly added `onError` callback calls `queryClient.invalidateQueries` without returning or awaiting the promise, the mutation settles before the invalidated seats query refetch finishes. Return `queryClient.invalidateQueries({ queryKey: queryKeys.seats(change.workspaceId) })` from `onError` so it stays pending until that refetch settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 99555,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because the new `onError` callback drops the `queryClient.invalidateQueries` promise in `src/billing/useUpdateSeats.ts`, it violates “Mutation callbacks return the invalidation promise” and the mutation rejects before the seats query refetch completes, so error-path callers see it as settled while the seats cache is still re-syncing from the server. Return that promise from `onError` (and from any other mutation callback that fires an invalidation) so the mutation stays pending until the refetch for `queryKeys.seats(change.workspaceId)` settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 115817,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because `onError` calls `queryClient.invalidateQueries` without returning or awaiting it, the mutation settles into its error state before the seats refetch finishes, so consumers can observe the rolled-back seat count as final while the cache is still revalidating after a failed save. Return that invalidation promise from `onError` so the mutation stays pending until the refetch settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 237367,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because `onError` calls `queryClient.invalidateQueries` without returning or awaiting it, it violates the rule that mutation callbacks return the invalidation promise: the mutation settles before the seats query refetches, so after a failed seat update callers observe the mutation as finished while the cache is still being re-synced. Return the promise so the mutation stays pending until the refetch settles: `return queryClient.invalidateQueries({ queryKey: queryKeys.seats(change.workspaceId) });`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P33-rule-invalidation-new-callback-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 48011,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because the new `onError` callback neither returns nor awaits `queryClient.invalidateQueries`, the rollback via `setQueryData` races with the refetch and the mutation resolves before the seats query is refreshed, violating Rule 21. Return the invalidation promise from the callback (or make it `async` and `await` it) for `queryKeys.seats(change.workspaceId)` so the mutation stays pending until the refetch settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P33-rule-invalidation-new-callback-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 40736,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because `onError` calls `queryClient.invalidateQueries` without returning or awaiting its promise, the mutation settles and its error state resolves before the refetch finishes, leaving consumers with stale data. Return that promise from the callback so React Query keeps the mutation pending until invalidation completes."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P33-rule-invalidation-new-callback-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 55997,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because the new `onError` callback neither returns nor awaits `queryClient.invalidateQueries`, the mutation settles before the seat data is refetched, which rule 21 forbids. Return the invalidation promise from the callback (or make it async and await it) so React Query keeps the mutation pending until the refetch settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P33-rule-invalidation-new-callback-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 46861,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "React Query treats the `onError` callback as settled immediately, so the mutation leaves its pending state before the seats query has refetched and the error-path UI can render stale data. Return or `await` the `queryClient.invalidateQueries({ queryKey: queryKeys.seats(change.workspaceId) })` promise so the mutation stays pending until the refetch settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P33-rule-invalidation-new-callback-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 54222,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because mutation callbacks must return the invalidation promise, calling `queryClient.invalidateQueries(...)` in the new `onError` without returning or awaiting it lets the mutation settle before the refetch completes; callers then see it as finished while the seat count query is still stale, and after a failed seat update the UI can show rolled-back data that briefly disagrees with the server. Return or await `queryClient.invalidateQueries({ queryKey: queryKeys.seats(change.workspaceId) })` so the mutation stays pending until the invalidation settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 173570,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the invoice query is loading or has failed, the card renders a $0.00 amount that reads as real data, violating rule 21's requirement to show a Skeleton or error state instead of a fallback default. Mirror `SeatUsageCard` by destructuring `isLoading` from `useQuery` and early-returning `<Skeleton className=\"h-24\" />` when `isLoading || !invoice`, or at minimum render the amount only when `invoice` exists."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 33,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the invoice query is loading or has failed, the due date renders as an empty string that reads as real data, violating rule 21's requirement to show a Skeleton or error state instead of a fallback. Add the same `isLoading || !invoice` guard used in `SeatUsageCard`, or render the date only when `invoice` exists."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 3,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-barrel-imports"
+          ],
+          "marked": false,
+          "text": "Importing `Card` and `Skeleton` from `'../ui'` pulls them through the ui module's index barrel, which rule 33 forbids. Import each component from its own file, such as `import { Card } from '../ui/Card';` and `import { Skeleton } from '../ui/Skeleton';`, adjusting to the actual file names."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 166145,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the upcoming-invoice query is loading or has failed, the card renders a real-looking $0.00 invoice, because `invoice?.totalCents ?? 0` turns missing data into a value — exactly the fallback-as-data pattern rule 21 forbids. Give `NextInvoiceCard` the same guard `SeatUsageCard` now uses: destructure `isLoading` from the `useQuery` result, early-return `<Skeleton />` or an error state when there is no data, then render `formatMoney(invoice.totalCents)` with no fallback."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 33,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "The due date has the same fallback-as-data problem, since `invoice?.dueDate ?? ''` renders an empty string that reads as the real due date while the query is loading or has failed. Once the loading/error guard on the amount line early-returns `<Skeleton />` when there is no invoice, render `invoice.dueDate` directly instead of the empty-string fallback."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 99129,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the upcoming-invoice query is loading or has failed, the card renders `formatMoney(invoice?.totalCents ?? 0)` as `$0.00`, which reads as a real amount and violates rule 21. Follow the `SeatUsageCard` pattern: destructure `isLoading` (and the error state) from `useQuery`, early-return `<Skeleton className=\"h-24\" />` until data exists, then render `formatMoney(invoice.totalCents)` with no `?? 0` fallback."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 33,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the query is loading or has failed, the due-date sentence renders `invoice?.dueDate ?? ''`, so an empty date is shown as if it were real data, violating rule 21. Gate on the query state like `SeatUsageCard` — early-return `<Skeleton className=\"h-24\" />` while `isLoading` or before data arrives, then render `invoice.dueDate` only when it exists, with no `?? ''` fallback."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 172099,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "In `src/billing/BillingCards.tsx`, while the upcoming-invoice query is pending or has failed, `NextInvoiceCard` renders `formatMoney(invoice?.totalCents ?? 0)` and shows a `$0.00` amount that reads as real invoice data. Mirror the `SeatUsageCard` pattern by destructuring `isLoading` from the `useQuery` result, returning a `<Skeleton />` (or an error state) until `invoice` exists, and then rendering `formatMoney(invoice.totalCents)` without the `?? 0` fallback."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 33,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "As with the amount line above, `invoice?.dueDate ?? ''` renders a blank due date while the query is loading or has failed, so the card presents an empty value as if it were real. Once the component returns a `<Skeleton />` (or an error state) until the invoice data arrives, render `invoice.dueDate` directly."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 134446,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "Rendering `formatMoney(invoice?.totalCents ?? 0)` before the upcoming-invoice query has data shows a $0.00 invoice that reads as real data while loading and after a failure. Destructure `isLoading` and `error` from the `useQuery`, return `<Skeleton className=\"h-24\" />` or an error state when `isLoading || !invoice`, and then render `formatMoney(invoice.totalCents)` without the fallback."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 33,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "The `?? ''` fallback renders a blank due date that reads as real data while the query is loading or has failed. Add the `isLoading || !invoice` guard returning `<Skeleton className=\"h-24\" />` or an error state before the card renders, then render `invoice.dueDate` with no fallback."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P34-rule-loading-default-new-component-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 280773,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the query is loading or has failed, `NextInvoiceCard` renders `formatMoney(invoice?.totalCents ?? 0)`, so `$0.00` appears as a real invoice amount and violates rule 21. Destructure `isLoading` and `isError` from the query, return `<Skeleton className=\"h-24\" />` before rendering exactly as `SeatUsageCard` above does, and render `formatMoney(invoice.totalCents)` with no fallback."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 33,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the query has no data yet or has failed, `NextInvoiceCard` renders `invoice?.dueDate ?? ''`, so a blank due date is presented as real data instead of a loading state and violates rule 21. Add a guard at the top (`if (isLoading || isError || !invoice) { return <Skeleton className=\"h-24\" />; }`) mirroring `SeatUsageCard`, then render `invoice.dueDate` directly."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P34-rule-loading-default-new-component-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 224748,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the upcoming-invoice query is still loading or has failed, `invoice?.totalCents ?? 0` renders a real-looking $0.00 invoice that users read as real data. Mirror `SeatUsageCard` by destructuring `isLoading` from the `useQuery` and early-returning `<Skeleton className=\"h-24\" />` when `isLoading || !invoice`, then render `formatMoney(invoice.totalCents)` with no fallback."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 33,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the upcoming-invoice query is still loading or has failed, `invoice?.dueDate ?? ''` renders an empty due date in place of the missing value, which reads to the user as real data. Add the same guard `SeatUsageCard` uses, early-returning `<Skeleton className=\"h-24\" />` when `isLoading || !invoice`, and render `invoice.dueDate` without the empty-string fallback."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P34-rule-loading-default-new-component-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 139164,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the upcoming-invoice query is pending or has failed, NextInvoiceCard renders `invoice?.totalCents ?? 0` and displays a $0.00 amount that reads as real data. Destructure `isLoading` from `useQuery` and return `<Skeleton className=\"h-24\" />` when `isLoading || !invoice` before rendering the Card, or at minimum replace the `?? 0` fallback with a Skeleton."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 33,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the invoice query is loading or has failed, NextInvoiceCard renders `invoice?.dueDate ?? ''`, showing an empty due date as if it were the real value. Add the `isLoading || !invoice` guard returning `<Skeleton className=\"h-24\" />` as `SeatUsageCard` does, or replace the empty-string fallback with a Skeleton."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P34-rule-loading-default-new-component-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 63521,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the upcoming-invoice query is loading or has failed, `invoice?.totalCents ?? 0` shows a $0.00 amount that reads as a real invoice total, which Rule 21 forbids. Destructure `isLoading`/`isError` from the query and return `<Skeleton className=\"h-24\" />` before rendering (mirroring `SeatUsageCard`), then render `formatMoney(invoice.totalCents)` without the fallback."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 33,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the upcoming-invoice query is loading or has failed, `invoice?.dueDate ?? ''` presents an empty string as the real due date instead of a loading or error state, which Rule 21 forbids. Add a loading/error guard to `NextInvoiceCard` that returns `<Skeleton className=\"h-24\" />` like `SeatUsageCard`, then render `invoice.dueDate` directly."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 3,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-barrel-imports"
+          ],
+          "marked": false,
+          "text": "Importing `Card` and `Skeleton` from the `../ui` barrel pulls the whole index and everything it re-exports into this module, hiding real dependencies and hurting tree-shaking and bundle size (Rule 33). Import each symbol from its own module, e.g. `../ui/Card` and `../ui/Skeleton`, using the actual file names in `src/ui`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P34-rule-loading-default-new-component-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 73704,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "In `src/billing/BillingCards.tsx`, while the query is loading or after it fails, `NextInvoiceCard` renders `formatMoney(invoice?.totalCents ?? 0)` and displays a formatted $0.00 that reads as a real invoice amount, violating Rule [21] by using a fallback instead of a Skeleton or error state. Mirror `SeatUsageCard` by destructuring `isLoading` from `useQuery`, early-returning `<Skeleton className=\"h-24\" />` before rendering the Card, and rendering `formatMoney(invoice.totalCents)` without the `?? 0` fallback (or guard the line with a Skeleton as shown in the replacement)."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 33,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "In `src/billing/BillingCards.tsx`, while the query is loading or after it fails, `NextInvoiceCard` renders `invoice?.dueDate ?? ''` and shows an empty date as if it were the real value, violating Rule [21] by using a fallback instead of a Skeleton or error state. Mirror `SeatUsageCard` by destructuring `isLoading` from `useQuery`, early-returning `<Skeleton className=\"h-24\" />` before rendering the Card, and rendering `invoice.dueDate` without the `?? ''` fallback (or guard the line with a Skeleton as shown in the replacement)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44881,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P40-rule-pii-on-structured-log-lines",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/receipts.ts:11` (2026-10-06 12:00 UTC).\n\n`customerEmail` is personal data under rule [42], so logging it persists the address in log aggregation outside the customer record, where it cannot be deleted or access-controlled. Drop the `customerEmail` field and keep the structured `orderId` field, i.e. `logger.info('receipt sent', { orderId: order.id })` — this revises the earlier structured-fields suggestion, which introduced the field."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 63432,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P40-rule-pii-on-structured-log-lines",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/receipts.ts:11` (2026-10-06 12:00 UTC).\n\nWriting `customerEmail: customer.email` into the logs exposes the customer's personal data, violating the \"No personal data in logs\" rule, because logs are broadly readable and retained far longer than the request needs. Drop the `customerEmail` field and log only non-personal identifiers such as `orderId`; this revises the earlier structured-logging suggestion, since the applied version additionally added `customerEmail`, which must not be logged."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 32143,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Log records are shipped to aggregators and retained, so passing `customerEmail: customer.email` turns the receipt log into a store of personal data that outlives the order, violating the \"No personal data in logs\" rule that also covers names, phone numbers, and document ids. Remove `customerEmail` from the context object and keep only non-personal identifiers such as `orderId` in `logger.info('receipt sent', { orderId: order.id })`, looking the customer up by order id in the database if support needs to trace a receipt."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 32680,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P40-rule-pii-on-structured-log-lines",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/receipts.ts:11` (2026-10-06 12:00 UTC).\n\nThe restructured log call now writes `customer.email` to the log pipeline as `customerEmail`, violating the \"No personal data in logs\" rule when the order id alone is enough to correlate the receipt. Drop the email field and keep only non-PII context, `logger.info('receipt sent', { orderId: order.id })`, so the applied structured-fields fix does not carry PII."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 49620,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P40-rule-pii-on-structured-log-lines",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/receipts.ts:11` (2026-10-06 12:00 UTC).\n\nEvery receipt in `src/orders/receipts.ts` now writes a personal email address into the log pipeline via `customer.email`, violating the No personal data in logs rule. Drop the email field and keep only the non-PII order identifier so receipts stay traceable without exposing customer data, and do not ship the extra field added alongside the `{ orderId: order.id }` structured-fields change."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P40-rule-pii-on-structured-log-lines-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 14210,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Writing `customer.email` into the application log leaks PII, which rule 42 forbids because logs are typically shipped to a shared sink with broader access than the customer record itself. Drop the `customerEmail` field and keep only the non-personal `orderId` so the receipt event can still be correlated without exposing the customer's email."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P40-rule-pii-on-structured-log-lines-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 20533,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Logging `customerEmail: customer.email` writes the customer's email address into widely readable, long-retained logs, violating the “No personal data in logs” rule that forbids emails, names, phone numbers, and document ids. Drop the `customerEmail` field from the `logger.info` context and keep only `orderId: order.id`, or log an internal customer id if support needs recipient tracing."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P40-rule-pii-on-structured-log-lines-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 21399,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Because Rule 42 forbids logging personal data such as email addresses, writing `customerEmail` with `customer.email` into the shared logger's context leaks PII into retained receipt logs and log aggregators well beyond the mailer call that legitimately needs it. Drop the `customerEmail` field and keep only non-personal identifiers such as `orderId`, or log the internal customer id rather than the email address when support needs to trace a customer."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P40-rule-pii-on-structured-log-lines-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 15379,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Logging `customerEmail` puts personal data in logs, which are widely accessible and often shipped to third-party aggregators, violating the no-personal-data-in-logs rule. Drop the email field and keep only non-personal identifiers such as `orderId` or a hashed/pseudonymized customer id if correlation is needed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P40-rule-pii-on-structured-log-lines-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 14109,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Logging `customerEmail: customer.email` sends the receipt address into log storage and any log-shipping pipeline, which rule [42] forbids for personal data. Drop the email field and keep only the non-personal `orderId` from `order.id` (add a customer or order id if correlation is needed)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 121675,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Because `findByExternalId` filters only by `externalId` and does not receive a `tenantId`, any caller passing an external id from a request can read a project belonging to another tenant. Add `tenantId` to the method signature and its `where` clause, mirroring `findById`, and apply this fix separately from the previously flagged `findBySlug`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54348,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Because `findByExternalId` only takes `externalId` and queries `where: { externalId }`, any caller passing an external id taken from a request can load a project belonging to another tenant, violating tenant-scoped repository queries. Change the signature to `findByExternalId(tenantId: string, externalId: string)` and query `where: { tenantId, externalId }`, exactly like `findById`, so lookups are always confined to the caller's tenant."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 46177,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Because `findByExternalId` filters only on `externalId`, a caller from one tenant can read another tenant's project by supplying a known id from webhooks or integrations. Add a `tenantId` parameter and include it in the `where` clause as `where: { tenantId, externalId }`, mirroring `findById`; this newly added method is distinct from `findBySlug`, so the existing comment on that method does not cover this query."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 24208,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Because `findByExternalId` filters on `externalId` alone and takes no `tenantId`, any caller passing an externalId from a request can load a project belonging to a different tenant, breaking the \"Scope repository queries by tenant\" rule just as `findBySlug` already does. Take `tenantId` as a parameter and include it in the `where` clause, matching the existing `findById`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P42-rule-tenant-scope-after-decline",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14087,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Because `findByExternalId` filters on `externalId` alone, any caller passing an external id from a request can load a project belonging to another tenant. Add `tenantId` as a parameter and include it in the `where` clause, as `findById` does: `where: { tenantId, externalId }`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P42-rule-tenant-scope-after-decline-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 18205,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Because `findByExternalId` filters only on `externalId`, a caller can read another tenant's project whenever two tenants share an external id. Add a `tenantId: string` parameter and include it in the `where` clause (`db.project.findFirst({ where: { tenantId, externalId } })`) so callers pass the current tenant's id."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P42-rule-tenant-scope-after-decline-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 13971,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Because `findByExternalId` filters only on `externalId`, it can return another tenant's project when external ids collide or a caller supplies a foreign id. Scope it by tenant per rule 21 by accepting `tenantId` and using `where: { tenantId, externalId }`, then update callers accordingly."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P42-rule-tenant-scope-after-decline-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 53794,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Without a `tenantId` parameter, `findByExternalId` cannot scope its query to one tenant and can read another tenant's row, violating Rule 21. Add `tenantId` as the first parameter: `async findByExternalId(tenantId: string, externalId: string) {`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/projects/project.repository.ts",
+          "line": 13,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Filtering only on `externalId` lets any caller who knows an external id load a project belonging to a different tenant, a cross-tenant read that violates Rule 21. Include `tenantId` in the `where` clause: `return db.project.findFirst({ where: { tenantId, externalId } });`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P42-rule-tenant-scope-after-decline-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 71053,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "Any tenant that knows or guesses an external id can read another tenant's project because `findByExternalId` filters only on `externalId`, violating rule 21's tenant-scoping requirement. Take `tenantId` as a parameter and include it in the `where` clause."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P42-rule-tenant-scope-after-decline-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 88700,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/projects/project.repository.ts",
+          "line": 12,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "`findByExternalId` is added without a `tenantId` parameter, so rule 21's requirement that every repository method take `tenantId` is unmet and the method can only be called tenant-agnostically. Take `tenantId` as the first argument and use it to scope the query, for example in `async findByExternalId(tenantId: string, externalId: string)` with the `where` clause filtering on `tenantId`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/projects/project.repository.ts",
+          "line": 13,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-tenant-scoped-queries"
+          ],
+          "marked": false,
+          "text": "The new query filters only on `externalId` and never on `tenantId`, so one tenant can read another tenant's project by supplying its external id, violating rule 21's requirement that every repository query filter by `tenantId` in its `where` clause. Add `tenantId` to the `where` object, such as `where: { tenantId, externalId }`, with `tenantId` accepted as a method parameter."
+        }
+      ],
+      "claims": [
+        {
+          "id": "external-id-tenant-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

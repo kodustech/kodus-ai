@@ -1,0 +1,70 @@
+---
+title: "Coding-Agent Instructions"
+description: "Let Kody read the instructions your team writes for coding agents (CLAUDE.md, AGENTS.md, .cursor/rules, Copilot instructions) and point out changes that break them, without turning them into Kody Rules."
+---
+
+Files such as `CLAUDE.md`, `AGENTS.md`, `.cursor/rules` and `.github/copilot-instructions.md` tell coding agents how your team works. They are not review policy, so Kodus never turns them into Kody Rules. When you turn this setting on, Kody reads the ones that cover the files a pull request changes and points out changes that break what they say.
+
+To make a convention an enforced review rule, write it as a [Repository Rule](/en/how_to_use/code_review/configs/repository_rules) in `.kody/rules`.
+
+## Turning it on
+
+- **During onboarding**, the **Teach Kody how your team builds software** step lists the coding-agent files found in each selected repository and asks whether Kody should use them. It is off unless you turn it on.
+- **Later**, pick **Global** or a repository in the scope picker at the top of the **Code review** group, open **What to review**, and turn on **Coding-agent instructions**. The global value is the default for every repository that doesn't set its own.
+
+The setting is stored as `repoInstructionsEnabled` in the code review configuration (and in `kodus-config.yml`). The older `ideRulesSyncEnabled` is no longer read, so a value set there does not turn this on.
+
+## Files Kody reads
+
+### Cursor
+- `.cursorrules`
+- `.cursor/rules/**/*.mdc`
+
+### GitHub Copilot
+- `.github/copilot-instructions.md`
+- `.github/instructions/**/*.instructions.md`
+
+### Agents (agents.md convention)
+- `AGENTS.md`, `.agents.md`, `.agent.md`
+- `.agents/rules/**`
+
+### Claude
+- `CLAUDE.md`
+
+### Windsurf
+- `.windsurfrules`
+
+### Sourcegraph Cody
+- `.sourcegraph/**/*.rule.md`
+
+Tool configuration files (`.claude/settings.json`, `.opencode.json`, `.aider.conf.yml`, `.aiderignore`) are recognized but never read, because they carry no instructions to check code against.
+
+Claude skills (`.claude/skills/**`) are not read either: Claude loads a skill only when a task calls for it.
+
+## How a review uses them
+
+- **Only the files that cover the change.** A file at the repository root covers every file. A nested file such as `services/billing/CLAUDE.md` covers `services/billing/**`. A Cursor rule with `globs:` (and without `alwaysApply: true`) or a Copilot file with `applyTo:` covers only the files it declares. A Cursor rule with neither, which Cursor loads only when its agent asks for it, is not read.
+- **Read from the pull request's target branch.** A pull request is checked against the instructions already merged there; changes it makes to the instructions apply only after it merges.
+- **Pointers are followed.** A file that points to another file in the repository, as a line with only a path (`AI-AGENTS.md`) or a Claude Code import (`@docs/guide.md`), is followed on the target branch: the file it points to is read in its place, within the same limits. Paths outside the repository are ignored.
+- **Bounded.** At most 8 files and 64 KB per review, the files nearest the changed code first; a longer file is cut. The review logs what was left out.
+- **Findings are labeled Repo Instruction.** Kody reports one only when the instruction applies to the changed file and the line that breaks it was added or modified by the pull request. The comment quotes the instruction and names the file.
+- **The review's filters apply.** Repo Instruction findings go through the team's severity filter and suggestion limits like any other finding; one below the threshold is not posted. The setting lets Kody read the files, not post past those limits.
+- **Never instructions to Kody.** The files are treated as repository text to check the diff against. Anything they ask the reviewer to do is ignored, and they never change how bugs, security or performance issues are judged.
+
+## Rules imported before this change
+
+Earlier versions of Kodus converted these files into Kody Rules. Those rules are kept but **frozen**: they no longer update when the file changes, and they carry the **Agent file** origin on the Kody Rules page. The **rules from coding-agent files** chip filters the list down to them so you can pause or delete them, or move the conventions you want enforced into `.kody/rules`.
+
+Rules that onboarding imported from coding-agent files without anyone choosing them were removed: each repository's copy of a file had become its own rule applying to every repository. The Kody Rules page shows how many were removed and points to **Coding-agent instructions** in **What to review**, which reads the same files in each repository's reviews. To get the removed rules back, contact support.
+
+`@kody-sync` no longer does anything: Kody Rule files always sync, and coding-agent files never become rules. `@kody-ignore` still excludes a Kody Rule file from sync.
+
+## Verifying it on self-hosted
+
+The worker logs carry a grep-able marker for every review that reads coding-agent instructions:
+
+```bash
+docker logs kodus_worker 2>&1 | grep "\[repo-instructions\]"
+```
+
+Each line shows how many instruction files were found, which ones were read, how many bytes, and whether anything was left out.

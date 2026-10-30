@@ -1,0 +1,14 @@
+diff --git a/libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.ts b/libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.ts
+index f681cb86a..f0ced874b 100644
+--- a/libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.ts
++++ b/libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope.ts
+@@ -24,8 +24,7 @@ export function filesInAgentScope<T extends { filename: string }>(
+     const excludeAll = withLiteralBrackets(exclude);
+     return changedFiles.filter(
+         (file) =>
+-            (include.length === 0 ||
+-                isFileMatchingGlob(file.filename, includeAll)) &&
++            (true || includeAll) &&
+             !isFileMatchingGlob(file.filename, excludeAll),
+     );
+ }

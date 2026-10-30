@@ -2,7 +2,7 @@ import type { FormattedCustomMessageEntity } from "@services/pull-request-messag
 
 type CustomMessagesLocalState = Pick<
     FormattedCustomMessageEntity,
-    "startReviewMessage" | "endReviewMessage"
+    "startReviewMessage" | "endReviewMessage" | "errorReviewMessage"
 >;
 
 type CustomMessagesGlobalSettingsState = NonNullable<
@@ -28,6 +28,7 @@ type CustomMessagesDirtySectionParams = {
 export type CustomMessagesDirtySection =
     | "startReviewMessage"
     | "endReviewMessage"
+    | "errorReviewMessage"
     | "globalSettings";
 
 export const buildCustomMessagesEditorState = (
@@ -36,6 +37,7 @@ export const buildCustomMessagesEditorState = (
     messages: {
         startReviewMessage: pullRequestMessages.startReviewMessage,
         endReviewMessage: pullRequestMessages.endReviewMessage,
+        errorReviewMessage: pullRequestMessages.errorReviewMessage,
     },
     globalSettings: {
         hideComments: pullRequestMessages.globalSettings?.hideComments,
@@ -57,6 +59,10 @@ export const hasCustomMessagesPendingChanges = ({
         pullRequestMessages.endReviewMessage.status?.value ||
     messages.endReviewMessage.content?.value !==
         pullRequestMessages.endReviewMessage.content?.value ||
+    messages.errorReviewMessage.status?.value !==
+        pullRequestMessages.errorReviewMessage.status?.value ||
+    messages.errorReviewMessage.content?.value !==
+        pullRequestMessages.errorReviewMessage.content?.value ||
     globalSettings.hideComments?.value !==
         (pullRequestMessages.globalSettings?.hideComments?.value ?? false) ||
     globalSettings.suggestionCopyPrompt?.value !==
@@ -72,6 +78,7 @@ export const getCustomMessagesDirtySection = ({
         messages: {
             startReviewMessage: editorState.messages.startReviewMessage,
             endReviewMessage: pullRequestMessages.endReviewMessage,
+            errorReviewMessage: pullRequestMessages.errorReviewMessage,
         },
         globalSettings: pullRequestMessages.globalSettings,
     });
@@ -85,6 +92,7 @@ export const getCustomMessagesDirtySection = ({
         messages: {
             startReviewMessage: pullRequestMessages.startReviewMessage,
             endReviewMessage: editorState.messages.endReviewMessage,
+            errorReviewMessage: pullRequestMessages.errorReviewMessage,
         },
         globalSettings: pullRequestMessages.globalSettings,
     });
@@ -93,11 +101,26 @@ export const getCustomMessagesDirtySection = ({
         return "endReviewMessage";
     }
 
+    const errorReviewMessageChanged = hasCustomMessagesPendingChanges({
+        pullRequestMessages,
+        messages: {
+            startReviewMessage: pullRequestMessages.startReviewMessage,
+            endReviewMessage: pullRequestMessages.endReviewMessage,
+            errorReviewMessage: editorState.messages.errorReviewMessage,
+        },
+        globalSettings: pullRequestMessages.globalSettings,
+    });
+
+    if (errorReviewMessageChanged) {
+        return "errorReviewMessage";
+    }
+
     const globalSettingsChanged = hasCustomMessagesPendingChanges({
         pullRequestMessages,
         messages: {
             startReviewMessage: pullRequestMessages.startReviewMessage,
             endReviewMessage: pullRequestMessages.endReviewMessage,
+            errorReviewMessage: pullRequestMessages.errorReviewMessage,
         },
         globalSettings: editorState.globalSettings,
     });

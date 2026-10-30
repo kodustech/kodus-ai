@@ -13,13 +13,9 @@ const API_FILES = [
 
 describe('API layer type imports', () => {
     test.each(API_FILES)('%s avoids the shared types barrel', (fileName) => {
-        const filePath = path.resolve(
-            __dirname,
-            '..',
-            fileName,
-        );
+        const filePath = path.resolve(__dirname, '..', fileName);
         const contents = fs.readFileSync(filePath, 'utf-8');
 
-        expect(contents).not.toContain("types/index.js");
+        expect(contents).not.toContain('types/index.js');
     });
 });

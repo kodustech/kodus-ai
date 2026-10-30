@@ -1,65 +1,109 @@
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
-import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
-import { resolveSecondaryPassModel } from './secondary-pass-model';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import { LLM } from '@libs/llm/llm';
+import {
+    buildFormatPrompt,
+    parseFormatResponse,
+    type FormattedSuggestion,
+    type SuggestionToFormat,
+} from './format-prompt';
+import {
+    looksLikeReviewScaffolding,
+    stripReviewScaffolding,
+} from './strip-review-scaffolding';
+
+export type { FormattedSuggestion, SuggestionToFormat };
 
 const logger = createLogger('SuggestionFormatter');
 
-const FORMAT_TIMEOUT_MS = 90_000; // 90s — the secondary model can take >30s under load
+/**
+ * Hard budget for the formatting pass.
+ *
+ * Raised from 90s once reasoning was turned off below. Production had this pass
+ * landing WITHIN A SECOND of the old ceiling on ordinary batches (a batch of 7
+ * at 89.1s) and past it on 25 occasions in twelve hours, which is a ceiling
+ * chosen too close to the work. 120s buys headroom for a large batch or a slow
+ * provider without making a stuck call hold a review much longer — the pass is
+ * a secondary polish, and the deterministic fallback already covers whatever it
+ * fails to deliver.
+ */
+const FORMAT_TIMEOUT_MS = 120_000;
 
 const displayNames = new Intl.DisplayNames(['en'], { type: 'language' });
 
-export interface SuggestionToFormat {
-    suggestionContent: string;
-    existingCode?: string;
-    improvedCode?: string;
-    relevantFile?: string;
-    language?: string;
-}
+/**
+ * What ships when the model pass gives us nothing for a suggestion.
+ *
+ * Every failure path below used to `return new Map()`, and the caller's loop
+ * over an empty map left `suggestionContent` as the finder wrote it -- the
+ * WHAT/WHY/HOW scaffolding the review prompt asks for. Production, twelve
+ * hours: 86 of 732 runs (11.7%) ended that way, and every suggestion in those
+ * batches reached a customer's pull request with the labels intact.
+ *
+ * The five causes were unrelated -- a suspended account (55), the 90s ceiling
+ * (25), a parse failure, a model id that does not exist, a rate limit -- so no
+ * fix aimed at one of them removes the symptom. Stripping the labels locally
+ * removes it for all five: it cannot time out, cannot be rate limited, and does
+ * not care whether the account has credit.
+ *
+ * The model pass is still the polish and still preferred; this is the floor.
+ * Suggestions that are already prose are returned untouched.
+ */
+function scaffoldingFallback(
+    suggestions: SuggestionToFormat[],
+    reason: string,
+    organizationId?: string,
+): Map<number, FormattedSuggestion> {
+    const out = new Map<number, FormattedSuggestion>();
 
-export interface FormattedSuggestion {
-    suggestionContent: string;
-    improvedCode: string;
+    suggestions.forEach((s, i) => {
+        const content = s.suggestionContent || '';
+        if (!looksLikeReviewScaffolding(content)) {
+            return;
+        }
+        out.set(i, {
+            suggestionContent: stripReviewScaffolding(content),
+            improvedCode: s.improvedCode || '',
+        });
+    });
+
+    if (out.size > 0) {
+        logger.warn({
+            message: `[FORMATTER] ${reason} — stripped WHAT/WHY/HOW locally for ${out.size}/${suggestions.length} suggestion(s) so the scaffolding does not ship`,
+            context: 'SuggestionFormatter',
+            // Which customer hit this. A count with no tenant cannot answer the
+            // first question anyone asks about it.
+            metadata: { organizationId },
+        });
+    }
+
+    return out;
 }
 
 /**
  * Reformat suggestion content from WHAT/WHY/HOW to natural prose,
  * and ensure improvedCode is populated.
  *
- * Runs on the shared secondary-pass model (gpt-5.4-mini) — see
- * resolveSecondaryPassModel. BYOK only as a self-hosted fallback.
- * Respects custom writing guidelines if provided.
+ * Plain BYOK text call through the ONE primitive (LLM.run): the passed slot
+ * when configured, else the managed default — same model resolution, limiter,
+ * reasoning and timeout as every other call. Respects custom writing guidelines
+ * if provided. A missing/failed model degrades through the catch (→ empty map:
+ * comments still ship, minus the prose polish).
+ *
+ * Prompt + parse live in format-prompt.ts (shared with the format eval).
  */
 export async function formatSuggestionContent(
     suggestions: SuggestionToFormat[],
     options?: {
         customWritingGuidelines?: string;
-        byokConfig?: BYOKConfig;
+        byokConfig?: NormalizedModel;
         languageResultPrompt?: string;
+        organizationId?: string;
     },
 ): Promise<Map<number, FormattedSuggestion>> {
     if (suggestions.length === 0) {
         return new Map();
     }
-
-    // Secondary pass: cheap, consistent platform model (gpt-5.4-mini) first,
-    // BYOK only as a self-hosted fallback — see resolveSecondaryPassModel. Null
-    // when nothing is configured → we skip formatting (comments still ship,
-    // minus the prose polish).
-    const model = resolveSecondaryPassModel(options?.byokConfig);
-
-    if (!model) {
-        logger.warn({
-            message: 'No model available for suggestion formatting, skipping',
-            context: 'SuggestionFormatter',
-        });
-        return new Map();
-    }
-
-    const customGuidelines = options?.customWritingGuidelines
-        ? `\n\nAdditional writing guidelines from the team:\n${options.customWritingGuidelines}`
-        : '';
 
     let langLabel: string | null = null;
     if (options?.languageResultPrompt) {
@@ -71,76 +115,60 @@ export async function formatSuggestionContent(
             langLabel = options.languageResultPrompt;
         }
     }
-    const langInstruction = langLabel
-        ? `\nIMPORTANT: Write all output in ${langLabel}. Do not fall back to English.`
-        : '';
-
-    const suggestionsText = suggestions
-        .map(
-            (s, i) =>
-                `[${i}]\nFile: ${s.relevantFile || 'unknown'}\nLanguage: ${s.language || 'unknown'}\nContent: ${s.suggestionContent}\nExisting code:\n\`\`\`\n${s.existingCode || '(none)'}\n\`\`\`\nImproved code:\n\`\`\`\n${s.improvedCode || '(none)'}\n\`\`\``,
-        )
-        .join('\n\n---\n\n');
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FORMAT_TIMEOUT_MS);
 
     try {
-        const result: any = await generateText({
-            model: model as any,
-            abortSignal: controller.signal,
-            experimental_telemetry: buildLangfuseTelemetry(
-                'suggestion-formatter',
-            ),
-            prompt: `You are a code review comment editor. Rewrite each suggestion into clean, natural prose.
-
-Rules:
-- Remove labels like "WHAT:", "WHY:", "HOW:", "1.", "2.", "3." from the beginning of sentences.
-- Merge the labeled sentences into a single natural paragraph (1-3 SHORT sentences). Aim for 2 sentences max: one describing the problem, one describing the fix.
-- Keep every technical detail: function names, file names, variable names, error types, line numbers.
-- Be concise: the code block already shows the fix, so the text should explain WHY, not repeat WHAT the code does.
-- Do NOT touch existingCode or improvedCode — return them exactly as provided.
-${customGuidelines ? `\nThe team has provided custom writing guidelines. Follow them — they take priority over the default rules above.\n${customGuidelines}` : ''}${langInstruction}
-
-Example:
-Input: "WHAT: The join method breaks out of the loop when the timeout expires. WHY: This leaves subsequent flusher processes running indefinitely as orphans. HOW: Remove the remaining_time check."
-Output: "The join method breaks out of the loop when the timeout expires, leaving subsequent flusher processes running indefinitely as orphans. Remove the remaining_time check."
-
-Respond with ONLY a JSON array:
-\`\`\`json
-[
-  {"index": 0, "suggestionContent": "cleaned text"}
-]
-\`\`\`
-
-Suggestions to clean:
-
-${suggestionsText}`,
+        const text = await LLM.run({
+            byokConfig: options?.byokConfig,
+            user: buildFormatPrompt(suggestions, {
+                customWritingGuidelines: options?.customWritingGuidelines,
+                languageLabel: langLabel,
+            }),
+            runName: 'suggestion-formatter',
+            timeoutMs: FORMAT_TIMEOUT_MS,
+            // Reasoning off. This pass REWRITES PROSE -- it decides nothing, it
+            // reformats a finding another model already made -- and production
+            // measured the models doing it spending 69-100% of their output
+            // tokens on reasoning to get there, which is what put the call on
+            // the edge of its own timeout (25 of 86 failures in twelve hours).
+            //
+            // Provider-agnostic on purpose: the switch resolves to effort
+            // 'none' and `buildProviderOptions` owns the per-vendor
+            // translation, so no thinking flag is written by hand here.
+            suppressReasoning: true,
+            // Stamp the org so this pass's usage/cost lands in the org's
+            // token-usage view instead of being recorded org-less (dropped).
+            organizationId: options?.organizationId,
         });
 
-        const text = result.text || '';
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        if (!jsonMatch) {
+        const { formatted, parseOk } = parseFormatResponse(text || '');
+        if (!parseOk) {
+            // Shape, never content. This text is model output ABOUT a customer's
+            // code, so a preview of it does not belong in a log store -- the
+            // same rule the NUL sanitiser follows when it reports field paths
+            // and not values.
+            //
+            // What the character count alone could not answer: whether the
+            // model REFUSED (no bracket anywhere) or answered in a shape the
+            // parser could not read (a bracket present, recovery still failed).
+            // Those are different problems with different fixes.
+            const raw = text || '';
             logger.warn({
-                message: `[FORMATTER] No JSON array in response (${text.length} chars)`,
+                message: `[FORMATTER] No JSON array in response (${raw.length} chars)`,
                 context: 'SuggestionFormatter',
+                metadata: {
+                    organizationId: options?.organizationId,
+                    chars: raw.length,
+                    hasBracket: raw.includes('['),
+                    hasFence: raw.includes('```'),
+                    startsWith: raw.trimStart().charAt(0) || '(empty)',
+                    suggestionCount: suggestions.length,
+                },
             });
-            return new Map();
-        }
-
-        const parsed = JSON.parse(jsonMatch[0]);
-        const formatted = new Map<number, FormattedSuggestion>();
-
-        for (const item of parsed) {
-            if (
-                typeof item.index === 'number' &&
-                typeof item.suggestionContent === 'string'
-            ) {
-                formatted.set(item.index, {
-                    suggestionContent: item.suggestionContent,
-                    improvedCode: item.improvedCode || '',
-                });
-            }
+            return scaffoldingFallback(
+                suggestions,
+                'no JSON array in response',
+                options?.organizationId,
+            );
         }
 
         logger.log({
@@ -148,14 +176,37 @@ ${suggestionsText}`,
             context: 'SuggestionFormatter',
         });
 
+        // A partial answer leaves the rest raw, which is the same leak in
+        // miniature. Fill only the gaps -- what the model returned wins.
+        //
+        // Gated on COVERAGE, not size. `parseFormatResponse` accepts any
+        // numeric index without a bounds check, so a response carrying an
+        // out-of-range or duplicate index (`[{index:0},{index:5}]` for a batch
+        // of two) makes the size match while a real index is still uncovered --
+        // and that suggestion would ship with the scaffolding intact, through
+        // the very code added to prevent it.
+        if (suggestions.some((_, i) => !formatted.has(i))) {
+            for (const [i, fallback] of scaffoldingFallback(
+                suggestions,
+                'model returned a partial batch',
+                options?.organizationId,
+            )) {
+                if (!formatted.has(i)) {
+                    formatted.set(i, fallback);
+                }
+            }
+        }
+
         return formatted;
     } catch (err) {
         logger.warn({
             message: `[FORMATTER] Formatting failed: ${err instanceof Error ? err.message : String(err)}`,
             context: 'SuggestionFormatter',
         });
-        return new Map();
-    } finally {
-        clearTimeout(timeout);
+        return scaffoldingFallback(
+            suggestions,
+            err instanceof Error ? err.message : String(err),
+            options?.organizationId,
+        );
     }
 }

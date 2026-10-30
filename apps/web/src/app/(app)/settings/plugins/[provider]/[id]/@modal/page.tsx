@@ -15,12 +15,27 @@ export default async function PluginModalPage({
 }) {
     const { id, provider } = await params;
     let installedPlugins: AwaitedReturnType<typeof getMCPPlugins> = [];
+    let tools: AwaitedReturnType<typeof getMCPPluginTools> = [];
 
+    // These three only need { id, provider } and don't depend on each other —
+    // fetch them in one round-trip. Tools keeps its own catch so a tools
+    // failure degrades gracefully instead of taking the whole modal down.
     let plugin;
     try {
-        plugin = await getMCPPluginById({ id, provider });
-        const allPlugins = await getMCPPlugins();
+        const [pluginResult, allPlugins, fetchedTools] = await Promise.all([
+            getMCPPluginById({ id, provider }),
+            getMCPPlugins(),
+            getMCPPluginTools({ id, provider }).catch((error) => {
+                console.error(
+                    "Error fetching plugin tools, continuing without them:",
+                    error,
+                );
+                return [] as AwaitedReturnType<typeof getMCPPluginTools>;
+            }),
+        ]);
+        plugin = pluginResult;
         installedPlugins = allPlugins.filter((p) => p.isConnected);
+        tools = fetchedTools || [];
     } catch (error) {
         console.error("Error fetching plugin data:", error);
         return null;
@@ -29,17 +44,6 @@ export default async function PluginModalPage({
     if (!plugin) {
         console.error("Plugin not found");
         return null;
-    }
-
-    let tools: AwaitedReturnType<typeof getMCPPluginTools> = [];
-    try {
-        const fetchedTools = await getMCPPluginTools({ id, provider });
-        tools = fetchedTools || [];
-    } catch (error) {
-        console.error(
-            "Error fetching plugin tools, continuing without them:",
-            error,
-        );
     }
 
     if (plugin.isConnected) {

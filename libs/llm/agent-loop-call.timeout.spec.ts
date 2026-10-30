@@ -1,0 +1,149 @@
+/**
+ * The agent loop must have a wall-clock floor under it.
+ *
+ * `AbortSignal` is the polite first try. Several OpenAI-compatible proxies
+ * accept the connection, ignore the abort, and never answer — `llm-call.ts`
+ * says so in as many words ("some providers ignore AbortSignal; this is the
+ * safety net") and wraps the ONE-SHOT path in `hardTimeout` for exactly that.
+ * The loop had no such net, and the loop is where reviews run.
+ *
+ * What that cost on 2026-09-03: a review's generalist agent stopped logging
+ * mid-run. Nine pipeline stages reported `completed in Xms`; `AgentReviewStage`
+ * reported nothing, ever. The PR kept the "review starting" comment the
+ * pipeline had already posted, the sandbox lease stayed held, the span stayed
+ * open, and nothing was logged as an error — a promise that never settles
+ * throws nothing for a `catch` to see. The e2e gave up after its own 53-minute
+ * budget, well past the 30-minute ceiling that was supposed to apply.
+ *
+ * These tests stub `generateText` to that exact shape — never settles, ignores
+ * the signal. Without the wrapper they hang until jest kills them; with it they
+ * reject as `[HARD-TIMEOUT]`.
+ *
+ * `hardTimeout` grants ms + 5s of grace so a provider that DOES honour the
+ * abort settles on its own first; the stalled cases advance fake timers past
+ * that grace instead of waiting it out on the wall clock.
+ */
+jest.mock('ai', () => {
+    const actual = jest.requireActual('ai');
+    return {
+        ...actual,
+        generateText: jest.fn(),
+        stepCountIs: jest.fn((n: number) => ({ __stepCountIs: n })),
+    };
+});
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: jest.fn(),
+}));
+jest.mock('@libs/llm/prompt-cache', () => ({
+    applyCacheBreakpoints: jest.fn(),
+}));
+jest.mock('@libs/llm/repair-tool-call', () => ({
+    repairInvalidToolInput: jest.fn(),
+}));
+jest.mock('@libs/llm/model-identity', () => ({
+    agentModelIdentity: jest.fn(),
+}));
+jest.mock('@libs/core/log/langfuse', () => ({
+    buildLangfuseTelemetry: jest.fn(() => ({ isEnabled: false })),
+    toAiSdkTelemetryArgs: jest.fn(() => ({
+        experimental_telemetry: { isEnabled: false },
+    })),
+}));
+
+import { generateText } from 'ai';
+import { runAgentLoopCall } from '@libs/llm/agent-loop-call';
+import { resolveModelConfig } from '@libs/llm/model-invocation';
+import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
+import { agentModelIdentity } from '@libs/llm/model-identity';
+
+const mockGenerate = generateText as unknown as jest.Mock;
+const mockResolve = resolveModelConfig as unknown as jest.Mock;
+const mockCache = applyCacheBreakpoints as unknown as jest.Mock;
+const mockIdentity = agentModelIdentity as unknown as jest.Mock;
+
+const params = () =>
+    ({
+        messages: [{ role: 'user', content: 'review this' }],
+        loop: { tools: {}, maxSteps: 1 },
+        runName: 'agent.stalled',
+        // The wrapper adds a 5s grace on top (see HARD_TIMEOUT_AT).
+        hardTimeoutMs: 40,
+    }) as any;
+
+/** When `hardTimeout` gives up on a 40ms ceiling: the ceiling plus its grace. */
+const HARD_TIMEOUT_AT = 40 + 5_000;
+
+/** Run `call` under fake timers and expect it to settle as `[HARD-TIMEOUT]`
+ *  once the clock passes the ceiling plus grace. */
+async function expectHardTimeout(call: () => Promise<unknown>) {
+    jest.useFakeTimers();
+    const settled = expect(call()).rejects.toThrow(/\[HARD-TIMEOUT\]/);
+    await jest.advanceTimersByTimeAsync(HARD_TIMEOUT_AT);
+    await settled;
+}
+
+afterEach(() => jest.useRealTimers());
+
+beforeEach(() => {
+    jest.clearAllMocks();
+    mockResolve.mockReturnValue({
+        model: { __model: 'main' },
+        modelName: 'openai_compatible:stub',
+        callOptions: {},
+        providerOptions: {},
+    });
+    mockCache.mockImplementation((a: any) => ({
+        systemArg: a?.system ? { system: a.system } : {},
+        messages: a?.messages ?? [],
+    }));
+    mockIdentity.mockReturnValue({ byokModelId: 'stub', credentialId: 'cred' });
+});
+
+describe('runAgentLoopCall — a stalled provider must not hang the caller', () => {
+    it('rejects on the wall clock when the provider never answers', async () => {
+        mockGenerate.mockImplementation(() => new Promise(() => {}));
+
+        await expectHardTimeout(() => runAgentLoopCall(params()));
+    });
+
+    it('rejects even when handed an abort signal the provider ignores', async () => {
+        mockGenerate.mockImplementation(
+            (opts: any) =>
+                new Promise(() => {
+                    // Receiving the signal is not the same as honouring it: the
+                    // stub takes it and still never settles, which is the whole
+                    // failure mode.
+                    void opts?.abortSignal;
+                }),
+        );
+
+        await expectHardTimeout(() => runAgentLoopCall(params()));
+    });
+
+    it('arms an abort even when the caller threads no signal', async () => {
+        // The race frees the pipeline; only the abort frees the request. With
+        // `abortSignal: undefined` the socket stays open and the BYOK limiter
+        // never gets its concurrency slot back — its release is a `finally` on
+        // a task that never settles. No review caller passes a signal, so the
+        // loop MUST arm its own.
+        mockGenerate.mockResolvedValue({ text: 'ok', steps: [], usage: {} });
+
+        await runAgentLoopCall(params());
+
+        const sent = mockGenerate.mock.calls[0][0];
+        expect(sent.abortSignal).toBeInstanceOf(AbortSignal);
+        expect(sent.abortSignal.aborted).toBe(false);
+    });
+
+    it("prefers the caller's signal when one IS threaded", async () => {
+        mockGenerate.mockResolvedValue({ text: 'ok', steps: [], usage: {} });
+        const controller = new AbortController();
+
+        await runAgentLoopCall({ ...params(), signal: controller.signal });
+
+        expect(mockGenerate.mock.calls[0][0].abortSignal).toBe(
+            controller.signal,
+        );
+    });
+
+});

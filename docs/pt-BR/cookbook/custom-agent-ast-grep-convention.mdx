@@ -1,0 +1,107 @@
+---
+title: "Imponha uma convenção com ast-grep"
+description: "Um agente personalizado que impõe uma convenção do time com regras do ast-grep, para que todo apontamento seja um match comprovado."
+icon: "code"
+---
+
+## Por que ast-grep
+
+Algumas convenções são estruturais: "nunca chame esta função aqui", "sempre passe esta opção". Um modelo consegue perceber, mas também pode deixar passar ou imaginar um caso. Uma regra do [ast-grep](https://ast-grep.github.io) casa com a árvore sintática, então um match é prova. Um apontamento que cita uma regra que bateu na execução pula a checagem pelo modelo e é postado.
+
+O exemplo é um serviço de checkout com uma convenção: **valores são centavos inteiros tratados pelo helper `Money`, nunca floats.**
+
+## Passo 1 — Escreva as regras no repositório
+
+Faça commit de um arquivo de regras na branch padrão. A Kodus lê esse arquivo da branch de destino de cada pull request, então um pull request não consegue afrouxar as regras que o conferem.
+
+```yaml rules/money.yml
+id: no-parsefloat-amount
+language: typescript
+message: Parse amounts with Money.parse; parseFloat turns cents into a float.
+severity: error
+rule:
+  pattern: parseFloat($A)
+---
+id: no-tofixed-amount
+language: typescript
+message: Format amounts with Money.format; toFixed formats a float, not an amount.
+severity: error
+rule:
+  pattern: $A.toFixed($N)
+```
+
+O `message` de cada regra é o que o comentário cita como regra, então escreva pensando em quem lê o pull request.
+
+Registre o raciocínio num doc também, para os casos que um padrão não pega:
+
+```markdown docs/money.md
+# Money
+
+Amounts are integers in cents, wrapped in `Money`. Never store, add or compare an amount as a float.
+Convert at the edges only: `Money.parse` on input, `Money.format` on output.
+```
+
+## Passo 2 — Crie o agente
+
+**New agent → Templates → Blank**, e depois:
+
+```text Name
+Money handling
+```
+
+```text Instructions
+Enforce the money convention in checkout and billing code: amounts are integer cents in Money, never floats.
+
+First run the team's ast-grep rules on the changed files. Report every match as its own finding on the matched line, citing its rule.
+
+Beyond the rules, flag arithmetic or comparison on amounts held as plain numbers only when docs/money.md states the rule; quote it.
+
+Ignore tests and amounts that are not money (percentages, durations, counts).
+```
+
+| Campo | Valor |
+| --- | --- |
+| **Files** | `src/checkout/**`, `src/billing/**` |
+| **Except** | `**/*.test.ts` |
+| **Skills & docs** | `docs/money.md` (**Add skill or doc → Add by path**) |
+
+## Passo 3 — Aponte para as regras
+
+Em **Tools → Advanced → Structural search (ast-grep rules)**, informe o caminho numa única linha:
+
+```text
+rules/money.yml
+```
+
+A dica do campo lista as regras encontradas: `2 rules in rules/money.yml: no-parsefloat-amount, no-tofixed-amount`. Você também pode colar o YAML direto no campo em vez do caminho; aí as regras ficam no agente, e não no repositório.
+
+## Passo 4 — Comentários
+
+| Campo | Valor |
+| --- | --- |
+| **Format** | Inline comments |
+| **Minimum severity** | Team minimum |
+| **Suggested fix** | When confident |
+
+Clique em **Save**.
+
+## Passo 5 — Try it
+
+Rode o **Try it** num pull request que adiciona um `parseFloat` num preço. O apontamento fica como **kept**, e o comentário cita a regra:
+
+```markdown
+**Rule** (`ast-grep:no-parsefloat-amount`):
+> Parse amounts with Money.parse; parseFloat turns cents into a float.
+```
+
+Um apontamento que o agente tirou de `docs/money.md` cita o doc, e é descartado se a citação não estiver no doc na branch de destino.
+
+## Checklist
+
+- [ ] Arquivo de regras commitado na branch padrão
+- [ ] Cada regra tem `id`, `rule` e um `message` legível
+- [ ] A dica do campo lista todas as regras
+- [ ] Os globs cobrem só o código a que a convenção se aplica
+- [ ] Testado num pull request com uma violação conhecida
+
+Veja [Regras do ast-grep](/pt-BR/how_to_use/code_review/custom_agents_knowledge_and_tools#regras-do-ast-grep) para os detalhes do campo.

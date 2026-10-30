@@ -100,7 +100,9 @@ const codexAfterAgent = {
 
 const ISO_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/;
 
-function expectValidEvent(event: LifecycleEvent | null): asserts event is LifecycleEvent {
+function expectValidEvent(
+    event: LifecycleEvent | null,
+): asserts event is LifecycleEvent {
     expect(event).not.toBeNull();
     expect(event!.timestamp).toMatch(ISO_REGEX);
 }
@@ -123,7 +125,10 @@ describe('Payload Compatibility: Claude Code', () => {
     });
 
     it('user-prompt-submit: produces TurnStart with prompt', () => {
-        const event = agent.parseHookEvent('user-prompt-submit', claudeUserPrompt);
+        const event = agent.parseHookEvent(
+            'user-prompt-submit',
+            claudeUserPrompt,
+        );
         expectValidEvent(event);
         expect(event.type).toBe('TurnStart');
         expect(event.sessionId).toBe('abc-123-def');
@@ -151,7 +156,10 @@ describe('Payload Compatibility: Claude Code', () => {
     });
 
     it('subagent-start: produces SubagentStart with all subagent fields', () => {
-        const event = agent.parseHookEvent('subagent-start', claudeSubagentStart);
+        const event = agent.parseHookEvent(
+            'subagent-start',
+            claudeSubagentStart,
+        );
         expectValidEvent(event);
         expect(event.type).toBe('SubagentStart');
         expect(event.sessionId).toBe('abc-123-def');
@@ -229,7 +237,10 @@ describe('Payload Compatibility: Cursor', () => {
     });
 
     it('subagentStart: produces SubagentStart with all subagent fields', () => {
-        const event = agent.parseHookEvent('subagentStart', cursorSubagentStart);
+        const event = agent.parseHookEvent(
+            'subagentStart',
+            cursorSubagentStart,
+        );
         expectValidEvent(event);
         expect(event.type).toBe('SubagentStart');
         expect(event.sessionId).toBe('cursor-sess-789');
@@ -403,7 +414,10 @@ describe('Payload Compatibility: Edge Cases', () => {
         });
 
         it('Claude Code: string payload', () => {
-            const event = claude.parseHookEvent('session-start', 'not an object');
+            const event = claude.parseHookEvent(
+                'session-start',
+                'not an object',
+            );
             expectValidEvent(event);
             expect(event.sessionId).toBe('');
         });

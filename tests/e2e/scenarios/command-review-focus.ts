@@ -1,6 +1,7 @@
 import type { RunContext, Scenario } from "../lib/types.js";
 import { http } from "../lib/http.js";
 import { ensureLicenseSeat } from "../lib/onboarding.js";
+import { assertHealthyExecution } from "../lib/execution-health.js";
 
 // Mirrors command-review, but posts a steering directive after the command
 // (`@kody review focus on ...`). What's under test is the NEW directive path:
@@ -118,12 +119,22 @@ export const commandReviewFocus: Scenario = {
                 `No review on PR/MR #${pr.number} within ${reviewLatencySec}s after posting "${command}". The trailing focus directive must not break command detection. pre-command findings count was ${preCount}.`,
             );
 
+            // Execution HEALTH, not just output: the focus-directive review can
+            // post findings while an agent/stage crashed (partial_error).
+            // Assert the execution settled `success`.
+            const executionStatus = await assertHealthyExecution(
+                ctx,
+                session,
+                pr.number,
+            );
+
             return {
                 prNumber: pr.number,
                 prUrl: pr.url,
                 fixture,
                 preCommandFindings: preCount,
                 reviewLatencySec,
+                executionStatus,
                 command,
                 directive: DIRECTIVE,
             };

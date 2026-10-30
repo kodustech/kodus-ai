@@ -1,0 +1,68 @@
+---
+title: "Umbral de Severidad"
+description: "Controla cuánto feedback publica Kody en tus PRs — la severidad mínima para publicar, antes Review Filters / Suggestion Control."
+---
+
+El umbral de severidad (antes **Review filters**, y antes de eso **Suggestion Control**) decide
+**cuáles** de los hallazgos de Kody se publican realmente. En la barra lateral, abre
+**Code review → What to review**; los ajustes están en la tarjeta **Minimum severity to post**. Se
+pueden definir a nivel global, de repositorio o de directorio — consulta
+[Herencia y Overrides de Configuración](/es/how_to_use/code_review/configs/inheritance_overrides).
+
+## Severidad mínima para publicar
+
+Kody asigna una severidad a cada sugerencia y solo publica las que están en el nivel que eliges en
+el slider o por encima. El valor por defecto es **Medium**. Kody sigue encontrando los problemas de
+menor severidad; simplemente no los comenta.
+
+| Nivel | Qué cubre |
+| --- | --- |
+| **Low/All** | Mejoras menores de calidad de código: pequeñas optimizaciones, ajustes de estilo, refinamientos sutiles. |
+| **Medium** (por defecto) | Mejoras moderadas, recomendables pero no críticas: buenas prácticas y prevención de deuda técnica futura. |
+| **High** | Problemas relevantes que deberían atenderse a corto plazo: mejoras importantes de calidad, riesgos potenciales, cuestiones técnicas sustanciales. |
+| **Critical** | Problemas que requieren atención inmediata y podrían afectar gravemente la estabilidad, la seguridad o el funcionamiento. |
+
+<Tip>
+  Demasiado ruido en un PR grande suele ser un problema de severidad, no de volumen. Sube a
+  **High** antes de probar cualquier otra cosa — conservas todos los bugs reales y pierdes los
+  nitpicks. Consulta [Cómo reducir el ruido en la revisión](/es/knowledge_base/how-to-reduce-code-review-noise).
+</Tip>
+
+## Aplicar el umbral a las Kody Rules
+
+Un toggle en la misma tarjeta, **desactivado por defecto**.
+
+- **Desactivado** — los hallazgos de las [Kody Rules](/es/how_to_use/code_review/configs/kody_rules)
+  **omiten** el umbral de severidad. Una regla escrita por tu equipo siempre se reporta, sea cual
+  sea la severidad que reciba.
+- **Activado** — las Kody Rules pasan por el mismo umbral de severidad que el resto de sugerencias.
+
+Déjalo desactivado salvo que tus reglas estén generando más ruido que señal. El sentido de una
+Kody Rule es precisamente que tu equipo ya decidió que eso importa.
+
+<Note>
+  En `kodus-config.yml` estos dos ajustes viven bajo `suggestionControl`:
+
+  ```yaml
+  suggestionControl:
+      severityLevelFilter: 'medium' # low | medium | high | critical
+      applyFiltersToKodyRules: false
+  ```
+
+  Recuerda que el archivo solo se lee una vez que habilitas
+  `kodusConfigFileOverridesWebPreferences` — consulta
+  [General](/es/how_to_use/code_review/configs/general).
+</Note>
+
+## Otras formas de reducir el ruido
+
+El umbral de severidad es un instrumento poco fino. Cuando necesites algo más dirigido:
+
+- **Ignored files** — omite por completo el código generado, los lockfiles y los directorios
+  vendorizados. Consulta [General](/es/how_to_use/code_review/configs/general).
+- **Categorías** — desactiva una categoría entera (p. ej. Performance) con su switch en
+  **What to review**, en los repositorios donde no aporta.
+- **Config por directorio** — aplica un umbral más estricto o más laxo por carpeta en un
+  monorepo. Consulta [Configuración por Directorio](/es/how_to_use/code_review/configs/directory_level).
+- **Kody Rules** — codifica lo que a tu equipo realmente le importa, para que la señal venga de
+  tus estándares en lugar de consejos genéricos.

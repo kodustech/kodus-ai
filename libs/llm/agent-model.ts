@@ -7,16 +7,27 @@
  *
  * Lives in @libs/llm (infra), not the harness — the engine stays model-agnostic.
  */
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
 import type { LanguageModel } from 'ai';
 
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import {
+    buildModelFromSlot,
+    type ByokModelOptions,
+} from '@libs/llm/byok-to-vercel';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 
 export interface ResolveAgentModelOptions {
     organizationId?: string;
     provider?: string;
     queueTimeoutMs?: number;
+    /** Model-build options forwarded to `buildModelFromSlot` — notably
+     *  `structuredOutputs` for the structured-output (generateObject) path.
+     *  Omit for the plain agentic loop. */
+    modelOptions?: ByokModelOptions;
+    /** Force a default model id on the env/managed path (no BYOK slot) — the
+     *  trial / public-demo override (e.g. cli-review's SUMMARY_MODEL). Threaded
+     *  to `buildModelFromSlot`; ignored when a real slot resolves. */
+    defaultModelOverride?: string;
     /** Wire to `ByokErrorCounter.record` so BYOK failures drive the
      *  `byok.llm_errors_threshold` notification — parity with code-review. */
     reporter?: (input: {
@@ -27,16 +38,20 @@ export interface ResolveAgentModelOptions {
 }
 
 export function resolveAgentModel(
-    byokConfig: BYOKConfig | undefined,
+    slot: NormalizedModel | undefined,
     opts: ResolveAgentModelOptions = {},
 ): LanguageModel {
-    return wrapByokModel(byokToVercelModel(byokConfig), {
-        byokConfig,
-        organizationId: opts.organizationId,
-        provider: opts.provider ?? byokConfig?.main?.provider,
-        ...(opts.queueTimeoutMs != null
-            ? { queueTimeoutMs: opts.queueTimeoutMs }
-            : {}),
-        ...(opts.reporter ? { reporter: opts.reporter } : {}),
-    });
+    // Build the model from the ONE resolved slot; the limiter keys off that slot.
+    return wrapByokModel(
+        buildModelFromSlot(slot, opts.modelOptions, opts.defaultModelOverride),
+        {
+            byokConfig: slot,
+            organizationId: opts.organizationId,
+            provider: opts.provider ?? slot?.provider,
+            ...(opts.queueTimeoutMs != null
+                ? { queueTimeoutMs: opts.queueTimeoutMs }
+                : {}),
+            ...(opts.reporter ? { reporter: opts.reporter } : {}),
+        },
+    );
 }

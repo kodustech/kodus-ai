@@ -88,6 +88,18 @@ export class ParametersService implements IParametersService {
         );
     }
 
+    createActiveVersionIfAbsent<K extends ParametersKey>(
+        configKey: K,
+        teamId: string,
+        configValue: IParameters<K>['configValue'],
+    ): Promise<ParametersEntity<K> | undefined> {
+        return this.parametersRepository.createActiveVersionIfAbsent(
+            configKey,
+            teamId,
+            configValue,
+        );
+    }
+
     async createOrUpdateConfig<K extends ParametersKey>(
         parametersKey: K,
         configValue: ParametersEntity<K>['configValue'],

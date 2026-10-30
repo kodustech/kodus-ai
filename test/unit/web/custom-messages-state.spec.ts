@@ -31,6 +31,16 @@ const buildMessages = (): FormattedCustomMessageEntity => ({
             value: PullRequestMessageStatus.ONLY_WHEN_OPENED,
         },
     },
+    errorReviewMessage: {
+        content: {
+            level: FormattedConfigLevel.GLOBAL,
+            value: 'Error review',
+        },
+        status: {
+            level: FormattedConfigLevel.GLOBAL,
+            value: PullRequestMessageStatus.OFF,
+        },
+    },
     globalSettings: {
         hideComments: {
             level: FormattedConfigLevel.GLOBAL,
@@ -53,6 +63,8 @@ describe('hasCustomMessagesPendingChanges', () => {
                 messages: {
                     startReviewMessage: pullRequestMessages.startReviewMessage,
                     endReviewMessage: pullRequestMessages.endReviewMessage,
+                    errorReviewMessage:
+                        pullRequestMessages.errorReviewMessage,
                 },
                 globalSettings: pullRequestMessages.globalSettings,
             }),
@@ -74,6 +86,8 @@ describe('hasCustomMessagesPendingChanges', () => {
                         },
                     },
                     endReviewMessage: pullRequestMessages.endReviewMessage,
+                    errorReviewMessage:
+                        pullRequestMessages.errorReviewMessage,
                 },
                 globalSettings: pullRequestMessages.globalSettings,
             }),
@@ -95,6 +109,8 @@ describe('hasCustomMessagesPendingChanges', () => {
                             value: PullRequestMessageStatus.OFF,
                         },
                     },
+                    errorReviewMessage:
+                        pullRequestMessages.errorReviewMessage,
                 },
                 globalSettings: pullRequestMessages.globalSettings,
             }),
@@ -110,6 +126,8 @@ describe('hasCustomMessagesPendingChanges', () => {
                 messages: {
                     startReviewMessage: pullRequestMessages.startReviewMessage,
                     endReviewMessage: pullRequestMessages.endReviewMessage,
+                    errorReviewMessage:
+                        pullRequestMessages.errorReviewMessage,
                 },
                 globalSettings: {
                     ...pullRequestMessages.globalSettings,
@@ -132,6 +150,7 @@ describe('buildCustomMessagesEditorState', () => {
             messages: {
                 startReviewMessage: pullRequestMessages.startReviewMessage,
                 endReviewMessage: pullRequestMessages.endReviewMessage,
+                errorReviewMessage: pullRequestMessages.errorReviewMessage,
             },
             globalSettings: pullRequestMessages.globalSettings,
         });
@@ -178,6 +197,32 @@ describe('getCustomMessagesDirtySection', () => {
                 },
             }),
         ).toBe('startReviewMessage');
+    });
+
+    it('flags the error section dirty when its content changes', () => {
+        const pullRequestMessages = buildMessages();
+        const editorState =
+            buildCustomMessagesEditorState(pullRequestMessages);
+
+        expect(
+            getCustomMessagesDirtySection({
+                pullRequestMessages,
+                editorState: {
+                    ...editorState,
+                    messages: {
+                        ...editorState.messages,
+                        errorReviewMessage: {
+                            ...editorState.messages.errorReviewMessage,
+                            content: {
+                                ...editorState.messages.errorReviewMessage
+                                    .content,
+                                value: 'Review failed: @errorReason',
+                            },
+                        },
+                    },
+                },
+            }),
+        ).toBe('errorReviewMessage');
     });
 
     it('returns null when nothing changed', () => {

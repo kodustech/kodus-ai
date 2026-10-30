@@ -16,6 +16,7 @@ function getDefaultMessages() {
     return {
         start: defaults.customMessages?.startReviewMessage?.content ?? '',
         end: defaults.customMessages?.endReviewMessage?.content ?? '',
+        error: defaults.customMessages?.errorReviewMessage?.content ?? '',
         globalSettings: {
             hideComments:
                 defaults.customMessages?.globalSettings?.hideComments ?? false,
@@ -41,8 +42,10 @@ export interface PullRequestMessagesLogParams extends BaseLogParams {
     directoryId?: string;
     startReviewMessage?: PullRequestMessage;
     endReviewMessage?: PullRequestMessage;
+    errorReviewMessage?: PullRequestMessage;
     existingStartMessage?: PullRequestMessage;
     existingEndMessage?: PullRequestMessage;
+    existingErrorMessage?: PullRequestMessage;
     globalSettings?: GlobalSettings;
     existingGlobalSettings?: GlobalSettings;
     directoryPath?: string;
@@ -123,6 +126,25 @@ export class PullRequestMessagesLogHandler {
             }
         }
 
+        // Check error message changes
+        if (params.errorReviewMessage) {
+            const errorChange = this.analyzeMessageChange(
+                'Error',
+                params.errorReviewMessage,
+                params.existingErrorMessage,
+                defaultMessages.error,
+                params.isUpdate,
+                params.configLevel,
+                params.repositoryId,
+                params.directoryPath,
+                params.userInfo.userEmail,
+            );
+
+            if (errorChange) {
+                changedData.push(errorChange);
+            }
+        }
+
         // Check globalSettings changes
         if (params.globalSettings) {
             const globalSettingsChanges = this.analyzeGlobalSettingsChanges(
@@ -143,7 +165,7 @@ export class PullRequestMessagesLogHandler {
     }
 
     private analyzeMessageChange(
-        messageType: 'Start' | 'End',
+        messageType: 'Start' | 'End' | 'Error',
         newMessage: PullRequestMessage,
         existingMessage: PullRequestMessage | undefined,
         defaultMessage: string,

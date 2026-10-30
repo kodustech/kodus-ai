@@ -16,7 +16,6 @@ import { ExecuteCliReviewUseCase } from '@libs/cli-review/application/use-cases/
 import { EnqueueCliReviewUseCase } from '@libs/cli-review/application/use-cases/enqueue-cli-review.use-case';
 import { GetCliReviewJobStatusUseCase } from '@libs/cli-review/application/use-cases/get-cli-review-job-status.use-case';
 import { WaitForCliReviewJobUseCase } from '@libs/cli-review/application/use-cases/wait-for-cli-review-job.use-case';
-import { SubmitCliSessionCaptureUseCase } from '@libs/cli-review/application/use-cases/submit-cli-session-capture.use-case';
 import { AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/authenticated-rate-limiter.service.contract';
 import { TRIAL_RATE_LIMITER_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/trial-rate-limiter.service.contract';
 import { GITHUB_PUBLIC_PR_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/github-public-pr.service.contract';
@@ -25,7 +24,9 @@ import { INTEGRATION_CONFIG_SERVICE_TOKEN } from '@libs/integrations/domain/inte
 import { CLI_DEVICE_SERVICE_TOKEN } from '@libs/organization/domain/cli-device/contracts/cli-device.service.contract';
 import { TEAM_CLI_KEY_SERVICE_TOKEN } from '@libs/organization/domain/team-cli-key/contracts/team-cli-key.service.contract';
 import { TEAM_SERVICE_TOKEN } from '@libs/organization/domain/team/contracts/team.service.contract';
-import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
+import { BusinessValidationService } from '@libs/agents/business-validation/business-validation.service';
+import { ValidationRunRepository } from '@libs/agents/business-validation/runs/validation-run.repository';
+import { BusinessLogicPublisher } from '@libs/platform/application/services/business-logic-publisher.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { TriggerBusinessValidationUseCase } from '@libs/platform/application/use-cases/codeManagement/trigger-business-validation.use-case';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -52,7 +53,7 @@ describe('CLI business-validation integration', () => {
         findIntegrationConfigFormatted: jest.fn(),
     };
     const mockBusinessProvider = {
-        execute: jest.fn(),
+        validate: jest.fn(),
     };
 
     beforeEach(async () => {
@@ -74,10 +75,6 @@ describe('CLI business-validation integration', () => {
                 },
                 {
                     provide: WaitForCliReviewJobUseCase,
-                    useValue: { execute: jest.fn() },
-                },
-                {
-                    provide: SubmitCliSessionCaptureUseCase,
                     useValue: { execute: jest.fn() },
                 },
                 {
@@ -146,8 +143,24 @@ describe('CLI business-validation integration', () => {
                     useValue: mockIntegrationConfigService,
                 },
                 {
-                    provide: BusinessRulesValidationAgentProvider,
+                    provide: BusinessValidationService,
                     useValue: mockBusinessProvider,
+                },
+                {
+                    provide: BusinessLogicPublisher,
+                    useValue: {
+                        configFor: jest
+                            .fn()
+                            .mockResolvedValue({
+                                settings: undefined,
+                                enabled: true,
+                            }),
+                        withRepository: jest.fn((request) => request),
+                    },
+                },
+                {
+                    provide: ValidationRunRepository,
+                    useValue: { create: jest.fn().mockResolvedValue('run-1') },
                 },
                 {
                     provide: JwtService,
@@ -180,9 +193,37 @@ describe('CLI business-validation integration', () => {
         mockCodeManagementService.getTypeIntegration.mockResolvedValue(
             PlatformType.GITHUB,
         );
-        mockBusinessProvider.execute.mockResolvedValue(
-            '## Business Rules Validation\n\nLooks good.',
-        );
+        mockBusinessProvider.validate.mockResolvedValue({
+            outcome: {
+                kind: 'validated',
+                checks: [
+                    {
+                        task: { tracker: 'Linear', id: 'KD-1234' },
+                        verdict: {
+                            needsMoreInfo: false,
+                            summary: 'ok',
+                            requirements: [
+                                {
+                                    requirement: 'Validates the rule',
+                                    state: 'met',
+                                    evidence: [{ file: 'rule.ts', line: 3 }],
+                                    confidence: 'high',
+                                },
+                            ],
+                            outOfScope: [],
+                        },
+                        passed: true,
+                        readAt: '2026-10-05T00:00:00.000Z',
+                    },
+                ],
+                thinTasks: [],
+                passed: true,
+                unseenFiles: [],
+            },
+            references: [],
+            attempts: [],
+            trackers: ['Linear'],
+        });
         mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
             [{ id: 'repo-1', name: 'kodus-ai', organizationName: 'kodus-ai' }],
         );
@@ -217,28 +258,28 @@ describe('CLI business-validation integration', () => {
             repositoryId: 'repo-1',
             repositoryName: 'kodus-ai',
             taskReference: 'KD-1234',
-            result: '## Business Rules Validation\n\nLooks good.',
+            result: expect.stringContaining(
+                'MET            Validates the rule rule.ts:3',
+            ),
+            verdict: expect.objectContaining({
+                status: 'compliant',
+                passed: true,
+            }),
         });
         expect(mockRateLimiter.checkRateLimit).toHaveBeenCalledWith('team-1');
-        expect(mockBusinessProvider.execute).toHaveBeenCalledWith(
+        expect(mockBusinessProvider.validate).toHaveBeenCalledWith(
             expect.objectContaining({
+                door: 'cli',
                 organizationAndTeamData: {
                     organizationId: 'org-1',
                     teamId: 'team-1',
                 },
-                thread: 'vbl-thread-id',
-                prepareContext: expect.objectContaining({
-                    userQuestion: '@kody -v business-logic KD-1234',
-                    taskId: 'KD-1234',
-                    taskReference: 'KD-1234',
-                    platformType: PlatformType.GITHUB,
-                    pullRequest: expect.objectContaining({
-                        pullRequestNumber: 42,
-                    }),
-                    repository: expect.objectContaining({
-                        id: 'repo-1',
-                        name: 'kodus-ai',
-                    }),
+                taskInput: 'KD-1234',
+                platformType: PlatformType.GITHUB,
+                pullRequest: expect.objectContaining({ number: 42 }),
+                repository: expect.objectContaining({
+                    id: 'repo-1',
+                    name: 'kodus-ai',
                 }),
             }),
         );
@@ -280,12 +321,9 @@ describe('CLI business-validation integration', () => {
                 filters: { number: 77 },
             }),
         );
-        expect(mockBusinessProvider.execute).toHaveBeenCalledWith(
+        expect(mockBusinessProvider.validate).toHaveBeenCalledWith(
             expect.objectContaining({
-                prepareContext: expect.objectContaining({
-                    taskUrl: 'https://linear.app/kodus/issue/KD-77',
-                    taskReference: 'https://linear.app/kodus/issue/KD-77',
-                }),
+                taskInput: 'https://linear.app/kodus/issue/KD-77',
             }),
         );
     });
@@ -317,23 +355,23 @@ describe('CLI business-validation integration', () => {
             repositoryId: 'repo-1',
             repositoryName: 'kodus-ai',
             taskReference: 'KD-1234',
-            result: '## Business Rules Validation\n\nLooks good.',
+            result: expect.stringContaining(
+                'MET            Validates the rule rule.ts:3',
+            ),
+            verdict: expect.objectContaining({
+                status: 'compliant',
+                passed: true,
+            }),
         });
 
-        const providerPayload = mockBusinessProvider.execute.mock.calls[0][0];
-        expect(providerPayload.prepareContext).toMatchObject({
-            userQuestion: '@kody -v business-logic KD-1234',
-            taskId: 'KD-1234',
-            taskReference: 'KD-1234',
-            pullRequestDescription:
-                'Local diff validation requested for task: KD-1234',
-            prDiff: diff,
-            repository: {
-                id: 'repo-1',
-                name: 'kodus-ai',
-            },
+        const request = mockBusinessProvider.validate.mock.calls[0][0];
+        expect(request).toMatchObject({
+            door: 'cli',
+            taskInput: 'KD-1234',
+            diff,
+            repository: { id: 'repo-1', name: 'kodus-ai' },
         });
-        expect(providerPayload.prepareContext.pullRequest).toBeUndefined();
+        expect(request.pullRequest).toBeUndefined();
         expect(
             mockCodeManagementService.getPullRequests,
         ).not.toHaveBeenCalled();
@@ -351,7 +389,7 @@ describe('CLI business-validation integration', () => {
             ),
         ).rejects.toBeInstanceOf(UnauthorizedException);
 
-        expect(mockBusinessProvider.execute).not.toHaveBeenCalled();
+        expect(mockBusinessProvider.validate).not.toHaveBeenCalled();
     });
 
     it('returns 429 when authenticated rate limit is exceeded', async () => {
@@ -394,6 +432,6 @@ describe('CLI business-validation integration', () => {
             ),
         ).rejects.toBeInstanceOf(BadRequestException);
 
-        expect(mockBusinessProvider.execute).not.toHaveBeenCalled();
+        expect(mockBusinessProvider.validate).not.toHaveBeenCalled();
     });
 });

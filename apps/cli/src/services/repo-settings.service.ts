@@ -19,8 +19,7 @@ export type RepositorySettingsCentralizedPrResult = {
 };
 
 export type RepositorySettingsMutationResult =
-    | RepositorySettingsResult
-    | RepositorySettingsCentralizedPrResult;
+    RepositorySettingsResult | RepositorySettingsCentralizedPrResult;
 
 class RepositorySettingsService {
     async getRepositorySettings(

@@ -9,7 +9,9 @@ describe('RealAuthApi', () => {
         });
 
         const api = new RealAuthApi(requestWithRetry);
-        await expect(api.login('wellington@test.com', 'secret')).resolves.toEqual(
+        await expect(
+            api.login('wellington@test.com', 'secret'),
+        ).resolves.toEqual(
             expect.objectContaining({
                 accessToken: 'access-token',
                 refreshToken: 'refresh-token',

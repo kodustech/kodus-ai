@@ -47,8 +47,18 @@ export enum NotificationEvent {
     SPEND_LIMIT_THRESHOLD_REACHED = 'spend_limit.threshold_reached',
     SPEND_LIMIT_EXCEEDED_FINAL = 'spend_limit.exceeded_final',
 
+    // ── Prepaid credits (Kodus as the provider) ────────────────
+    CREDITS_PURCHASED = 'credits.purchased',
+    CREDITS_LOW = 'credits.low',
+    CREDITS_EXHAUSTED = 'credits.exhausted',
+
     // ── Kody Rules (continued) ─────────────────────────────────
     RULE_FILE_REFERENCES_INVALID = 'rule.file_references_invalid',
+    KODY_RULES_AUTO_PAUSED = 'kody_rules.auto_paused',
+    KODY_RULES_AUTO_PAUSE_DIGEST = 'kody_rules.auto_pause_digest',
+
+    // ── Business Logic ─────────────────────────────────────────
+    BUSINESS_LOGIC_SOURCE_UNAVAILABLE = 'business_logic.source_unavailable',
 
     // ── Security (future — critical) ───────────────────────────
     // SECURITY_API_KEY_LEAKED = 'security.api_key_leaked',
@@ -59,6 +69,29 @@ export enum NotificationEvent {
 // The emitter generic `emit<E>()` infers the payload type at
 // compile time, so a wrong payload is a build error.
 // ────────────────────────────────────────────────────────────────
+
+/** One auto-paused rule, as listed in its notifications. */
+export interface KodyRuleAutoPauseEntry {
+    ruleId: string;
+    title: string;
+    /** `null` or absent for a global rule. */
+    repositoryId?: string | null;
+    repositoryName?: string | null;
+    directoryId?: string | null;
+    state: 'ignored' | 'noisy';
+    triggers: number;
+    implemented: number;
+    rate: number;
+    thumbsUp: number;
+    thumbsDown: number;
+    /** Length of the usage window the rule was judged on. */
+    windowDays: number;
+    /** The window started at the rule's last resume, not a full look-back. */
+    sinceResume?: boolean;
+    pausedAt: string;
+    /** Digest only: the rule was resumed before the digest went out. */
+    resumed?: boolean;
+}
 
 export interface NotificationPayloadMap {
     [NotificationEvent.AUTH_EMAIL_CONFIRMATION]: {
@@ -130,12 +163,16 @@ export interface NotificationPayloadMap {
 
     [NotificationEvent.IDE_RULES_SYNCED]: {
         repoName: string;
+        /** Scope the rules landed in — links the notification to its page. */
+        repositoryId?: string;
         rulesCount: number;
         syncMode: 'fast' | 'full' | 'changed-files';
     };
 
     [NotificationEvent.IDE_RULES_SYNC_FAILED]: {
         repoName: string;
+        /** Scope the sync targeted — links the notification to its page. */
+        repositoryId?: string;
         reason: string;
         correlationId: string;
     };
@@ -178,6 +215,16 @@ export interface NotificationPayloadMap {
         upgradeUrl?: string;
     };
 
+    // ── Business Logic ─────────────────────────────────────────
+
+    [NotificationEvent.BUSINESS_LOGIC_SOURCE_UNAVAILABLE]: {
+        /** The task tracker that stopped answering. */
+        tracker: string;
+        /** What it answered, when it answered anything. */
+        error?: string;
+        repositoryId?: string;
+    };
+
     // ── BYOK ───────────────────────────────────────────────────
 
     [NotificationEvent.BYOK_LLM_ERRORS_THRESHOLD]: {
@@ -186,6 +233,11 @@ export interface NotificationPayloadMap {
         windowStart: string;
         windowEnd: string;
         sampleError: string;
+        /** `LlmErrorCategory` of the sample error; absent when unclassified. */
+        category?: string;
+        httpStatus?: number;
+        /** The sample error is a routing refusal (see ClassifiedErrorInfo). */
+        routingRefusal?: boolean;
     };
 
     // ── Spend limit ────────────────────────────────────────────
@@ -205,11 +257,31 @@ export interface NotificationPayloadMap {
         periodKey: string;
     };
 
+    // ── Prepaid credits (Kodus as the provider) ────────────────
+
+    [NotificationEvent.CREDITS_PURCHASED]: {
+        creditUsd: number;
+        balanceUsd: number;
+    };
+
+    [NotificationEvent.CREDITS_LOW]: {
+        balanceUsd: number;
+        thresholdUsd: number;
+        topUpUrl?: string;
+    };
+
+    [NotificationEvent.CREDITS_EXHAUSTED]: {
+        balanceUsd: number;
+        topUpUrl?: string;
+    };
+
     // ── Kody Rules (file reference validation) ────────────────
 
     [NotificationEvent.RULE_FILE_REFERENCES_INVALID]: {
         source: 'ide' | 'manual' | 'auto_recheck';
         repoName: string;
+        /** Scope the affected rules live in — links each one to its page. */
+        repositoryId?: string;
         invalidCount: number;
         issues: Array<{
             ruleId: string;
@@ -217,5 +289,17 @@ export interface NotificationPayloadMap {
             filePath: string;
             reason: string;
         }>;
+    };
+
+    /** Rules one run of the auto-pause cron paused. */
+    [NotificationEvent.KODY_RULES_AUTO_PAUSED]: {
+        rules: KodyRuleAutoPauseEntry[];
+    };
+
+    /** Weekly email of the rules auto-paused since the last digest. */
+    [NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST]: {
+        rules: KodyRuleAutoPauseEntry[];
+        periodStart: string;
+        periodEnd: string;
     };
 }

@@ -1,0 +1,2 @@
+# Partial results of a snapshot run, kept only to resume it (snapshot.js).
+.partial-*/

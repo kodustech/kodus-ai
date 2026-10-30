@@ -1,0 +1,187 @@
+---
+title: "代码库规则"
+description: "使用结构化的 markdown 文件直接在代码库中创建自定义 Kody 规则。"
+---
+
+<Info>
+代码库规则始终保持同步:无需开启任何设置。它们是代码库中唯一会变成 Kody 规则的文件。为编码代理编写的指令(`CLAUDE.md`、`AGENTS.md`、`.cursor/rules`)会单独处理,请参阅<a href="/zh/how_to_use/code_review/configs/rules_file_detection">编码代理指令</a>。
+</Info>
+
+## 如何使用
+您可以通过将结构化的 markdown 文件放置在特定目录中,直接在代码库中创建自定义 Kody 规则。这允许您对规则进行版本控制并与团队共享。
+
+<Info>
+代码库规则文件会被**逐字**导入 —— 不经过 LLM 转换。frontmatter 按原样解析,markdown 正文会原封不动地成为规则的指令(标识符、格式和措辞都会保留),Bad/Good 示例按结构导入。每个文件生成一条规则。不符合模板的文件(缺少 frontmatter、`title` 或正文)会被跳过,同步会记录该文件;不会从中生成任何内容。
+</Info>
+
+### 同步
+- **自动检测**:每个已连接的代码库都会自动检测和同步代码库规则;无需开启任何设置
+- **立即导入**:在该代码库的 **Kody Rules → Configuration** 面板中,**Import rule files now** 会读取默认分支上的所有规则文件
+- **Web 应用程序**:同步的规则显示在该代码库的 **Code review → Kody Rules** 页面上,来源标记为 **Auto-sync**(在编码代理文件停止转换之前从这些文件导入的规则则显示 **Agent file**)
+- **实时更新**:当拉取请求合并到默认分支时同步规则文件的更改
+
+## 文件位置
+
+将您的规则文件放在以下目录之一,可位于代码库根目录或任意子目录:
+- `.kody/rules/**/*.md`
+- `rules/**/*.md`
+- `.rules/**` 和 `docs/coding-standards/**`(仅限遵循模板的文件)
+
+## 规则模板
+
+每个规则文件必须遵循此确切的模板结构:
+
+```markdown
+---
+title: "<规则名称>"
+scope: "file"            # "file" 或 "pull-request"
+path: []                 # glob 列表。示例: ["**/*.ts", "apps/web/**"]
+severity_min: "high"     # "low", "medium", "high", "critical"
+languages: []            # 可选。例如: ["jsts", "go", "php", "ruby", "java", "csharp", "dart", "kotlin", "rust"]
+buckets: []              # 可选。例如: ["style-conventions", "error-handling", "security"]
+uuid: ""                 # 可选。用于稳定的规则 ID
+enabled: true            # 可选
+---
+
+## Instructions
+描述要审查什么以及如何决定。直接客观。
+- 关注安全性、性能和公共契约影响。
+- 在适用时给出团队偏好或模式。
+- 如果是 PR 规则,解释在变更集中要考虑什么。
+
+## Examples
+
+### Bad example
+\`\`\`lang
+// 在此粘贴违反规则的简短反例
+\`\`\`
+
+### Good example
+\`\`\`lang
+// 在此粘贴遵循规则的简短示例
+\`\`\`
+```
+## 模板字段
+
+### 必填字段
+
+严格必填的只有两项:非空的 `title` 和非空的规则正文。缺少其中任意一项的文件会被整体跳过。
+
+| 字段 | 说明 | 取值 |
+|-------|-------------|---------|
+| `title` | 在界面中显示的规则名称 | 任意描述性字符串 |
+
+### 带默认值的字段
+
+其余都是可选的 —— 省略时使用默认值。
+
+| 字段 | 说明 | 取值 | 默认值 |
+|-------|-------------|---------|---------|
+| `scope` | 规则的分析范围 | `"file"` 或 `"pull-request"` | `"file"` |
+| `path` | 规则适用的路径。只要匹配**任意一个** glob 即会触发 | glob 模式数组 | `**/*`(所有文件) |
+| `severity_min` | 最低严重性级别 | `"low"`、`"medium"`、`"high"`、`"critical"` | `"medium"` |
+| `enabled` | 设为 `false` 可跳过导入该文件(已导入的规则不会被移除) | boolean | `true` |
+| `uuid` | 稳定的规则标识符 —— 文件重命名后仍对应平台上的同一条规则 | string | 无 |
+| `languages`、`buckets` | 说明性元数据 | — | — |
+
+<Note>
+  `severity` 会被当作 `severity_min` 的别名接受,因为它很容易写错而意图并不含糊。四个级别之外
+  的取值会回退为 `"medium"`,而 `"pull-request"` 以外的 `scope` 都按 `"file"` 处理。
+</Note>
+
+## 示例规则
+
+### 文件级规则示例
+```markdown
+---
+title: "避免在生产代码中使用 console.log"
+scope: "file"
+path: ["src/**/*.ts", "src/**/*.tsx"]
+severity_min: "medium"
+languages: ["jsts"]
+buckets: ["style-conventions"]
+enabled: true
+---
+
+## Instructions
+检查生产 TypeScript/JavaScript 文件中的 console.log 语句。
+- console.log 不应出现在生产代码中
+- 改用适当的日志库
+- 仅在开发工具中允许 console.log
+
+## Examples
+
+### Bad example
+\`\`\`typescript
+function processUser(user: User) {
+  console.log('Processing user:', user.id);
+  return user.process();
+}
+\`\`\`
+
+### Good example
+\`\`\`typescript
+import { logger } from './logger';
+
+function processUser(user: User) {
+  logger.info('Processing user:', user.id);
+  return user.process();
+}
+\`\`\`
+```
+
+### 拉取请求级规则示例
+```markdown
+---
+title: "新 API 端点必须有测试"
+scope: "pull-request"
+path: ["**/*"]
+severity_min: "high"
+buckets: ["testing"]
+enabled: true
+---
+
+## Instructions
+当添加新 API 端点时,确保 PR 中包含相应的测试。
+- 检查控制器中的新路由定义
+- 验证新端点存在测试文件
+- 确保包含正面和负面测试用例
+
+## Examples
+
+### Bad example
+添加了新端点 `/api/users/profile` 但 PR 中未包含测试文件。
+
+### Good example
+添加了新端点 `/api/users/profile`,并带有相应的测试文件 `tests/api/users/profile.test.ts`,涵盖成功和错误情况。
+```
+
+## 设置要求
+
+1. **创建规则文件**:将遵循模板的 `.md` 文件放在 `.kody/rules/**` 或 `rules/**` 中。`.rules/**` 和 `docs/coding-standards/**` 中遵循模板的文件也会被导入。
+2. **合并它们**:当新增、修改、重命名或删除某个规则文件的拉取请求被合并到默认分支时,该文件会同步。删除文件会删除其对应的规则。
+3. **已有文件**:要导入默认分支上已有的规则文件,请使用该代码库 **Kody Rules → Configuration** 面板中的 **Import rule files now**。
+
+新规则会直接启用;如果开启了 **Kody knowledge approval**,则进入 **Pending review**。
+
+<Tip>
+在规则文件的任意位置添加 `@kody-ignore`,即可把它保留在代码库中而不进行同步。下次同步时,它已有的规则会被移除。
+</Tip>
+
+## 验证同步与规则评估(自托管)
+
+在自托管部署中,API 日志会输出便于 grep 的标记:
+
+- `[kody-rules-sync]` —— 每次同步的汇总:哪些文件被导入、被跳过(含原因)或被移除。
+- `[kody-rules-eval]` —— 审查过程中按文件的评估轨迹:每个被审查文件究竟有哪些规则(uuid + 标题)被选入提示词。
+
+```bash
+docker logs kodus_api 2>&1 | grep "kody-rules-sync"
+docker logs kodus_api 2>&1 | grep "kody-rules-eval"
+```
+
+如果某条规则在 UI 中显示为启用,却从未在你预期文件的 `[kody-rules-eval]` 中出现,请检查它的 **Path** glob —— 规则只会在匹配其路径的文件上运行。
+
+## 规则数量上限
+
+使用云端 **Free** 套餐(或订阅已取消或过期)的组织,以及**没有有效许可证**运行的自托管实例(Community Edition),每次审查最多评估 **10 条启用的规则**(按最早创建优先)。超出上限的规则会以 **Locked** 状态保留在列表中,并在每个 PR 上被跳过;**Code review → Kody Rules** 上的横幅会显示有多少条被跳过。付费云端套餐和已授权的自托管实例没有此限制。如果第 10 条之后的规则不触发,原因就是这个上限。

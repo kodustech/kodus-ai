@@ -21,6 +21,8 @@ import {
     ActionType,
     ConfigLevel,
 } from '@libs/core/infrastructure/config/types/general/codeReviewSettingsLog.type';
+import { buildDefaultGlobalCodeReviewConfig } from '@libs/common/utils/validateCodeReviewConfigFile';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 interface ICodeRepository {
     avatar_url?: string;
@@ -59,6 +61,8 @@ export class UpdateCodeReviewParameterRepositoriesUseCase {
                 email: string;
             };
         },
+
+        private readonly telemetry: TelemetryService,
     ) {}
 
     async execute(body: {
@@ -73,13 +77,37 @@ export class UpdateCodeReviewParameterRepositoriesUseCase {
         try {
             const { organizationAndTeamData } = body;
 
-            const codeReviewConfigs = await this.parametersService.findByKey(
+            let codeReviewConfigs = await this.parametersService.findByKey(
                 ParametersKey.CODE_REVIEW_CONFIG,
                 organizationAndTeamData,
             );
 
+            // The config row is normally created at team creation, but a team
+            // predating that guarantee (or one whose creation write failed) can
+            // reach here without it. Create the default global config instead
+            // of silently no-op'ing, so the selected repositories still land.
             if (!codeReviewConfigs) {
-                return false;
+                await this.createOrUpdateParametersUseCase.execute(
+                    ParametersKey.CODE_REVIEW_CONFIG,
+                    buildDefaultGlobalCodeReviewConfig(),
+                    organizationAndTeamData,
+                );
+
+                codeReviewConfigs = await this.parametersService.findByKey(
+                    ParametersKey.CODE_REVIEW_CONFIG,
+                    organizationAndTeamData,
+                );
+
+                if (!codeReviewConfigs) {
+                    this.logger.error({
+                        message:
+                            'Code review config still missing after attempting to create the default; skipping repository attach',
+                        context:
+                            UpdateCodeReviewParameterRepositoriesUseCase.name,
+                        metadata: { organizationAndTeamData },
+                    });
+                    return false;
+                }
             }
 
             const codeRepositories =
@@ -185,6 +213,13 @@ export class UpdateCodeReviewParameterRepositoriesUseCase {
                     context: UpdateCodeReviewParameterRepositoriesUseCase.name,
                 });
             }
+
+            void this.telemetry.codeReviewSettingsUpdated({
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                actorUserId: body.actor?.userId ?? this.request?.user?.uuid,
+                configLevel: ConfigLevel.REPOSITORY,
+            });
 
             return result;
         } catch (error) {

@@ -1,0 +1,1238 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "7003ef4b9fc10ff89b54187d366c3618e0b90018576932d61a57bfca21ef5072"
+  },
+  "startedAt": "2026-10-13T21:29:08.233Z",
+  "updatedAt": "2026-10-13T22:05:58.363Z",
+  "complete": true,
+  "selectedCases": [
+    "P23-param-shape-read-before-helper",
+    "P23-param-shape-read-before-helper-control"
+  ],
+  "summary": {
+    "measured": 10,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 15,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 15,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P23-param-shape-read-before-helper · export-filter-shape-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P23-param-shape-read-before-helper · low-stock-wrong-query-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P23-param-shape-read-before-helper-control · export-filter-shape-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P23-param-shape-read-before-helper-control · low-stock-wrong-query-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 197856,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of the previous stockService.low(filter). WHY: stockService.low adds `and qty < reorder_at` (src/inventory/stock.service.ts:8-9) while list does not, so the low-stock endpoint returns the entire warehouse stock set and silently drops the low-stock filter. HOW: call stockService.low(filter) in lowStock.",
+          "keep": true,
+          "rationale": "Confirmed: lowStock at stock.controller.ts:13 calls stockService.list(filter), whereas stockService.low (stock.service.ts:8-9) is the method that appends `and qty < reorder_at`. The low-stock endpoint therefore drops the low-stock filter and returns the whole warehouse set. The root cause and failure path are exactly as described. Neither previous decision covers this: index 1 is about filter param shape causing a TypeError/500, index 2 about CSV formula escaping — different failures. No refutation available.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The low-stock endpoint now returns the entire warehouse stock set and silently drops the low-stock filter, because `stockService.list` omits the `and qty < reorder_at` condition that `stockService.low` adds (src/inventory/stock.service.ts:8-9). Call `stockService.low(filter)` in `lowStock` instead of `stockService.list(filter)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 181518,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter), so it no longer applies the `qty < reorder_at` filter. WHY: the low-stock endpoint returns every stock row for the warehouse/sku instead of only items below their reorder point, silently returning wrong data to the client (list is `where warehouse=$1 and sku like $2`; low adds `and qty < reorder_at`, per src/inventory/stock.service.ts:6-9). HOW: call the low delegate: `const rows = await stockService.low(filter);`.",
+          "keep": true,
+          "rationale": "Confirmed in code: src/inventory/stock.controller.ts:13 calls stockService.list(filter), while src/inventory/stock.service.ts:8-9 shows the low() delegate is the one that adds `and qty < reorder_at`. list() (lines 6-7) does not. So lowStock silently returns every row for the warehouse/sku instead of only items below the reorder point — a real wrong-data bug. This is a different failure than the PreviousDecision (which was about filter param shape causing a TypeError/500), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 13,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The low-stock endpoint now returns every stock row for the warehouse/sku instead of only items below their reorder point, silently sending wrong data to clients because `list` omits the `qty < reorder_at` filter that `low` adds (`src/inventory/stock.service.ts:6-9`). Call the `low` delegate with `const rows = await stockService.low(filter);` so the reorder-point filter is applied."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 273283,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) where the pre-PR code called stockService.low(...). WHY: stockService.low (stock.service.ts:8) appends `and qty < reorder_at` while stockService.list (stock.service.ts:6) does not, so the low-stock endpoint returns the entire stock list for the warehouse instead of only items below the reorder threshold — a silent wrong-result regression for callers relying on the low-stock view. HOW: call the low-stock method: `const rows = await stockService.low(filter);`.",
+          "keep": true,
+          "rationale": "Confirmed: stock.controller.ts:13 calls stockService.list(filter), whose query (stock.service.ts:6-7) has no `qty < reorder_at` predicate, while stockService.low (stock.service.ts:8-9) is the method that filters below reorder threshold. The low-stock endpoint therefore returns the entire warehouse list instead of only low items — a real wrong-result regression. This is distinct from PreviousDecision index 1, which concerns req.query.filter not being a plain object (TypeError/500), not the list-vs-low selection.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `stockService.list` (`stock.service.ts:6`) lacks the `and qty < reorder_at` filter that `stockService.low` (`stock.service.ts:8`) applies, the low-stock endpoint now returns the warehouse's entire stock list instead of only items below the reorder threshold, silently regressing callers. Call `stockService.low(filter)` so the low-stock view keeps its filtering behavior."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 174922,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter) (the pre-refactor code called `low`). WHY: `list` has no `qty < reorder_at` predicate, so the low-stock endpoint returns every stock row for the warehouse rather than only items below the reorder threshold — wrong results for callers, and `stockService.low` becomes dead code. HOW: restore the call to `stockService.low(filter)`.",
+          "keep": true,
+          "rationale": "Confirmed. src/inventory/stock.service.ts defines `list` (line 6-7) with only warehouse/sku predicates and `low` (line 8-9) adding `qty < reorder_at`. lowStock at stock.controller.ts:13 calls `list`, so the low-stock endpoint returns all warehouse rows instead of only below-reorder items, and `low` has no remaining callers (grep found none). This is a different problem than the earlier param-shape decision, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "low\\(|list\\(|lowStock",
+                "path": "src/inventory"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 13,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `stockService.list` has no `qty < reorder_at` predicate, the low-stock endpoint returns every stock row for the warehouse instead of only items below the reorder threshold, and `stockService.low` becomes dead code. Restore the call to `stockService.low(filter)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P23-param-shape-read-before-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 370659,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls `stockService.list(filter)` instead of the previous `stockService.low(...)`, so the low-stock endpoint returns every row for the warehouse/sku rather than only items with `qty < reorder_at`. WHY: callers of the low-stock endpoint get the full stock list (wrong result, silent contract break), and `stockService.low` is left as dead code. HOW: call the low-stock service method: `const rows = await stockService.low(filter);`.",
+          "keep": true,
+          "rationale": "Confirmed in code: stock.controller.ts:13 calls stockService.list(filter), which selects all rows for the warehouse/sku, while stockService.low (stock.service.ts:8-9) is the only method filtering qty < reorder_at. The low-stock endpoint therefore returns the full stock list instead of only low-stock items — a real wrong-result contract break, and stockService.low is left dead. No PreviousReviewDecision covers this failure (one concerns filter param shape/TypeError, the other CSV escaping).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "low|list",
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Callers of the low-stock endpoint now receive every row for the warehouse/sku instead of only items with `qty < reorder_at`, a silent contract break that also leaves `stockService.low` as dead code. Call the low-stock service method in `lowStock` with `const rows = await stockService.low(filter);`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P23-param-shape-read-before-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 129547,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock calls stockService.list(filter) instead of stockService.low(filter). WHY: the endpoint now returns every stock row for the warehouse/sku instead of only rows where qty < reorder_at, silently breaking the low-stock report contract (wrong output). HOW: call the low variant.",
+          "keep": true,
+          "rationale": "stock.service.ts defines both list (all rows) and low (rows with qty < reorder_at). lowStock at lines 11-15 calls stockService.list(filter), returning all rows instead of only low-stock rows, breaking the low-stock report contract. The root cause and failure path are exactly as described. The only previous decision concerns CSV escaping in src/reports/export.ts, an unrelated problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "low|list",
+                "glob": "**/stock.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock builds the filename from raw.warehouse.trim() (line 19) before readStockFilter validates the input (line 20), so raw.warehouse can be undefined. WHY: for `?filter=x` (string), repeated `?filter` (array), or a missing filter, raw.warehouse is undefined and `.trim()` throws a TypeError, producing a 500 instead of the intended 400 — exactly the inputs readStockFilter's guards exist to reject. HOW: validate first, then derive the filename from the validated filter (or guard the access).",
+          "keep": true,
+          "rationale": "Verified against source: stock.controller.ts:19 dereferences raw.warehouse.trim() before readStockFilter(raw) at line 20. readStockFilter (filter.ts:8-14) is the guard that throws HttpError(400) for string/array/undefined inputs; because it runs second, those same inputs crash earlier at `.trim()` with a TypeError, yielding a 500 rather than 400. The claim is factually correct and reachable. The prior review decision (round-a-other-1) addresses CSV formula escaping in src/reports/export.ts — an unrelated problem, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/inventory/filter.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The endpoint now returns every stock row for the warehouse/sku instead of only rows where `qty < reorder_at`, silently breaking the low-stock report contract. Call `stockService.low(filter)` instead of `stockService.list(filter)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "For `?filter=x` (string), repeated `?filter` (array), or a missing filter, `raw.warehouse` is undefined, so `raw.warehouse.trim()` throws a TypeError and produces a 500 instead of the intended 400 — exactly the inputs `readStockFilter`'s guards exist to reject. Validate first with `readStockFilter`, then derive the filename from the validated `filter.warehouse` (or otherwise guard the access)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P23-param-shape-read-before-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 231283,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: `lowStock` now calls `stockService.list(filter)` instead of `stockService.low(filter)`. WHY: `list` (stock.service.ts:6-7) selects all rows for the warehouse/sku, while `low` (stock.service.ts:8-9) additionally filters `qty < reorder_at`, so the low-stock endpoint silently returns the full stock list rather than only low-stock items. HOW: call `stockService.low(filter)`.",
+          "keep": true,
+          "rationale": "Confirmed: src/inventory/stock.service.ts defines both `list` (line 6-7, no qty filter) and `low` (line 8-9, adds `and qty < reorder_at`). The lowStock handler at src/inventory/stock.controller.ts:11-15 calls `stockService.list(filter)`, so the low-stock endpoint returns all rows for the warehouse/sku instead of only items below reorder threshold. The cited root cause and failure path are correct and reachable. The sole PreviousReviewDecision concerns CSV formula escaping in src/reports/export.ts and is unrelated, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: `fileName` is computed from `raw.warehouse.trim()` on line 19 before `readStockFilter(raw)` validates `raw` on line 20. WHY: when `?filter` is a string (`?filter=x`), an array, or absent, `raw.warehouse` is undefined and `.trim()` throws a TypeError, producing a 500 instead of the intended HttpError(400) — the new validation guard is bypassed for exportStock. HOW: call `readStockFilter` first and derive the filename from the validated filter's `warehouse`, e.g. `const filter = readStockFilter(req.query.filter); const fileName = `stock_${filter.warehouse}.csv`;`.",
+          "keep": true,
+          "rationale": "Confirmed. Line 19 dereferences `raw.warehouse.trim()` before `readStockFilter(raw)` runs on line 20. `readStockFilter` (filter.ts:7-15) is the guard that validates `raw` and throws HttpError(400) for non-object/array/string filters. Since line 19 executes first, when `?filter` is a string (`?filter=x`), an array, or absent, `req.query.filter` is a string/array/undefined, so `raw.warehouse` is undefined and `.trim()` (or the property access itself for undefined) throws a TypeError → unhandled 500 instead of the intended 400. The validation guard is genuinely bypassed for exportStock. The failure path is real and reachable; not refuted. Not a repeat of the prior decision (that concerned CSV formula injection in export.ts).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/inventory/filter.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `list` (stock.service.ts:6-7) selects all rows for the warehouse/sku while `low` (stock.service.ts:8-9) also filters `qty < reorder_at`, the low-stock endpoint silently returns the full stock list instead of only low-stock items. Change `lowStock` to call `stockService.low(filter)` rather than `stockService.list(filter)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `fileName` is computed from `raw.warehouse.trim()` on line 19 before `readStockFilter(raw)` validates `raw` on line 20, a string, array, or absent `?filter` leaves `raw.warehouse` undefined and `.trim()` throws a `TypeError`, producing a 500 instead of the intended `HttpError(400)` and bypassing the validation guard for `exportStock`. Call `readStockFilter(req.query.filter)` first and derive `fileName` from the validated filter's `warehouse`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P23-param-shape-read-before-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 235032,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock calls stockService.list(filter) instead of stockService.low(filter). WHY: The endpoint named lowStock now returns every stock row for the warehouse instead of only rows where qty < reorder_at, silently breaking the endpoint's contract (the pre-PR code called stockService.low). HOW: Call stockService.low(filter).",
+          "keep": true,
+          "rationale": "stock.controller.ts:13 calls stockService.list(filter), but stock.service.ts defines low() (lines 8-9) which adds 'and qty < reorder_at'. list() returns all rows for the warehouse, so the lowStock endpoint no longer filters low-stock rows, breaking its contract. Confirmed by reading both the controller and service. Unrelated to the prior CSV-escape decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "low|list",
+                "glob": "**/stock*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock dereferences raw.warehouse.trim() (line 19) before readStockFilter(raw) validates it (line 20). WHY: When req.query.filter is a string (?filter=x), an array, or lacks a string warehouse, `raw.warehouse` is undefined/array and `.trim()` throws a TypeError, which errorHandler converts to a 500 instead of the intended HttpError 400 — the filename path bypasses the new validation entirely. HOW: Validate first, then derive the filename from the validated filter.",
+          "keep": true,
+          "rationale": "Confirmed: exportStock line 19 dereferences raw.warehouse.trim() before readStockFilter(raw) validates at line 20. filter.ts explicitly documents that Express yields a string for ?filter=x, an array for repeated params, and the guard rejects non-object/non-string-warehouse inputs — all of which make raw.warehouse undefined (or raw itself a string/array), so .trim() throws a TypeError converted to 500 instead of the intended HttpError 400. The failure path is reachable from the query string and the fix (validate first) is correct. This is a different problem from the prior CSV-injection decision in src/reports/export.ts, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/filter.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 25,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The `lowStock` endpoint now returns every stock row for the warehouse instead of only rows where `qty < reorder_at`, silently breaking its contract since the pre-PR code called `stockService.low`. Call `stockService.low(filter)` instead of `stockService.list(filter)`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 18,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`exportStock` dereferences `raw.warehouse.trim()` (line 19) before `readStockFilter(raw)` validates it (line 20), so when `req.query.filter` is a string, an array, or lacks a string `warehouse`, `.trim()` throws a `TypeError` that `errorHandler` converts to a 500 instead of the intended `HttpError` 400, bypassing the new validation entirely. Validate first with `readStockFilter`, then derive the filename from the validated filter."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P23-param-shape-read-before-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 251181,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter). WHY: stockService.list (stock.service.ts:6-7) omits the 'and qty < reorder_at' predicate that low() applies (stock.service.ts:8-9), so the low-stock endpoint returns every row for the warehouse instead of only depleted items — a wrong result that silently defeats low-stock reporting (low() is now dead code). HOW: call stockService.low(filter).",
+          "keep": true,
+          "rationale": "Confirmed: lowStock (stock.controller.ts:13) calls stockService.list, whose query (stock.service.ts:6-7) omits the `qty < reorder_at` predicate that low() (8-9) applies. grep shows low() has no remaining callers, so the low-stock endpoint returns every warehouse row instead of only depleted items — a concrete wrong-result bug. The prior review decision concerns CSV escaping in export.ts, a different operation, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "stockService\\.(low|list)",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock builds the filename from raw.warehouse.trim() before readStockFilter validates the filter shape. WHY: req.query.filter is undefined for '?', a string for '?filter=x', and an array for repeated ?filter, so raw.warehouse is undefined or an array and .trim() throws a TypeError; per src/http/errors.ts:9 only HttpError keeps its status, so the request yields a 500 instead of the intended 400 (the validated value is computed too late to help). HOW: validate first and derive the filename from the validated filter: const filter = readStockFilter(req.query.filter); const fileName = `stock_${filter.warehouse}.csv`;",
+          "keep": true,
+          "rationale": "Confirmed: in exportStock (stock.controller.ts:18-20) `raw.warehouse.trim()` executes before `readStockFilter(raw)`. readStockFilter (filter.ts:7-16) is the only shape validator and its comment confirms `?filter=x` is a string, repeated `?filter` an array, and no filter yields undefined. In all those cases `raw.warehouse` is undefined and `.trim()` throws a TypeError. errors.ts:9-15 shows only HttpError preserves status, so this yields a 500 instead of the intended 400. Root cause is factually accurate and the failure path is reachable. The prior review decision concerns CSV formula escaping in src/reports/export.ts — a different problem/operation, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/inventory/filter.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 20,
+                "path": "src/http/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 31,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 13,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The low-stock endpoint now returns every row for the warehouse instead of only depleted items, silently defeating low-stock reporting and leaving `low()` as dead code because `stockService.list` (stock.service.ts:6-7) omits the `and qty < reorder_at` predicate that `low()` applies (stock.service.ts:8-9). Call `stockService.low(filter)` so the depleted-only result is preserved."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `req.query.filter` is undefined for `?`, a string for `?filter=x`, and an array for repeated `?filter`, `raw.warehouse` is undefined or an array and `.trim()` throws a TypeError that yields a 500 rather than the intended 400, since only HttpError keeps its status (src/http/errors.ts:9). Validate first and derive the filename from the validated filter, using `const filter = readStockFilter(req.query.filter)` and `` `stock_${filter.warehouse}.csv` ``."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P23-param-shape-read-before-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 164017,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: lowStock now calls stockService.list(filter) instead of stockService.low(filter). WHY: stock.service.ts still defines low() (line 8-9) filtering `qty < reorder_at`, while list() returns every row for the warehouse/sku, so the lowStock endpoint silently returns all stock instead of only low-stock items — a wrong-result regression from the pre-refactor code. HOW: call stockService.low(filter).",
+          "keep": true,
+          "rationale": "Confirmed: stock.controller.ts:13 lowStock calls stockService.list(filter), whose query (stock.service.ts:6-7) has no `qty < reorder_at` predicate, whereas the dedicated low() method (lines 8-9) does. The endpoint therefore returns all stock rows rather than low-stock items, a real wrong-result regression; low() is left unused. The prior review decision concerns CSV escaping in a different file and is unrelated.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.service.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/inventory/stock.controller.ts",
+          "claim": "WHAT: exportStock reads raw.warehouse.trim() to build the filename before readStockFilter(raw) validates the shape. WHY: when ?filter is not an object (?filter=x parses to a string, a repeated ?filter to an array, or it is absent), raw.warehouse is undefined and .trim() throws a TypeError, which errorHandler (src/http/errors.ts:15) turns into a 500 instead of the intended 400 — the new validation is bypassed by the line above it. HOW: validate first and derive the filename from the validated filter.",
+          "keep": true,
+          "rationale": "Confirmed: line 19 dereferences raw.warehouse.trim() before readStockFilter(raw) (line 20) performs the shape/type validation. When req.query.filter is a string, array, or absent, raw.warehouse is undefined and .trim() throws a TypeError, which errorHandler maps to 500 instead of the intended 400 — the validation is bypassed by the line above it. The only previous decision concerns CSV formula escaping in src/reports/export.ts, a different file and failure, so this is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/inventory/stock.controller.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "readStockFilter"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 40,
+                "path": "src/inventory/filter.ts",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 30,
+                "path": "src/http/errors.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 13,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "`lowStock` now returns every stock row for the warehouse/sku instead of only items matching `qty < reorder_at`, because `stockService.list(filter)` ignores the filtering that `stock.service.ts` lines 8-9 apply in `low()` — a wrong-result regression. Call `stockService.low(filter)` instead."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/inventory/stock.controller.ts",
+          "line": 19,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When `?filter` is not an object (a string, an array, or absent), `raw.warehouse` is undefined and `raw.warehouse.trim()` throws a TypeError that `errorHandler` in `src/http/errors.ts:15` maps to a 500 instead of the intended 400, bypassing the new validation. Call `readStockFilter(raw)` first and derive the filename from the validated `filter.warehouse`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "export-filter-shape-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "low-stock-wrong-query-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

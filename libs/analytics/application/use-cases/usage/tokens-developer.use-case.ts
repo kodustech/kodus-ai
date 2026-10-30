@@ -72,6 +72,7 @@ export class TokensByDeveloperUseCase {
             query.timezone || 'UTC',
             query.models || '',
             query.prNumber ?? '',
+            query.repositoryId ?? '',
             query.developer || '',
         ].join('|');
         const cached = await this.cacheService.getFromCache<

@@ -72,6 +72,9 @@ async function runSkillAction(
                     ? `, ${targetResult.removedLegacy} legacy removed`
                     : ''),
         );
+        // A dry run that does not say where the files would land answers the
+        // wrong half of the question.
+        cliInfo(chalk.dim(`    ${targetResult.target.baseDir}`));
     }
 
     cliInfo(

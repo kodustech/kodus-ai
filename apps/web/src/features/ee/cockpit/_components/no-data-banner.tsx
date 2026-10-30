@@ -1,16 +1,33 @@
+"use client";
+
 import { Image } from "@components/ui/image";
+import { PAGE_MAX_WIDTH } from "@components/ui/page";
+import { useQueryState } from "nuqs";
+import { cn } from "src/core/utils/components";
+
+import { COCKPIT_PARAM } from "../_constants";
 
 export const CockpitNoDataBanner = () => {
+    const [tab] = useQueryState(COCKPIT_PARAM.tab);
+    if (tab === "code-areas") return null;
     return (
         <div className="bg-warning/10 -mt-10 mb-8 flex min-h-16 items-center justify-center">
-            <div className="relative container flex w-full max-w-(--breakpoint-lg) items-center">
+            <div
+                className={cn(
+                    "relative mx-auto flex w-full items-center px-8",
+                    PAGE_MAX_WIDTH,
+                )}>
                 <div className="absolute -bottom-6.5 left-8 max-w-16 scale-x-[-1]">
-                    <Image src="/assets/images/kody/look-left-with-paws.png" />
+                    <Image
+                        alt=""
+                        src="/assets/images/kody/look-left-with-paws.png"
+                    />
                 </div>
 
                 <span className="flex-1 text-center text-sm">
                     <strong>
-                        Kody doesn't have enough data yet to fill your cockpit.
+                        Kody doesn&apos;t have enough data yet to fill your
+                        cockpit.
                     </strong>{" "}
                     Start by opening a few PRs, and watch the magic happen.
                 </span>

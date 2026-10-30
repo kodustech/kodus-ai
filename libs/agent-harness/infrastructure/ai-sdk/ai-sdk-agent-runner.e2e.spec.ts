@@ -7,11 +7,19 @@
  * finalize; the CompletionGatePolicy stops the loop; the BudgetPolicy composes
  * alongside. Asserts the loop drove the tool and recorded the run.
  */
+// The runner drives the loop through LLM.run, which resolves the model via
+// resolveModelConfig — mock it to inject the scripted MockLanguageModelV3.
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: jest.fn(),
+}));
+
 import { MockLanguageModelV3 } from 'ai/test';
+
+import { scriptedToolModel } from './__test-utils__/scripted-tool-model';
+import { resolveModelConfig } from '@libs/llm/model-invocation';
 
 import type { AgentSpec } from '../../domain/contracts/agent.contract';
 import type { ProgressLedger } from '../../domain/contracts/progress.contract';
-import type { ModelResolver } from '../../domain/contracts/model.contract';
 import type { ToolContext, AgentTool } from '../../domain/contracts/tool.contract';
 import { BudgetPolicy } from '../policies/budget.policy';
 import { CompletionGatePolicy } from '../policies/completion-gate.policy';
@@ -20,33 +28,25 @@ import { AiSdkAgentRunner } from './ai-sdk-agent-runner';
 
 // --- a scripted model: step 0 -> call echo; step 1 -> call submitResult ---
 function scriptedModel() {
-    let call = 0;
-    const doGenerate = (async () => {
-        call += 1;
-        const tc =
-            call === 1
-                ? { id: 'c1', name: 'echo', input: { text: 'hello' } }
-                : { id: 'c2', name: 'submitResult', input: { findings: [] } };
-        return {
-            content: [
-                {
-                    type: 'tool-call',
-                    toolCallId: tc.id,
-                    toolName: tc.name,
-                    input: JSON.stringify(tc.input),
-                },
-            ],
-            finishReason: 'tool-calls',
-            usage: { inputTokens: 10, outputTokens: 5 },
-            warnings: [],
-        };
-    }) as any;
-    return new MockLanguageModelV3({ doGenerate });
+    return scriptedToolModel((turn) =>
+        turn === 1
+            ? { id: 'c1', name: 'echo', input: { text: 'hello' } }
+            : { id: 'c2', name: 'submitResult', input: { findings: [] } },
+    );
 }
 
-const resolver: ModelResolver<any> = {
-    resolve: () => scriptedModel() as any,
-};
+const mockResolve = resolveModelConfig as jest.Mock;
+
+/** Point the mocked resolution at a given model (fresh per run). */
+function wireModel(model: any) {
+    mockResolve.mockReturnValue({
+        model,
+        callOptions: {},
+        providerOptions: {},
+        modelName: 'mock',
+        usageIdentity: {},
+    });
+}
 
 const echoTool: AgentTool = {
     name: 'echo',
@@ -86,7 +86,6 @@ describe('AiSdkAgentRunner (end-to-end, mocked model)', () => {
         const spec: AgentSpec = {
             id: 'finder',
             systemPrompt: 'find bugs',
-            modelId: 'mock',
             tools: new InMemoryToolRegistry([echoTool, doneTool]),
             policies: [
                 new BudgetPolicy(),
@@ -98,7 +97,8 @@ describe('AiSdkAgentRunner (end-to-end, mocked model)', () => {
             resultToolName: 'submitResult',
         };
 
-        const runner = new AiSdkAgentRunner(resolver);
+        wireModel(scriptedModel());
+        const runner = new AiSdkAgentRunner(undefined);
         const state = await runner.run(spec, { prompt: 'go' }, ctx);
 
         // the loop executed multiple steps (echo, then submitResult)
@@ -120,18 +120,16 @@ describe('AiSdkAgentRunner (end-to-end, mocked model)', () => {
     });
 
     it('turns a model/provider throw into a RunState{status:error}, not an exception', async () => {
-        const throwingResolver: ModelResolver<any> = {
-            resolve: () =>
-                new MockLanguageModelV3({
-                    doGenerate: (async () => {
-                        throw new Error('boom: provider rejected request');
-                    }) as any,
+        wireModel(
+            new MockLanguageModelV3({
+                doGenerate: (async () => {
+                    throw new Error('boom: provider rejected request');
                 }) as any,
-        };
+            }),
+        );
         const spec: AgentSpec = {
             id: 'finder',
             systemPrompt: 'find bugs',
-            modelId: 'mock',
             tools: new InMemoryToolRegistry([echoTool, doneTool]),
             policies: [
                 new CompletionGatePolicy(noCriticalLedger(), {
@@ -141,7 +139,7 @@ describe('AiSdkAgentRunner (end-to-end, mocked model)', () => {
             maxSteps: 10,
         };
 
-        const runner = new AiSdkAgentRunner(throwingResolver);
+        const runner = new AiSdkAgentRunner(undefined);
 
         // MUST NOT throw — the failure is captured into the RunState.
         const state = await runner.run(spec, { prompt: 'go' }, ctx);
@@ -152,5 +150,59 @@ describe('AiSdkAgentRunner (end-to-end, mocked model)', () => {
         const errEvent = state.trace.find((e) => e.kind === 'error');
         expect(errEvent).toBeDefined();
         expect(String(errEvent?.detail?.message)).toContain('boom');
+    });
+
+    it('emits a tool.skipped trace event when a tool call ends on an unsafe finish reason', async () => {
+        // The model requests a tool but the turn ends TRUNCATED (finishReason
+        // 'length'): ai@7.0.70+ refuses to auto-execute the tool. The runner must
+        // make that visible in the trace instead of silently returning a short,
+        // empty run — the diagnostic we need for a BYOK provider that truncates.
+        wireModel(
+            new MockLanguageModelV3({
+                doGenerate: (async () => ({
+                    content: [
+                        {
+                            type: 'tool-call',
+                            toolCallId: 'c1',
+                            toolName: 'echo',
+                            input: JSON.stringify({ text: 'hi' }),
+                        },
+                    ],
+                    finishReason: { unified: 'length', raw: 'length' },
+                    usage: {
+                        inputTokens: {
+                            total: 10,
+                            noCache: 10,
+                            cacheRead: 0,
+                            cacheWrite: 0,
+                        },
+                        outputTokens: { total: 5, text: 5, reasoning: 0 },
+                    },
+                    warnings: [],
+                })) as any,
+            }),
+        );
+        const spec: AgentSpec = {
+            id: 'finder',
+            systemPrompt: 'find bugs',
+            tools: new InMemoryToolRegistry([echoTool, doneTool]),
+            policies: [
+                new CompletionGatePolicy(noCriticalLedger(), {
+                    doneToolName: 'submitResult',
+                }),
+            ],
+            maxSteps: 10,
+            resultToolName: 'submitResult',
+        };
+
+        const runner = new AiSdkAgentRunner(undefined);
+        const state = await runner.run(spec, { prompt: 'go' }, ctx);
+
+        const skipped = state.trace.find((e) => e.kind === 'tool.skipped');
+        expect(skipped).toBeDefined();
+        expect(skipped?.detail?.finishReason).toBe('length');
+        expect(skipped?.detail?.tools).toEqual(['echo']);
+        // the tool never ran, so nothing was finalized into artifacts.
+        expect(state.artifacts).toHaveLength(0);
     });
 });

@@ -1,0 +1,343 @@
+"use client";
+
+import { useState } from "react";
+import { Card } from "@components/ui/card";
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleIndicator,
+    CollapsibleTrigger,
+} from "@components/ui/collapsible";
+import { Heading } from "@components/ui/heading";
+import { Input } from "@components/ui/input";
+import { Label } from "@components/ui/label";
+import { Link } from "@components/ui/link";
+import { RadioGroup } from "@components/ui/radio-group";
+import { Skeleton } from "@components/ui/skeleton";
+import { isRegexSafe, MAX_PATTERN_LEN } from "@libs/common/utils/safe-regex";
+import { useReadTools, useTaskSources } from "@services/business-logic/hooks";
+import { Controller, useFormContext, useWatch } from "react-hook-form";
+
+import { OverrideIndicatorForm } from "../../../_components/override";
+import type { CodeReviewFormType } from "../../../_types";
+
+const AUTO = "auto";
+
+/**
+ * The ids a pattern finds in a sample, as Kody reads them: the first group, or
+ * the whole match. A pattern the server drops (`isRegexSafe`, as in
+ * `resolveBusinessLogicSettings`) is never run here either.
+ */
+const previewIds = (
+    pattern: string,
+    sample: string,
+): string[] | "invalid" | "unsafe" => {
+    const trimmed = pattern.trim();
+    if (!trimmed) return [];
+    if (trimmed.length > MAX_PATTERN_LEN) return "invalid";
+    try {
+        new RegExp(trimmed);
+    } catch {
+        return "invalid";
+    }
+    if (!isRegexSafe(trimmed)) return "unsafe";
+    try {
+        return [...sample.matchAll(new RegExp(trimmed, "g"))]
+            .map((m) => (m[1] ?? m[0]).trim())
+            .filter(Boolean);
+    } catch {
+        return "invalid";
+    }
+};
+
+/**
+ * Where tasks are read from (UC-01 to UC-04). `auto` reads every tracker
+ * Kody recognizes; picking one plugin reads only that one, and a custom
+ * plugin also needs the tool that reads one task by its id.
+ */
+export const TaskSource = ({
+    teamId,
+    canEdit,
+}: {
+    teamId: string;
+    canEdit: boolean;
+}) => {
+    const form = useFormContext<CodeReviewFormType>();
+    const { data: sources, isLoading } = useTaskSources(teamId);
+    const selected =
+        (useWatch({
+            control: form.control,
+            name: "businessLogic.taskSource.value" as never,
+        }) as string | undefined) ?? AUTO;
+    const selectedSource = sources?.find((s) => s.integrationId === selected);
+    const isCustom = selectedSource?.kind === "custom";
+    // What "every connected tracker" reads, as the server decides it.
+    const inAuto = (s: { kind: string; inAuto?: boolean }) =>
+        s.inAuto ?? s.kind === "managed";
+    const autoNames = (sources ?? []).filter(inAuto).map((s) => s.name);
+    const pickOnly = (sources ?? [])
+        .filter((s) => !inAuto(s))
+        .map((s) => s.name);
+    const pattern =
+        (useWatch({
+            control: form.control,
+            name: "businessLogic.taskIdPattern.value" as never,
+        }) as string | undefined) ?? "";
+    const [sample, setSample] = useState("");
+    // A long list of custom plugins buried the rest of the page: they stay
+    // folded until asked for, or while one of them is the picked source.
+    const [showCustom, setShowCustom] = useState(false);
+    const shown =
+        showCustom || isCustom
+            ? (sources ?? [])
+            : (sources ?? []).filter((s) => s.kind !== "custom");
+    const hiddenCustom = (sources?.length ?? 0) - shown.length;
+    const preview = previewIds(pattern, sample);
+    const { data: tools, isLoading: toolsLoading } = useReadTools(
+        teamId,
+        isCustom ? selected : undefined,
+    );
+
+    return (
+        <section
+            className="flex flex-col gap-3"
+            data-field-name="businessLogic.taskSource">
+            <div className="flex items-center gap-2">
+                <Heading variant="h3">Task source</Heading>
+                <OverrideIndicatorForm fieldName="businessLogic.taskSource" />
+            </div>
+            <p className="text-text-secondary text-sm">
+                Which tracker Kody asks for the task a pull request names. Each
+                repository or directory can pick its own; unset, it follows the
+                level above.
+            </p>
+
+            {isLoading ? (
+                <Skeleton className="h-24 w-full rounded-xl" />
+            ) : !sources?.length ? (
+                <Card color="lv1" className="px-5 py-4 text-sm">
+                    No task tracker is connected.{" "}
+                    <Link href="/settings/plugins">Connect one in Plugins</Link>{" "}
+                    (a task tracker or a custom plugin).
+                </Card>
+            ) : (
+                <Controller
+                    name={"businessLogic.taskSource.value" as never}
+                    control={form.control}
+                    render={({ field }) => (
+                        <RadioGroup.Root
+                            value={(field.value as string) ?? AUTO}
+                            onValueChange={(value) => {
+                                field.onChange(value);
+                                // The picked tool belongs to the old source.
+                                // Clear it only when there is one: writing ""
+                                // over an unset field left the layout's
+                                // unsaved-changes guard stuck on.
+                                const tool =
+                                    "businessLogic.taskSourceTool.value" as never;
+                                if (form.getValues(tool)) {
+                                    form.setValue(tool, "" as never, {
+                                        shouldDirty: true,
+                                    });
+                                }
+                            }}
+                            disabled={!canEdit || field.disabled}
+                            className="gap-2">
+                            <Label className="bg-card-lv1 flex cursor-pointer items-start gap-3 rounded-xl px-4 py-3">
+                                <RadioGroup.Item
+                                    value={AUTO}
+                                    className="mt-0.5"
+                                />
+                                <span className="flex flex-col">
+                                    <span className="text-text-primary text-sm font-medium">
+                                        Every connected tracker
+                                    </span>
+                                    <span className="text-text-secondary text-xs">
+                                        {autoNames.length
+                                            ? `Reads ${autoNames.join(", ")}.`
+                                            : "No tracker Kody reads on its own yet."}
+                                    </span>
+                                    {pickOnly.length > 0 && (
+                                        <span className="text-text-tertiary text-xs">
+                                            Other custom plugins are read only
+                                            when picked below.
+                                        </span>
+                                    )}
+                                </span>
+                            </Label>
+                            {shown.map((source) => (
+                                <Label
+                                    key={source.integrationId}
+                                    className="bg-card-lv1 flex cursor-pointer items-start gap-3 rounded-xl px-4 py-3">
+                                    <RadioGroup.Item
+                                        value={source.integrationId}
+                                        className="mt-0.5"
+                                    />
+                                    <span className="flex flex-col">
+                                        <span className="text-text-primary text-sm font-medium">
+                                            {source.name}
+                                            {source.kind === "custom" && (
+                                                <span className="bg-card-lv3 text-text-secondary ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase">
+                                                    Custom plugin
+                                                </span>
+                                            )}
+                                        </span>
+                                        <span className="text-text-secondary text-xs">
+                                            Only this tracker
+                                        </span>
+                                    </span>
+                                </Label>
+                            ))}
+                            {hiddenCustom > 0 && (
+                                <button
+                                    type="button"
+                                    className="text-text-secondary hover:text-text-primary self-start px-1 text-xs"
+                                    onClick={() => setShowCustom(true)}>
+                                    Show {hiddenCustom} custom{" "}
+                                    {hiddenCustom === 1 ? "plugin" : "plugins"}
+                                </button>
+                            )}
+                        </RadioGroup.Root>
+                    )}
+                />
+            )}
+
+            {isCustom && (
+                <Card color="lv1" className="flex flex-col gap-3 px-5 py-4">
+                    <span className="text-text-primary text-sm font-medium">
+                        Which tool reads a task by its id?
+                    </span>
+                    {toolsLoading ? (
+                        <Skeleton className="h-10 w-full" />
+                    ) : !tools?.length ? (
+                        <p className="text-warning text-sm">
+                            {selectedSource?.name} has no tool that reads one
+                            item by its id. Kody can&apos;t read tasks from it.
+                        </p>
+                    ) : (
+                        <Controller
+                            name={"businessLogic.taskSourceTool.value" as never}
+                            control={form.control}
+                            render={({ field }) => (
+                                <RadioGroup.Root
+                                    value={(field.value as string) || ""}
+                                    onValueChange={field.onChange}
+                                    disabled={!canEdit || field.disabled}
+                                    className="gap-2">
+                                    {tools.map((tool) => (
+                                        <Label
+                                            key={tool.name}
+                                            className="flex cursor-pointer items-start gap-3">
+                                            <RadioGroup.Item
+                                                value={tool.name}
+                                                className="mt-0.5"
+                                            />
+                                            <span className="flex flex-col">
+                                                <code className="text-text-primary text-sm">
+                                                    {tool.name}
+                                                </code>
+                                                <span className="text-text-secondary text-xs">
+                                                    {tool.recommended
+                                                        ? "Recommended · reads one item by id"
+                                                        : "Read-only"}
+                                                    {tool.description
+                                                        ? ` · ${tool.description}`
+                                                        : ""}
+                                                </span>
+                                            </span>
+                                        </Label>
+                                    ))}
+                                </RadioGroup.Root>
+                            )}
+                        />
+                    )}
+                    <p className="text-text-secondary text-xs">
+                        Only tools that read one task by its id are listed.
+                        Search and list tools can return a different task, and
+                        tools that write are never used. Check it with Try it
+                        below.
+                    </p>
+                </Card>
+            )}
+
+            <Collapsible
+                className="bg-card-lv1 rounded-xl"
+                defaultOpen={!!pattern.trim()}>
+                <CollapsibleTrigger asChild>
+                    <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left">
+                        <span className="flex flex-col">
+                            <span className="text-text-primary text-sm font-medium">
+                                Custom task id format{" "}
+                                <span className="text-text-secondary font-normal">
+                                    (optional)
+                                </span>
+                            </span>
+                            <span className="text-text-secondary text-xs">
+                                Only for ids Kody doesn&apos;t find on its own,
+                                like T1234
+                            </span>
+                        </span>
+                        <CollapsibleIndicator />
+                    </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                    <div className="border-card-lv3/60 flex flex-col gap-2 border-t px-5 py-4">
+                        <p className="text-text-secondary text-xs">
+                            Kody already finds SAA-96, AB#8, #12, CU-86a1b2c3d
+                            and tracker links. For another shape, write a
+                            regular expression; its first group is the id. For
+                            example <code>{"T(\\d{4})"}</code> reads 1234 from{" "}
+                            <code>nina/T1234-gift-cards</code>.
+                        </p>
+                        <p className="text-text-tertiary text-xs">
+                            A lower-case key (sc-123) counts in a branch name;
+                            in a title or description, only when Linear or Jira
+                            has that team or project.
+                        </p>
+                        <Controller
+                            name={"businessLogic.taskIdPattern.value" as never}
+                            control={form.control}
+                            render={({ field }) => (
+                                <Input
+                                    placeholder="e.g. T(\d{4})"
+                                    value={(field.value as string) ?? ""}
+                                    onChange={field.onChange}
+                                    maxLength={MAX_PATTERN_LEN}
+                                    disabled={!canEdit || field.disabled}
+                                />
+                            )}
+                        />
+                        {pattern.trim() && (
+                            <>
+                                <Input
+                                    placeholder="Paste a title, branch or description to preview"
+                                    value={sample}
+                                    onChange={(e) => setSample(e.target.value)}
+                                />
+                                <span
+                                    className={
+                                        preview === "invalid" ||
+                                        preview === "unsafe"
+                                            ? "text-danger text-xs"
+                                            : "text-text-secondary text-xs"
+                                    }>
+                                    {preview === "invalid"
+                                        ? "Not a valid regular expression."
+                                        : preview === "unsafe"
+                                          ? "Kody drops a pattern that could take too long to run, like (a+)+."
+                                          : !sample.trim()
+                                            ? "Paste a title, branch or description to see what the pattern reads."
+                                            : preview.length
+                                              ? `Reads: ${preview.join(", ")}`
+                                              : "No id in this text."}
+                                </span>
+                            </>
+                        )}
+                    </div>
+                </CollapsibleContent>
+            </Collapsible>
+        </section>
+    );
+};

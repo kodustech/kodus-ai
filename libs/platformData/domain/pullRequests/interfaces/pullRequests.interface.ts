@@ -7,12 +7,58 @@ import {
 import { DeliveryStatus } from '../enums/deliveryStatus.enum';
 import { ImplementationStatus } from '../enums/implementationStatus.enum';
 import { PriorityStatus } from '../enums/priorityStatus.enum';
-import { FeedbackType } from '@libs/kodyFineTuning/domain/enums/feedbackType.enum';
+import { FeedbackType } from '@libs/platformData/domain/pullRequests/enums/feedbackType.enum';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 
+// Per-PR delivered-suggestion counts, plus a breakdown of the SENT ones by
+// severity. Powers the "needs attention" signal + severity filter on the PR
+// dashboard list. Keys are the lowercased SeverityLevel values.
+export type SuggestionSeverityBreakdown = Record<
+    'critical' | 'high' | 'medium' | 'low',
+    number
+>;
+
+export interface IApprovalReasonDeliveryFailure {
+    decision: 'hold' | 'approve';
+    reason: string;
+    occurredAt: string;
+}
+
+export interface SuggestionCountsBySeverity {
+    // deliveryStatus === 'sent' — comment posted on the PR.
+    sent: number;
+    // deliveryStatus === 'not_sent' — held back by the review config/priority
+    // rules (severity threshold, quantity limit, safeguard, clustering…).
+    filtered: number;
+    // deliveryStatus ∈ {'failed', 'failed_lines_mismatch'} — Kody tried to post
+    // but couldn't (API error / lines no longer match the diff). A delivery
+    // failure, NOT a config decision — kept separate so it isn't hidden.
+    failed: number;
+    // deliveryStatus === 'replaced' — superseded by a newer suggestion (e.g. a
+    // re-review). Counted for reconciliation; not surfaced as a live signal.
+    replaced: number;
+    // Delivered (sent) suggestions the author still hasn't applied —
+    // implementationStatus ≠ 'implemented' (not_implemented, partially, or a
+    // legacy doc with no status). This is the "Needs attention" signal: it must
+    // match the card count (countDeliveredPullRequests unresolvedOnly) so the
+    // list you see on click can't disagree with the badge.
+    unresolved: number;
+    // Same unresolved set, broken down by severity — lets the UI lead with
+    // critical/high (the urgent slice) without hiding the lower-severity tail.
+    unresolvedBySeverity: SuggestionSeverityBreakdown;
+    bySeverity: SuggestionSeverityBreakdown;
+    // Distinct labels (categories) among the delivered suggestions, lowercased.
+    categories: string[];
+    // Deep-link target when the PR-list count is clicked (?file=...&
+    // suggestion=... on the review screen): the delivered finding that most
+    // wants attention — see deep-link-rank.ts. null when there is none.
+    firstSentSuggestion?: { id: string; filePath: string } | null;
+}
+
 export interface IPullRequests {
     uuid?: string;
+    approvalReasonDeliveryFailure?: IApprovalReasonDeliveryFailure | null;
     title: string;
     status: string;
     merged: boolean;
@@ -72,11 +118,25 @@ export interface ISuggestion {
     existingCode: string;
     improvedCode: string;
     oneSentenceSummary: string;
+    fullExplanation?: string;
     relevantLinesStart: number;
     relevantLinesEnd: number;
     label: string;
     severity: string;
     rankScore?: number;
+    /**
+     * Where the finding came from when it was not the model — the rule that
+     * fired, and the tool that ran it. Stored for our own measurement (which
+     * rules earn their keep, how often a deterministic pass beats the agent);
+     * deliberately not surfaced in the published comment, where the author
+     * cares about the problem and not its provenance.
+     */
+    evidence?: {
+        source: string;
+        ruleId?: string;
+        ruleUrl?: string;
+        analyzerSeverity?: string;
+    };
     brokenKodyRulesIds?: string[];
     clusteringInformation?: {
         type?: ClusteringType;
@@ -100,6 +160,12 @@ export interface ISuggestion {
     prUrl?: string;
     repositoryId?: string;
     repositoryFullName?: string;
+    /** The custom agent that made this finding (#2172), as stored with it. */
+    customAgent?: {
+        id: string;
+        name: string;
+        color?: string;
+    };
 }
 
 export interface ISuggestionToEmbed {
@@ -152,6 +218,13 @@ export interface IFile {
         generateSuggestions: string;
         safeguard: string;
     };
+    // Unified diff persisted for review context. Written at save-time and
+    // consume a shared aggregate budget so the PR document stays under
+    // MongoDB's 16 MB BSON ceiling; `patchTruncated` marks a diff that was
+    // capped (the patch carries a trailing marker) rather than persisted whole
+    // (#1841).
+    patch?: string;
+    patchTruncated?: boolean;
 }
 
 export interface IPullRequestUser {
@@ -164,12 +237,19 @@ export interface IPullRequestUser {
 export interface ISuggestionByPR {
     id: string;
     suggestionContent: string;
+    fullExplanation?: string;
     oneSentenceSummary: string;
     label: LabelType;
     severity?: SeverityLevel;
     brokenKodyRulesIds?: string[];
     priorityStatus?: PriorityStatus;
     deliveryStatus: DeliveryStatus;
+    /** The custom agent whose findings this comment gathers (#2172); drives its tag. */
+    customAgent?: {
+        id: string;
+        name: string;
+        color?: string;
+    };
     comment?: {
         id: number;
         pullRequestReviewId: number;

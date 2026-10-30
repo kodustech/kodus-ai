@@ -1,0 +1,2147 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "132199b01626ae41e00492d534f84a759d83f954",
+    "sourceDigest": "9170842cc550c3febe8c25bca52dd7858c96ff09202478559e63c2ba38e1e3e2"
+  },
+  "startedAt": "2026-10-15T13:30:09.639Z",
+  "updatedAt": "2026-10-15T13:32:42.008Z",
+  "complete": true,
+  "selectedCases": [
+    "R1-repeat-open",
+    "R2-consequence-status-implemented",
+    "R8-consequence-kody-rule-prior",
+    "R12-unrelated-other-file",
+    "R13-repeat-after-move",
+    "K4-rule-repeats-declined-bug",
+    "K7-rule-repost-prod-profile",
+    "P01-rule-skip-comment-incomplete",
+    "P05-rule-local-path-fixture-touched",
+    "P18-rule-timeout-out-of-40",
+    "P22-rule-forward-parsed-pingpong",
+    "P24-create-mode-section-hidden",
+    "P40-rule-pii-on-structured-log-lines"
+  ],
+  "summary": {
+    "measured": 26,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 18,
+        "violations": 1,
+        "rate": 0.056
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 1,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 18,
+        "violations": 3,
+        "rate": 0.167
+      },
+      "index-reference (#2039)": {
+        "n": 22,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R2-consequence-status-implemented · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 1,
+        "n": 2,
+        "delivered": 1
+      },
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 0,
+        "n": 2,
+        "delivered": 0
+      },
+      "R1-repeat-open · resubmit-repeat [not_deliver, proposed]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "R13-repeat-after-move · resubmit-repeat-moved [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "K4-rule-repeats-declined-bug · finishRun-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "K4-rule-repeats-declined-bug · finishBatch-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P01-rule-skip-comment-incomplete · skip-comment-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "R12-unrelated-other-file · refund-guard-inverted [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "K7-rule-repost-prod-profile · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "K7-rule-repost-prod-profile · dayKey-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P22-rule-forward-parsed-pingpong · create-order-raw-body-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "P22-rule-forward-parsed-pingpong · cancel-order-raw-body-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P18-rule-timeout-out-of-40 · geocode-timeout-repeat [not_deliver]": {
+        "pass": 1,
+        "n": 2,
+        "delivered": 1
+      },
+      "P18-rule-timeout-out-of-40 · timezone-timeout-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P40-rule-pii-on-structured-log-lines · pii-log-field-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P24-create-mode-section-hidden · billing-hidden-on-create-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.8888888888888888,
+    "floor": null,
+    "baseline": null
+  },
+  "runs": 2,
+  "tokens": {
+    "in": 1367361,
+    "out": 72570,
+    "cacheRead": 1077032,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 26
+  },
+  "cases": [
+    {
+      "id": "R1-repeat-open",
+      "checks": "resubmit-repeat: not posted",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "resubmit-repeat",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R2-consequence-status-implemented",
+      "checks": "resubmit-double-charge: posted and linked",
+      "hits": 1,
+      "total": 2,
+      "detail": [
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R8-consequence-kody-rule-prior",
+      "checks": "resubmit-double-charge: posted and linked",
+      "hits": 0,
+      "total": 2,
+      "detail": [
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        }
+      ]
+    },
+    {
+      "id": "R12-unrelated-other-file",
+      "checks": "refund-guard-inverted: posted",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "refund-guard-inverted",
+          "ok": true
+        },
+        {
+          "what": "refund-guard-inverted",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R13-repeat-after-move",
+      "checks": "resubmit-repeat-moved: not posted",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "resubmit-repeat-moved",
+          "ok": true
+        },
+        {
+          "what": "resubmit-repeat-moved",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "K4-rule-repeats-declined-bug",
+      "checks": "finishRun-repeat: not posted; finishBatch-new-site: posted",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        },
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "K7-rule-repost-prod-profile",
+      "checks": "rangeLabel-start-repeat: not posted; dayKey-new-site: posted",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P01-rule-skip-comment-incomplete",
+      "checks": "Kody Rule on a file new in the PR; the developer answered with a comment that documents nothing; stored implemented; 15 earlier comments",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "skip-comment-repeat",
+          "ok": true
+        },
+        {
+          "what": "skip-comment-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P05-rule-local-path-fixture-touched",
+      "checks": "Kody Rule against local absolute paths, on a test fixture constant; the developer touched the line and the path is still there; stored implemented; 34 earlier comments",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "local-path-fixture-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-new-site",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P18-rule-timeout-out-of-40",
+      "checks": "Kody Rule (outbound timeout shorter than the function limit) on a file new in the PR; more than 40 later comments push the earlier one out of the history; the fetch line was re-touched and still sets no timeout; stored not_implemented",
+      "hits": 3,
+      "total": 4,
+      "detail": [
+        {
+          "what": "geocode-timeout-repeat",
+          "ok": true
+        },
+        {
+          "what": "timezone-timeout-new-site",
+          "ok": true
+        },
+        {
+          "what": "geocode-timeout-repeat",
+          "ok": false
+        },
+        {
+          "what": "timezone-timeout-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P22-rule-forward-parsed-pingpong",
+      "checks": "Ping-pong on one function: an early comment asked to forward the raw input, a later Kody Rule comment asked to forward only the validated data (stored implemented); the developer forwards the raw object again; 40 earlier comments",
+      "hits": 4,
+      "total": 4,
+      "detail": [
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        },
+        {
+          "what": "create-order-raw-body-repeat",
+          "ok": true
+        },
+        {
+          "what": "cancel-order-raw-body-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P24-create-mode-section-hidden",
+      "checks": "Bug finder; a form section never renders when creating a record because its condition needs an id that exists only after save; the developer changed the condition but create mode still hides it; stored implemented; 1 earlier comment",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "billing-hidden-on-create-repeat",
+          "ok": true
+        },
+        {
+          "what": "billing-hidden-on-create-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P40-rule-pii-on-structured-log-lines",
+      "checks": "Kody Rule: a different rule (\"No personal data in logs\") broken on the very lines an earlier, implemented comment about another rule (\"Structured log fields\") covered; 4 earlier comments",
+      "hits": 2,
+      "total": 2,
+      "detail": [
+        {
+          "what": "pii-log-field-new-site",
+          "ok": true
+        },
+        {
+          "what": "pii-log-field-new-site",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36342,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36552,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37685,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39008,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R1-repeat-open",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 47512,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat",
+          "expect": "not_deliver",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 51261,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged from gw.status into fetchStatus wires a transient 'charge not settled yet' error into pollCharge's resubmit branch, which calls the non-idempotent gw.submit. WHY: NotReadyError is defined as 'the gateway has the charge but has not settled it yet (transient)' (errors.ts:1) and pollCharge is invoked 'on every tick for charges the gateway has ACCEPTED' (poller.ts:6), yet pollCharge treats any NotReadyError as 'the gateway never received it: resubmit' and calls gw.submit — documented as 'NOT idempotent: every call creates a new charge' (gateway.ts:3). So an accepted-but-unsettled charge is resubmitted on every poll tick, creating duplicate charges. HOW: Distinguish the two cases — e.g. have gw.status throw a dedicated 'NotSettledError' for accepted-but-unsettled and let pollCharge treat only a genuine 'not received' signal as resubmit; a NotReadyError arising from status polling should be retried (re-poll) rather than resubmitted, so fetchStatus should not surface it to the resubmit path.",
+          "keep": true,
+          "rationale": "The code confirms the claim: NotReadyError is documented as \"the gateway has the charge but has not settled it yet (transient)\" (errors.ts:1); fetchStatus (status.ts:8-11) re-throws it unchanged; pollCharge (poller.ts:13-15) treats any NotReadyError as \"gateway never received it\" and calls gw.submit, which is documented \"NOT idempotent: every call creates a new charge\" (gateway.ts:3), on every tick for accepted charges (poller.ts:6). So an accepted-but-unsettled charge is resubmitted each tick, creating duplicate charges. This is a distinct problem from the earlier decision (round-a-propagate), which only addressed misclassifying NotReadyError as a terminal FailedError; this finding is the resubmit/duplicate-charge failure that arises as a consequence of applying that suggestion, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nPropagating `NotReadyError` unchanged from `gw.status` into `fetchStatus` routes an accepted-but-unsettled charge into `pollCharge`'s resubmit branch, so every poll tick calls the non-idempotent `gw.submit` and creates duplicate charges (`errors.ts:1`, `poller.ts:6`, `gateway.ts:3`). Have `gw.status` throw a dedicated `NotSettledError` for accepted-but-unsettled charges, let `pollCharge` resubmit only on a genuine 'not received' signal, and re-poll a `NotReadyError` from status polling rather than surfacing it to the resubmit path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25133,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R13-repeat-after-move",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 27203,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-repeat-moved",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16053,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": "round-a-bug-progress",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In `finishBatch`, `db.results.insertMany` is called on line 11 before `db.progress.update` on line 12, violating rule [1] that progress must be recorded before results are written. Swap the order so `db.progress.update(batch.id, 'done')` runs first, then `db.results.insertMany(batch.id, batch.outputs)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 5627,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 37703,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: the refund amount check was inverted — `amount < charge.amount` now throws 'refund exceeds the charge', so amounts greater than the charge (including any partial refund request) pass through while legitimate full/partial refunds below the charge are rejected. WHY: the caller can submit a refund larger than the charged amount to a non-idempotent gateway (gateway.ts submit creates a new charge on every call), over-refunding the customer, while valid refunds fail with a misleading error. HOW: restore the correct comparison, e.g. `if (amount > charge.amount) { throw new Error('refund exceeds the charge'); }` (and reject non-positive amounts if the gateway does not).",
+          "keep": true,
+          "rationale": "Confirmed: refund.ts:4 uses `if (amount < charge.amount) throw ... 'refund exceeds the charge'`, which is inverted. Legitimate partial/full refunds below the charge amount are rejected, while any amount >= charge.amount (including over-refunds) passes the guard. gateway.ts:3 documents submit as non-idempotent (creates a new charge per call), so an over-refund reaches the gateway without rejection. Root cause and failure path are both real; distinct from the earlier status.ts NotReadyError decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit\\(|refund\\(|charge\\.amount",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund\\("
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted comparison lets a refund larger than `charge.amount` reach the non-idempotent gateway in `gateway.ts`, where `submit` creates a new charge on every call, over-refunding the customer while legitimate full or partial refunds below the charge are rejected with a misleading error. Restore the correct comparison so amounts greater than `charge.amount` throw 'refund exceeds the charge', and reject non-positive amounts if the gateway does not."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P01-rule-skip-comment-incomplete",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 3230,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/shipping/address.schema.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P01-rule-skip-comment-incomplete",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P01-rule-skip-comment-incomplete",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "skip-comment-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 12399,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "Because `dayKey` uses `at.toISOString().slice(0, 10)`, it violates the \"Format date-only values in local calendar time\" rule and returns the previous day for users west of UTC. Replace it with `formatLocalDate(at)` from `src/reports/dates.ts`, which is already imported."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R12-unrelated-other-file",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 47923,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: the refund bounds check was inverted to `if (amount < charge.amount)`, so refunds larger than the charge pass through to gw.submit while legitimate partial refunds are rejected. WHY: `gw.submit` is documented as NOT idempotent (every call creates a new charge), so an amount exceeding `charge.amount` is submitted and refunds more than was ever charged, and the thrown message \"refund exceeds the charge\" fires on the opposite condition. HOW: restore the original comparison so only amounts greater than the charge are rejected.",
+          "keep": true,
+          "rationale": "Confirmed: refund.ts:4 uses `if (amount < charge.amount)`, which rejects legitimate partial refunds (amount less than charge) with the message \"refund exceeds the charge\" and lets amounts greater than charge.amount pass through to gw.submit. gateway.ts:3 documents submit as NOT idempotent (\"every call creates a new charge\"), so an oversized refund is submitted and over-refunds. The guard is factually inverted as claimed. This is a distinct issue from the PreviousDecision (status.ts NotReadyError propagation), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund|gw\\.submit|charge\\.amount",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "submit|idempotent",
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/refund.ts",
+          "claim": "WHAT: The refund bounds check was inverted to `if (amount < charge.amount)`, so refunds larger than the charge are allowed and legitimate partial refunds are rejected. WHY: The guard now throws 'refund exceeds the charge' exactly when the refund does NOT exceed the charge, permitting over-refunds (funds drainage) while breaking valid partial refunds. HOW: Restore the comparison to `if (amount > charge.amount)`.",
+          "keep": true,
+          "rationale": "src/billing/refund.ts:4 confirms the inverted guard `if (amount < charge.amount)` throws 'refund exceeds the charge' precisely when the refund does NOT exceed the charge, rejecting legitimate partial refunds and allowing over-refunds beyond charge.amount before gw.submit is called. This is a genuine logic bug (wrong result / funds drainage), not style, and no prior review decision addresses refund.ts.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/refund.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "refund exceeds the charge"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "Because `gw.submit` is not idempotent, the inverted check lets refunds larger than `charge.amount` pass through and create a new charge, draining funds, while valid partial refunds are rejected and the 'refund exceeds the charge' error fires on the opposite condition. Restore the original comparison so only amounts greater than `charge.amount` are rejected."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/refund.ts",
+          "line": 4,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "The inverted guard throws 'refund exceeds the charge' exactly when the refund does not exceed the charge, permitting over-refunds and funds drainage while breaking valid partial refunds. Restore the comparison so only values of `amount` greater than `charge.amount` are rejected."
+        }
+      ],
+      "claims": [
+        {
+          "id": "refund-guard-inverted",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23816,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "For users west of UTC, `dayKey` returns the previous day because `toISOString().slice(0, 10)` formats in UTC instead of local calendar time. Replace it with `formatLocalDate(at)` from './dates' to stay consistent with the rest of the file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43524,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-bug-progress",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "Rule [1] requires `db.progress.update` before `db.results.insertMany`, so calling `db.results.insertMany(batch.id, batch.outputs)` on line 11 before `db.progress.update(batch.id, 'done')` on line 12 means a crash between them can leave a batch's outputs visible while its progress was never recorded. Move the progress update ahead of the `insertMany` call in `finishBatch`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18946,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "The hardcoded absolute path `/Users/dev/billing-archive` violates the rule \"No local machine paths in committed files\" and causes any test relying on `settings.archive_dir` to fail in CI and for other developers because the directory exists only on one laptop. Use a temporary directory such as pytest's `tmp_path` or a repository-relative path so `settings.archive_dir` resolves consistently."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21180,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "text": "Because `archive_dir` is `/Users/dev/billing-archive`, CI or another developer's machine will try to read and write a path that does not exist there. Replace the hardcoded home directory with pytest's `tmp_path` fixture (or a repository-relative path) so no local machine paths are committed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16007,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Because the handler forwards the raw `req.body` after validating with `CancelOrderSchema`, any unchecked field the client sends—such as an arbitrary `status`, `actorId`, or extra payload—is published verbatim to event bus consumers, violating the rule to forward only the parsed result. Publish `result.data` instead so consumers receive only schema-validated fields."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21131,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "label": "kody_rules",
+          "earlierId": "round-a-P22-rule-forward-parsed-pingpong",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "The raw `req.body` can carry fields `CancelOrderSchema` never checked, such as a client-set `status`, so unvalidated data reaches the event bus. Publish `result.data` instead of `req.body`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36263,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P18-rule-timeout-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 14,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-docs-public-api"
+          ],
+          "marked": false,
+          "text": "Because `handler` is exported from `src/lib-style` shared code without a doc comment, it violates rule 43 and leaves its behavior undocumented for consumers. Add a one-line doc comment above `handler` describing what it does."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/geocode-address.ts",
+          "line": 26,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-non-null"
+          ],
+          "marked": false,
+          "text": "`body.results[0]` non-null-asserts nothing syntactically, yet `body` comes straight from the network and `body.results[0]` assumes `results` is present, so reading `best.lat`/`best.lng` without validation can crash or produce NaN coordinates on malformed data. Parse the provider response with a zod schema (or guard `body.results`) before use, per rules 4/34."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "With no timeout on the outbound fetch to the timezone provider, a hung response blocks until the platform kills the function at its 10s `maxDuration` (`FUNCTION_LIMIT_SECONDS`), violating rule 21. Add an explicit timeout signal shorter than the function limit, such as `signal: AbortSignal.timeout(TIMEOUT_MS)` with a named constant like `const TIMEOUT_MS = 5_000;`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 10542,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Logging `customer.email` in the `logger.info` call in `src/orders/receipts.ts` leaks personal data into the log pipeline, where it can be read by anyone with log access and retained far beyond the request. Replace the `customerEmail` field with a non-personal identifier such as `customer.id`, for example `customerId: customer.id`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P40-rule-pii-on-structured-log-lines",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22395,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/receipts.ts",
+          "line": 11,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P40-rule-pii-on-structured-log-lines",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/receipts.ts:11` (2026-10-06 12:00 UTC).\n\nLogging `customerEmail` violates the no-personal-data-in-logs rule because the log pipeline persists emails, and it is a regression from the previous line that did not log the email while the structured-fields fix `round-a-P40-rule-pii-on-structured-log-lines` is revised. Remove the `customerEmail` field from the `logger.info` call in `src/orders/receipts.ts` and keep only the non-personal `orderId` field."
+        }
+      ],
+      "claims": [
+        {
+          "id": "pii-log-field-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39500,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: The condition `mode === 'edit' || Boolean(draft.id)` is still false in create mode, so BillingSection never renders for a new customer. WHY: A create-mode draft has no id and `mode === 'edit'` is false, so the billing email input is hidden while validateCustomer (validate.ts:8) unconditionally requires a valid billing email — 'Create customer' always fails with 'A valid billing email is required'. This is the same failure the earlier suggestion targeted; the added `mode === 'edit' ||` clause does not fix create mode because neither disjunct is true there. HOW: render the billing section in create mode too, e.g. `const showBilling = mode === 'create' || Boolean(draft.id);` (or simply always render it).",
+          "keep": false,
+          "rationale": "This finding raises the exact problem already posted on this PR as PreviousDecision round-a-P24-create-mode-section-hidden: BillingSection hidden in create mode while validateCustomer (validate.ts:8) unconditionally requires a valid billing email, so 'Create customer' always fails with 'A valid billing email is required'. The rule explicitly says to DROP a finding that re-raises a PreviousReviewDecisions problem even when it argues the developer's fix is incomplete. Same failure, same operation, no distinct new problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "billing",
+                "path": "src/customers/validate.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 49659,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "label": "kody_rules",
+          "earlierId": "round-a-P18-rule-timeout-out-of-40",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-async-await"
+          ],
+          "marked": false,
+          "text": "Without an explicit timeout this fetch can hang past the function limit, so the request is killed mid-flight instead of failing cleanly. Add a `signal: AbortSignal.timeout(...)` with a value below `FUNCTION_LIMIT_SECONDS` (10s) to the outbound call."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/geocode-address.ts",
+          "line": 16,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-pii-logs"
+          ],
+          "marked": false,
+          "text": "Any failure path that echoes the request URL can leak the user's address, which is personal data. Avoid putting raw address components into any logged context, and consider not embedding the raw address in the request string when it can be avoided."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/functions/geocode-address.ts",
+          "line": 14,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-docs-public-api"
+          ],
+          "marked": false,
+          "text": "The exported `handler` and `config` const lack the one-line doc comment that rule 43 requires for exports in `src/lib`. Add a one-line doc comment above each."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "If the provider hangs, the function is killed at the 10s `FUNCTION_LIMIT_SECONDS` limit instead of failing cleanly. Pass `signal: AbortSignal.timeout((FUNCTION_LIMIT_SECONDS - 1) * 1000)` to the fetch."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P24-create-mode-section-hidden",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53248,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: `await onSave(draft)` inside `submit()` is not wrapped in try/catch, and the handler calls `void submit()` without awaiting or catching. WHY: When onSave rejects (e.g. the store/API call fails), the rejection escapes the submit handler as an unhandled promise rejection instead of surfacing an error to the user, and any state the component expected after save is silently skipped. HOW: Wrap the save in try/catch and record a user-visible error, e.g. `try { await onSave(draft); } catch (e) { setErrors(['Could not save the customer']); }`.",
+          "keep": true,
+          "rationale": "The code confirms the claim: `submit()` is async, calls `await onSave(draft)` with no try/catch, and the form's onSubmit does `void submit()`, so any rejection from onSave (declared to return Promise<void>) becomes an unhandled promise rejection with no user-visible error. This is a real behavior bug, not style, and it is distinct from the prior review decision (which concerned the billing section visibility gate, not error handling around the save). No upstream guard catches the rejection. Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "onSave",
+                "path": "src/customers",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "CustomerForm",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/customers/CustomerForm.tsx",
+          "claim": "WHAT: The billing-section gate `mode === 'edit' || Boolean(draft.id)` evaluates to false in create mode, so BillingSection never renders for a new customer, contradicting the comment above it. WHY: A new customer has no `id` (line 12) and `mode !== 'edit'`, so the billing email input is never mounted while `validateCustomer` (validate.ts:8) still requires a valid billing email — 'Create customer' always fails with 'A valid billing email is required' and onSave is never invoked. HOW: Render the section in create mode as well, e.g. `const showBilling = mode === 'create' || mode === 'edit';` (or simply always render it), matching the stated intent.",
+          "keep": false,
+          "rationale": "Exact repeat of PreviousReviewDecision round-a-P24-create-mode-section-hidden: same file/location (CustomerForm.tsx), same root cause (showBilling gate on draft.id), same failure (BillingSection hidden in create mode so validateCustomer's billing-email requirement always fails and onSave never runs). That entry already raised this precise problem on this PR (Outcome: implemented). Rules mandate dropping repeats even when the applied fix is incomplete.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/CustomerForm.tsx",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "billing|validateCustomer|showBilling",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/customers/validate.ts",
+                "startLine": 1,
+                "endLine": 15
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/customers/CustomerForm.tsx",
+          "line": 19,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "text": "When `onSave` rejects inside `submit()`, the rejection escapes as an unhandled promise rejection and the user sees no error because `void submit()` neither awaits nor catches it. Wrap `await onSave(draft)` in a `try/catch` and record a user-visible error with `setErrors(['Could not save the customer'])` in the catch."
+        }
+      ],
+      "claims": [
+        {
+          "id": "billing-hidden-on-create-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

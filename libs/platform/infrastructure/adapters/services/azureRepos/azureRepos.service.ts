@@ -1,3 +1,7 @@
+import {
+    is429Error,
+    isTransientFetchError,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTwoFilesPatch } from 'diff';
@@ -35,6 +39,11 @@ import {
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { ICodeManagementService } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 
+import {
+    CheckEvidence,
+    CheckEvidenceConclusion,
+    GetCheckEvidenceParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import {
     OneSentenceSummaryItem,
@@ -49,8 +58,13 @@ import {
 import { createLogger } from '@libs/core/log/logger';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
-import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
+import { getSuggestionShield } from '@libs/common/utils/codeManagement/labels';
 import { getSeverityLevelShield } from '@libs/common/utils/codeManagement/severityLevel';
+import {
+    formatFixBlock,
+    formatTitleLine,
+    resolveAgentPrompt,
+} from '@libs/common/utils/codeManagement/suggestion-comment-blocks';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { IntegrationServiceDecorator } from '@libs/common/utils/decorators/integration-service.decorator';
 import {
@@ -61,7 +75,10 @@ import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
-import { generateWebhookToken } from '@libs/common/utils/webhooks/webhookTokenCrypto';
+import {
+    generateWebhookToken,
+    validateWebhookToken,
+} from '@libs/common/utils/webhooks/webhookTokenCrypto';
 import { AzureReposAuthDetail } from '@libs/integrations/domain/authIntegrations/types/azure-repos-auth-detail';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 import { IntegrationEntity } from '@libs/integrations/domain/integrations/entities/integration.entity';
@@ -71,6 +88,7 @@ import {
     AzureRepoCommit,
     AzureRepoFileItem,
     AzureRepoPRThread,
+    AzureRepoSubscription,
     EventConfig,
 } from '@libs/platform/domain/azure/entities/azureRepoExtras.type';
 import {
@@ -83,6 +101,12 @@ import {
     PullRequestFileChange,
 } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
+import {
+    isDeniedStatus,
+    RepositoryAccessDiagnosis,
+    summarizeProviderError,
+    UNKNOWN_REPOSITORY_ACCESS,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryAccessDiagnosis.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
 import axios, { AxiosInstance } from 'axios';
 import {
@@ -95,6 +119,19 @@ import {
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { AzureReposRequestHelper } from './azure-repos-request-helper';
+import { listingFailed } from '../repository-listing';
+
+// Sequence for the webhook-pass id in the instrumentation logs, so
+// successive passes over the same selection can be told apart.
+let azureWebhookPassSeq = 0;
+
+// Org/team keys with a webhook pass currently running, and those whose pass
+// must go around again because a save arrived while it was running. In-memory
+// and per-process is enough: the pass always runs in the API process that
+// handled the save, which is the same reasoning the historical-PR backfill
+// guard in create-repositories.ts uses.
+const azureWebhookPassInFlight = new Set<string>();
+const azureWebhookPassRerunRequested = new Set<string>();
 
 @IntegrationServiceDecorator(PlatformType.AZURE_REPOS, 'codeManagement')
 export class AzureReposService implements Omit<
@@ -119,6 +156,24 @@ export class AzureReposService implements Omit<
      * regardless of which entry point fired the fetch.
      */
     private static readonly FILE_CONTENT_CONCURRENCY = 30;
+
+    /**
+     * The PR events Kodus subscribes to, and the resourceVersion Azure
+     * requires for each. Shared by the code that creates subscriptions and the
+     * code that prunes the ones the selection no longer asks for, so the two
+     * can never disagree about what "the desired state" is.
+     *
+     * The versions are not interchangeable: the comment event only exists at
+     * 2.0, the two pull-request events at 1.0.
+     */
+    private static readonly WEBHOOK_EVENTS: EventConfig[] = [
+        { type: 'git.pullrequest.created', resourceVersion: '1.0' },
+        { type: 'git.pullrequest.updated', resourceVersion: '1.0' },
+        {
+            type: 'ms.vss-code.git-pullrequest-comment-event',
+            resourceVersion: '2.0',
+        },
+    ];
 
     constructor(
         @Inject(INTEGRATION_SERVICE_TOKEN)
@@ -669,7 +724,10 @@ export class AzureReposService implements Omit<
                     return {
                         name,
                         id,
-                        type: 'user',
+                        // Azure keys principal kind on the descriptor prefix:
+                        // `svc.` is a service identity (pipeline Build Service
+                        // and friends), `aad.`/`msa.` are people.
+                        type: String(id).startsWith('svc.') ? 'bot' : 'user',
                     };
                 })
                 .filter(
@@ -885,7 +943,7 @@ export class AzureReposService implements Omit<
                 return null;
             }
 
-            let state: PullRequestReviewState | null = null;
+            let state: PullRequestReviewState = PullRequestReviewState.NONE;
             for (const reviewer of reviewers || []) {
                 if (
                     reviewer.id === currentUserId &&
@@ -955,6 +1013,54 @@ export class AzureReposService implements Omit<
             });
             return null;
         }
+    }
+
+    /**
+     * Removes the token user's approval when a later review holds it.
+     * Returns how many approvals were removed (0 or 1).
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(
+                `Could not read Kody's approval on PR #${prNumber}`,
+            );
+        }
+        if (state !== PullRequestReviewState.APPROVED) return 0;
+        const { orgName, token } = await this.getAuthDetails(
+            organizationAndTeamData,
+        );
+        const [projectId, reviewerId] = await Promise.all([
+            this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            ),
+            this.azureReposRequestHelper.getAuthenticatedUserId({
+                orgName,
+                token,
+            }),
+        ]);
+        if (!reviewerId) throw new Error('Unable to identify reviewer from PAT.');
+        await this.azureReposRequestHelper.votePullRequest({
+            orgName,
+            token,
+            projectId,
+            repositoryId: repository.id,
+            prId: prNumber,
+            reviewerId,
+            vote: AzurePullRequestVote.NoVote,
+        });
+        return 1;
     }
 
     async approvePullRequest(params: {
@@ -1128,6 +1234,89 @@ export class AzureReposService implements Omit<
                 metadata: { params },
             });
             return null;
+        }
+    }
+
+    async getCheckEvidence(
+        params: GetCheckEvidenceParams,
+    ): Promise<CheckEvidence[]> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+
+        // Azure attaches statuses to the pull request, not to a commit; with
+        // no PR to address there is nothing to read.
+        if (!prNumber) {
+            return [];
+        }
+
+        try {
+            const { orgName, token } = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+
+            const projectId = await this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+
+            const statuses =
+                await this.azureReposRequestHelper.getPullRequestStatuses({
+                    orgName,
+                    token,
+                    projectId,
+                    repositoryId: repository.id,
+                    prId: prNumber,
+                });
+
+            return (statuses ?? []).map((status) =>
+                this.mapAzureBuildStatus(status),
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Failed to read Azure pull request statuses',
+                context: AzureReposService.name,
+                error,
+                metadata: { repository: repository.name, prNumber },
+            });
+            return [];
+        }
+    }
+
+    private mapAzureBuildStatus(status: {
+        id: number;
+        state: string;
+        context?: { name?: string; genre?: string };
+        targetUrl?: string;
+        updatedDate?: string;
+    }): CheckEvidence {
+        const unfinished = status.state === 'pending' || status.state === 'notSet';
+        const name = status.context?.genre
+            ? `${status.context.genre}/${status.context?.name ?? ''}`
+            : (status.context?.name ?? '');
+
+        return {
+            id: String(status.id),
+            name,
+            status: unfinished ? 'in_progress' : 'completed',
+            conclusion: unfinished
+                ? null
+                : this.mapAzureConclusion(status.state),
+            url: status.targetUrl ?? null,
+            completedAt: unfinished ? null : (status.updatedDate ?? null),
+            platform: PlatformType.AZURE_REPOS,
+        };
+    }
+
+    private mapAzureConclusion(state: string): CheckEvidenceConclusion | null {
+        switch (state) {
+            case 'succeeded':
+                return 'success';
+            case 'failed':
+            case 'error':
+                return 'failure';
+            case 'notApplicable':
+                return 'skipped';
+            default:
+                return null;
         }
     }
 
@@ -1342,6 +1531,108 @@ export class AzureReposService implements Omit<
                 serviceName: 'AzureReposService',
                 error,
                 metadata: { params },
+            });
+            return null;
+        }
+    }
+
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ): Promise<FileChange[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            baseBranch,
+            headSha,
+        } = params;
+
+        try {
+            const { orgName, token } = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            const projectId = await this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+            if (!projectId) {
+                throw new Error('Repository project not found');
+            }
+
+            // Every push is an iteration that keeps its own source commit and
+            // merge base, so the earlier head is still readable after a rebase.
+            const iterations = await this.azureReposRequestHelper.getIterations(
+                {
+                    orgName,
+                    token,
+                    projectId,
+                    repositoryId: repository.id,
+                    prId: prNumber,
+                },
+            );
+            const iteration = [...(iterations ?? [])]
+                .reverse()
+                .find((it) => it?.sourceRefCommit?.commitId === headSha);
+            const baseCommitId =
+                iteration?.commonRefCommit?.commitId ??
+                iteration?.targetRefCommit?.commitId;
+            if (!iteration || !baseCommitId) {
+                throw new Error('No PR iteration had this head');
+            }
+
+            const changes = await this.azureReposRequestHelper.getChanges({
+                orgName,
+                token,
+                projectId,
+                repositoryId: repository.id,
+                pullRequestId: prNumber,
+                iterationId: iteration.id,
+            });
+            const entries = (changes ?? []).filter(
+                (change) => change.item?.path || change?.originalPath,
+            );
+
+            const limit = pLimit(AzureReposService.FILE_CONTENT_CONCURRENCY);
+            const files = await Promise.all(
+                entries.map((change) =>
+                    limit(() =>
+                        this._generateFileDiffForAzure({
+                            orgName,
+                            token,
+                            projectId,
+                            repositoryId: repository.id,
+                            filePath: change.item?.path || change?.originalPath,
+                            baseCommitId,
+                            targetCommitId: headSha,
+                            changeType: change.changeType,
+                            rethrowRateLimit: true,
+                        }),
+                    ),
+                ),
+            );
+            if (files.some((file) => !file)) {
+                throw new Error('Some file diffs could not be built');
+            }
+
+            return files as FileChange[];
+        } catch (error) {
+            // A rate limit is not a missing diff: the caller must not answer it
+            // with a full review.
+            if (is429Error(error)) throw error;
+            this.logger.warn({
+                message: `Could not read the diff of PR#${prNumber} at ${headSha}`,
+                context: AzureReposService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                    baseBranch,
+                    headSha,
+                    reason: 'compare_failed',
+                },
             });
             return null;
         }
@@ -1848,6 +2139,15 @@ export class AzureReposService implements Omit<
                 error,
                 metadata: { params },
             });
+            // A 429 or a transport failure means "we couldn't fetch the
+            // commits", NOT "the PR has no commits" — swallowing it as null
+            // makes createLineComments anchor nothing and the review ships
+            // with zero inline comments while reporting success (same class
+            // observed live on the bitbucket path, 2026-07-29). Re-throw so
+            // callers can tell an empty list apart from a failed fetch.
+            if (is429Error(error) || isTransientFetchError(error)) {
+                throw error;
+            }
             return null;
         }
     }
@@ -2281,29 +2581,176 @@ export class AzureReposService implements Omit<
     async createWebhook(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<void> {
+        const passKey = `${organizationAndTeamData?.organizationId}:${organizationAndTeamData?.teamId}`;
+
+        if (azureWebhookPassInFlight.has(passKey)) {
+            // A pass is already walking this org/team's selection. The web UI
+            // saves in chunks of 50 and the backend fires this without
+            // awaiting it, so a second pass starting now would read its
+            // subscription snapshot before the first finished creating hooks
+            // and both would create the same ones, leaving the repository with
+            // duplicate subscriptions that deliver every PR event twice. Ask
+            // the running pass to go around once more instead, so whatever
+            // this save added still gets its hooks.
+            azureWebhookPassRerunRequested.add(passKey);
+
+            this.logger.log({
+                message: `[AZURE-HOOKS] pass coalesced into the one already running | key=${passKey}`,
+                context: this.createWebhook.name,
+                metadata: { organizationAndTeamData },
+            });
+
+            return;
+        }
+
+        azureWebhookPassInFlight.add(passKey);
+
+        try {
+            do {
+                azureWebhookPassRerunRequested.delete(passKey);
+
+                const passId = `${Date.now().toString(36)}-${(azureWebhookPassSeq += 1)}`;
+
+                await this.createWebhookPass(organizationAndTeamData, passId);
+            } while (azureWebhookPassRerunRequested.has(passKey));
+        } finally {
+            azureWebhookPassInFlight.delete(passKey);
+            azureWebhookPassRerunRequested.delete(passKey);
+        }
+    }
+
+    private async createWebhookPass(
+        organizationAndTeamData: OrganizationAndTeamData,
+        passId: string,
+    ): Promise<void> {
         try {
             const azureAuthDetail = await this.getAuthDetails(
                 organizationAndTeamData,
             );
 
-            const repositories: Repositories[] =
+            const repositories =
                 await this.findOneByOrganizationAndTeamDataAndConfigKey(
                     organizationAndTeamData,
                     IntegrationConfigKey.REPOSITORIES,
                 );
 
-            if (!repositories || repositories.length === 0) {
+            // Only an array is a statement about what the team wants. A
+            // missing integration and a missing config row both come back
+            // nullish, and a failed read throws — none of them mean "nothing
+            // is selected", and pruning against an unknown desired state would
+            // delete every subscription the team has. An explicit empty array
+            // does mean it, and must still reach the prune below.
+            if (!Array.isArray(repositories)) {
                 return null;
             }
 
-            for (const repo of repositories) {
+            const selection = repositories as Repositories[];
+
+            this.logger.log({
+                message: `[AZURE-HOOKS] pass ${passId} START | converging ${selection.length} repositories | org=${organizationAndTeamData?.organizationId} team=${organizationAndTeamData?.teamId}`,
+                context: this.createWebhook.name,
+                metadata: {
+                    passId,
+                    organizationAndTeamData,
+                    repositoryCount: selection.length,
+                },
+            });
+
+            // One listing for the whole pass. The endpoint is
+            // organization-wide with no server-side filter, so it costs the
+            // same whether we are about to check one repository or two
+            // hundred; running it per repository per event is what exhausted
+            // the account's rate limit (issue #1956). A snapshot taken here is
+            // safe because each repository/event pair is visited exactly once
+            // per pass, so nothing this pass creates can be missed by its own
+            // later lookups.
+            let existingSubscriptions: AzureRepoSubscription[];
+
+            try {
+                existingSubscriptions =
+                    await this.azureReposRequestHelper.listSubscriptions({
+                        orgName: azureAuthDetail.orgName,
+                        token: azureAuthDetail.token,
+                    });
+            } catch (error) {
+                // The whole pass reads from this one snapshot, so losing it
+                // means nothing is created and nothing is pruned for any
+                // repository. Reported here rather than through the pass-level
+                // catch, which cannot say which step failed, and returning
+                // instead of throwing keeps the fire-and-forget caller intact.
+                this.logger.error({
+                    message: `[AZURE-HOOKS] pass ${passId} | subscription listing failed — no webhook created or pruned for any of the ${selection.length} selected repositories`,
+                    context: this.createWebhook.name,
+                    error: error,
+                    metadata: {
+                        passId,
+                        organizationAndTeamData,
+                        repositoryCount: selection.length,
+                    },
+                });
+
+                return null;
+            }
+
+            // Converge down before converging up. Pruning first leaves at
+            // most one subscription per repository and event, so the create
+            // side below sees an unambiguous model and no subscription is
+            // touched twice in one pass — otherwise a duplicate whose token
+            // had expired got deleted by the create side and again by the
+            // prune, while its freshly created replacement turned into a new
+            // duplicate.
+            const { removed: pruned, surviving } =
+                await this.pruneSubscriptionsOutsideSelection({
+                    passId,
+                    orgName: azureAuthDetail.orgName,
+                    token: azureAuthDetail.token,
+                    selection,
+                    existingSubscriptions,
+                    teamId: organizationAndTeamData?.teamId,
+                });
+
+            // One index for the whole pass. The create side used to rescan the
+            // organization-wide snapshot once per repository per event type,
+            // which grows with the organization rather than with the
+            // selection. Keyed exactly like the prune step so the two cannot
+            // disagree about what counts as the same subscription.
+            const subscriptionIndex = new Map<string, AzureRepoSubscription[]>();
+
+            for (const subscription of surviving) {
+                const key = AzureReposService.subscriptionKey(
+                    subscription.publisherInputs?.projectId,
+                    subscription.publisherInputs?.repository,
+                    subscription.eventType,
+                );
+
+                subscriptionIndex.set(key, [
+                    ...(subscriptionIndex.get(key) ?? []),
+                    subscription,
+                ]);
+            }
+
+            for (const repo of selection) {
                 await this.createNotificationChannel(
                     repo?.project?.id,
                     azureAuthDetail.token,
                     azureAuthDetail.orgName,
                     repo.id,
+                    passId,
+                    subscriptionIndex,
+                    organizationAndTeamData?.teamId,
                 );
             }
+
+            this.logger.log({
+                message: `[AZURE-HOOKS] pass ${passId} END | ${selection.length} repositories converged, ${pruned} stale subscriptions removed`,
+                context: this.createWebhook.name,
+                metadata: {
+                    passId,
+                    organizationAndTeamData,
+                    repositoryCount: selection.length,
+                    prunedSubscriptions: pruned,
+                },
+            });
         } catch (error) {
             this.logger.error({
                 message: 'Error to create webhook',
@@ -2643,7 +3090,24 @@ export class AzureReposService implements Omit<
                 params.type,
             );
 
-            this.createWebhook(params.organizationAndTeamData);
+            // Deliberately not awaited (webhook creation must not block the
+            // integration-config save) — but the promise MUST be caught.
+            // createWebhook's own body is wrapped, yet the single-flight
+            // bookkeeping and the pass logging around it are not, and an
+            // orphaned rejection here escalates to an unhandledRejection: the
+            // same failure mode that crashed the whole API process on the
+            // Bitbucket adapter. Failures still get a loud error log from
+            // createWebhook itself; this catch only stops the crash.
+            // Skipped for an intermediate chunk of a chunked save: the
+            // selection persisted so far is partial, and reconciling webhooks
+            // against a partial selection removes the hooks of everything not
+            // in it. The last chunk arrives with the complete selection and
+            // runs this once.
+            if (!params.deferWebhooks) {
+                void this.createWebhook(
+                    params.organizationAndTeamData,
+                ).catch(() => undefined);
+            }
         } catch (err) {
             this.logger.error({
                 message: 'Error to create or update integration config',
@@ -3534,7 +3998,7 @@ export class AzureReposService implements Omit<
                             AzureReposService['_generateFileDiffForAzure']
                         >
                     >
-                >
+                > & { previous_filename?: string }
             > = [];
             const failedFiles: Array<{ filePath: string; reason: string }> = [];
 
@@ -3544,7 +4008,16 @@ export class AzureReposService implements Omit<
                     validEntries[idx]?.originalPath;
                 if (result.status === 'fulfilled') {
                     if (result.value !== null) {
-                        successfulFiles.push(result.value);
+                        const { item, originalPath } = validEntries[idx];
+                        successfulFiles.push({
+                            ...result.value,
+                            previous_filename:
+                                item?.path &&
+                                originalPath &&
+                                originalPath !== item.path
+                                    ? originalPath
+                                    : undefined,
+                        });
                     }
                     // `value === null` means `_generateFileDiffForAzure`
                     // swallowed its own error and already logged it — no
@@ -3619,6 +4092,8 @@ export class AzureReposService implements Omit<
         baseCommitId: string | null; // Can be null for new files
         targetCommitId: string;
         changeType: string; // Azure's change type (e.g., 'add', 'edit', 'delete')
+        /** Let a rate limit through instead of answering null. */
+        rethrowRateLimit?: boolean;
     }): Promise<{
         filename: string;
         sha: string; // Added missing sha property
@@ -3766,6 +4241,7 @@ export class AzureReposService implements Omit<
                 content: modifiedFileContent, // Added content
             };
         } catch (error: any) {
+            if (params.rethrowRateLimit && is429Error(error)) throw error;
             this.logger.error({
                 message: `Error generating diff for file "${filePath}" between commits "${baseCommitId}" and "${targetCommitId}"`,
                 context: this._generateFileDiffForAzure.name,
@@ -3966,26 +4442,284 @@ export class AzureReposService implements Omit<
         }
     }
 
+    /**
+     * Brings Azure in line with the selection: removes this instance's
+     * subscriptions that the selection no longer asks for, and collapses
+     * duplicates down to one per repository and event.
+     *
+     * Reuses the snapshot the pass already took, so convergence costs no
+     * extra listing.
+     *
+     * Why it compares against Azure rather than against the previously saved
+     * selection (which is what the GitHub adapter does): resetting the
+     * integration to rotate a PAT deletes every integration config row, so
+     * after a reconnect there is no previous selection to diff against, and
+     * subscriptions from before the reset would stay live forever. Comparing
+     * against Azure needs no memory and therefore survives a reset, a failed
+     * reset, and a rotated token.
+     *
+     * Ownership is decided by the callback URL pointing at THIS instance.
+     * That is deliberate: two Kodus instances sharing one Azure account mint
+     * their tokens from the same secret, so token-based ownership would let
+     * one delete the other's subscriptions. The cost is that subscriptions
+     * left behind by an earlier webhook URL are not reclaimed here — they are
+     * invisible to this match by construction, and any broader rule risks
+     * deleting hooks that are not ours to delete.
+     */
+    private async pruneSubscriptionsOutsideSelection(params: {
+        passId: string;
+        orgName: string;
+        token: string;
+        selection: Repositories[];
+        existingSubscriptions: AzureRepoSubscription[];
+        teamId?: string;
+    }): Promise<{ removed: number; surviving: AzureRepoSubscription[] }> {
+        const {
+            passId,
+            orgName,
+            token,
+            selection,
+            existingSubscriptions,
+            teamId,
+        } = params;
+
+        const webhookUrl =
+            process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK;
+
+        if (!webhookUrl) {
+            // Without it there is no way to tell our subscriptions from
+            // anyone else's, and guessing wrong deletes someone's webhooks.
+            this.logger.warn({
+                message: `[AZURE-HOOKS] pass ${passId} | no webhook URL configured, skipping convergence`,
+                context: this.createWebhook.name,
+                metadata: { passId },
+            });
+
+            return { removed: 0, surviving: existingSubscriptions };
+        }
+
+        const desired = new Set<string>();
+
+        for (const repo of selection) {
+            for (const event of AzureReposService.WEBHOOK_EVENTS) {
+                desired.add(
+                    AzureReposService.subscriptionKey(
+                        repo?.project?.id,
+                        repo?.id,
+                        event.type,
+                    ),
+                );
+            }
+        }
+
+        // Deletion is scoped to subscriptions this team minted, not merely to
+        // ones pointing at this deployment's webhook URL. The URL is a single
+        // env var for the whole deployment and an Azure organization can be
+        // connected by more than one team -- nothing enforces otherwise -- so
+        // matching on it alone would let one team's save delete another team's
+        // hooks and silently stop their reviews. Subscriptions created before
+        // the team marker existed carry no owner and are left alone: they are
+        // still replaced when their repository is selected (see
+        // `createOrReplaceHook`), which is what tags them, but they are never
+        // removed on someone else's behalf.
+        const marked = existingSubscriptions.filter((subscription) =>
+            this.subscriptionBelongsToTeam(
+                subscription.consumerInputs?.url,
+                webhookUrl,
+                teamId,
+            ),
+        );
+
+        // Keys this team demonstrably owns, because a marked copy exists.
+        const ownedKeys = new Set(
+            marked.map((subscription) =>
+                AzureReposService.subscriptionKey(
+                    subscription.publisherInputs?.projectId,
+                    subscription.publisherInputs?.repository,
+                    subscription.eventType,
+                ),
+            ),
+        );
+
+        // Ours, plus unmarked copies of a key we already own. Every team on a
+        // deployment shares one webhook URL and the handler resolves the team
+        // from the repository in the database, so one subscription per
+        // repository and event serves all of them: a second copy is not extra
+        // coverage, it makes Azure deliver every event twice. Collapsing one
+        // of these cannot uncover anybody, because the marked copy that proves
+        // the key is ours stays behind.
+        const ours = existingSubscriptions.filter(
+            (subscription) =>
+                this.subscriptionBelongsToTeam(
+                    subscription.consumerInputs?.url,
+                    webhookUrl,
+                    teamId,
+                ) ||
+                (!this.hasTeamMarker(subscription.consumerInputs?.url) &&
+                    !!subscription.consumerInputs?.url?.includes(webhookUrl) &&
+                    ownedKeys.has(
+                        AzureReposService.subscriptionKey(
+                            subscription.publisherInputs?.projectId,
+                            subscription.publisherInputs?.repository,
+                            subscription.eventType,
+                        ),
+                    )),
+        );
+
+        const byKey = new Map<string, AzureRepoSubscription[]>();
+
+        for (const subscription of ours) {
+            const key = AzureReposService.subscriptionKey(
+                subscription.publisherInputs?.projectId,
+                subscription.publisherInputs?.repository,
+                subscription.eventType,
+            );
+
+            byKey.set(key, [...(byKey.get(key) ?? []), subscription]);
+        }
+
+        const stale: Array<{
+            subscription: AzureRepoSubscription;
+            reason: 'not-in-selection' | 'duplicate';
+        }> = [];
+
+        for (const [key, subscriptions] of byKey) {
+            if (!desired.has(key)) {
+                subscriptions.forEach((subscription) =>
+                    stale.push({ subscription, reason: 'not-in-selection' }),
+                );
+                continue;
+            }
+
+            if (subscriptions.length > 1) {
+                // Overlapping passes could create the same subscription more
+                // than once, and Azure then delivers every event that many
+                // times. Keep one — preferring a token this instance can still
+                // validate — and drop the rest.
+                // Prefer a copy that both delivers and carries a token we
+                // accept. Looking at the token alone can keep a subscription
+                // Azure has disabled and delete the enabled one beside it,
+                // which reads as "converged" while no event arrives.
+                const isUsable = (subscription: AzureRepoSubscription) =>
+                    AzureReposService.subscriptionIsHealthy(subscription) &&
+                    this.hasUsableWebhookToken(
+                        subscription.consumerInputs?.url,
+                    );
+
+                // Prefer a copy that is ours, delivering, and carries a token
+                // we accept. Ours matters: keeping an unmarked copy over a
+                // marked one would undo the ownership this pass just
+                // recorded, and the next pass would have to mark it again.
+                const keepIndex = Math.max(
+                    [
+                        (subscription: AzureRepoSubscription) =>
+                            isUsable(subscription) &&
+                            this.subscriptionBelongsToTeam(
+                                subscription.consumerInputs?.url,
+                                webhookUrl,
+                                teamId,
+                            ),
+                        isUsable,
+                    ]
+                        .map((predicate) => subscriptions.findIndex(predicate))
+                        .find((index) => index >= 0) ?? -1,
+                    0,
+                );
+
+                subscriptions.forEach((subscription, index) => {
+                    if (index !== keepIndex) {
+                        stale.push({ subscription, reason: 'duplicate' });
+                    }
+                });
+            }
+        }
+
+        if (stale.length === 0) {
+            return { removed: 0, surviving: existingSubscriptions };
+        }
+
+        const staleIds = new Set(stale.map(({ subscription }) => subscription.id));
+        let removed = 0;
+
+        for (const { subscription, reason } of stale) {
+            try {
+                await this.azureReposRequestHelper.deleteWebhookById({
+                    orgName,
+                    token,
+                    subscriptionId: subscription.id,
+                });
+
+                removed += 1;
+
+                this.logger.log({
+                    message: `[AZURE-HOOKS] pass ${passId} | pruned ${reason} subscription | repo=${subscription.publisherInputs?.repository} event=${subscription.eventType} id=${subscription.id}`,
+                    context: this.createWebhook.name,
+                    metadata: {
+                        passId,
+                        reason,
+                        repoId: subscription.publisherInputs?.repository,
+                        eventType: subscription.eventType,
+                        subscriptionId: subscription.id,
+                    },
+                });
+            } catch (error) {
+                // A subscription we failed to remove is stale, which is noise.
+                // Aborting the pass would instead leave selected repositories
+                // without the hooks they need, so keep going.
+                this.logger.error({
+                    message: `[AZURE-HOOKS] pass ${passId} | failed to prune subscription ${subscription.id} (${reason})`,
+                    context: this.createWebhook.name,
+                    error: error,
+                    metadata: {
+                        passId,
+                        reason,
+                        repoId: subscription.publisherInputs?.repository,
+                        eventType: subscription.eventType,
+                        subscriptionId: subscription.id,
+                    },
+                });
+            }
+        }
+
+        // Whatever the create side looks at must not include what this pass
+        // just deleted, or it would try to reuse — or delete again — a
+        // subscription that no longer exists.
+        return {
+            removed,
+            surviving: existingSubscriptions.filter(
+                (subscription) => !staleIds.has(subscription.id),
+            ),
+        };
+    }
+
     private async createNotificationChannel(
         projectId: string,
         userToken: string,
         organizationName: string,
         repoId: string,
+        passId?: string,
+        subscriptionIndex: Map<string, AzureRepoSubscription[]> = new Map(),
+        teamId?: string,
     ): Promise<void> {
-        const EVENT_CONFIGS: EventConfig[] = [
-            { type: 'git.pullrequest.created', resourceVersion: '1.0' },
-            { type: 'git.pullrequest.updated', resourceVersion: '1.0' },
-            {
-                type: 'ms.vss-code.git-pullrequest-comment-event',
-                resourceVersion: '2.0',
-            },
-        ];
-
         const webhookUrl =
             process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK!;
         const encryptedToken = generateWebhookToken();
 
-        const tasks = EVENT_CONFIGS.map(({ type, resourceVersion }) =>
+        this.logger.log({
+            message: `[AZURE-HOOKS] pass ${passId} repo ${repoId} | fan-out ${AzureReposService.WEBHOOK_EVENTS.length} event types (parallel)`,
+            context: this.createNotificationChannel.name,
+            metadata: {
+                passId,
+                projectId,
+                repoId,
+                eventTypes: AzureReposService.WEBHOOK_EVENTS.map(
+                    (event) => event.type,
+                ),
+            },
+        });
+
+        const tasks = AzureReposService.WEBHOOK_EVENTS.map(
+            ({ type, resourceVersion }) =>
             this.createOrReplaceHook({
                 orgName: organizationName,
                 token: userToken,
@@ -3995,6 +4729,9 @@ export class AzureReposService implements Omit<
                 resourceVersion,
                 webhookUrl,
                 encryptedToken,
+                passId,
+                subscriptionIndex,
+                teamId,
             }).catch((error) => {
                 this.logger.error({
                     message: `Erro no hook ${type}: ${error.message ?? error}`,
@@ -4014,6 +4751,129 @@ export class AzureReposService implements Omit<
         await Promise.all(tasks);
     }
 
+    /**
+     * Query parameter that records which Kodus team minted a subscription.
+     *
+     * The callback URL is otherwise identical for every team on a deployment,
+     * and an Azure organization can be connected by more than one of them, so
+     * without this there is no way to tell whose hook a subscription is.
+     */
+    private static readonly TEAM_PARAM = 'team';
+
+    /**
+     * Whether Azure is still delivering this subscription.
+     *
+     * Azure moves a subscription out of `enabled` on its own -- `onProbation`
+     * after repeated delivery failures, `disabledBySystem`,
+     * `disabledByUser`, `disabledByInactiveIdentity` -- and a subscription in
+     * any of those states exists without delivering anything. The old code
+     * deleted and recreated on every save, so it healed these by accident;
+     * skipping work when the hook is already correct means the check has to be
+     * made on purpose. A missing status is read as enabled so an unexpected
+     * response shape does not cause needless churn.
+     */
+    private static subscriptionIsHealthy(
+        subscription?: AzureRepoSubscription,
+    ): boolean {
+        return !subscription?.status || subscription.status === 'enabled';
+    }
+
+    /** Identity of a subscription: one per repository, per event type. */
+    private static subscriptionKey(
+        projectId?: string,
+        repoId?: string,
+        eventType?: string,
+    ): string {
+        return `${projectId}|${repoId}|${eventType}`;
+    }
+
+    /** The callback URL this instance mints for a team's subscriptions. */
+    private buildWebhookCallbackUrl(
+        webhookUrl: string,
+        encryptedToken: string,
+        teamId?: string,
+    ): string {
+        const base = `${webhookUrl}?token=${encodeURIComponent(encryptedToken)}`;
+
+        return teamId
+            ? `${base}&${AzureReposService.TEAM_PARAM}=${encodeURIComponent(teamId)}`
+            : base;
+    }
+
+    /**
+     * Whether a subscription records an owner at all. One that does not
+     * predates the marker, so it cannot be attributed to any team.
+     */
+    private hasTeamMarker(subscriptionUrl?: string): boolean {
+        if (!subscriptionUrl) {
+            return false;
+        }
+
+        try {
+            return (
+                new URL(subscriptionUrl).searchParams.get(
+                    AzureReposService.TEAM_PARAM,
+                ) !== null
+            );
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Whether a subscription was minted by this team, which is what makes it
+     * safe to delete. Deliberately stricter than "points at our webhook URL":
+     * that is true of every team on the deployment. A subscription with no
+     * owner marker predates the marker and belongs to nobody, so it is never
+     * deleted on a guess.
+     */
+    private subscriptionBelongsToTeam(
+        subscriptionUrl: string | undefined,
+        webhookUrl: string,
+        teamId?: string,
+    ): boolean {
+        if (!subscriptionUrl?.includes(webhookUrl) || !teamId) {
+            return false;
+        }
+
+        try {
+            return (
+                new URL(subscriptionUrl).searchParams.get(
+                    AzureReposService.TEAM_PARAM,
+                ) === String(teamId)
+            );
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Whether an existing subscription's callback URL still carries a webhook
+     * token this instance accepts.
+     *
+     * The token is the shared secret encrypted under a random IV, and
+     * validation just decrypts and compares, so a subscription created by any
+     * earlier pass stays valid indefinitely and recreating it buys nothing. It
+     * does stop being valid if `CODE_MANAGEMENT_SECRET` or
+     * `CODE_MANAGEMENT_WEBHOOK_TOKEN` is rotated, and the delete-and-recreate
+     * path is what heals that -- so check the token rather than treating any
+     * URL that merely points at us as usable.
+     */
+    private hasUsableWebhookToken(subscriptionUrl?: string): boolean {
+        if (!subscriptionUrl) {
+            return false;
+        }
+
+        try {
+            const token = new URL(subscriptionUrl).searchParams.get('token');
+
+            return !!token && validateWebhookToken(token);
+        } catch {
+            // Unparseable URL: treat as unusable so it gets replaced.
+            return false;
+        }
+    }
+
     private async createOrReplaceHook(opts: {
         orgName: string;
         token: string;
@@ -4023,6 +4883,9 @@ export class AzureReposService implements Omit<
         resourceVersion: string;
         webhookUrl: string;
         encryptedToken: string;
+        passId?: string;
+        subscriptionIndex: Map<string, AzureRepoSubscription[]>;
+        teamId?: string;
     }): Promise<void> {
         const {
             orgName,
@@ -4033,6 +4896,8 @@ export class AzureReposService implements Omit<
             resourceVersion,
             webhookUrl,
             encryptedToken,
+            passId,
+            subscriptionIndex,
         } = opts;
 
         try {
@@ -4044,27 +4909,92 @@ export class AzureReposService implements Omit<
                 consumerActionId: 'httpRequest',
                 publisherInputs: { projectId, repository: repoId },
                 consumerInputs: {
-                    url: `${webhookUrl}?token=${encodeURIComponent(encryptedToken)}`,
+                    url: this.buildWebhookCallbackUrl(
+                        webhookUrl,
+                        encryptedToken,
+                        opts.teamId,
+                    ),
                     resourceDetailsToSend: 'all',
                     messagesToSend: 'all',
                     detailedMessagesToSend: 'all',
                 },
             };
 
-            // Lista assinaturas existentes
-            const subs =
-                await this.azureReposRequestHelper.listSubscriptionsByProject({
-                    orgName,
-                    token,
-                    projectId,
-                });
+            // The pass indexed the organization's subscriptions once and
+            // handed the map down, so this is a lookup rather than a rescan of
+            // the whole organization per repository per event type.
+            //
+            // Matching here is by callback URL, which is wider than the
+            // ownership rule the prune step applies: a subscription minted
+            // before the team marker existed has no owner, and finding it here
+            // is what lets it be replaced by a marked one instead of having a
+            // second subscription created beside it -- which would make Azure
+            // deliver every event twice.
+            const candidates = (
+                subscriptionIndex.get(
+                    AzureReposService.subscriptionKey(
+                        projectId,
+                        repoId,
+                        eventType,
+                    ),
+                ) ?? []
+            ).filter((s) => s.consumerInputs?.url?.includes(webhookUrl));
 
-            const existing = subs.find(
-                (s) =>
-                    s.eventType === eventType &&
-                    s.publisherInputs?.repository === repoId &&
-                    s.consumerInputs?.url?.includes(webhookUrl),
+            // Coverage is decided by a subscription this team owns, not by
+            // whichever entry Azure happened to list first. Taking the first
+            // URL match instead let another team's entry, sorted ahead of
+            // ours, be read as "not ours, replace it": the pass deleted their
+            // hook and created a second one of ours beside the healthy one it
+            // never looked at, so Azure delivered every event twice.
+            const owned = candidates.find((s) =>
+                this.subscriptionBelongsToTeam(
+                    s.consumerInputs?.url,
+                    webhookUrl,
+                    opts.teamId,
+                ),
             );
+
+            const usable =
+                !!owned &&
+                AzureReposService.subscriptionIsHealthy(owned) &&
+                this.hasUsableWebhookToken(owned.consumerInputs?.url);
+
+            // Only a subscription this pass may remove can be replaced: one of
+            // ours, or an unmarked entry that predates the marker. Another
+            // team's is left untouched.
+            const existing =
+                owned ??
+                candidates.find(
+                    (s) => !this.hasTeamMarker(s.consumerInputs?.url),
+                );
+
+            this.logger.log({
+                message: `[AZURE-HOOKS] pass ${passId} repo ${repoId} | ${eventType} | decision=${usable ? 'skip-already-subscribed' : existing ? 'delete-then-create' : 'create-only'}`,
+                context: this.createOrReplaceHook.name,
+                metadata: {
+                    passId,
+                    projectId,
+                    repoId,
+                    eventType,
+                    subscriptionsInSnapshot: subscriptionIndex.size,
+                    decision: usable
+                        ? 'skip-already-subscribed'
+                        : existing
+                          ? 'delete-then-create'
+                          : 'create-only',
+                    existingSubscriptionId: existing?.id,
+                },
+            });
+
+            if (usable) {
+                // Already subscribed to this event for this repository, with a
+                // token this instance can still validate. Deleting and
+                // recreating it would leave Azure in exactly the state it is
+                // already in, at the cost of two writes per event per
+                // repository on every save -- the churn measured in #1956.
+                // This matches what the Bitbucket adapter already does.
+                return;
+            }
 
             if (existing) {
                 await this.azureReposRequestHelper.deleteWebhookById({
@@ -4127,42 +5057,6 @@ export class AzureReposService implements Omit<
         return `<sub>${text}</sub>\n\n`;
     }
 
-    private formatPromptForLLM(lineComment: any) {
-        let copyPrompt = '';
-        if (lineComment?.suggestion?.llmPrompt) {
-            if (lineComment.path) {
-                copyPrompt += `File ${lineComment.path}:\n\n`;
-            }
-
-            if (lineComment.start_line && lineComment.line) {
-                copyPrompt += `Line ${lineComment.start_line} to ${lineComment.line}:\n\n`;
-            } else if (lineComment.line) {
-                copyPrompt += `Line ${lineComment.line}:\n\n`;
-            }
-
-            copyPrompt += lineComment?.suggestion?.llmPrompt;
-
-            if (lineComment?.body?.improvedCode) {
-                copyPrompt +=
-                    '\n\nSuggested Code:\n\n' + lineComment?.body?.improvedCode;
-            }
-
-            copyPrompt = `\n\n<details>
-
-<summary>Prompt for LLM</summary>
-
-\`\`\`
-
-${copyPrompt}
-
-\`\`\`
-
-</details>\n\n`;
-        }
-
-        return copyPrompt;
-    }
-
     private formatBodyForAzure(
         lineComment: any,
         repository: any,
@@ -4172,13 +5066,7 @@ ${copyPrompt}
         const severityShield = lineComment?.suggestion
             ? getSeverityLevelShield(lineComment.suggestion.severity)
             : '';
-        const codeBlock = lineComment?.body?.improvedCode
-            ? this.formatCodeBlock(
-                  repository?.language?.toLowerCase(),
-                  this.dedentCode(lineComment?.body?.improvedCode),
-              )
-            : '';
-        const suggestionContent = lineComment?.body?.suggestionContent || '';
+        const suggestionContent = `${formatTitleLine(lineComment?.suggestion?.oneSentenceSummary)}${lineComment?.body?.suggestionContent || ''}`;
         const actionStatement = lineComment?.body?.actionStatement
             ? `${lineComment.body.actionStatement}\n\n`
             : '';
@@ -4187,7 +5075,7 @@ ${copyPrompt}
             [
                 getCodeReviewBadge(),
                 lineComment?.suggestion
-                    ? getLabelShield(lineComment.suggestion.label)
+                    ? getSuggestionShield(lineComment.suggestion)
                     : '',
                 severityShield,
             ].join(' ') + '\n\n';
@@ -4195,19 +5083,25 @@ ${copyPrompt}
         const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
         const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
 
-        const copyPrompt = suggestionCopyPrompt
-            ? this.formatPromptForLLM(lineComment)
-            : '';
+        const copyPrompt = formatFixBlock({
+            copyPrompt: suggestionCopyPrompt ?? true,
+            path: lineComment?.path,
+            startLine: lineComment?.start_line,
+            endLine: lineComment?.line,
+            prompt: resolveAgentPrompt(lineComment?.suggestion),
+            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
+            language: lineComment?.suggestion?.language || repository?.language,
+        });
 
         return [
             badges,
             suggestionContent,
             actionStatement,
-            codeBlock,
             copyPrompt,
             this.formatSub(translations.talkToKody),
-            this.formatSub(translations.feedback) +
-                '<!-- kody-codereview -->&#8203;\n&#8203;',
+            this.formatSub(
+                translations.feedbackReply || translations.feedback,
+            ) + '<!-- kody-codereview -->&#8203;\n&#8203;',
             thumbsUpBlock,
             thumbsDownBlock,
         ]
@@ -4313,7 +5207,104 @@ ${copyPrompt}
         }
     }
 
+    async diagnoseRepositoryAccess(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; fullName?: string };
+    }): Promise<RepositoryAccessDiagnosis> {
+        const result: RepositoryAccessDiagnosis = {
+            ...UNKNOWN_REPOSITORY_ACCESS,
+        };
+
+        try {
+            const authDetails = await this.getAuthDetails(
+                params.organizationAndTeamData,
+            );
+
+            if (!authDetails) {
+                result.error = 'Azure Repos integration has no auth details';
+                return result;
+            }
+
+            const repository = await this.getRepoById(
+                params.organizationAndTeamData,
+                params.repository.id,
+            );
+            const projectId = repository?.project?.id;
+
+            if (!projectId) {
+                result.error =
+                    'Repository or its project is not in the integration config';
+                return result;
+            }
+
+            try {
+                await this.azureReposRequestHelper.getCommits({
+                    orgName: authDetails.orgName,
+                    token: authDetails.token,
+                    projectId,
+                    repositoryId: params.repository.id,
+                    filters: { top: 1 },
+                });
+                result.read = 'ok';
+            } catch (error) {
+                result.read = isDeniedStatus(error) ? 'denied' : 'unknown';
+                result.error = summarizeProviderError(error);
+            }
+
+            // Azure DevOps does not report a PAT's effective permission on a
+            // repository without the Security namespace APIs, so `write`
+            // stays `unknown` rather than being guessed.
+
+            const webhookUrl =
+                this.configService.get<string>(
+                    'GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK',
+                ) ?? process.env.GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK;
+
+            // Unset URL: nothing to match, so the hook stays unknown (the
+            // doctor reports the missing URL itself).
+            if (webhookUrl) {
+                try {
+                    const subscriptions =
+                        await this.azureReposRequestHelper.listSubscriptionsByProject(
+                            {
+                                orgName: authDetails.orgName,
+                                token: authDetails.token,
+                                projectId,
+                            },
+                        );
+                    result.hook = subscriptions.some(
+                        (subscription) =>
+                            subscription.publisherInputs?.repository ===
+                                params.repository.id &&
+                            subscription.consumerInputs?.url?.includes(
+                                webhookUrl,
+                            ),
+                    )
+                        ? 'present'
+                        : 'missing';
+                } catch (error) {
+                    result.error ??= summarizeProviderError(error);
+                }
+            }
+        } catch (error) {
+            // A 401/403/404 before any repository call (resolving the owner,
+            // building the client) still means the token cannot read.
+            if (isDeniedStatus(error)) {
+                result.read = 'denied';
+            }
+            result.error = summarizeProviderError(error);
+        }
+
+        return result;
+    }
+
     async deleteWebhook(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<void> {
+        return this.deleteWebhookPass(params);
+    }
+
+    private async deleteWebhookPass(params: {
         organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<void> {
         try {
@@ -4330,6 +5321,46 @@ ${copyPrompt}
                     );
 
                 if (repositories) {
+                    // One listing for the whole delete pass, for the same
+                    // reason as the create pass: the endpoint is
+                    // organization-wide, so listing it once per repository
+                    // multiplied the cost by the size of the selection with no
+                    // extra information to show for it (issue #1956). Deleting
+                    // cannot invalidate another repository's entry in the
+                    // snapshot, since each subscription is matched and removed
+                    // exactly once.
+                    let allSubscriptions: AzureRepoSubscription[];
+
+                    try {
+                        allSubscriptions =
+                            await this.azureReposRequestHelper.listSubscriptions(
+                                {
+                                    orgName: authDetails.orgName,
+                                    token: authDetails.token,
+                                },
+                            );
+                    } catch (error) {
+                        // Reported here rather than letting it reach the outer
+                        // catch, which would blame authentication for what is a
+                        // listing failure. Nothing can be deleted without the
+                        // listing, and the caller
+                        // (delete-integration.use-case) already proceeds with
+                        // local cleanup when this path fails.
+                        this.logger.error({
+                            message:
+                                'Error listing Azure Repos subscriptions for webhook deletion — no webhooks removed',
+                            context: this.deleteWebhook.name,
+                            error: error,
+                            metadata: {
+                                organizationAndTeamData:
+                                    params.organizationAndTeamData,
+                                repositoryCount: repositories.length,
+                            },
+                        });
+
+                        return;
+                    }
+
                     for (const repo of repositories) {
                         try {
                             const projectId =
@@ -4342,14 +5373,14 @@ ${copyPrompt}
                                 continue;
                             }
 
-                            const subs =
-                                await this.azureReposRequestHelper.listSubscriptionsByProject(
-                                    {
-                                        orgName: authDetails.orgName,
-                                        token: authDetails.token,
-                                        projectId,
-                                    },
-                                );
+                            // The project filter that
+                            // `listSubscriptionsByProject` used to apply is
+                            // applied here, so the set matched per repository
+                            // is the same one as before.
+                            const subs = allSubscriptions.filter(
+                                (s) =>
+                                    s.publisherInputs?.projectId === projectId,
+                            );
 
                             const webhookUrl = this.configService.get<string>(
                                 'GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK'!,
@@ -4439,7 +5470,7 @@ ${copyPrompt}
 
             const badges = [
                 getCodeReviewBadge(),
-                suggestion?.label ? getLabelShield(suggestion.label) : '',
+                getSuggestionShield(suggestion),
                 severityShield,
             ]
                 .filter(Boolean)
@@ -4449,6 +5480,7 @@ ${copyPrompt}
         }
 
         // BODY - Conteúdo principal
+        commentBody += formatTitleLine(suggestion?.oneSentenceSummary);
         if (suggestion?.suggestionContent) {
             commentBody += `${suggestion.suggestionContent}\n\n`;
         }
@@ -4457,9 +5489,12 @@ ${copyPrompt}
             commentBody += `${suggestion.clusteringInformation.actionStatement}\n\n`;
         }
 
-        if (suggestionCopyPrompt) {
-            commentBody += this.formatPromptForLLM(suggestion);
-        }
+        commentBody += formatFixBlock({
+            copyPrompt: suggestionCopyPrompt,
+            prompt: resolveAgentPrompt(suggestion),
+            improvedCode: suggestion?.improvedCode,
+            language: suggestion?.language || params.repository?.language,
+        });
 
         // FOOTER - Interação/Feedback
         if (includeFooter) {
@@ -4469,7 +5504,10 @@ ${copyPrompt}
             );
 
             commentBody += this.formatSub(translations.talkToKody) + '\n';
-            commentBody += this.formatSub(translations.feedback) + '\n\n';
+            commentBody +=
+                this.formatSub(
+                    translations.feedbackReply || translations.feedback,
+                ) + '\n\n';
 
             const thumbsUpBlock = `\`\`\`\n👍\n\`\`\`\n`;
             const thumbsDownBlock = `\`\`\`\n👎\n\`\`\`\n`;
@@ -4800,6 +5838,7 @@ ${copyPrompt}
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -4819,7 +5858,10 @@ ${copyPrompt}
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Azure Repos authentication details not found',
+                );
             }
 
             const { orgName, token } = authDetails;
@@ -4836,7 +5878,10 @@ ${copyPrompt}
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Project ID not found for repository',
+                );
             }
 
             const {
@@ -4860,7 +5905,10 @@ ${copyPrompt}
                         metadata: params,
                     });
 
-                    return [];
+                    return listingFailed(
+                        params.throwOnError,
+                        'Default branch not found',
+                    );
                 }
             }
 
@@ -4933,7 +5981,11 @@ ${copyPrompt}
                 metadata: { params },
             });
 
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 
@@ -5137,6 +6189,7 @@ ${copyPrompt}
             sourceRefName: pr?.sourceRefName ?? '', // TODO: remove, legacy, use head.ref
             head: {
                 ref: pr?.sourceRefName?.replace('refs/heads/', ''),
+                sha: pr?.lastMergeSourceCommit?.commitId ?? '',
                 repo: {
                     id: pr?.repository?.id ?? '',
                     name: pr?.repository?.name ?? '',
@@ -5147,6 +6200,7 @@ ${copyPrompt}
             targetRefName: pr?.targetRefName ?? '', // TODO: remove, legacy, use base.ref
             base: {
                 ref: pr?.targetRefName?.replace('refs/heads/', ''),
+                sha: pr?.lastMergeTargetCommit?.commitId ?? '',
                 repo: {
                     id: pr?.repository?.id ?? '',
                     name: pr?.repository?.name ?? '',

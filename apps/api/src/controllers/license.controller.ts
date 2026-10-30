@@ -5,6 +5,7 @@ import {
     Get,
     Inject,
     Post,
+    Query,
     UseGuards,
 } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
@@ -26,7 +27,9 @@ import {
     ILicenseService,
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { SelfHostedLicenseService } from '@libs/ee/license/self-hosted-license.service';
+import { PruneRemovedLicenseSeatsUseCase } from '@libs/platform/application/use-cases/codeManagement/prune-removed-license-seats.use-case';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { TrialExtensionNotifierService } from '../services/trial-extension-notifier.service';
 
@@ -41,6 +44,8 @@ export class LicenseController {
         private readonly licenseService: ILicenseService,
         private readonly createOrUpdateOrganizationParametersUseCase: CreateOrUpdateOrganizationParametersUseCase,
         private readonly trialExtensionNotifierService: TrialExtensionNotifierService,
+        private readonly pruneRemovedLicenseSeatsUseCase: PruneRemovedLicenseSeatsUseCase,
+        private readonly telemetry: TelemetryService,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
@@ -90,6 +95,15 @@ export class LicenseController {
         // Decode payload for status details
         const payload =
             this.selfHostedLicenseService.decodePayload(sanitizedKey);
+
+        void this.telemetry.licenseActivated({
+            organizationId,
+            userId: this.request?.user?.uuid,
+            planType: payload?.plan,
+            expiresAt: payload
+                ? new Date(payload.exp * 1000).toISOString()
+                : undefined,
+        });
 
         return {
             ...result,
@@ -257,12 +271,63 @@ export class LicenseController {
 
             if (ok) {
                 successful.push(user);
+                void this.telemetry.licenseSeatChanged({
+                    organizationId,
+                    actorUserId: this.request?.user?.uuid,
+                    targetGitId: user.gitId,
+                    assigned: user.licenseStatus === 'active',
+                    source: 'manual',
+                });
             } else {
                 failed.push(user);
             }
         }
 
         return { successful, failed };
+    }
+
+    @Get('/removable-seats')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.UserSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Preview reclaimable license seats',
+        description:
+            'Lists the git ids holding a seat while no longer belonging to the git organization. Returns a "members_unavailable" status when the code platform could not be reached.',
+    })
+    public async removableSeats(@Query('teamId') teamId?: string) {
+        return this.pruneRemovedLicenseSeatsUseCase.execute({
+            organizationAndTeamData: this.resolveOrganizationAndTeamData(teamId),
+            dryRun: true,
+        });
+    }
+
+    @Post('/prune-seats')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Update,
+            resource: ResourceType.UserSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Reclaim license seats from users removed from the git org',
+        description:
+            'Releases the seats of users who no longer belong to the git organization. Never runs when the member list could not be confirmed.',
+    })
+    public async pruneSeats(
+        @Body() body: { teamId?: string; gitIds?: string[] },
+    ) {
+        return this.pruneRemovedLicenseSeatsUseCase.execute({
+            organizationAndTeamData: this.resolveOrganizationAndTeamData(
+                body?.teamId,
+            ),
+            gitIds: body?.gitIds,
+        });
     }
 
     @Post('/trial-extension-request')
@@ -291,5 +356,17 @@ export class LicenseController {
             teamSize: body.teamSize,
             message: body.message,
         });
+    }
+
+    private resolveOrganizationAndTeamData(teamId?: string) {
+        const organizationId = this.request?.user?.organization?.uuid;
+
+        if (!organizationId) {
+            throw new BadRequestException(
+                'Organization ID is missing from request',
+            );
+        }
+
+        return { organizationId, teamId };
     }
 }

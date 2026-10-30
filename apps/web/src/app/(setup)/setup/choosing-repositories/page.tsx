@@ -62,7 +62,7 @@ export default function App() {
     const router = useRouter();
     const { userId, organizationId } = useAuth();
     const { teamId } = useSelectedTeamId();
-    const nextStepPath = "/setup/review-mode";
+    const nextStepPath = "/setup/select-reviewers";
 
     const { configValue } = useSuspenseGetCodeReviewParameter(teamId);
     if (configValue?.repositories?.length) redirect(nextStepPath);

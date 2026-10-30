@@ -209,6 +209,9 @@ export class CodeManagementTools {
 
         return {
             name: 'KODUS_LIST_REPOSITORIES',
+            annotations: {
+                readOnlyHint: true,
+            },
             description:
                 'List all repositories accessible to the team. Use this to discover available repositories, check repository metadata (private/public, archived status, languages), or when you need to see what repositories exist before performing other operations.',
             inputSchema,
@@ -315,6 +318,9 @@ export class CodeManagementTools {
 
         return {
             name: 'KODUS_LIST_PULL_REQUESTS',
+            annotations: {
+                readOnlyHint: true,
+            },
             description:
                 'List pull requests with advanced filtering (by state, repository, author, date range). Use this to find specific PRs, analyze PR patterns, or get overview of team activity. Returns PR metadata only - use get_pull_request for full PR content.',
             inputSchema,
@@ -433,6 +439,9 @@ export class CodeManagementTools {
 
         return {
             name: 'KODUS_LIST_COMMITS',
+            annotations: {
+                readOnlyHint: true,
+            },
             description:
                 'List commit history from repositories with filtering by author, date range, or branch. Use this to analyze commit patterns, find specific commits, or track development activity. Returns commit metadata and messages.',
             inputSchema,
@@ -513,6 +522,9 @@ export class CodeManagementTools {
 
         return {
             name: 'KODUS_GET_PULL_REQUEST',
+            annotations: {
+                readOnlyHint: true,
+            },
             description:
                 'Get complete details of a specific pull request including description, commits, reviews, and list of modified files. Use this when you need full PR context - NOT for file content (use get_pull_request_file_content for that).',
             inputSchema,
@@ -627,6 +639,9 @@ export class CodeManagementTools {
 
         return {
             name: 'KODUS_GET_REPOSITORY_FILES',
+            annotations: {
+                readOnlyHint: true,
+            },
             description:
                 'Get file tree/listing from a repository branch with pattern filtering. Use this to explore repository structure, find specific files by pattern, or get overview of codebase organization. Returns file paths only - NOT file content.',
             inputSchema,
@@ -718,6 +733,9 @@ export class CodeManagementTools {
 
         return {
             name: 'KODUS_GET_REPOSITORY_CONTENT',
+            annotations: {
+                readOnlyHint: true,
+            },
             description:
                 'Get the current content of a specific file from a repository branch. Use this to read files from the main/current branch - NOT from pull requests (use get_pull_request_file_content for PR files).',
             inputSchema,
@@ -886,6 +904,9 @@ export class CodeManagementTools {
 
         return {
             name: 'KODUS_GET_PULL_REQUEST_FILE_CONTENT',
+            annotations: {
+                readOnlyHint: true,
+            },
             description:
                 'Get the modified content of a specific file within a pull request context. Use this to read how a file looks AFTER the PR changes are applied - NOT the original version.',
             inputSchema,
@@ -1016,6 +1037,9 @@ export class CodeManagementTools {
 
         return {
             name: 'KODUS_GET_DIFF_FOR_FILE',
+            annotations: {
+                readOnlyHint: true,
+            },
             description:
                 'Get the exact diff/patch showing what changed in a specific file within a pull request. Use this to see the precise changes made - additions, deletions, and modifications line by line.',
             inputSchema,
@@ -1086,6 +1110,9 @@ export class CodeManagementTools {
 
         return {
             name: 'KODUS_GET_PULL_REQUEST_DIFF',
+            annotations: {
+                readOnlyHint: true,
+            },
             description:
                 'Get the complete diff/patch for an entire Pull Request showing all changes across all files. Use this to see the full context of what changed in the PR, including additions, deletions, and modifications across all modified files.',
             inputSchema,

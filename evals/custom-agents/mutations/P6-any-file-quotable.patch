@@ -1,0 +1,13 @@
+diff --git a/libs/code-review/infrastructure/agents/core/convention-check.ts b/libs/code-review/infrastructure/agents/core/convention-check.ts
+index 2f1b0e731..685babc62 100644
+--- a/libs/code-review/infrastructure/agents/core/convention-check.ts
++++ b/libs/code-review/infrastructure/agents/core/convention-check.ts
+@@ -302,7 +302,7 @@ export async function checkConventionQuotes(
+             });
+             return true;
+         };
+-        if (!isLinkedGuide(file, guideFiles)) {
++        if (!isLinkedGuide(file, guideFiles) && false) {
+             if (!passFromInstructions()) {
+                 reject(finding, `${file} is not a guide linked to this review`);
+             }

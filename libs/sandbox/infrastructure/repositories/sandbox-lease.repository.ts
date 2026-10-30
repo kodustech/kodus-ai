@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
+import { SANDBOX_LEASE_CLEANUP_STATUS } from './schemas/sandbox-lease.model';
 import { SandboxLeaseModel } from './schemas/sandbox-lease.model';
 
 /**
@@ -119,20 +120,37 @@ export class SandboxLeaseRepository {
      * Only updates if the document is still in CREATING state to prevent
      * overwriting a concurrent INVALIDATED state change.
      */
-    async updateReady(prKey: string, sandboxId: string): Promise<void> {
+    async updateReady(
+        prKey: string,
+        sandboxId: string,
+        baseBranch?: string,
+        privilegesDropped?: boolean,
+    ): Promise<void> {
         await this.leaseModel.updateOne(
             { _id: prKey, state: 'CREATING' },
-            { $set: { state: 'READY', sandboxId } },
+            {
+                $set: {
+                    state: 'READY',
+                    sandboxId,
+                    ...(baseBranch ? { baseBranch } : {}),
+                    privilegesDropped: privilegesDropped === true,
+                },
+            },
         );
     }
 
     /**
-     * Mark a CREATING lease as INVALIDATED (mid-create race handling).
-     * The create path will check for this state after completing and kill the sandbox.
+     * Mark a CREATING or READY lease as INVALIDATED.
+     *
+     * CREATING: mid-create race handling — the create path detects this
+     * after completing and kills the sandbox.
+     * READY: called by invalidate() when a local READY lease has active
+     * consumers (leaseCount > 0). The state change prevents new acquires
+     * from attaching to the stale sandbox.
      */
     async markInvalidated(prKey: string): Promise<void> {
         await this.leaseModel.updateOne(
-            { _id: prKey, state: 'CREATING' },
+            { _id: prKey, state: { $in: ['CREATING', 'READY'] } },
             { $set: { state: 'INVALIDATED' } },
         );
     }
@@ -154,10 +172,15 @@ export class SandboxLeaseRepository {
      */
     async findExpired(
         now: Date,
-    ): Promise<Pick<SandboxLeaseModel, '_id' | 'sandboxId' | 'state'>[]> {
+    ): Promise<
+        Pick<
+            SandboxLeaseModel,
+            '_id' | 'sandboxId' | 'state' | 'killRetryCount' | 'organizationId'
+        >[]
+    > {
         return this.leaseModel
             .find({ expiresAt: { $lt: now } })
-            .select('_id sandboxId state')
+            .select('_id sandboxId state killRetryCount organizationId')
             .lean();
     }
 
@@ -167,6 +190,70 @@ export class SandboxLeaseRepository {
      */
     async delete(prKey: string): Promise<void> {
         await this.leaseModel.deleteOne({ _id: prKey });
+    }
+
+    /**
+     * Detach a sandbox from its prKey without losing track of it.
+     *
+     * Sandboxes are created with `onTimeout: 'pause'`, so an E2B timeout only
+     * pauses them — the only thing that ever kills one is the reaper crons,
+     * and they only see sandboxes that still have a lease doc. Deleting the
+     * lease outright therefore leaves a paused orphan forever.
+     *
+     * Deletes the prKey lease first (so no acquire can join the sandbox after
+     * this point), then writes a retired doc (`<org>:retired:<sandboxId>`,
+     * never matched by acquire) carrying `killAt`. `killIdleSandboxes` kills
+     * the sandbox at `killAt` and removes the retired doc, retrying on real
+     * failures; the TTL reaper backs it up via `expiresAt`, and the orphan
+     * sweep covers a crash between the two writes.
+     *
+     * `killAt` comes from the leaseCount the deleted doc had — read in the
+     * same atomic delete, so a joiner that attached just before still counts:
+     * `busyKillAt` while someone else still holds the sandbox, `idleKillAt`
+     * otherwise. `ownHolds` discounts the caller's own hold.
+     */
+    async retire(
+        prKey: string,
+        sandboxId: string,
+        opts: { idleKillAt: Date; busyKillAt: Date; ownHolds?: number },
+    ): Promise<void> {
+        const detached = await this.leaseModel
+            .findOneAndDelete({ _id: prKey, sandboxId })
+            .select('leaseCount')
+            .lean();
+        const otherHolders =
+            (detached?.leaseCount ?? 0) - (opts.ownHolds ?? 0);
+        const killAt = otherHolders > 0 ? opts.busyKillAt : opts.idleKillAt;
+
+        const orgSegment = prKey.split(':')[0];
+        await this.leaseModel.updateOne(
+            { _id: `${orgSegment}:retired:${sandboxId}` },
+            {
+                $setOnInsert: {
+                    sandboxId,
+                    state: 'READY',
+                    leaseCount: 0,
+                    createdAt: new Date(),
+                    expiresAt: killAt,
+                    killAt,
+                    organizationId: orgSegment,
+                },
+            },
+            { upsert: true },
+        );
+    }
+
+    /**
+     * Which of these sandbox ids still have a lease doc (active or retired).
+     * The orphan sweep kills only the ids NOT in this set.
+     */
+    async findSandboxIdsWithLease(sandboxIds: string[]): Promise<Set<string>> {
+        if (sandboxIds.length === 0) return new Set();
+        const docs = await this.leaseModel
+            .find({ sandboxId: { $in: sandboxIds } })
+            .select('sandboxId')
+            .lean();
+        return new Set(docs.map((d) => d.sandboxId));
     }
 
     /**
@@ -210,13 +297,156 @@ export class SandboxLeaseRepository {
      */
     async findReadyToKill(
         now: Date,
-    ): Promise<Pick<SandboxLeaseModel, '_id' | 'sandboxId' | 'killAt'>[]> {
+    ): Promise<
+        Pick<
+            SandboxLeaseModel,
+            | '_id'
+            | 'sandboxId'
+            | 'killAt'
+            | 'killRetryCount'
+            | 'organizationId'
+        >[]
+    > {
         return this.leaseModel
             .find({
                 killAt: { $lte: now },
                 sandboxId: { $exists: true, $ne: '' },
             })
-            .select('_id sandboxId killAt')
+            .select('_id sandboxId killAt killRetryCount organizationId')
             .lean();
+    }
+
+    /**
+     * Atomically increment the reaper's kill-retry counter after a real
+     * `Sandbox.kill` failure (never on "already gone" — that deletes the
+     * doc immediately). Bounds the reaper's infinite-retry window (see
+     * MAX_KILL_RETRIES in sandbox-lease-reaper.service.ts).
+     */
+    async bumpKillRetry(prKey: string): Promise<void> {
+        await this.leaseModel.updateOne(
+            { _id: prKey },
+            { $inc: { killRetryCount: 1 } },
+        );
+    }
+
+    /**
+     * Atomically claim a local cleanup. Returns the doc only when prKey and
+     * sandboxId match and cleanup is not already in_progress or completed.
+     *
+     * @param requireLeaseCountZero When true, also requires leaseCount <= 0.
+     *   Used by release/invalidate to prevent deleting a local sandbox
+     *   directory while a concurrent acquire has re-incremented the lease
+     *   count (race between decrementLease and claimCleanup). The reaper
+     *   path passes false (default) because it force-reclaims regardless
+     *   of active leases (expired TTL = all leases are dead).
+     */
+    async claimCleanup(
+        prKey: string,
+        expectedSandboxId: string,
+        requireLeaseCountZero = false,
+    ): Promise<SandboxLeaseModel | null> {
+        const filter: Record<string, unknown> = {
+            _id: prKey,
+            sandboxId: expectedSandboxId,
+            cleanupStatus: {
+                $nin: [
+                    SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+                    SANDBOX_LEASE_CLEANUP_STATUS.COMPLETED,
+                ],
+            },
+        };
+        if (requireLeaseCountZero) {
+            filter.leaseCount = { $lte: 0 };
+        }
+        return this.leaseModel
+            .findOneAndUpdate(
+                filter,
+                {
+                    $set: {
+                        cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+                        cleanupRetryAt: null,
+                        cleanupStartedAt: new Date(),
+                    },
+                    $inc: { cleanupAttempts: 1 },
+                },
+                { new: true },
+            )
+            .exec();
+    }
+
+    /**
+     * Complete a local cleanup by deleting the lease doc.
+     * Only deletes when prKey, sandboxId, and cleanupStatus=IN_PROGRESS match.
+     */
+    async completeCleanup(
+        prKey: string,
+        expectedSandboxId: string,
+    ): Promise<boolean> {
+        const result = await this.leaseModel
+            .deleteOne({
+                _id: prKey,
+                sandboxId: expectedSandboxId,
+                cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+            })
+            .exec();
+        return result.deletedCount === 1;
+    }
+
+    /**
+     * Mark a local cleanup as failed. Sets a retry marker.
+     * Only updates when prKey, sandboxId, and cleanupStatus=IN_PROGRESS match.
+     */
+    async failCleanup(
+        prKey: string,
+        expectedSandboxId: string,
+        error: string,
+    ): Promise<boolean> {
+        const result = await this.leaseModel
+            .updateOne(
+                {
+                    _id: prKey,
+                    sandboxId: expectedSandboxId,
+                    cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+                },
+                {
+                    $set: {
+                        cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.FAILED,
+                        cleanupRetryAt: new Date(Date.now() + 60_000),
+                        cleanupError: error.slice(0, 500),
+                    },
+                },
+            )
+            .exec();
+        return result.modifiedCount === 1;
+    }
+
+    /**
+     * Reset stale in_progress cleanup claims left behind by a crashed worker.
+     * When a worker crashes after claiming cleanup (cleanupStatus=IN_PROGRESS)
+     * but before completing it, the lease gets stuck forever — claimCleanup
+     * rejects IN_PROGRESS docs. This method detects stale claims by checking
+     * cleanupStartedAt against a threshold (typically 5 minutes) and resets
+     * them to FAILED so the reaper can retry on the next tick.
+     */
+    async resetStaleCleanup(
+        prKey: string,
+        staleThreshold: Date,
+    ): Promise<void> {
+        await this.leaseModel
+            .updateOne(
+                {
+                    _id: prKey,
+                    cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS,
+                    cleanupStartedAt: { $lt: staleThreshold },
+                },
+                {
+                    $set: {
+                        cleanupStatus: SANDBOX_LEASE_CLEANUP_STATUS.FAILED,
+                        cleanupError:
+                            'Worker crash recovery — stale in_progress reset',
+                    },
+                },
+            )
+            .exec();
     }
 }

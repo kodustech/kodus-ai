@@ -5,14 +5,12 @@ import os from 'os';
 import {
     installCodexSessionHooks,
     removeCodexSessionHooks,
-} from '../memory/session-hooks-install-codex.js';
+} from '../trace/session-hooks-install-codex.js';
 
 let tmpDir: string;
 
 beforeEach(async () => {
-    tmpDir = await fs.mkdtemp(
-        path.join(os.tmpdir(), 'kodus-codex-hooks-'),
-    );
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kodus-codex-hooks-'));
 });
 
 afterEach(async () => {
@@ -40,7 +38,7 @@ describe('installCodexSessionHooks', () => {
 
         const content = await fs.readFile(configPath(), 'utf-8');
         expect(content).toContain(
-            'command = "kodus decisions hooks codex AfterAgent"',
+            'command = "kodus trace hooks codex AfterAgent"',
         );
     });
 
@@ -58,10 +56,7 @@ describe('installCodexSessionHooks', () => {
 
     it('preserves existing TOML content', async () => {
         await fs.mkdir(tmpDir, { recursive: true });
-        await fs.writeFile(
-            configPath(),
-            '[settings]\nmodel = "gpt-4"\n',
-        );
+        await fs.writeFile(configPath(), '[settings]\nmodel = "gpt-4"\n');
 
         await installCodexSessionHooks(configPath());
 
@@ -70,7 +65,7 @@ describe('installCodexSessionHooks', () => {
         expect(content).toContain('model = "gpt-4"');
         expect(content).toContain('[[hooks]]');
         expect(content).toContain(
-            'command = "kodus decisions hooks codex AfterAgent"',
+            'command = "kodus trace hooks codex AfterAgent"',
         );
     });
 });
@@ -83,7 +78,7 @@ describe('removeCodexSessionHooks', () => {
         expect(result.removed).toBe(true);
 
         const content = await fs.readFile(configPath(), 'utf-8');
-        expect(content).not.toContain('kodus decisions hooks codex');
+        expect(content).not.toContain('kodus trace hooks codex');
         expect(content).not.toContain('[[hooks]]');
     });
 
@@ -113,7 +108,7 @@ describe('removeCodexSessionHooks', () => {
         // Verify both hook blocks are present
         const contentBefore = await fs.readFile(configPath(), 'utf-8');
         expect(contentBefore).toContain('echo before-agent');
-        expect(contentBefore).toContain('kodus decisions hooks codex');
+        expect(contentBefore).toContain('kodus trace hooks codex');
 
         // Remove kodus hooks
         const result = await removeCodexSessionHooks(configPath());
@@ -128,6 +123,6 @@ describe('removeCodexSessionHooks', () => {
         expect(contentAfter).toContain('echo before-agent');
 
         // Kodus hooks should be gone
-        expect(contentAfter).not.toContain('kodus decisions hooks codex');
+        expect(contentAfter).not.toContain('kodus trace hooks codex');
     });
 });

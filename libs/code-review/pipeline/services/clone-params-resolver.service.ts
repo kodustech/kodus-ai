@@ -6,6 +6,29 @@ import { CliReviewPipelineContext } from '@libs/cli-review/pipeline/context/cli-
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
 /**
+ * Extract the host of a git remote, accepting both URL forms we deal with
+ * (`https://host/path` and the scp-like `git@host:path`).
+ */
+export function extractRemoteHost(url: string): string | undefined {
+    const value = url.trim();
+    if (!value) {
+        return undefined;
+    }
+
+    // scp-like (`git@host:path`) is not a parseable URL — match it first.
+    const scpLike = value.match(/^[^@\s/]+@([^:/]+):/);
+    if (scpLike) {
+        return scpLike[1].toLowerCase();
+    }
+
+    try {
+        return new URL(value).hostname.toLowerCase() || undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
  * Parse a git remote URL (HTTPS or SSH) into fullName/name parts.
  *
  * Accepts any number of path segments so hosts with nested namespaces work
@@ -116,13 +139,25 @@ export class CloneParamsResolverService {
             this.logger.warn({
                 message: `Could not parse git remote URL: ${gitContext.remote}`,
                 context: CloneParamsResolverService.name,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    remoteHost: extractRemoteHost(gitContext.remote),
+                },
             });
             return null;
         }
 
-        const platform = gitContext.inferredPlatform || PlatformType.GITHUB;
+        // The CLI can only infer a platform from well-known SaaS hostnames
+        // (github.com, gitlab.com, ...), so a self-managed host — GitLab
+        // CE/EE, Bitbucket Server, Gitea/Forgejo, GHES — arrives here
+        // undefined. Do NOT guess GitHub: getCloneParams would then hand back
+        // a github.com URL built from `fullName` and the sandbox would clone
+        // from the wrong server entirely (#1541). Left undefined,
+        // getCloneParams resolves the organization's connected integration.
+        const inferredPlatform = gitContext.inferredPlatform;
         const branch = gitContext.branch || 'main';
 
+        let platform = inferredPlatform;
         let authToken = '';
         let authUsername: string | undefined;
         let cloneUrl = gitContext.remote;
@@ -132,8 +167,30 @@ export class CloneParamsResolverService {
         // there's no integration row to find for anonymous traffic.
         if (gitContext.githubPat) {
             authToken = gitContext.githubPat;
-        } else {
+            platform = platform ?? PlatformType.GITHUB;
+        } else if (!cliContext?.isTrialMode) {
+            // Trial mode without a PAT skips this whole lookup: with no
+            // PAT, `context.organizationAndTeamData` is the placeholder
+            // `{organizationId: 'trial', teamId: 'trial'}`
+            // (public-pr-review.use-case.ts), not a real org — there is no
+            // integration row to look up. Querying it anyway threw "invalid
+            // input syntax for type uuid" against Postgres on every trial
+            // review (prod incident, 2026-09-14). It falls straight through
+            // to the `!platform` guard below with `platform` untouched:
+            // do NOT default it to GITHUB here (caught in review, PR
+            // #1954) — unlike the `githubPat` branch above, where the
+            // client explicitly signals "this is GitHub" by sending a
+            // GitHub-flavored token, a plain trial request carries no such
+            // signal, and forcing GITHUB would override that guard for
+            // exactly the self-managed hosts (GitLab CE/EE, GHES, Gitea) it
+            // exists to skip (#1541: "Do NOT guess GitHub" a few lines up).
+            // The intended case — a public github.com trial repo — already
+            // arrives with `inferredPlatform === GITHUB` from the hostname
+            // check above, so `platform` needs no help here.
             try {
+                // Passing an undefined platform is deliberate: getCloneParams
+                // then resolves the team's connected integration itself, which
+                // is the only thing that knows a self-managed host.
                 const cloneParams =
                     await this.codeManagementService.getCloneParams(
                         {
@@ -146,21 +203,47 @@ export class CloneParamsResolverService {
                             organizationAndTeamData:
                                 context.organizationAndTeamData,
                         },
-                        platform,
+                        inferredPlatform,
                     );
-                authToken = cloneParams.auth?.token || '';
-                authUsername = cloneParams.auth?.username;
 
-                if (cloneParams.url) {
-                    cloneUrl = cloneParams.url;
+                if (cloneParams) {
+                    authToken = cloneParams.auth?.token || '';
+                    authUsername = cloneParams.auth?.username;
+                    platform = cloneParams.provider ?? platform;
+
+                    if (cloneParams.url) {
+                        cloneUrl = cloneParams.url;
+                    }
                 }
             } catch (error) {
                 this.logger.warn({
                     message: `Could not get auth token for CLI sandbox, trying without auth`,
                     context: CloneParamsResolverService.name,
                     error,
+                    metadata: {
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                        remoteHost: extractRemoteHost(gitContext.remote),
+                        inferredPlatform,
+                    },
                 });
             }
+        }
+
+        // No integration and nothing inferable: we know neither the platform
+        // nor a credential, and platform drives the git auth header shape.
+        // Skip the sandbox instead of guessing — the review still runs, just
+        // without the sandbox-dependent stages.
+        if (!platform) {
+            this.logger.warn({
+                message: `Could not resolve the platform for the CLI sandbox remote; skipping sandbox`,
+                context: CloneParamsResolverService.name,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    remoteHost: extractRemoteHost(gitContext.remote),
+                },
+            });
+            return null;
         }
 
         // Ensure HTTPS (E2B requires HTTPS for token auth)
@@ -172,6 +255,12 @@ export class CloneParamsResolverService {
                 this.logger.warn({
                     message: `Could not parse SSH-like git remote URL: ${cloneUrl}`,
                     context: CloneParamsResolverService.name,
+                    metadata: {
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                        remoteHost: extractRemoteHost(cloneUrl),
+                        platform,
+                    },
                 });
                 return null;
             }

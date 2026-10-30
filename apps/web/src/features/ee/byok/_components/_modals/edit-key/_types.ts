@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { refineProviderCredentials } from "./credential-config";
+
 const baseFields = {
     provider: z.string().trim().min(1),
     model: z.string().trim().min(1),
@@ -34,45 +36,10 @@ export const createKeySchema = z
         apiKey: z.string().trim().optional().default(""),
     })
     .superRefine((data, ctx) => {
-        if (data.provider === "amazon_bedrock") {
-            const hasBearer = !!data.awsBearerToken?.trim();
-            const hasAccessKey = !!data.awsAccessKeyId?.trim();
-            const hasSecret = !!data.awsSecretAccessKey?.trim();
-            const hasAnyIam = hasAccessKey || hasSecret;
-
-            // Happy path: bearer token set → done.
-            if (hasBearer) return;
-
-            // User is clearly trying IAM (touched at least one field).
-            // Surface field-specific errors so they land next to the
-            // missing input, not on an unrelated bearer-token field.
-            if (hasAnyIam) {
-                if (!hasAccessKey) {
-                    ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
-                        path: ["awsAccessKeyId"],
-                        message: "Access Key ID is required",
-                    });
-                }
-                if (!hasSecret) {
-                    ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
-                        path: ["awsSecretAccessKey"],
-                        message: "Secret Access Key is required",
-                    });
-                }
-                return;
-            }
-
-            // Nothing filled in at all — nudge toward the recommended path.
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["awsBearerToken"],
-                message:
-                    "Paste a Bedrock API key, or expand Advanced to use IAM user credentials.",
-            });
-            return;
-        }
+        // A provider with bespoke credential rules (registered in
+        // credential-config) validates itself; if it handled things, skip the
+        // default. Everything else just needs an API key.
+        if (refineProviderCredentials(data, ctx)) return;
         if (!data.apiKey?.trim()) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,

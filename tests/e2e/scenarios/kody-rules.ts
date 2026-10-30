@@ -17,7 +17,7 @@ const log = logger("kody-rules");
 //   - the old flow took ~70s per run on sentry (large repo)
 //   - the fixture content is stable, so there's nothing per-run that needs
 //     to be authored from the test runner
-const FIXTURE_BRANCHES: Record<
+export const FIXTURE_BRANCHES: Record<
     string,
     { head: string; base: string } | undefined
 > = {
@@ -100,7 +100,7 @@ export const kodyRulesCreateAndApply: Scenario = {
         // human's rule is never touched.
         const swept = await sweepStaleE2ERules(ctx, session, String(repo.id));
         if (swept > 0) {
-            log.info(`[kody-rules] swept ${swept} stale e2e-rule-* rule(s) before creating a fresh one`);
+            log.info(`[kody-rules] swept ${swept} stale rule(s) (e2e-rule-* + auto-generated past_reviews) before creating a fresh one`);
         }
 
         const ruleName = `e2e-rule-${ctx.runId.slice(0, 8)}-${randomUUID().slice(0, 6)}`;
@@ -232,7 +232,14 @@ export const kodyRulesCreateAndApply: Scenario = {
                             ? resp.body.data.length
                             : 0;
                         return c > 0 ? c : null;
-                    }, { intervalSec: 3, timeoutSec: 60 })) ?? 0;
+                        // 150s, not 60s: the suggestion row is persisted
+                        // asynchronously AFTER the completion comment posts —
+                        // observed ~80s after MR open on bitbucket (the slowest
+                        // provider). Now that persistence (not the comment) is
+                        // the pass signal, the poll window must comfortably
+                        // clear that lag so "persisted slowly" is never mistaken
+                        // for "never persisted" (the Mongo frozen-object bug).
+                    }, { intervalSec: 3, timeoutSec: 150 })) ?? 0;
                 return { review, count };
             };
 
@@ -276,25 +283,31 @@ export const kodyRulesCreateAndApply: Scenario = {
                 ));
             }
 
-            // The scenario proves "a created rule is APPLIED to a fresh PR".
-            // Two independent signals confirm that; either suffices:
-            //   1. suggestionsCount>0 — a suggestion links back to OUR ruleId
-            //      (the strict signal; reliable now that sweepStaleE2ERules
-            //      guarantees no duplicate rule can absorb the blame).
-            //   2. the review visibly flagged the marker — the completion
-            //      comment names our rule or the TODO_REMOVE_ME substring.
-            // Relying on #1 alone made this brittle: when a duplicate rule
-            // existed the engine attributed the finding to the OTHER uuid, so
-            // the exact-id query returned 0 while the rule had plainly fired
-            // (gitlab, 2026-06-04). #2 catches that case deterministically.
+            // The scenario proves "a created rule is APPLIED to a fresh PR"
+            // and that the finding is PERSISTED — the strict signal is a
+            // suggestion linked back to OUR ruleId (suggestionsCount>0),
+            // reliable now that sweepStaleE2ERules guarantees no duplicate rule
+            // can absorb the blame (the old reason a fired rule could show 0).
+            //
+            // A visible marker in the completion comment is captured as a
+            // DIAGNOSTIC only — deliberately NOT part of the pass condition.
+            // It used to be OR'd in ("suggestionsCount>0 || markerFlagged"),
+            // but that masked the class of bug where Kody posts the comment
+            // (marker flagged) while nothing lands in Mongo — the Immer
+            // frozen-object regression (#1522/#1523) that silently dropped
+            // EVERY persisted suggestion for ~2 days. Requiring persistence
+            // here makes the matrix catch that outcome instead of green-washing
+            // "commented but stored nothing". Slow-but-eventual persistence is
+            // covered by the 150s suggestion poll above (~80s worst case), so a
+            // 0 that survives the poll means "never persisted" — the bug.
             const sampleText = (review.sample ?? "").toLowerCase();
             const reviewFlaggedMarker =
                 sampleText.includes(ruleName.toLowerCase()) ||
                 sampleText.includes("todo_remove_me");
 
             ctx.assert(
-                suggestionsCount > 0 || reviewFlaggedMarker,
-                `Rule ${ruleName} was not applied to PR ${opened.url}: 0 suggestions linked to its ruleId AND the review comment never flagged TODO_REMOVE_ME, even after a re-triggered review — the fixture branch contains explicit TODO_REMOVE_ME occurrences, so the rule pipeline ignored an active rule (real regression, not a propagation race). reviewSample(head)=${(review.sample ?? "").slice(0, 200)}`,
+                suggestionsCount > 0,
+                `Rule ${ruleName} produced no PERSISTED suggestion for PR ${opened.url}: 0 suggestions linked to its ruleId after the 150s persistence poll and a re-triggered review, even though the fixture branch contains explicit TODO_REMOVE_ME occurrences. This is either a rule-pipeline miss or a persistence regression (comment posted but nothing stored — the Immer frozen-object class). Diagnostic: the review comment ${reviewFlaggedMarker ? "DID" : "did NOT"} visibly flag the rule/marker${reviewFlaggedMarker ? " — comment posted but suggestion never persisted, which points at the persistence path, not the finder" : ""}. reviewSample(head)=${(review.sample ?? "").slice(0, 200)}`,
             );
 
             // Informational only — captured as evidence, not asserted on.
@@ -351,7 +364,7 @@ export const kodyRulesCreateAndApply: Scenario = {
 // /kody-rules/find-by-organization-id response. Shape is roughly
 // `{ data: [{ repositoryId, rules: [{ uuid, status }] }] }`, but we walk it
 // defensively so a response-shape tweak doesn't silently break the wait.
-function findRuleStatusById(
+export function findRuleStatusById(
     node: unknown,
     ruleId: string,
 ): string | undefined {
@@ -375,12 +388,13 @@ function findRuleStatusById(
     return undefined;
 }
 
-// Collect every {uuid, title} pair anywhere in the find-by-organization-id
-// response (shape ≈ `{ data: [{ repositoryId, rules: [{ uuid, title, … }] }] }`,
-// walked defensively). Used to find stale e2e rules to delete.
+// Collect every {uuid, title, origin} pair anywhere in the
+// find-by-organization-id response (shape ≈
+// `{ data: [{ repositoryId, rules: [{ uuid, title, origin, … }] }] }`, walked
+// defensively). Used to find stale e2e rules to delete.
 function collectRules(
     node: unknown,
-    out: Array<{ uuid: string; title: string }>,
+    out: Array<{ uuid: string; title: string; origin?: string }>,
 ): void {
     if (Array.isArray(node)) {
         for (const item of node) collectRules(item, out);
@@ -389,17 +403,29 @@ function collectRules(
     if (node && typeof node === "object") {
         const obj = node as Record<string, unknown>;
         if (typeof obj.uuid === "string" && typeof obj.title === "string") {
-            out.push({ uuid: obj.uuid, title: obj.title });
+            out.push({
+                uuid: obj.uuid,
+                title: obj.title,
+                origin:
+                    typeof obj.origin === "string" ? obj.origin : undefined,
+            });
         }
         for (const v of Object.values(obj)) collectRules(v, out);
     }
 }
 
-// Delete every `e2e-rule-*` rule left over from prior runs (crashes skip the
-// per-run finally). Best-effort — returns how many it deleted; a failed
-// delete just logs and is retried next run. Title-prefix scoped so a human
-// rule is never removed.
-async function sweepStaleE2ERules(
+// Delete stale rules left over from prior runs before creating a fresh one.
+// Two sources accumulate on the reused tenant:
+//   - `e2e-rule-*` rules a crashed run failed to delete in its `finally`.
+//   - `origin: past_reviews` rules the onboarding now auto-generates (the
+//     background 3-month backfill added in the kody-rules-generation hotfix).
+//     The scenario onboards every run, so without sweeping these the tenant
+//     climbs past the plan's rule cap and rule creation starts returning
+//     "Free plan's limit reached".
+// Best-effort — returns how many it deleted; a failed delete just logs and is
+// retried next run. Scoped to the `e2e-rule-` title prefix and auto-generated
+// origin so a human-authored rule is never removed.
+export async function sweepStaleE2ERules(
     ctx: RunContext,
     session: KodusSession,
     _repoId: string,
@@ -411,13 +437,17 @@ async function sweepStaleE2ERules(
             timeoutMs: 15_000,
         },
     );
-    const found: Array<{ uuid: string; title: string }> = [];
+    const found: Array<{ uuid: string; title: string; origin?: string }> = [];
     collectRules(listResp.body, found);
     // De-dupe (the same rule can appear under multiple repo groupings).
     const stale = [
         ...new Map(
             found
-                .filter((r) => /^e2e-rule-/.test(r.title))
+                .filter(
+                    (r) =>
+                        /^e2e-rule-/.test(r.title) ||
+                        r.origin === "past_reviews",
+                )
                 .map((r) => [r.uuid, r]),
         ).values(),
     ];

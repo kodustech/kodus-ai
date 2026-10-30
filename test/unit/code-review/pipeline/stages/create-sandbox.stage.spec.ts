@@ -5,6 +5,7 @@ import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
     AcquireResult,
+    SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
 import { CodeManagementService } from '@/platform/infrastructure/adapters/services/codeManagement.service';
@@ -52,7 +53,6 @@ describe('CreateSandboxStage', () => {
         overrides: Partial<CodeReviewPipelineContext> = {},
     ): CodeReviewPipelineContext =>
         ({
-            dryRun: { enabled: false },
             organizationAndTeamData: {
                 organizationId: '7e2e97b8-aefa-422e-92d4-30b378c0332e',
                 teamId: 'team-456',
@@ -133,10 +133,6 @@ describe('CreateSandboxStage', () => {
         stage = module.get<CreateSandboxStage>(CreateSandboxStage);
     });
 
-    it('should have correct stage name', () => {
-        expect(stage.stageName).toBe('CreateSandboxStage');
-    });
-
     describe('guard conditions', () => {
         it('should skip if sandbox already exists in context', async () => {
             const context = createBaseContext({
@@ -161,14 +157,6 @@ describe('CreateSandboxStage', () => {
 
             expect(mockLeaseManager.acquire).not.toHaveBeenCalled();
             expect(result.sandboxHandle).toBeDefined();
-        });
-
-        it('should skip if no changed files', async () => {
-            const context = createBaseContext({ changedFiles: [] });
-
-            const _result = await (stage as any).executeStage(context);
-
-            expect(mockLeaseManager.acquire).not.toHaveBeenCalled();
         });
 
         it('should proceed and acquire lease even when sandbox provider type is null', async () => {
@@ -255,19 +243,31 @@ describe('CreateSandboxStage', () => {
             );
         });
 
-        it('should handle lease acquisition failure gracefully', async () => {
+        it('logs an invalidation as a supersede (warn, not error) and continues', async () => {
+            // A PR closed / force-pushed mid-acquire surfaces as
+            // SandboxInvalidatedError — a supersede, not a failure. The stage
+            // must log it at warn (so it doesn't pollute error rates/alerts)
+            // and still continue self-contained.
             mockLeaseManager.acquire.mockRejectedValue(
-                new Error('Lease acquisition timeout'),
+                new SandboxInvalidatedError(
+                    '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:5',
+                    true,
+                ),
             );
 
             const context = createBaseContext({
                 changedFiles: [{ filename: 'test.ts' } as any],
             });
 
-            // Should NOT throw
             const result = await (stage as any).executeStage(context);
+            const logger = (stage as any).logger;
 
             expect(result.sandboxHandle).toBeUndefined();
+            expect(logger.warn).toHaveBeenCalled();
+            expect(logger.error).not.toHaveBeenCalled();
+            // The review is moot, so it is not reported as one that lost its
+            // checkout (#2066).
+            expect(result.sandboxSuperseded).toBe(true);
         });
 
         it('does not retry acquire itself — retry+backoff lives inside the lease manager', async () => {
@@ -287,6 +287,7 @@ describe('CreateSandboxStage', () => {
 
             expect(mockLeaseManager.acquire).toHaveBeenCalledTimes(1);
             expect(result.sandboxHandle).toBeUndefined();
+            expect(result.sandboxSuperseded).toBeUndefined();
         });
     });
 });

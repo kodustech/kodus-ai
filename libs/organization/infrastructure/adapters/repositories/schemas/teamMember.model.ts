@@ -1,4 +1,4 @@
-import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
 import { OrganizationModel } from './organization.model';
 import { TeamModel } from './team.model';
@@ -11,6 +11,17 @@ import { IProjectManagementMemberConfig } from '@libs/organization/domain/teamMe
 import { CoreModel } from '@libs/core/infrastructure/repositories/model/typeOrm';
 
 @Entity('team_member')
+// FKs create constraints, not indexes — every hot-path lookup that filters
+// by user_id / (organization_id, team_id) was doing a Seq Scan.
+@Index('IDX_team_member_user', ['user'], { concurrent: true })
+@Index('IDX_team_member_org_team', ['organization', 'team'], {
+    concurrent: true,
+})
+// Slack/Teams user lookup: communicationId is only set for members with a
+// linked chat identity, so a partial index skips the many-null rows. TypeORM
+// cannot emit `WHERE communicationId IS NOT NULL`, so synchronize:false and
+// the real CREATE lives in the accompanying migration.
+@Index('IDX_team_member_comm_id', { synchronize: false })
 export class TeamMemberModel extends CoreModel {
     @Column()
     name: string;

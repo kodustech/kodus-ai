@@ -1,0 +1,59 @@
+{
+    "name": "gitlab-chosen-reads-the-issue",
+    "issue": "#1884",
+    "trackers": [
+        {
+            "integrationId": "int-gitlab",
+            "appName": "GitLab",
+            "provider": "custom",
+            "category": null,
+            "responseShape": "gitlab",
+            "tools": [
+                {
+                    "name": "get_issue",
+                    "kind": "get",
+                    "idArg": "issue_iid",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "project_id": {
+                                "type": "string"
+                            },
+                            "issue_iid": {
+                                "type": "number"
+                            }
+                        },
+                        "required": ["project_id", "issue_iid"]
+                    }
+                }
+            ],
+            "extraWriteTools": ["create_issue"],
+            "tasks": [
+                {
+                    "id": "12",
+                    "title": "Scale servings",
+                    "description": "Cooks change servings and see amounts recalculated.",
+                    "acceptanceCriteria": [
+                        "Amounts are rounded to two decimals",
+                        "Servings below 1 are rejected"
+                    ]
+                }
+            ]
+        }
+    ],
+    "pullRequest": {
+        "title": "feat: scale servings",
+        "body": "Closes #12"
+    },
+    "expect": {
+        "outcome": "validated",
+        "criteria": [
+            "Amounts are rounded to two decimals",
+            "Servings below 1 are rejected"
+        ],
+        "toolsCalled": ["get_issue"]
+    },
+    "settings": {
+        "taskSource": "int-gitlab"
+    }
+}

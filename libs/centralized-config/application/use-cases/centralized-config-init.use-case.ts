@@ -10,9 +10,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CentralizedConfigDownloadUseCase } from './centralized-config-download.use-case';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { CentralizedConfigPrService } from '../../infrastructure/adapters/services/centralized-config-pr.service';
+import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 
 @Injectable()
-export class CentralizedConfigInitUseCase {
+export class CentralizedConfigInitUseCase implements IUseCase {
     private readonly logger = createLogger(CentralizedConfigInitUseCase.name);
 
     constructor(
@@ -235,6 +236,17 @@ export class CentralizedConfigInitUseCase {
         return existingParameter?.configValue?.enabled === true;
     }
 
+    /**
+     * Writes a fresh value on purpose — do NOT spread the existing parameter.
+     *
+     * `managedRepositoryIds` / `managedScopeRepositoryIds` record what a
+     * previous config repository owned. Carrying them into a new one would
+     * make the first sync treat repositories the new repo never mentioned as
+     * deletions. Dropping them costs one no-op reconcile round (the sync
+     * records the baseline and reconciles nothing when it is missing) and is
+     * the safe direction. The same holds for the disable paths here, in
+     * DeleteIntegrationUseCase, and in the CLI controller.
+     */
     private async enableCentralizedConfigForRepository(
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { id: string; name: string },

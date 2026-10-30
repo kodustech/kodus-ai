@@ -1,4 +1,5 @@
 import { AzureReposService } from './azureRepos.service';
+import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 /**
  * Regression test for issue #1045 / Bug B — Azure DevOps' API uses
@@ -47,9 +48,32 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
             orgName: 'fake-org',
             token: 'fake-token',
         });
-        jest.spyOn(service as any, 'getProjectIdFromRepository').mockResolvedValue(
-            stubRepository.project.id,
-        );
+        jest.spyOn(
+            service as any,
+            'getProjectIdFromRepository',
+        ).mockResolvedValue(stubRepository.project.id);
+    });
+
+    it('distinguishes no Kody vote from an unavailable Azure lookup', async () => {
+        (azureReposRequestHelper as any).getAuthenticatedUserId = jest
+            .fn()
+            .mockResolvedValue('kody');
+        (azureReposRequestHelper as any).getListOfPullRequestReviewers = jest
+            .fn()
+            .mockResolvedValueOnce([])
+            .mockRejectedValueOnce(new Error('Azure unavailable'));
+        const request = {
+            organizationAndTeamData: stubOrg,
+            repository: stubRepository,
+            prNumber: 42,
+        };
+
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(PullRequestReviewState.NONE);
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(null);
     });
 
     it('maps Azure `description` onto `body` while preserving the original `description` field', async () => {
@@ -110,6 +134,60 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
         expect(result?.body).toBe('');
     });
 
+    it('carries the source branch head commit as `head.sha` (issue #2028)', async () => {
+        // `getPullRequest` is the NORMALIZED read the code-review automation uses
+        // (libs/ee/automation/runCodeReview.use-case.ts), and the object it
+        // builds through `transformPullRequest` exposed `head` as `{ ref, repo }`
+        // only. The reviewed-commit pin that anchors inline review comments on
+        // the commit the review actually read reads `pullRequest.head.sha`, so on
+        // Azure it could never activate: a push landing mid-review moved every
+        // anchor, and the returned `lastAnalyzedCommit` reported the pushed
+        // commits as already analyzed so the next incremental run skipped them —
+        // the bug #2012 fixes, left in place on this platform (#2028 review).
+        azureReposRequestHelper.getPullRequestDetails.mockResolvedValue({
+            id: 2028,
+            title: 'feat: anchored comments',
+            description: 'body',
+            sourceRefName: 'refs/heads/feature/anchors',
+            repository: stubRepository,
+            lastMergeSourceCommit: { commitId: 'a1b2c3d4e5f6' },
+            lastMergeTargetCommit: { commitId: 'target-commit' },
+        });
+
+        const result = await service.getPullRequest({
+            organizationAndTeamData: stubOrg,
+            repository: stubRepository,
+            prNumber: 2028,
+        });
+
+        expect(result?.head?.sha).toBe('a1b2c3d4e5f6');
+        expect(result?.base?.sha).toBe('target-commit');
+        // The ref keeps its existing shape (the `refs/heads/` prefix stripped).
+        expect(result?.head?.ref).toBe('feature/anchors');
+    });
+
+    it('normalizes a missing source commit to an empty sha, not an invented one', async () => {
+        // `transformPullRequest` maps `lastMergeSourceCommit?.commitId ?? ''`
+        // (main's normalization), and an empty string is what keeps the pin off:
+        // the caller reads `pullRequest.head.sha` and only pins when it is
+        // truthy, so "Azure reported no commit" falls back to the live head
+        // exactly as before.
+        azureReposRequestHelper.getPullRequestDetails.mockResolvedValue({
+            id: 2029,
+            title: 'chore: no commit info',
+            sourceRefName: 'refs/heads/main',
+            repository: stubRepository,
+        });
+
+        const result = await service.getPullRequest({
+            organizationAndTeamData: stubOrg,
+            repository: stubRepository,
+            prNumber: 2029,
+        });
+
+        expect(result?.head?.sha).toBe('');
+    });
+
     it('returns null when the upstream helper returns null (no PR found)', async () => {
         azureReposRequestHelper.getPullRequestDetails.mockResolvedValue(null);
 
@@ -135,28 +213,82 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
 
         expect(result).toBeNull();
     });
+});
 
-    /**
-     * Anti-regression — the bug shape this test guards against is:
-     * the method returning the raw Azure object without mapping
-     * description→body, leaving downstream consumers with
-     * `pr.body === undefined`. If anyone refactors and forgets the
-     * spread, this assertion fails immediately.
-     */
-    it('does NOT regress to returning the raw Azure object (anti-regression)', async () => {
-        azureReposRequestHelper.getPullRequestDetails.mockResolvedValue({
-            id: 1,
-            description: 'something',
+/**
+ * Regression test for "fix(platform): rethrow transient fetch failures
+ * from getCommits swallow" (2026-07-29): getCommitsForPullRequestForCodeReview
+ * used to swallow EVERY error into `null`, which upstream collapses to "PR
+ * has no commits" — createLineComments then anchors zero inline comments
+ * and the review ships with suggestionsCount.sent=0, reporting SUCCESS,
+ * with the real cause never surfaced. A 429 or a transient network failure
+ * must now rethrow so callers can tell a failed fetch apart from a
+ * genuinely empty commit list; a non-transient error (e.g. a real 404)
+ * keeps the historical null contract.
+ */
+describe('AzureReposService.getCommitsForPullRequestForCodeReview — transient-failure rethrow', () => {
+    let service: AzureReposService;
+    let azureReposRequestHelper: { getCommitsForPullRequest: jest.Mock };
+
+    const params = {
+        organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+        repository: { name: 'repo', id: 'repo-1', project: { id: 'proj-1' } },
+        prNumber: 42,
+    };
+
+    beforeEach(() => {
+        azureReposRequestHelper = {
+            getCommitsForPullRequest: jest.fn(),
+        };
+
+        service = new AzureReposService(
+            {} as any,
+            {} as any,
+            {} as any,
+            azureReposRequestHelper as any,
+            {} as any,
+            undefined,
+        );
+
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+            orgName: 'fake-org',
+            token: 'fake-token',
+        });
+        jest.spyOn(
+            service as any,
+            'getProjectIdFromRepository',
+        ).mockResolvedValue('proj-1');
+    });
+
+    it('rethrows on a transient (undici) fetch failure instead of returning null', async () => {
+        azureReposRequestHelper.getCommitsForPullRequest.mockRejectedValue(
+            new TypeError('fetch failed'),
+        );
+
+        await expect(
+            service.getCommitsForPullRequestForCodeReview(params as any),
+        ).rejects.toThrow('fetch failed');
+    });
+
+    it('rethrows on a 429', async () => {
+        azureReposRequestHelper.getCommitsForPullRequest.mockRejectedValue({
+            status: 429,
+            message: 'Too Many Requests',
         });
 
-        const result = await service.getPullRequestByNumber({
-            organizationAndTeamData: stubOrg,
-            repository: stubRepository,
-            prNumber: 1,
-        });
+        await expect(
+            service.getCommitsForPullRequestForCodeReview(params as any),
+        ).rejects.toMatchObject({ status: 429 });
+    });
 
-        expect(result).toHaveProperty('body');
-        expect(result?.body).not.toBeUndefined();
+    it('still returns null (historical contract) for a non-transient error', async () => {
+        azureReposRequestHelper.getCommitsForPullRequest.mockRejectedValue(
+            new Error('Repository not found'),
+        );
+
+        await expect(
+            service.getCommitsForPullRequestForCodeReview(params as any),
+        ).resolves.toBeNull();
     });
 });
 
@@ -217,9 +349,7 @@ describe('AzureReposService.getFilesByPullRequestId — current behavior (charac
     beforeEach(() => {
         azureReposRequestHelper = {
             getPullRequestDetails: jest.fn().mockResolvedValue(prDetails()),
-            getIterations: jest
-                .fn()
-                .mockResolvedValue([{ id: 1 }, { id: 2 }]),
+            getIterations: jest.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]),
             getChanges: jest.fn().mockResolvedValue([]),
             getFileContent: jest
                 .fn()

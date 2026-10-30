@@ -2,6 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { PullRequestClassifierService } from '@libs/ee/analytics-warehouse';
+import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
+
+const LOCK_KEY = 'CRON:ANALYTICS_CLASSIFIER';
+// 25min TTL for a 30min-tick cron. Auto-clears on crashes without
+// letting a runaway hold the slot into the next tick.
+const LOCK_TTL_MS = 25 * 60 * 1000;
 
 /**
  * Cron wrapper that drives `PullRequestClassifierService` on a schedule.
@@ -9,12 +15,13 @@ import { PullRequestClassifierService } from '@libs/ee/analytics-warehouse';
  * so bug-ratio and other "by type" aggregates have ground truth.
  *
  * Tunable via `ANALYTICS_CLASSIFIER_CRON` (standard cron expression).
- * Default = every 15 minutes. Disable with `ANALYTICS_CLASSIFIER_DISABLED=true`.
+ * Default = every 30 minutes. Disable with `ANALYTICS_CLASSIFIER_DISABLED=true`.
  *
- * Concurrency: same in-memory mutex trick as `AnalyticsIngestionCron`.
- * Two ticks overlapping would mostly be wasted work (both picking the
- * same unclassified rows) — the upserts are idempotent but the LLM
- * cost would double.
+ * Concurrency: 15 worker replicas in prod. Without a distributed lock
+ * every replica would call the LLM on the same unclassified rows every
+ * 30min — the upserts are idempotent so the DB stays correct, but the
+ * OpenAI spend multiplies by 15. Local `running` mutex still catches
+ * same-node reentry.
  */
 @Injectable()
 export class AnalyticsClassifierCron {
@@ -23,6 +30,7 @@ export class AnalyticsClassifierCron {
 
     constructor(
         private readonly classifier: PullRequestClassifierService,
+        private readonly distributedLockService: DistributedLockService,
     ) {}
 
     // `||` so that docker-compose's `${VAR:-}` empty-string fallthrough
@@ -43,6 +51,22 @@ export class AnalyticsClassifierCron {
             return;
         }
 
+        const lock = await this.distributedLockService
+            .acquire(LOCK_KEY, { ttl: LOCK_TTL_MS })
+            .catch((err: unknown) => {
+                this.logger.warn(
+                    `analytics classifier lock acquire threw: ${err instanceof Error ? err.message : String(err)}`,
+                );
+                return null;
+            });
+
+        if (!lock) {
+            this.logger.log(
+                'skipping analytics classifier — another replica holds the lock',
+            );
+            return;
+        }
+
         this.running = true;
         const start = Date.now();
         try {
@@ -59,6 +83,11 @@ export class AnalyticsClassifierCron {
             );
         } finally {
             this.running = false;
+            await lock.release().catch((err: unknown) => {
+                this.logger.warn(
+                    `analytics classifier lock release failed: ${err instanceof Error ? err.message : String(err)}`,
+                );
+            });
         }
     }
 }

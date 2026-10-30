@@ -43,10 +43,7 @@ export function formatCategoryBadge(category: string): string {
     return categoryMap[category] || category;
 }
 
-export function generateFixPrompt(
-    file: string,
-    issues: ReviewIssue[],
-): string {
+export function generateFixPrompt(file: string, issues: ReviewIssue[]): string {
     let prompt = `Fix the following issues in ${file}:\n\n`;
 
     issues.forEach((issue, index) => {

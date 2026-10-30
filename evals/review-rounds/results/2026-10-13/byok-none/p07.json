@@ -1,0 +1,2173 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "8d22cf93b7b767539c70cf6d879db8b39e0dbdde1464815e132caf5145e6d525"
+  },
+  "startedAt": "2026-10-13T21:22:45.631Z",
+  "updatedAt": "2026-10-13T21:38:42.655Z",
+  "complete": true,
+  "selectedCases": [
+    "P07-rule-absent-assert-cast-rewritten",
+    "P07-rule-absent-assert-cast-rewritten-control",
+    "P08-rule-bottom-cast-moved-to-helper",
+    "P08-rule-bottom-cast-moved-to-helper-control",
+    "P09-rule-changelog-entry-still-deferred",
+    "P09-rule-changelog-entry-still-deferred-control"
+  ],
+  "summary": {
+    "measured": 30,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 15,
+        "violations": 14,
+        "rate": 0.933
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 45,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 60,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P07-rule-absent-assert-cast-rewritten · absent-cast-repeat [not_deliver]": {
+        "pass": 1,
+        "n": 5,
+        "delivered": 4
+      },
+      "P07-rule-absent-assert-cast-rewritten · absent-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P07-rule-absent-assert-cast-rewritten-control · absent-cast-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P07-rule-absent-assert-cast-rewritten-control · absent-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P08-rule-bottom-cast-moved-to-helper · bottom-cast-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P08-rule-bottom-cast-moved-to-helper · bottom-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P08-rule-bottom-cast-moved-to-helper-control · bottom-cast-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P08-rule-bottom-cast-moved-to-helper-control · bottom-cast-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P09-rule-changelog-entry-still-deferred · changelog-deferred-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P09-rule-changelog-entry-still-deferred · changelog-deferred-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P09-rule-changelog-entry-still-deferred-control · changelog-deferred-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P09-rule-changelog-entry-still-deferred-control · changelog-deferred-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 34081,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P07-rule-absent-assert-cast-rewritten",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/pricing/quote.test.ts:15` (2026-10-06 12:00 UTC).\n\nCasting with `as unknown as Discount | null` defeats the absence assertion: if `quote.discount`'s type changes, the test keeps compiling and stops catching the regression. Assert absence on the value as it is with `expect(quote.discount).toBeNull()`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `undefined as unknown as Coupon` cast makes the check type-check even if the field's type changes, so it no longer detects the regression. Assert absence on the value as it is with `expect(quote.appliedCoupon).toBeUndefined()`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20512,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `as unknown as Discount | null` cast hides the real type of `quote.discount` and would keep the assertion compiling even if the field's type changed. This is the actual-value variant of the cast, so assert absence on the value as it is with `expect(quote.discount).toBeNull()`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the expected value with `undefined as unknown as Coupon` and using `.toEqual` instead of an absence matcher means the check no longer verifies the real type of `quote.appliedCoupon`. Assert it directly with `expect(quote.appliedCoupon).toBeUndefined()`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22113,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the actual value with `as unknown as Discount | null` hides the real type of `quote.discount`, so the test keeps compiling even if the field's type changes, and it violates the rule \"Assert absent values without casts\". Assert absence on the value as it is with `expect(quote.discount).toBeNull()`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the expected value with `as unknown as Coupon` defeats type-checking of the absence check and would keep compiling even if `quote.appliedCoupon` changed type, violating the rule \"Assert absent values without casts\". Assert absence on the value as it is with `expect(quote.appliedCoupon).toBeUndefined()`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18523,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "In `src/pricing/quote.test.ts`, the double cast hides the real type of `quote.appliedCoupon` and keeps the check compiling even if the field changes type, so the test can no longer catch that and it violates 'Assert absent values without casts'. Assert absence directly on the value with `expect(quote.appliedCoupon).toBeUndefined()` instead of casting to `undefined as unknown as Coupon`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P07-rule-absent-assert-cast-rewritten",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16034,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `as unknown as Discount | null` cast violates the \"Assert absent values without casts\" rule and hides the real type of `quote.discount`, so the test keeps compiling if that field's type changes and can no longer catch it. Assert absence directly on the value with `expect(quote.discount).toBeNull()`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `as unknown as Coupon` double cast violates the \"Assert absent values without casts\" rule and defeats the type check, hiding the real type of `quote.appliedCoupon` so a change to that field's type goes unnoticed. Assert absence directly with `expect(quote.appliedCoupon).toBeUndefined()`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P07-rule-absent-assert-cast-rewritten-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 19624,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the actual value with `as unknown as Discount | null` bypasses type-checking and violates rule 21, which requires asserting absence on the value as it is. Drop the cast and assert `toBeNull()` directly on `quote.discount`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the expected value with `as unknown as Coupon` hides the type mismatch, and rule 21 forbids casting either the actual or the expected value. Assert `quote.appliedCoupon` as it is with `toBeUndefined()`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/pricing/quote.test.ts",
+          "line": 23,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-names"
+          ],
+          "marked": false,
+          "text": "Rule 22 asks test titles to describe observable behavior, and `ignores an expired coupon` arguably already does so. No change is required if the reviewer accepts this title as behavior-describing."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P07-rule-absent-assert-cast-rewritten-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 17252,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the actual value with `as unknown as Discount | null` bypasses the type checker and violates Rule 21 when asserting absence. Assert on `quote.discount` as it is with `toBeNull()` (or `toBeUndefined()`) instead of casting."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the expected value with `undefined as unknown as Coupon` bypasses the type checker and violates Rule 21 when asserting an absent `appliedCoupon`. Assert on `quote.appliedCoupon` as it is with `toBeUndefined()` instead of casting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P07-rule-absent-assert-cast-rewritten-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 23156,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the actual value with `as unknown as Discount | null` bypasses the intended absence check and violates Rule 21, which requires `toBeNull()`/`toBeUndefined()` on the value as it is. Remove the `as unknown as Discount | null` cast from the actual value."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Casting the expected value with `as unknown as Coupon` bypasses the intended absence check and violates Rule 21, which requires `toBeUndefined()`/`toBeNull()` without casting. Replace `toEqual(undefined as unknown as Coupon)` with `toBeUndefined()` on `quote.appliedCoupon` without the cast."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P07-rule-absent-assert-cast-rewritten-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 18990,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Rule 21 requires asserting absence on the value as it is, so casting `quote.discount` with `as unknown as Discount | null` hides the type mismatch the rule is meant to catch. Drop the cast and assert directly on `quote.discount`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "Rule 21 forbids casts on the actual or expected value for absence checks, and `as unknown as Coupon` obscures the real type of `quote.appliedCoupon`. Use `toBeUndefined()` on `quote.appliedCoupon` as it is."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P07-rule-absent-assert-cast-rewritten-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 23664,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/pricing/quote.test.ts",
+          "line": 15,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `as unknown as Discount | null` cast hides the actual type and violates Rule 21, which requires asserting absence on the value as it is. Change the assertion to `expect(quote.discount).toBeNull()` and drop the cast."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/pricing/quote.test.ts",
+          "line": 25,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-test-absent-no-cast"
+          ],
+          "marked": false,
+          "text": "The `as unknown as Coupon` cast hides that this is an absence assertion and violates Rule 21, which requires checking the value as it is. Replace the `toEqual(undefined as unknown as Coupon)` assertion with `expect(quote.appliedCoupon).toBeUndefined()`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "absent-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "absent-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 59662,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 4,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The helper reintroduces the forbidden `fields as unknown as InvoiceEventMap[K]` cast, which silences the compiler via `as unknown as T` so a missing or misnamed field in the `paid` payload can reach subscribers with no compile error, and this rule 21 violation at the helper replacing the previously fixed `as never` means the earlier suggestion does not resolve it. Type the parameter as `InvoiceEventMap[K]` and return it directly so the object literal at the call site is checked against the event type."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The new `refunded` method publishes the payload with `payload as never`, which rule 21 explicitly bans because `as never` disables all type checking, so a missing `reason` or a renamed field would be delivered to subscribers silently. Construct the payload so it matches `InvoiceEventMap['invoice.refunded']`, for example via the typed `payloadFor` helper, instead of casting through `never`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36926,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The helper's double cast through `unknown` (`as unknown as InvoiceEventMap[K]`) silences the compiler and hides missing or misnamed fields from call sites. Since the generic signature already ties the returned type to `K`, return `fields as InvoiceEventMap[K]` (or type `fields` as `InvoiceEventMap[K]` directly) so mistakes are caught at the call sites."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `payload as never` bottom-type cast silences the compiler and lets missing or misnamed fields slip past compile time. Type the payload as `InvoiceEventMap['invoice.refunded']` and drop the cast so the `publish` call is checked."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 47615,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/invoice-publisher.ts:8` (2026-10-06 12:00 UTC).\n\nCasting through `unknown` silences the compiler, so a missing or misnamed field can still reach subscribers without a compile error, and moving that cast into `payloadFor` does not resolve it. Give `fields` the type `InvoiceEventMap[K]` (or make the helper accept the mapped type directly) and return it uncast."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `payload as never` cast hides a missing or misnamed refund field by silencing the compiler for `invoice.refunded`. Route it through the typed helper (or type `payload` as `InvoiceEventMap['invoice.refunded']`) so `publish` type-checks the event fields instead of relying on `as never`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 91866,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 4,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/invoice-publisher.ts:8` (2026-10-06 12:00 UTC).\n\nBecause `payloadFor` still uses `fields as unknown as InvoiceEventMap[K]`, every payload passed through it bypasses compiler checks and a missing or misnamed field will not be caught, violating rule 21 (No casts through never or unknown) and repeating the `as never` issue flagged on the paid payload. Type the `fields` parameter as `InvoiceEventMap[K]` so callers are checked and the cast can be dropped."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/invoice-publisher.ts:8` (2026-10-06 12:00 UTC).\n\nThe `as never` cast on the refunded payload violates rule 21 (No casts through never or unknown) and, like the cast removed from the paid event, lets a missing or misnamed field in the refunded payload reach subscribers without a compile error. Replace `payload as never` with `payload as InvoiceEventMap['invoice.refunded']` or construct it via `payloadFor` so `publish` can type-check it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P08-rule-bottom-cast-moved-to-helper",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 31953,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/invoice-publisher.ts:8` (2026-10-06 12:00 UTC).\n\n`payloadFor` still double-casts through `unknown` at `fields as unknown as InvoiceEventMap[K]`, so the rule 21 violation flagged for the `paid` payload's `as never` remains, just relocated. Give the function a properly typed parameter and return type, or validate and narrow with a type guard, instead of casting through a top type."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P08-rule-bottom-cast-moved-to-helper",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/invoice-publisher.ts:8` (2026-10-06 12:00 UTC).\n\nUsing `payload as never` on the new `refunded` path silences the compiler instead of letting `publish` check the payload shape against `InvoiceEventMap['invoice.refunded']`, reintroducing the rule 21 violation previously flagged for the `paid` payload. Type the payload as the event map's value or narrow it, and drop the cast."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P08-rule-bottom-cast-moved-to-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 84732,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `payloadFor` cast through `unknown` (`fields as unknown as InvoiceEventMap[K]`) silences the compiler and violates rule 21. Give the parameter the correct generic type such as `fields: InvoiceEventMap[K]` and return it directly, or validate it with a type guard instead of casting through the top type."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "Casting the refund payload through `never` to force it into `publish` violates rule 21. Construct the payload with the same typed helper used by `paid`, or give `payload` the correct `InvoiceEventMap['invoice.refunded']` type, so no `as never` cast is needed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P08-rule-bottom-cast-moved-to-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 24633,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "Casting `fields` through `unknown` to reach `InvoiceEventMap[K]` is exactly the double-cast the rule forbids. Give the payload the right type, or have callers pass a properly typed object so the generic resolves without a bottom/top type bridge."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "Casting through the bottom type with `payload as never` bypasses the event map type check, which the rule prohibits. Type the payload as `InvoiceEventMap['invoice.refunded']` (or use the typed helper) instead of asserting `as never`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P08-rule-bottom-cast-moved-to-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 37388,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "Casting through `unknown` silences the compiler instead of giving the value its correct type, which rule 21 forbids. Type the `fields` parameter as `InvoiceEventMap[K]` so no cast is needed, or narrow the value with a type guard before returning."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "Casting the payload `as never` forces it through `publish` and silences the compiler rather than typing the value. Build the payload with the same typed helper used for `invoice.paid`, or otherwise give it the concrete `InvoiceEventMap['invoice.refunded']` type."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P08-rule-bottom-cast-moved-to-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 42030,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `fields as unknown as InvoiceEventMap[K]` double-cast through the top type `unknown` silences the compiler, which rule 21 forbids. Since `fields: object` is not assignable to `InvoiceEventMap[K]` directly, make `payloadFor` generic over the fields or accept `InvoiceEventMap[K]` instead of double-casting."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "Casting the payload through the bottom type `never` makes the publish call type-check at the cost of violating rule 21. Type the payload as `InvoiceEventMap['invoice.refunded']` (or use the `payloadFor` helper as the `paid` path does) so no cast is needed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P08-rule-bottom-cast-moved-to-helper-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 33456,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 5,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "The `payloadFor` helper's double cast through `unknown` (`as unknown as InvoiceEventMap[K]`) silences the compiler and violates rule 21 in application code. Since callers already pass the correct fields, give the value the right type with a single direct assertion or an overload per topic instead of the `unknown` hop."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/invoice-publisher.ts",
+          "line": 22,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-bottom-casts"
+          ],
+          "marked": false,
+          "text": "Casting `payload as never` through a bottom type silences the compiler and violates rule 21. Because the payload matches `InvoiceEventMap['invoice.refunded']`, type the local with that event map entry (or route it through the same helper as `paid`) and publish without the cast."
+        }
+      ],
+      "claims": [
+        {
+          "id": "bottom-cast-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "bottom-cast-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26535,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The `TBD` placeholder in the Webhooks entry can be lost before release, leaving the retry behavior undocumented. Write the full entry in this PR stating the retry behavior, or drop the dangling clause."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 12,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `CHANGELOG.md:11` (2026-10-06 12:00 UTC).\n\nThe `follow-up PR` deferral remains after the earlier change only adjusted wording, so the released notes would still ship an incomplete column list. List every new tax column (`tax_rate`, `tax_cents`, `tax_jurisdiction`) in this entry now."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33235,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Because `CHANGELOG.md` is read at release time, deferring `Retry details TBD.` in the `Webhooks` entry violates the rule `Changelog entry lands with the change`, and the released notes would ship incomplete. Write the full retry behavior in this PR instead of deferring it."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `CHANGELOG.md:11` (2026-10-06 12:00 UTC).\n\nThe `Exports` entry in `CHANGELOG.md` still contains `The full column list will be added to this entry in a follow-up PR.` in the added lines, so despite an earlier suggestion the released notes would ship incomplete contrary to the rule `Changelog entry lands with the change`. Replace that deferred sentence with the final content listing every new tax column in this PR."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19031,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The Webhooks entry's \"Retry details TBD\" is easy to lose by release time, so the shipped notes would be incomplete despite the rule that a changelog entry lands with the change. Write the full entry in this PR, describing the retry behaviour of `invoice.paid`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `CHANGELOG.md:11` (2026-10-06 12:00 UTC).\n\nBecause the rewrite only reworded the deferral (\"will update this entry later\" became \"will be added in a follow-up PR\"), the Exports entry still violates the rule that a changelog entry lands with the change and the released notes would ship incomplete. Replace this line with the actual list of new tax columns so the entry is complete in this PR."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20695,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Since the changelog is read at release time and a deferred placeholder is easy to lose, the released notes would ship incomplete. Write the full Webhooks entry in this PR, including the retry details."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 12,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `CHANGELOG.md:11` (2026-10-06 12:00 UTC).\n\nThe released notes would ship incomplete because the promised follow-up for the Exports entry is easy to lose by release time. Write the final entry in this PR, listing every new tax column, including `tax_rate` and `tax_cents`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P09-rule-changelog-entry-still-deferred",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39804,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "In `CHANGELOG.md`, the Webhooks entry's \"Retry details TBD\" placeholder violates \"Changelog entry lands with the change\" and leaves the released notes incomplete. Write the retry details now or drop the unfinished sentence."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 12,
+          "severity": "low",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P09-rule-changelog-entry-still-deferred",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `CHANGELOG.md:11` (2026-10-06 12:00 UTC).\n\nIn `CHANGELOG.md`, the Exports entry still defers the full tax column list to a follow-up even though the earlier review asked for the final entry in this PR and the line was only reworded, violating \"Changelog entry lands with the change\" and leaving the released notes incomplete. List the complete set (`tax_rate`, `tax_cents`, and others) now and remove the deferral sentence."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P09-rule-changelog-entry-still-deferred-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 24629,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Deferring the retry details leaves the `invoice.paid` webhook change incompletely documented, and rule [1] requires every user-visible change to be written in full in the same PR without placeholders like TBD. Remove the deferred clause or write the retry details now."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 12,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Deferring the full tax column list (including `tax_rate` and `tax_cents`) to a follow-up PR violates rule [1] and leaves the CSV export change incompletely documented. Write the full column list in this PR, or drop the deferral sentence."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P09-rule-changelog-entry-still-deferred-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 17048,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Deferring the `invoice.paid` webhook change with \"Retry details TBD.\" violates rule 1, which requires changelog entries to be written in full in the same PR. Replace the placeholder with the actual retry details, or drop the sentence if there is nothing to document."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 12,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Deferring the full column list with \"The full column list will be added to this entry in a follow-up PR.\" violates rule 1, which requires the entry to be complete in this PR. List the full column set now and remove the follow-up sentence."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P09-rule-changelog-entry-still-deferred-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 26851,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The `Retry details TBD` placeholder leaves the changelog entry incomplete, which the rule prohibits. Replace it with the actual retry details such as the backoff schedule and attempt count, or drop the retry mention entirely."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The phrase \"in a follow-up PR\" defers the entry's content and leaves the changelog incomplete, which the rule prohibits. Spell out the full column list in this PR, or remove the sentence if the list is not needed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P09-rule-changelog-entry-still-deferred-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 19398,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "The `Retry details TBD` placeholder leaves the changelog entry incomplete and violates the rule that entries must be written in full in the same PR without placeholders such as `TBD`, `will update later`, `to follow` or `in a follow-up PR`. Include the retry details now or remove the deferred clause so the entry is complete."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Deferring the full column list to a follow-up PR violates the rule and leaves the Exports entry not self-contained. Write the complete column list (`tax_rate`, `tax_cents`, `tax_jurisdiction`, `tax_exempt_cents`) in this same PR or omit the deferred sentence."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P09-rule-changelog-entry-still-deferred-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 18531,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "CHANGELOG.md",
+          "line": 7,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "`Retry details TBD` leaves the entry incomplete, which rule [1] forbids because a changelog entry must be written in full in the same PR with no \"TBD\"/\"will update later\"/\"to follow\" placeholders. Describe the retry behaviour in full now, or drop the deferred clause until it can be stated completely."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "CHANGELOG.md",
+          "line": 13,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-changelog-entry-final"
+          ],
+          "marked": false,
+          "text": "Deferring the column list to a follow-up PR leaves this entry incomplete, which rule [1] explicitly prohibits. Write the full column list into this entry in the same PR instead of promising it later."
+        }
+      ],
+      "claims": [
+        {
+          "id": "changelog-deferred-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        },
+        {
+          "id": "changelog-deferred-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

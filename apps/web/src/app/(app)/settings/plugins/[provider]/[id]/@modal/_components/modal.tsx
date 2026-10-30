@@ -37,18 +37,18 @@ import {
     CUSTOM_MCP_SESSION_STORAGE_KEYS,
     KODUS_ISSUES_INTEGRATION_ID,
 } from "@services/mcp-manager/types";
-import { useSelectedTeamId } from "src/core/providers/selected-team-context";
-
-import { resolveConnectionRef } from "./resolve-connection-ref";
+import { useMCPPluginsLimit } from "@services/mcp-manager/use-mcp-plugins-limit";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { EditIcon, PlugIcon, RefreshCwIcon, Trash } from "lucide-react";
+import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import type { AwaitedReturnType } from "src/core/types";
+import { countInstalledPlugins } from "src/core/utils/mcp-plugins/compute-locked-plugins";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
-import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { AuthMethodConnect } from "./auth-method-connect";
 import { RequiredConfiguration } from "./required-configuration";
+import { resolveConnectionRef } from "./resolve-connection-ref";
 import { SelectTools } from "./select-tools";
 
 export const PluginModal = ({
@@ -62,37 +62,23 @@ export const PluginModal = ({
 }) => {
     const router = useRouter();
     const { toast } = useToast();
-    const subscription = useSubscriptionStatus();
-
-    const mcpPluginsLimits = useMemo(() => {
-        const total = installedPlugins.length;
-
-        if (!subscription.valid)
-            return {
-                total,
-                canAddMoreRules: false,
-                limit: Number.POSITIVE_INFINITY,
-            };
-
-        if (
-            subscription.status === "free" ||
-            subscription.status === "self-hosted"
-        )
-            return { canAddMoreRules: total < 3, total, limit: 3 };
-
-        if (subscription.status === "licensed-self-hosted")
-            return {
-                canAddMoreRules: true,
-                total,
-                limit: Number.POSITIVE_INFINITY,
-            };
-
-        return {
-            canAddMoreRules: true,
-            total,
-            limit: Number.POSITIVE_INFINITY,
-        };
-    }, [subscription, installedPlugins]);
+    // Must agree with PluginsGrid's count — default (system-managed)
+    // plugins like "Kodus MCP" don't consume the free-plan cap, so
+    // counting raw `.length` here could block a valid install that the
+    // grid itself would've allowed.
+    const mcpPluginsLimits = useMCPPluginsLimit(
+        countInstalledPlugins(installedPlugins),
+    );
+    // Same filter as the count above: default (system-managed) plugins don't
+    // consume a slot, so naming them as the reason this install is blocked
+    // would be wrong.
+    const runningPluginNames = useMemo(
+        () =>
+            installedPlugins
+                .filter((item) => item.isConnected && !item.isDefault)
+                .map((item) => item.name),
+        [installedPlugins],
+    );
 
     const isConnected = plugin.isConnected;
     const isDefault = plugin.isDefault;
@@ -518,7 +504,7 @@ export const PluginModal = ({
                                 {plugin.provider === "custom" && (
                                     <Button
                                         size="md"
-                                        variant="secondary"
+                                        variant="helper"
                                         leftIcon={<EditIcon />}
                                         onClick={() =>
                                             router.push(
@@ -547,7 +533,7 @@ export const PluginModal = ({
 
                                 {!isConnected ? (
                                     <>
-                                        {mcpPluginsLimits.canAddMoreRules ? (
+                                        {mcpPluginsLimits.canInstallMore ? (
                                             <Button
                                                 size="md"
                                                 variant="primary"
@@ -568,7 +554,9 @@ export const PluginModal = ({
                                             </Button>
                                         ) : (
                                             <MCPPluginsLimitPopover
-                                                limit={mcpPluginsLimits.limit}>
+                                                limit={mcpPluginsLimits.limit}
+                                                pluginName={plugin.name}
+                                                running={runningPluginNames}>
                                                 <PopoverTrigger asChild>
                                                     <Button
                                                         size="md"
@@ -610,7 +598,7 @@ export const PluginModal = ({
                                         )}
                                         <Button
                                             size="md"
-                                            variant="primary"
+                                            variant="helper"
                                             leftIcon={<EditIcon />}
                                             loading={isUpdateToolsLoading}
                                             onClick={() => updateTools()}

@@ -8,25 +8,37 @@ import { ByokManualPageClient } from "./page.client";
 export default async function ByokManualPage({
     searchParams,
 }: {
-    searchParams: Promise<{ slot?: "main" | "fallback" }>;
+    // `model=<BYOKModelConfig.id>` opens this form in EDIT mode for that connected
+    // model — the single editor for EVERY model, curated or not (the Models tab
+    // routes all edits here). `provider=<id>` pre-scopes an ADD to that provider
+    // (reusing its stored key). `credential=<BYOKCredential.id>` names which of
+    // that provider's credentials the add starts on, when the org has several
+    // (two OpenAI-compatible gateways). Absent ⇒ ADD a fresh model.
+    searchParams: Promise<{
+        model?: string;
+        provider?: string;
+        credential?: string;
+    }>;
 }) {
-    const { slot: slotParam } = await searchParams;
-    const slot = slotParam === "fallback" ? "fallback" : "main";
+    const {
+        model: editModelId,
+        provider: presetProvider,
+        credential: presetCredentialId,
+    } = await searchParams;
 
-    const [byokConfig, llmConfigStatus] = await Promise.all([
+    // The full v2 config is needed so a save MERGES into it (add/edit a model
+    // in place) rather than overwriting — the whole blob is the intended config.
+    const [existing, llmConfigStatus] = await Promise.all([
         getBYOK().catch(() => null),
         getLLMConfigStatus().catch(() => null),
     ]);
 
-    const existingConfig =
-        slot === "main"
-            ? (byokConfig?.main ?? null)
-            : (byokConfig?.fallback ?? null);
-
     return (
         <ByokManualPageClient
-            slot={slot}
-            existingConfig={existingConfig}
+            existing={existing}
+            editModelId={editModelId}
+            presetProvider={presetProvider}
+            presetCredentialId={presetCredentialId}
             llmConfigStatus={llmConfigStatus}
         />
     );

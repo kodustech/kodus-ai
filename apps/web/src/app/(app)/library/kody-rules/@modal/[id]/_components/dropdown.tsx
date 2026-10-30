@@ -50,6 +50,13 @@ export const SelectRepositoriesDropdown = ({
           )
         : _repositories;
 
+    // Global already applies to every repository through inheritance, so
+    // adding a rule to Global + individual repos is always redundant and
+    // produces a duplicate (one INHERITED: GLOBAL copy plus a direct copy).
+    // While Global is selected we lock the per-repo options to that single
+    // choice.
+    const isGlobalSelected = selectedRepositoriesIds.includes("global");
+
     const matchesSearch = (repo: (typeof repositories)[0]) => {
         if (!search) return true;
         return repo.name.toLowerCase().includes(search.toLowerCase());
@@ -120,25 +127,26 @@ export const SelectRepositoriesDropdown = ({
                                     {search ? ` (${selectedRepos.length})` : ""}
                                 </button>
                             )}
-                            {unselectedRepos.length > 0 && (
-                                <button
-                                    type="button"
-                                    className="text-primary-light hover:text-primary-dark cursor-pointer text-xs font-medium"
-                                    onClick={() => {
-                                        const idsToAdd = unselectedRepos.map(
-                                            (r) => r.id,
-                                        );
-                                        setSelectedRepositoriesIds([
-                                            ...selectedRepositoriesIds,
-                                            ...idsToAdd,
-                                        ]);
-                                    }}>
-                                    Select all
-                                    {search
-                                        ? ` (${unselectedRepos.length})`
-                                        : ""}
-                                </button>
-                            )}
+                            {unselectedRepos.length > 0 &&
+                                !isGlobalSelected && (
+                                    <button
+                                        type="button"
+                                        className="text-primary-light hover:text-primary-dark cursor-pointer text-xs font-medium"
+                                        onClick={() => {
+                                            const idsToAdd = unselectedRepos
+                                                .map((r) => r.id)
+                                                .filter((id) => id !== "global");
+                                            setSelectedRepositoriesIds([
+                                                ...selectedRepositoriesIds,
+                                                ...idsToAdd,
+                                            ]);
+                                        }}>
+                                        Select all
+                                        {search
+                                            ? ` (${unselectedRepos.length})`
+                                            : ""}
+                                    </button>
+                                )}
                         </div>
                     )}
 
@@ -195,36 +203,64 @@ export const SelectRepositoriesDropdown = ({
 
                             {unselectedRepos.length > 0 && (
                                 <CommandGroup heading="Not selected">
-                                    {unselectedRepos.map((r) => (
-                                        <CommandItem
-                                            key={r.id}
-                                            value={r.id}
-                                            onSelect={() => {
-                                                setSelectedRepositoriesIds([
-                                                    ...selectedRepositoriesIds,
-                                                    r.id,
-                                                ]);
-                                            }}>
-                                            <span className="flex flex-1 flex-col items-start gap-1 text-left">
-                                                <span>{r.name}</span>
-                                                {r.directories &&
-                                                    r.directories.length >
-                                                        0 && (
+                                    {unselectedRepos.map((r) => {
+                                        const blockedByGlobal =
+                                            isGlobalSelected &&
+                                            r.id !== "global";
+
+                                        return (
+                                            <CommandItem
+                                                key={r.id}
+                                                value={r.id}
+                                                disabled={blockedByGlobal}
+                                                aria-disabled={blockedByGlobal}
+                                                onSelect={() => {
+                                                    if (r.id === "global") {
+                                                        // Selecting Global
+                                                        // supersedes any repo
+                                                        // selection to avoid a
+                                                        // duplicated (inherited
+                                                        // + direct) rule.
+                                                        setSelectedRepositoriesIds(
+                                                            ["global"],
+                                                        );
+                                                        setSelectedDirectoriesIds(
+                                                            [],
+                                                        );
+                                                        return;
+                                                    }
+                                                    setSelectedRepositoriesIds([
+                                                        ...selectedRepositoriesIds,
+                                                        r.id,
+                                                    ]);
+                                                }}>
+                                                <span className="flex flex-1 flex-col items-start gap-1 text-left">
+                                                    <span>{r.name}</span>
+                                                    {blockedByGlobal ? (
                                                         <span className="text-text-tertiary text-xs">
-                                                            {
-                                                                r.directories
-                                                                    .length
-                                                            }{" "}
-                                                            director
-                                                            {r.directories
-                                                                .length > 1
-                                                                ? "ies"
-                                                                : "y"}
+                                                            Covered by Global
                                                         </span>
+                                                    ) : (
+                                                        r.directories &&
+                                                        r.directories.length >
+                                                            0 && (
+                                                            <span className="text-text-tertiary text-xs">
+                                                                {
+                                                                    r.directories
+                                                                        .length
+                                                                }{" "}
+                                                                director
+                                                                {r.directories
+                                                                    .length > 1
+                                                                    ? "ies"
+                                                                    : "y"}
+                                                            </span>
+                                                        )
                                                     )}
-                                            </span>
-                                        </CommandItem>
-                                    ))}
+                                                </span>
+                                            </CommandItem>
+                                        );
+                                    })}
                                 </CommandGroup>
                             )}
                         </div>

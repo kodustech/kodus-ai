@@ -119,7 +119,7 @@ function TreeNodeItem({ node, depth }: { node: TreeNode; depth: number }) {
                 {node.suggestionCount > 0 && (
                     <span
                         className={cn(
-                            "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums",
+                            "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-3xs font-medium tabular-nums",
                             isSelected
                                 ? "bg-brand-purple/20 text-brand-purple"
                                 : "bg-card-lv3 text-text-tertiary",
@@ -148,7 +148,7 @@ function TreeNodeItem({ node, depth }: { node: TreeNode; depth: number }) {
                     <FolderIcon className="text-text-tertiary size-4 shrink-0" />
                 )}
                 <span className="truncate font-mono text-xs">{node.name}</span>
-                <span className="text-text-tertiary ml-auto shrink-0 text-[10px] tabular-nums">
+                <span className="text-text-tertiary ml-auto shrink-0 text-3xs tabular-nums">
                     {node.suggestionCount}
                 </span>
             </button>

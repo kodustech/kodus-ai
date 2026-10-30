@@ -1,0 +1,422 @@
+{
+  "model": "claude-sonnet-5-5",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "8c206718746410428f38bed002a490ba4fcfb0a5a9e4e86aab2b98b752a62c3d"
+  },
+  "startedAt": "2026-10-15T15:37:21.965Z",
+  "updatedAt": "2026-10-15T15:39:32.839Z",
+  "complete": true,
+  "selectedCases": [
+    "R8-consequence-kody-rule-prior",
+    "K7-rule-repost-prod-profile",
+    "P22-rule-forward-parsed-pingpong"
+  ],
+  "casesSourceDigest": "86b7ff2e8a5db76dae3f7ed3df899f9e989d3763af9b9704b7cadc032db3d9c4",
+  "summary": {
+    "measured": 5,
+    "infra": 1,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 3,
+        "violations": 0,
+        "rate": 0
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 2,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 5,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "K7-rule-repost-prod-profile · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "K7-rule-repost-prod-profile · dayKey-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P22-rule-forward-parsed-pingpong · create-order-raw-body-repeat [not_deliver]": {
+        "pass": 1,
+        "n": 1,
+        "delivered": 0
+      },
+      "P22-rule-forward-parsed-pingpong · cancel-order-raw-body-new-site [deliver]": {
+        "pass": 1,
+        "n": 1,
+        "delivered": 1
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 42903,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Rethrowing NotReadyError unchanged from fetchStatus makes pollCharge (poller.ts:13-15) catch it and call gw.submit(charge.payload) again. WHY: pollCharge only runs for charges the gateway has already ACCEPTED, so a NotReadyError from status() (for example, status not ready yet) now causes a duplicate submission, and so a possible double charge, on every poll tick. Before this change the error was wrapped in FailedError and that branch never ran. HOW: Make the retry semantics explicit. Either have the poller treat NotReadyError as 'try again next tick' without resubmitting, or use a distinct error type for 'gateway never received it'. If resubmission is intended, make gw.submit idempotent with a charge-id key.",
+          "keep": true,
+          "rationale": "The code path is real. `fetchStatus` now rethrows `NotReadyError` unchanged (status.ts:8-10). `pollCharge` catches it and calls `gw.submit(charge.payload)` again (poller.ts:13-15). The poller's own doc comment contradicts itself: it says the function runs for charges the gateway has already ACCEPTED, and it also says `NotReadyError` means the gateway never received the charge. If `status()` throws `NotReadyError` for a charge that was accepted but isn't ready yet, the poller resubmits it on each tick, which risks a double charge. This is a different problem from the earlier decision, which only asked for `NotReadyError` to be propagated. This finding is a consequence of applying that change, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 5,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\n`pollCharge` (poller.ts:13-15) only runs for charges the gateway has already accepted, so a `NotReadyError` from `status()` now makes it call `gw.submit(charge.payload)` again on every poll tick, risking a double charge. Change the poller to treat `NotReadyError` as 'try again next tick' without resubmitting, or use a distinct error type for 'gateway never received it', and if resubmission is intended, make `gw.submit` idempotent with a charge-id key."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 38879,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError, which pollCharge (poller.ts:13-16) interprets as \"gateway never received it\" and answers by calling gw.submit(charge.payload) again. errors.ts defines NotReadyError as \"gateway HAS the charge but has not settled it yet\". WHY: for an accepted but unsettled charge, every poll tick can now resubmit the payment, which risks duplicate charges. Before this change the error was wrapped in FailedError and the resubmit branch never ran. HOW: make poller treat NotReadyError as 'still pending' (return a pending state and retry later, with no submit). Alternatively, throw a distinct error from fetchStatus for the 'never received' case and keep resubmit only for that error. Fix the incorrect doc comment in poller.ts as well.",
+          "keep": true,
+          "rationale": "The code matches the claim. `errors.ts` documents NotReadyError as \"gateway has the charge but has not settled it yet\". `fetchStatus` now rethrows it unchanged. `pollCharge` catches NotReadyError and calls `gw.submit(charge.payload)` again, so an accepted but unsettled charge is resubmitted on each tick. That risks duplicate charges. This is a different failure from the earlier decision, which was about NotReadyError being wrapped as a terminal FailedError. It is a consequence of applying that suggestion, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 6,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `fetchStatus` now rethrows `NotReadyError`, `pollCharge` (poller.ts:13-16) mistakes an accepted but unsettled charge for one the gateway never received and calls `gw.submit(charge.payload)` again on every poll tick, risking duplicate charges. Make `pollCharge` treat `NotReadyError` as still pending and retry later without submitting, or have `fetchStatus` throw a distinct error for the never-received case and resubmit only on that one, and correct the doc comment in poller.ts to match the `NotReadyError` definition in errors.ts."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 1,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 10174,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "In `dayKey`, `toISOString().slice(0, 10)` returns the previous calendar day for users west of UTC, which breaks the rule on date-only values. Use `formatLocalDate` from `src/reports/dates.ts`, which is already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 2,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 11196,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "`toISOString()` converts to UTC, so `dayKey` returns the wrong calendar day for some users, for example the previous day for those west of UTC late in the evening, which misgroups entries in the reports. Replace `toISOString().slice(0, 10)` with `formatLocalDate`, which is already imported in `src/reports/range.ts`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 1,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 12724,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Because `cancelOrderHandler` publishes the raw `req.body`, the `order.cancel_requested` event carries every client-sent field, including unchecked ones that zod strips only from the parsed result. Publish `result.data` instead so only validated data reaches the event bus."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 2,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "error": "INFRA: Kody Rules were not fully evaluated: KODY_RULES_PARTIAL: 1 of 2 Kody Rules check(s) failed to run; the rules on them were not applied"
+    }
+  ]
+}

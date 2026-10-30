@@ -1,5 +1,7 @@
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 import { Injectable, Inject } from '@nestjs/common';
+import pLimit from 'p-limit';
 
 import { IKodyIssuesManagementService } from '@libs/code-review/domain/contracts/KodyIssuesManagement.contract';
 import {
@@ -44,6 +46,10 @@ import {
 } from '@libs/ee/codeBase/kodyIssuesAnalysis.service';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
+
+// Matches the per-call fan-out the API pool (max 30) can absorb without
+// starving concurrent requests.
+const ISSUE_CREATE_CONCURRENCY = 5;
 
 @Injectable()
 export class KodyIssuesManagementService implements IKodyIssuesManagementService {
@@ -177,7 +183,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
         context: contextToGenerateIssues,
         filePath: string,
         newSuggestions: any[],
-        byokConfig: BYOKConfig | null,
+        byokConfig: NormalizedModel | undefined,
     ): Promise<any> {
         const { organizationAndTeamData, repository, pullRequest } = context;
 
@@ -212,7 +218,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                                 id: suggestion.id,
                                 language: suggestion.language,
                                 relevantFile: suggestion.relevantFile,
-                                suggestionContent: suggestion.suggestionContent,
+                                suggestionContent:
+                                    suggestion.fullExplanation ||
+                                    suggestion.suggestionContent,
                                 existingCode: suggestion.existingCode,
                                 improvedCode: suggestion.improvedCode,
                                 oneSentenceSummary:
@@ -229,7 +237,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     id: suggestion.id,
                     language: suggestion.language,
                     relevantFile: suggestion.relevantFile,
-                    suggestionContent: suggestion.suggestionContent,
+                    suggestionContent:
+                        suggestion.fullExplanation ||
+                        suggestion.suggestionContent,
                     existingCode: suggestion.existingCode,
                     improvedCode: suggestion.improvedCode,
                     oneSentenceSummary: suggestion.oneSentenceSummary,
@@ -250,7 +260,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             // 4. Processar resultado do merge
             await this.processMergeResult(context, mergeResult, newSuggestions);
         } catch (error) {
-            this.logger.error({
+            // Terminal BYOK billing/auth → warn (user's provider config; one
+            // suspended key fans out per-file), real fault → error.
+            this.logger[llmErrorLogLevel(error)]({
                 message: `Error merging suggestions into issues for file ${filePath}`,
                 context: KodyIssuesManagementService.name,
                 error,
@@ -280,51 +292,73 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     context.organizationAndTeamData,
                 );
 
-            for (const suggestion of unmatchedSuggestions) {
-                await this.issuesService.create({
-                    title: suggestion.oneSentenceSummary,
-                    description: suggestion.suggestionContent,
-                    filePath: suggestion.relevantFile,
-                    language: suggestion.language,
-                    label: suggestion?.label as LabelType,
-                    severity: suggestion?.severity as SeverityLevel,
-                    contributingSuggestions: [
-                        {
-                            id: suggestion.id,
-                            prNumber: context.pullRequest.number,
-                            prAuthor: {
-                                id: pullRequest?.user?.id.toString() || '',
-                                name: pullRequest?.user?.name || '',
+            // Each create is independent — parallelize instead of
+            // sequential await. Cuts latency of this step from N × RTT
+            // to max(RTT) on the code-review hot path when a PR has
+            // many unmatched suggestions.
+            //
+            // Bounded, though: an unbounded fan-out here would issue one
+            // concurrent write per unmatched suggestion, and a PR with many
+            // of them turns into an instant burst against the same pool this
+            // change is trying to keep healthy (worker max 60, API 30). The
+            // cap keeps the latency win while leaving the pool room to serve
+            // everything else.
+            const createLimit = pLimit(ISSUE_CREATE_CONCURRENCY);
+            await Promise.all(
+                unmatchedSuggestions.map((suggestion) =>
+                    createLimit(() =>
+                        this.issuesService.create({
+                            title: suggestion.oneSentenceSummary,
+                            // The issue outlives the PR comment: keep the whole
+                            // explanation, not the short body under the title.
+                            description:
+                                suggestion.fullExplanation ||
+                                suggestion.suggestionContent,
+                            filePath: suggestion.relevantFile,
+                            language: suggestion.language,
+                            label: suggestion?.label as LabelType,
+                            severity: suggestion?.severity as SeverityLevel,
+                            contributingSuggestions: [
+                                {
+                                    id: suggestion.id,
+                                    prNumber: context.pullRequest.number,
+                                    prAuthor: {
+                                        id:
+                                            pullRequest?.user?.id.toString() ||
+                                            '',
+                                        name: pullRequest?.user?.name || '',
+                                    },
+                                    ...(suggestion.brokenKodyRulesIds?.length
+                                        ? {
+                                              brokenKodyRulesIds:
+                                                  suggestion.brokenKodyRulesIds,
+                                          }
+                                        : {}),
+                                },
+                            ],
+                            repository: {
+                                id: context.repository.id,
+                                name: context.repository.name,
+                                full_name: context.repository.full_name,
+                                platform: context.repository.platform,
                             },
-                            ...(suggestion.brokenKodyRulesIds?.length
-                                ? {
-                                      brokenKodyRulesIds:
-                                          suggestion.brokenKodyRulesIds,
-                                  }
-                                : {}),
-                        },
-                    ],
-                    repository: {
-                        id: context.repository.id,
-                        name: context.repository.name,
-                        full_name: context.repository.full_name,
-                        platform: context.repository.platform,
-                    },
-                    organizationId:
-                        context.organizationAndTeamData.organizationId,
-                    status: IssueStatus.OPEN,
-                    owner: {
-                        gitId: pullRequest.user.id,
-                        username: pullRequest.user.username,
-                    },
-                    reporter: {
-                        gitId: 'kodus',
-                        username: 'Kodus',
-                    },
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                });
-            }
+                            organizationId:
+                                context.organizationAndTeamData.organizationId,
+                            status: IssueStatus.OPEN,
+                            owner: {
+                                gitId: pullRequest.user.id,
+                                username: pullRequest.user.username,
+                            },
+                            reporter: {
+                                gitId: 'kodus',
+                                username: 'Kodus',
+                            },
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
+                        }),
+                    ),
+                ),
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error creating new issues',
@@ -347,7 +381,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             'organizationAndTeamData' | 'repository' | 'pullRequest'
         >,
         files: any[],
-        byokConfig: BYOKConfig | null,
+        byokConfig: NormalizedModel | undefined,
     ): Promise<void> {
         try {
             if (!files || files?.length === 0) {
@@ -416,11 +450,17 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     );
 
                 if (llmResult?.issueVerificationResults) {
+                    // Push into the existing `updatePromises` array
+                    // instead of awaiting sequentially — the outer
+                    // Promise.all below then runs every updateStatus
+                    // in parallel. Was N × RTT, becomes max(RTT).
                     for (const resolution of llmResult.issueVerificationResults) {
                         if (!resolution.isIssuePresentInCode) {
-                            await this.issuesService.updateStatus(
-                                resolution.issueId,
-                                IssueStatus.RESOLVED,
+                            updatePromises.push(
+                                this.issuesService.updateStatus(
+                                    resolution.issueId,
+                                    IssueStatus.RESOLVED,
+                                ),
                             );
                         }
                     }
@@ -432,7 +472,8 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 await Promise.all(updatePromises);
             }
         } catch (error) {
-            this.logger.error({
+            // See mergeSuggestionsIntoIssues: terminal BYOK → warn, else error.
+            this.logger[llmErrorLogLevel(error)]({
                 message: 'Error resolving existing issues',
                 context: KodyIssuesManagementService.name,
                 error,
@@ -454,6 +495,10 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             PriorityStatus.DISCARDED_BY_SAFEGUARD,
             PriorityStatus.DISCARDED_BY_KODY_FINE_TUNING,
             PriorityStatus.DISCARDED_BY_CODE_DIFF,
+            // An earlier comment on the PR already raised it (#2097).
+            PriorityStatus.DISCARDED_BY_REPEAT,
+            // Its verify run failed; nobody judged it (#2171).
+            PriorityStatus.DISCARDED_BY_VERIFY_ERROR,
         ];
 
         return prFiles.reduce((acc: any[], file) => {
@@ -669,7 +714,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                             endLine: fullSuggestion.relevantLinesEnd,
                             oneSentenceSummary:
                                 fullSuggestion.oneSentenceSummary,
-                            suggestionContent: fullSuggestion.suggestionContent,
+                            suggestionContent:
+                                fullSuggestion.fullExplanation ||
+                                fullSuggestion.suggestionContent,
                             language: fullSuggestion.language,
                             label: fullSuggestion.label,
                             severity: fullSuggestion.severity,

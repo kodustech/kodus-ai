@@ -4,7 +4,6 @@ import {
     useSuspenseFetch,
     useSuspenseFetchMany,
 } from "src/core/utils/reactQuery";
-import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import {
     resolveRepoCount,
@@ -27,36 +26,6 @@ export const useSuspenseFindLibraryKodyRules = () => {
     return Object.values(rules).flat();
 };
 
-export const useSuspenseKodyRulesTotalQuantity = () => {
-    return useSuspenseFetch<{ total: number }>(
-        KODY_RULES_PATHS.GET_KODY_RULES_TOTAL_QUANTITY,
-    ).total;
-};
-
-export const useKodyRulesLimits = () => {
-    const subscription = useSubscriptionStatus();
-    const total = useSuspenseKodyRulesTotalQuantity();
-
-    if (!subscription.valid)
-        return {
-            total,
-            canAddMoreRules: false,
-            limit: Number.POSITIVE_INFINITY,
-        };
-
-    if (subscription.status === "free" || subscription.status === "self-hosted")
-        return { canAddMoreRules: total < 10, total, limit: 10 };
-
-    if (subscription.status === "licensed-self-hosted")
-        return {
-            canAddMoreRules: true,
-            total,
-            limit: Number.POSITIVE_INFINITY,
-        };
-
-    return { canAddMoreRules: true, total, limit: Number.POSITIVE_INFINITY };
-};
-
 export const useSuspenseKodyRulesByRepositoryId = (
     repositoryId: string,
     directoryId?: string,
@@ -75,25 +44,70 @@ export const useSuspenseAllOrganizationKodyRules = (type?: KodyRulesType) => {
     );
 };
 
-export const useSuspenseGetPendingIDERules = (params: {
-    teamId: string;
-    repositoryId?: string;
-}) => {
-    return useSuspenseFetch<Array<KodyRule>>(
-        KODY_RULES_PATHS.PENDING_IDE_RULES,
-        { params },
-        { fallbackData: [] },
-    );
-};
-
 export const useSuspenseKodyRulesCheckSyncStatus = (params: {
     teamId: string;
     repositoryId: string;
 }) => {
     return useSuspenseFetch<{
-        ideRulesSyncEnabledFirstTime: boolean;
         kodyRulesGeneratorEnabledFirstTime: boolean;
+        removedOnboardingImports?: number;
     }>(KODY_RULES_PATHS.CHECK_SYNC_STATUS, { params });
+};
+
+export type GlobalRulesSourceRepository = {
+    id: string;
+    name: string;
+    fullName?: string;
+};
+
+export const useSuspenseGlobalRulesSourceRepositories = (params: {
+    teamId: string;
+}) => {
+    return useSuspenseFetch<Array<GlobalRulesSourceRepository>>(
+        KODY_RULES_PATHS.GLOBAL_SOURCE_REPOSITORIES,
+        { params },
+        { fallbackData: [] },
+    );
+};
+
+export type GlobalRulesImportTier = "free" | "trial" | "paid";
+
+export type GlobalRulesImportStatus = {
+    tier: GlobalRulesImportTier;
+    limit: number | null;
+    used: number;
+    remaining: number | null;
+};
+
+export const useSuspenseGlobalRulesImportStatus = (params: {
+    teamId: string;
+}) => {
+    return useSuspenseFetch<GlobalRulesImportStatus>(
+        KODY_RULES_PATHS.GLOBAL_RULES_IMPORT_STATUS,
+        { params },
+        {
+            fallbackData: {
+                tier: "free",
+                limit: 0,
+                used: 0,
+                remaining: 0,
+            },
+        },
+    );
+};
+
+export type PastReviewer = { id: string; name: string };
+
+export const useGetPastReviewers = (
+    params: { teamId: string; repositoryId?: string; months?: number },
+    options?: { enabled?: boolean },
+) => {
+    return useFetch<PastReviewer[]>(
+        KODY_RULES_PATHS.PAST_REVIEWERS,
+        { params },
+        // 3rd arg is the enabled condition — undefined = enabled (eager).
+        options?.enabled,
+    );
 };
 
 export const useSuspenseGetInheritedKodyRules = (params: {

@@ -9,7 +9,11 @@ export function buildFileDiffReadPlan(
     options?: GitFileReadOptions,
 ):
     | { mode: 'single-diff'; args: string[] }
-    | { mode: 'working-tree-diff'; stagedArgs: string[]; unstagedArgs: string[] } {
+    | {
+          mode: 'working-tree-diff';
+          stagedArgs: string[];
+          unstagedArgs: string[];
+      } {
     if (options?.branch) {
         return {
             mode: 'single-diff',

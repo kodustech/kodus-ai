@@ -24,6 +24,10 @@ export type CustomMessageConfig = {
         content: string;
         status: PullRequestMessageStatus;
     };
+    errorReviewMessage: {
+        content: string;
+        status: PullRequestMessageStatus;
+    };
     globalSettings: {
         hideComments: boolean;
         suggestionCopyPrompt: boolean;

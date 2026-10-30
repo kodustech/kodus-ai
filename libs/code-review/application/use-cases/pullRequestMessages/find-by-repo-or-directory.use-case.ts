@@ -149,6 +149,10 @@ export class FindByRepositoryOrDirectoryIdPullRequestMessagesUseCase {
                 content: json?.endReviewMessage?.content,
                 status: json?.endReviewMessage?.status,
             },
+            errorReviewMessage: {
+                content: json?.errorReviewMessage?.content,
+                status: json?.errorReviewMessage?.status,
+            },
             startReviewMessage: {
                 content: json?.startReviewMessage?.content,
                 status: json?.startReviewMessage?.status,

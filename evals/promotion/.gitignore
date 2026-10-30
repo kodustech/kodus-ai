@@ -1,4 +1,0 @@
-.promptfoo.generated.yaml
-.promptfoo.generated.tests.json
-results/*
-!results/.gitkeep

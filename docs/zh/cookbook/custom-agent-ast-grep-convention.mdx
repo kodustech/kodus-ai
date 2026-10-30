@@ -1,0 +1,107 @@
+---
+title: "用 ast-grep 强制执行约定"
+description: "一个用 ast-grep 规则强制执行团队约定的自定义智能体，每条发现都是经过证明的匹配。"
+icon: "code"
+---
+
+## 为什么用 ast-grep
+
+有些约定是结构性的："这里永远不要调用这个函数"、"总是传这个选项"。模型能发现它们，但也可能漏掉或凭空想象。[ast-grep](https://ast-grep.github.io) 规则匹配的是语法树，因此匹配本身就是证据。引用了本次运行匹配到的规则的发现会跳过模型检查并直接发布。
+
+示例是一个结账服务，只有一条约定：**金额是由 `Money` 辅助类处理的整数分，永远不用浮点数。**
+
+## 步骤 1 — 在代码库中编写规则
+
+在默认分支上提交一个规则文件。Kodus 从每个拉取请求的目标分支读取它，因此拉取请求无法放宽用来检查它的规则。
+
+```yaml rules/money.yml
+id: no-parsefloat-amount
+language: typescript
+message: Parse amounts with Money.parse; parseFloat turns cents into a float.
+severity: error
+rule:
+  pattern: parseFloat($A)
+---
+id: no-tofixed-amount
+language: typescript
+message: Format amounts with Money.format; toFixed formats a float, not an amount.
+severity: error
+rule:
+  pattern: $A.toFixed($N)
+```
+
+每条规则的 `message` 就是评论中作为规则引用的内容，所以请为阅读拉取请求的人来写它。
+
+再把背后的理由写进一份 doc，覆盖模式无法捕捉的情况：
+
+```markdown docs/money.md
+# Money
+
+Amounts are integers in cents, wrapped in `Money`. Never store, add or compare an amount as a float.
+Convert at the edges only: `Money.parse` on input, `Money.format` on output.
+```
+
+## 步骤 2 — 创建智能体
+
+**New agent → Templates → Blank**，然后：
+
+```text Name
+Money handling
+```
+
+```text Instructions
+Enforce the money convention in checkout and billing code: amounts are integer cents in Money, never floats.
+
+First run the team's ast-grep rules on the changed files. Report every match as its own finding on the matched line, citing its rule.
+
+Beyond the rules, flag arithmetic or comparison on amounts held as plain numbers only when docs/money.md states the rule; quote it.
+
+Ignore tests and amounts that are not money (percentages, durations, counts).
+```
+
+| 字段 | 值 |
+| --- | --- |
+| **Files** | `src/checkout/**`、`src/billing/**` |
+| **Except** | `**/*.test.ts` |
+| **Skills & docs** | `docs/money.md`（**Add skill or doc → Add by path**） |
+
+## 步骤 3 — 指向规则
+
+在 **Tools → Advanced → Structural search (ast-grep rules)** 中，单独一行填写路径：
+
+```text
+rules/money.yml
+```
+
+提示会列出找到的规则：`2 rules in rules/money.yml: no-parsefloat-amount, no-tofixed-amount`。您也可以直接粘贴内联 YAML 而不是路径；这样规则就保存在智能体中，而不是在代码库中。
+
+## 步骤 4 — 评论
+
+| 字段 | 值 |
+| --- | --- |
+| **Format** | Inline comments |
+| **Minimum severity** | Team minimum |
+| **Suggested fix** | When confident |
+
+点击 **Save**。
+
+## 步骤 5 — Try it
+
+在一个对价格使用了 `parseFloat` 的拉取请求上运行 **Try it**。该发现会被 **kept**，其评论引用规则：
+
+```markdown
+**Rule** (`ast-grep:no-parsefloat-amount`):
+> Parse amounts with Money.parse; parseFloat turns cents into a float.
+```
+
+智能体基于 `docs/money.md` 提出的发现会改为引用该 doc；如果引文不在目标分支上的 doc 中，则会被丢弃。
+
+## 检查清单
+
+- [ ] 规则文件已提交到默认分支
+- [ ] 每条规则都有 `id`、`rule` 和易读的 `message`
+- [ ] 字段提示列出了每一条规则
+- [ ] glob 只覆盖该约定适用的代码
+- [ ] 已在一个已知存在违规的拉取请求上试运行
+
+该字段的详细说明，请参阅 [ast-grep 规则](/zh/how_to_use/code_review/custom_agents_knowledge_and_tools#ast-grep-rules)。

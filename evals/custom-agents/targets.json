@@ -1,0 +1,15 @@
+{
+    "__doc": [
+        "Floors per model for the share of property checks right (run.js --gate), as ratios: `floor` over every check, and `properties` one per property, so a break of one property cannot hide in the overall share.",
+        "eval-fake (the wiring smoke, every PR): the scripted model's one finding names no file of the case, so the mapper drops it: every flag check is wrong, every quiet check and every dispatch check (what the review handed each agent) is right. Deterministic: two runs on ca/eval gave 17 of 22 each, the same answer on every check (P1 3/6, P2 3/3, P3 6/6, P4 4/6, P7 1/1). floor = observed, so a dispatch break (scope, ignored-file reach, enabled switch) fails the PR check.",
+        "deepseek-v4-flash@fireworks (the nightly model): not calibrated. On 2026-10-19 no Fireworks key was available to the run (none in the environment or ~/.kodus-dev/config), so run.js exited 2, not measured. Calibrate with two runs of one commit before adding the eval to evals/nightly-evals.js.",
+        "RATCHET: a PR that adds cases or moves a value on purpose recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "models": {
+        "eval-fake": {
+            "floor": 0.77,
+            "observed": 0.7727,
+            "properties": { "P1": 0.5, "P2": 1, "P3": 1, "P4": 0.66, "P7": 1 }
+        }
+    }
+}

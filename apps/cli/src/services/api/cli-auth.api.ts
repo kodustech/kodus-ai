@@ -16,12 +16,7 @@ export interface CliDeviceInitResponse {
 }
 
 export type CliLoginPollStatus =
-    | 'pending'
-    | 'completed'
-    | 'consumed'
-    | 'denied'
-    | 'expired'
-    | 'not_found';
+    'pending' | 'completed' | 'consumed' | 'denied' | 'expired' | 'not_found';
 
 export interface CliLoginPollResponse {
     status: CliLoginPollStatus;
@@ -47,8 +42,12 @@ export const cliAuthApi = {
         deviceCode?: string;
     }): Promise<CliLoginPollResponse> {
         const search = new URLSearchParams();
-        if (params.state) {search.append('state', params.state);}
-        if (params.deviceCode) {search.append('device_code', params.deviceCode);}
+        if (params.state) {
+            search.append('state', params.state);
+        }
+        if (params.deviceCode) {
+            search.append('device_code', params.deviceCode);
+        }
         return request<CliLoginPollResponse>(
             `/cli/auth/login-poll?${search.toString()}`,
             { method: 'GET' },

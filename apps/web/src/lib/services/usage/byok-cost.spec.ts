@@ -23,10 +23,20 @@ describe("canonicalModelId", () => {
     });
 
     it("strips a provider prefix (last segment after ':')", () => {
-        // Real G1b value: the LangChain path writes `provider:model`.
+        // Real G1b value: BYOK model names are written as `provider:model`
+        // (getModelName, libs/llm/managed-slot.ts) — current format, not a
+        // legacy-engine artifact.
         expect(canonicalModelId("openai_compatible:kimi-k2.7-code")).toBe(
             "kimi-k2.7-code",
         );
+    });
+
+    it("strips a Bedrock :<version> suffix, not the model (regression)", () => {
+        // The old split(':').pop() returned "0" for a Bedrock id — never matching
+        // the configured id and collapsing every Bedrock model onto "0".
+        expect(
+            canonicalModelId("us.anthropic.claude-3-5-haiku-20241022-v1:0"),
+        ).toBe("us.anthropic.claude-3-5-haiku-20241022-v1");
     });
 
     it("trims and tolerates null/empty", () => {
@@ -54,6 +64,21 @@ describe("resolveByokModelCost", () => {
         const byModel = [row("kimi-k2.7-code", 4.5)];
         const res = resolveByokModelCost("kimi-k2.7-code", byModel);
         expect(res).toMatchObject({ status: "ok", total: 4.5 });
+    });
+
+    it("matches a Bedrock model whose config id carries a :version suffix (regression)", () => {
+        // Config stores `...v1:0`; the usage row may carry the version or not.
+        // Both canonicalize to `...v1`, so the cost resolves instead of showing
+        // "No usage" — the Bedrock "cost not saving" symptom.
+        const configId = "us.anthropic.claude-3-5-haiku-20241022-v1:0";
+        for (const rowModel of [
+            "us.anthropic.claude-3-5-haiku-20241022-v1:0",
+            "us.anthropic.claude-3-5-haiku-20241022-v1",
+        ]) {
+            expect(resolveByokModelCost(configId, [row(rowModel, 2.5)])).toMatchObject(
+                { status: "ok", total: 2.5 },
+            );
+        }
     });
 
     it("does NOT match gpt-4o against gpt-4o-mini (family safety, no startsWith)", () => {

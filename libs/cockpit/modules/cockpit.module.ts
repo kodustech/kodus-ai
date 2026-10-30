@@ -14,7 +14,9 @@ import { COCKPIT_DEVELOPER_PRODUCTIVITY_SERVICE_TOKEN } from '../domain/contract
 import { COCKPIT_REPORTS_SERVICE_TOKEN } from '../domain/contracts/cockpit-reports.service.contract';
 import { COCKPIT_REVIEW_ANALYTICS_SERVICE_TOKEN } from '../domain/contracts/cockpit-review-analytics.service.contract';
 import { REPORT_RECIPIENTS_SERVICE_TOKEN } from '../domain/contracts/report-recipients.service.contract';
+import { AutoPauseKodyRulesUseCase } from '../application/use-cases/auto-pause-kody-rules.use-case';
 import { GetKodyRulesHealthUseCase } from '../application/use-cases/get-kody-rules-health.use-case';
+import { SendKodyRulesAutoPauseDigestUseCase } from '../application/use-cases/send-kody-rules-auto-pause-digest.use-case';
 import { SendOrgReportUseCase } from '../application/use-cases/send-org-report.use-case';
 import { SendRepoReportUseCase } from '../application/use-cases/send-repo-report.use-case';
 import { ReportRecipientsService } from '../application/services/report-recipients.service';
@@ -84,6 +86,8 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         },
         SendOrgReportUseCase,
         SendRepoReportUseCase,
+        AutoPauseKodyRulesUseCase,
+        SendKodyRulesAutoPauseDigestUseCase,
     ],
     exports: [
         CockpitSourceResolver,
@@ -99,6 +103,8 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
         GetKodyRulesHealthUseCase,
         SendOrgReportUseCase,
         SendRepoReportUseCase,
+        AutoPauseKodyRulesUseCase,
+        SendKodyRulesAutoPauseDigestUseCase,
     ],
 })
 export class CockpitModule {}

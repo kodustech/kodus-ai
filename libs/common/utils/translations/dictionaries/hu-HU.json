@@ -1,7 +1,8 @@
 {
     "reviewComment": {
         "talkToKody": "Beszélj Kody-val úgy, hogy megemlíted @kody",
-        "feedback": "Hasznos volt ez a javaslat? Reagálj egy 👍 vagy 👎 jellel, hogy segíts Kody-nak tanulni ebből az interakcióból."
+        "feedback": "Hasznos volt ez a javaslat? Reagálj egy 👍 vagy 👎 jellel, hogy segíts Kody-nak tanulni ebből az interakcióból.",
+        "feedbackReply": "Hasznos volt ez a javaslat? Válaszolj egy 👍 vagy 👎 jellel, hogy segíts Kody-nak tanulni ebből az interakcióból."
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## Kódellenőrzés befejezve! 🔥\n\nA kódellenőrzés sikeresen befejeződött a jelenlegi konfigurációid alapján.\n\n",

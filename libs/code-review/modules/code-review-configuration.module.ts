@@ -2,6 +2,7 @@ import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { ContextReferenceModule } from '@libs/code-review/modules/contextReference.module';
 import { PromptsModule } from '@libs/code-review/modules/prompts.module';
 import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequestMessages.module';
+import { LicenseModule } from '@libs/ee/license/license.module';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
 import { PermissionsModule } from '@libs/identity/modules/permissions.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
@@ -11,11 +12,11 @@ import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { Module, forwardRef } from '@nestjs/common';
 
-import { ApplyCodeReviewPresetUseCase } from '../application/use-cases/configuration/apply-code-review-preset.use-case';
 import { DeleteRepositoryCodeReviewParameterUseCase } from '../application/use-cases/configuration/delete-repository-code-review-parameter.use-case';
 import { GenerateKodusConfigFileUseCase } from '../application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCliRepositorySettingsUseCase } from '../application/use-cases/configuration/get-cli-repository-settings.use-case';
 import { GetCodeReviewParameterUseCase } from '../application/use-cases/configuration/get-code-review-parameter.use-case';
+import { GetCodeReviewScopesUseCase } from '../application/use-cases/configuration/get-code-review-scopes.use-case';
 import { ListCodeReviewAutomationLabelsUseCase } from '../application/use-cases/configuration/list-code-review-automation-labels-use-case';
 import { ListCodeReviewAutomationLabelsWithStatusUseCase } from '../application/use-cases/configuration/list-code-review-automation-labels-with-status.use-case';
 import { UpdateCliRepositorySettingsUseCase } from '../application/use-cases/configuration/update-cli-repository-settings.use-case';
@@ -23,6 +24,11 @@ import { UpdateCodeReviewParameterRepositoriesUseCase } from '../application/use
 import { UpdateOrCreateCodeReviewParameterUseCase } from '../application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
 import { PreviewPrSummaryUseCase } from '../application/use-cases/summary/preview-pr-summary.use-case'; // Added
 import { CentralizedConfigModule } from '@libs/centralized-config/modules/centralized-config.module';
+import { CodeReviewCoreModule } from '@libs/code-review/modules/code-review-core.module';
+import { GetCustomAgentsStatusUseCase } from '../application/use-cases/custom-agents/get-custom-agents-status.use-case';
+import { ResolveCustomAgentUseCase } from '../application/use-cases/custom-agents/resolve-custom-agent.use-case';
+import { TryCustomAgentUseCase } from '../application/use-cases/custom-agents/try-custom-agent.use-case';
+import { CustomAgentsEngineModule } from './custom-agents-engine.module';
 
 @Module({
     imports: [
@@ -38,32 +44,44 @@ import { CentralizedConfigModule } from '@libs/centralized-config/modules/centra
         forwardRef(() => IntegrationConfigModule),
         forwardRef(() => CentralizedConfigModule),
         forwardRef(() => PermissionValidationModule),
+        // Linked repositories plan gate (Teams/Enterprise).
+        forwardRef(() => LicenseModule),
+        // Stored findings, for the custom agents status.
+        forwardRef(() => CodeReviewCoreModule),
+        // Skills/docs reader, plugin tool catalog and Try it runner.
+        forwardRef(() => CustomAgentsEngineModule),
     ],
     providers: [
-        ApplyCodeReviewPresetUseCase,
         DeleteRepositoryCodeReviewParameterUseCase,
         GenerateKodusConfigFileUseCase,
         GetCliRepositorySettingsUseCase,
         GetCodeReviewParameterUseCase,
+        GetCodeReviewScopesUseCase,
         ListCodeReviewAutomationLabelsUseCase,
         ListCodeReviewAutomationLabelsWithStatusUseCase,
         UpdateCodeReviewParameterRepositoriesUseCase,
         UpdateCliRepositorySettingsUseCase,
         UpdateOrCreateCodeReviewParameterUseCase,
         PreviewPrSummaryUseCase, // Added
+        ResolveCustomAgentUseCase,
+        TryCustomAgentUseCase,
+        GetCustomAgentsStatusUseCase,
     ],
     exports: [
-        ApplyCodeReviewPresetUseCase,
         DeleteRepositoryCodeReviewParameterUseCase,
         GenerateKodusConfigFileUseCase,
         GetCliRepositorySettingsUseCase,
         GetCodeReviewParameterUseCase,
+        GetCodeReviewScopesUseCase,
         ListCodeReviewAutomationLabelsUseCase,
         ListCodeReviewAutomationLabelsWithStatusUseCase,
         UpdateCodeReviewParameterRepositoriesUseCase,
         UpdateCliRepositorySettingsUseCase,
         UpdateOrCreateCodeReviewParameterUseCase,
         PreviewPrSummaryUseCase, // Added
+        ResolveCustomAgentUseCase,
+        TryCustomAgentUseCase,
+        GetCustomAgentsStatusUseCase,
     ],
 })
 export class CodeReviewConfigurationModule {}

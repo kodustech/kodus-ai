@@ -1,0 +1,10 @@
+{
+    "_note": "Recorded generate result for a non-reasoning openai model. Usage carries NO reasoning details, so normalizeUsage.reasoning must be 0 (a number, never null/undefined) — otherwise the observability `reasoning_tokens > 0` guard mis-fires.",
+    "text": "{\"decisions\":[]}",
+    "finishReason": "stop",
+    "usage": {
+        "inputTokens": 512,
+        "outputTokens": 128,
+        "totalTokens": 640
+    }
+}

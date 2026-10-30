@@ -7,6 +7,12 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 
 import {
     ConsumeTrialReviewCreditResult,
+    CreditBalance,
+    CreditCheckoutResult,
+    CreditLedgerEntry,
+    CreditLedgerEntryType,
+    DebitCreditsEntry,
+    DebitCreditsResult,
     ILicenseService,
     OrganizationLicenseValidationResult,
     UserWithLicense,
@@ -55,6 +61,70 @@ export class LicenseService implements ILicenseService {
             });
             return { valid: false };
         }
+    }
+
+    /**
+     * Provision a Kodus-managed trial for the organization via billing.
+     *
+     * The trial used to be created only by the browser at the end of
+     * onboarding; if that client-side call never ran (tab closed, network
+     * drop) or failed silently, the org was left without a license. This
+     * server-side path makes provisioning reliable and retries transient
+     * failures. The billing endpoint is idempotent (409 when a license
+     * already exists), so repeating the call is safe.
+     */
+    async startTrial(
+        organizationAndTeamData: OrganizationAndTeamData,
+        byok: boolean,
+    ): Promise<boolean> {
+        const MAX_ATTEMPTS = 3;
+
+        for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                await this.licenseRequest.post('trial', {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    byok,
+                });
+                return true;
+            } catch (error) {
+                const status = (error as AxiosError)?.response?.status;
+
+                // A license already exists — the trial is effectively in
+                // place, so this is a success from our perspective.
+                if (status === 409) {
+                    return true;
+                }
+
+                // Client errors other than rate limiting won't be fixed by
+                // retrying (bad payload, org not found, etc.).
+                const isRetriable =
+                    status === undefined || status === 429 || status >= 500;
+
+                if (!isRetriable || attempt === MAX_ATTEMPTS) {
+                    this.logger.error({
+                        message: 'StartTrial failed to provision trial',
+                        context: LicenseService.name,
+                        error,
+                        serviceName: 'LicenseService startTrial',
+                        metadata: {
+                            ...organizationAndTeamData,
+                            byok,
+                            attempt,
+                            status,
+                        },
+                    });
+                    return false;
+                }
+
+                // Exponential backoff before the next attempt.
+                await new Promise((resolve) =>
+                    setTimeout(resolve, 500 * 2 ** (attempt - 1)),
+                );
+            }
+        }
+
+        return false;
     }
 
     async consumeTrialReviewCredit(
@@ -125,10 +195,25 @@ export class LicenseService implements ILicenseService {
         }
     }
 
+    /**
+     * The billing service's `users-with-license` endpoint filters on
+     * `licenseStatus = ACTIVE` and returns only `git_id`, so on cloud there is
+     * no way to tell a revoked seat from one that never existed. Every user it
+     * returns is by definition active. Surfacing revoked seats here needs a
+     * billing-service change; until then this reports the active seats with an
+     * explicit status so callers do not have to guess.
+     */
     async getAllUsersEverWithLicense(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<UserWithLicense[]> {
-        return this.getAllUsersWithLicense(organizationAndTeamData);
+        const users = await this.getAllUsersWithLicense(
+            organizationAndTeamData,
+        );
+
+        return users.map((user) => ({
+            git_id: user.git_id,
+            status: user.status ?? 'active',
+        }));
     }
 
     /**
@@ -178,6 +263,153 @@ export class LicenseService implements ILicenseService {
                 },
             });
             return false;
+        }
+    }
+
+    /**
+     * Release a user's seat by calling the billing service endpoint.
+     * @param organizationAndTeamData Organization and team identifiers
+     * @param userGitId Git ID of the user
+     * @returns Promise with boolean indicating success
+     */
+    async unassignLicenses(
+        organizationAndTeamData: OrganizationAndTeamData,
+        userGitIds: string[],
+        provider: string,
+    ): Promise<{ revoked: string[]; failed: string[] }> {
+        if (!userGitIds?.length) {
+            return { revoked: [], failed: [] };
+        }
+
+        try {
+            const result = await this.licenseRequest.post('assign-license', {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                users: userGitIds.map((gitId) => ({
+                    gitId,
+                    // The billing service rejects the whole request with a 400
+                    // when a user entry is missing gitTool.
+                    gitTool: provider?.toLowerCase(),
+                    licenseStatus: 'inactive',
+                })),
+                editedBy: {
+                    email: 'system@kodus.ai',
+                },
+                userName: 'System Seat Reclaim',
+            });
+
+            const revoked = (result?.successful ?? []).map(
+                (license: { git_id: string }) => String(license.git_id),
+            );
+            const revokedSet = new Set(revoked);
+
+            return {
+                revoked,
+                failed: userGitIds.filter((gitId) => !revokedSet.has(gitId)),
+            };
+        } catch (error) {
+            this.logger.error({
+                message: 'UnassignLicenses not working',
+                error: error,
+                context: LicenseService.name,
+                serviceName: 'LicenseService unassignLicenses',
+                metadata: {
+                    ...organizationAndTeamData,
+                    userGitIds,
+                },
+            });
+            return { revoked: [], failed: userGitIds };
+        }
+    }
+
+    // ── Prepaid credits ("Kodus as the provider") ────────────────────────
+
+    async getCreditBalance(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CreditBalance | null> {
+        try {
+            return await this.licenseRequest.get('credits/balance', {
+                params: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                },
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'GetCreditBalance not working',
+                context: LicenseService.name,
+                error,
+                serviceName: 'LicenseService getCreditBalance',
+                metadata: { ...organizationAndTeamData },
+            });
+            return null;
+        }
+    }
+
+    async listCreditLedger(
+        organizationAndTeamData: OrganizationAndTeamData,
+        options: {
+            limit?: number;
+            before?: string;
+            types?: CreditLedgerEntryType[];
+        } = {},
+    ): Promise<CreditLedgerEntry[]> {
+        try {
+            const response = await this.licenseRequest.get('credits/ledger', {
+                params: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    limit: options.limit,
+                    before: options.before,
+                    types: options.types?.join(','),
+                },
+            });
+            return response?.entries ?? [];
+        } catch (error) {
+            this.logger.error({
+                message: 'ListCreditLedger not working',
+                context: LicenseService.name,
+                error,
+                serviceName: 'LicenseService listCreditLedger',
+                metadata: { ...organizationAndTeamData },
+            });
+            return [];
+        }
+    }
+
+    // Deliberately NOT swallowed: the metering sweep keys retries on this
+    // throwing. A duplicate usageKey is a `skipped` count in the 200 body,
+    // never an error, so a retried batch is safe.
+    async debitCredits(
+        organizationAndTeamData: OrganizationAndTeamData,
+        entries: DebitCreditsEntry[],
+    ): Promise<DebitCreditsResult> {
+        return this.licenseRequest.post('credits/debit', {
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+            entries,
+        });
+    }
+
+    async createCreditCheckout(
+        organizationAndTeamData: OrganizationAndTeamData,
+        creditUsd: number,
+    ): Promise<CreditCheckoutResult | null> {
+        try {
+            return await this.licenseRequest.post('credits/checkout', {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                creditUsd,
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'CreateCreditCheckout not working',
+                context: LicenseService.name,
+                error,
+                serviceName: 'LicenseService createCreditCheckout',
+                metadata: { ...organizationAndTeamData, creditUsd },
+            });
+            return null;
         }
     }
 }

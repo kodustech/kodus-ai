@@ -1,0 +1,545 @@
+{
+  "model": "claude-sonnet-5-5",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "8c206718746410428f38bed002a490ba4fcfb0a5a9e4e86aab2b98b752a62c3d"
+  },
+  "startedAt": "2026-10-15T15:37:21.919Z",
+  "updatedAt": "2026-10-15T15:39:59.971Z",
+  "complete": true,
+  "selectedCases": [
+    "R2-consequence-status-implemented",
+    "K4-rule-repeats-declined-bug",
+    "P18-rule-timeout-out-of-40"
+  ],
+  "casesSourceDigest": "939ce593ae44bbc2b60432207fad817e692a493dc29a4aa520976c2857a57fd3",
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 4,
+        "violations": 3,
+        "rate": 0.75
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 2,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R2-consequence-status-implemented · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "K4-rule-repeats-declined-bug · finishRun-repeat [not_deliver]": {
+        "pass": 1,
+        "n": 2,
+        "delivered": 1
+      },
+      "K4-rule-repeats-declined-bug · finishBatch-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P18-rule-timeout-out-of-40 · geocode-timeout-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 2,
+        "delivered": 2
+      },
+      "P18-rule-timeout-out-of-40 · timezone-timeout-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 1,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39142,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError unchanged, but its only caller, pollCharge (poller.ts:13-15), treats NotReadyError as \"gateway never received it\" and calls gw.submit(charge.payload) again. WHY: for an accepted charge that is simply not settled yet, every poll tick now resubmits the payload, which can create duplicate charges. HOW: make the two sides agree on what NotReadyError means. Either have pollCharge treat NotReadyError as \"pending, retry later\" and return a pending state without resubmitting, or use a distinct error type for \"gateway never received it\". Resubmit only on that distinct error, and ideally use an idempotency key.",
+          "keep": true,
+          "rationale": "The code matches the claim. fetchStatus now rethrows NotReadyError unchanged. pollCharge (poller.ts:13-15) catches NotReadyError and calls gw.submit(charge.payload) again. Its own comment says it runs on every tick for charges the gateway has already ACCEPTED. A charge that is accepted but not yet settled therefore gets resubmitted on each poll, which can create duplicate charges. The earlier decision was about NotReadyError being misreported as FailedError. This is a different failure, caused by applying that suggestion, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 5,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `fetchStatus` now rethrows `NotReadyError` unchanged, `pollCharge` (poller.ts:13-15) reads it as \"gateway never received it\" and calls `gw.submit(charge.payload)` on every poll tick for a charge that is merely unsettled, which can create duplicate charges. Make both sides agree: have `pollCharge` return a pending state on `NotReadyError` without resubmitting, or add a distinct error type for \"never received\" and resubmit only on that, ideally with an idempotency key."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 2,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39886,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError, and its only caller, pollCharge in poller.ts, treats NotReadyError as \"gateway never received the charge\" and calls gw.submit(charge.payload) again. WHY: a charge that the gateway accepted but hasn't settled yet now triggers a resubmission on every poll tick, which can create duplicate charges. This is a different problem from the earlier misclassification finding, and it only appears because the earlier fix was applied. HOW: make the two sites agree on what NotReadyError means. Either distinguish a \"not settled\" error from a \"not received\" error, or change pollCharge to return a pending state for NotReadyError instead of resubmitting.",
+          "keep": true,
+          "rationale": "The code matches the claim. fetchStatus rethrows NotReadyError, and pollCharge catches it and calls gw.submit(charge.payload) again. The poller's docstring says the function runs on charges the gateway has already ACCEPTED, so a NotReadyError from gw.status can mean \"accepted but not settled\". Resubmitting on every tick can then create duplicate charges. This is a different failure from the earlier decision, which was about a transient error being reported as failed. It exists because that earlier fix was applied, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|gw\\.submit|fetchStatus",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError, and its only caller, pollCharge in poller.ts, treats NotReadyError as \"gateway never received it\" and calls gw.submit(charge.payload) again. errors.ts defines NotReadyError as \"gateway has the charge but has not settled it yet\", so the two files disagree on its meaning. WHY: every poll tick on an accepted-but-unsettled charge now resubmits it, which can cause duplicate charges. Before this change the resubmit branch was never reached. HOW: make pollCharge return a pending state on NotReadyError instead of resubmitting. If a separate \"not received\" condition exists, give it its own error type. Fix the stale comment in poller.ts.",
+          "keep": true,
+          "rationale": "The code matches the claim. status.ts now rethrows NotReadyError. In poller.ts, pollCharge catches NotReadyError and calls gw.submit(charge.payload) again. Its comment says NotReadyError means \"never received\". errors.ts says NotReadyError means \"has the charge but not settled yet\". So a charge the gateway has accepted but not settled gets resubmitted on every poll tick, which can duplicate charges. This is a different problem from the earlier decision. That decision was about NotReadyError being wrapped into FailedError. This one is a harmful consequence of applying that fix, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nEvery poll tick on an accepted-but-unsettled charge now makes `pollCharge` in poller.ts resubmit it through `gw.submit(charge.payload)`, which can cause duplicate charges. `errors.ts` defines `NotReadyError` as \"gateway has the charge but has not settled it yet\", so change `pollCharge` to return a pending state on `NotReadyError`, give any true \"not received\" condition its own error type, and fix the stale comment in poller.ts."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nA charge the gateway accepted but has not settled now triggers a resubmission on every poll tick, which can create duplicate charges, because `pollCharge` in poller.ts treats the `NotReadyError` that `fetchStatus` now rethrows as \"gateway never received the charge\". Make the two sites agree on its meaning by either adding a separate error for \"not received\" or changing `pollCharge` to return a pending state on `NotReadyError` instead of calling `gw.submit(charge.payload)` again."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 1,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19671,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "A result can become visible for a run whose progress was never recorded, because `db.results.insert` runs before `db.progress.update` in `finishRun`. Call `db.progress.update` first, remove the later duplicate call, and then insert the result."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "Results can become visible for a batch whose progress was never recorded, because `db.results.insertMany` runs before `db.progress.update` in `finishBatch`. Move the `db.progress.update` call ahead of `db.results.insertMany`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 2,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 14102,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "Calling `db.results.insertMany` before `db.progress.update` in `finishBatch` can expose results for a batch whose progress was never recorded. Move the `db.progress.update` call above `db.results.insertMany` and remove the old progress update on line 12."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 1,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17020,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "A slow geocoding provider can hold the request until the function hits its 10 second limit. Pass `signal: AbortSignal.timeout(GEO_TIMEOUT_MS)` to the fetch, with `GEO_TIMEOUT_MS` set to 5000 so it stays below `FUNCTION_LIMIT_SECONDS`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "If the provider hangs, the platform kills the function at the 10-second limit (`FUNCTION_LIMIT_SECONDS`), so the handler never returns its own 502 and the client gets a raw platform timeout. Pass `signal: AbortSignal.timeout(TZ_API_TIMEOUT_MS)` to the fetch, and define `TZ_API_TIMEOUT_MS` as 5_000 next to `FUNCTION_LIMIT_SECONDS` so it stays shorter than the function limit."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "rep": 2,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17318,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "A hung geocoding upstream leaves the function waiting until the platform kills it at the 10s limit. Pass `signal: AbortSignal.timeout(GEO_REQUEST_TIMEOUT_MS)` to the fetch, with `GEO_REQUEST_TIMEOUT_MS` defined as `8_000`, safely below `FUNCTION_LIMIT_SECONDS * 1000`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "If the timezone provider hangs, the call waits until the platform kills the function at its 10s limit (`FUNCTION_LIMIT_SECONDS`), so the handler never gets to return its 502 `lookup_failed` response. Pass `signal: AbortSignal.timeout(TZ_API_TIMEOUT_MS)` with a named constant below `FUNCTION_LIMIT_SECONDS * 1000` (for example 5000), and catch the abort error to return the 502."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

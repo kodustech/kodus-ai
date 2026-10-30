@@ -1,463 +1,314 @@
-import {
-    BYOKProvider,
-    getModelCapabilities,
-    ReasoningConfig,
-} from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
+import { REGISTRY } from '@libs/llm/providers';
+import type { CatalogModel } from '@libs/llm/providers/kernel/types';
+import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+    KODUS_PROVIDER_GATE_TOKEN,
+    KODUS_PROVIDER_NOT_ENABLED_MESSAGE,
+    KodusProviderGate,
+} from '@libs/core/infrastructure/services/providers/kodus-provider-gate.service';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
+import {
+    IOrganizationParametersService,
+    ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
+import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import axios from 'axios';
 
-// Interfaces for API responses
-interface OpenAIModel {
-    id: string;
-    object: string;
-    created: number;
-    owned_by: string;
-}
-
-interface OpenAIResponse {
-    object: string;
-    data: OpenAIModel[];
-}
-
-interface AnthropicModel {
-    id: string;
-    display_name?: string;
-    context_length: number;
-    pricing: {
-        prompt: string;
-        completion: string;
-    };
-}
-
-interface AnthropicResponse {
-    data: AnthropicModel[];
-}
-
-interface GeminiModel {
-    name: string;
-    displayName?: string;
-    description?: string;
-    supportedGenerationMethods: string[];
-}
-
-interface GeminiResponse {
-    models: GeminiModel[];
-}
+import { resolveByokSlot } from './byok-credentials.util';
+import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 
 export interface ModelResponse {
     provider: BYOKProvider;
-    models: Array<{
-        id: string;
-        name: string;
-        supportsReasoning?: boolean;
-        reasoningConfig?: ReasoningConfig;
-    }>;
+    models: CatalogModel[];
+    /**
+     * Whether producing this list actually USED the organization's credential.
+     *
+     * A live listing authenticates, so its result is evidence the key works. A
+     * static catalog is never fetched, and a curated fallback is served exactly
+     * when the live call could not run — neither says anything about the key.
+     *
+     * Callers that treat "the model is listed" as "the credential is good" need
+     * this to tell those apart: without it, a hard-coded array vouches for a
+     * dead key, and a screen gated on that verdict will persist it.
+     */
+    exercisedCredential: boolean;
 }
 
+/**
+ * Lists the models available for a BYOK provider — registry-driven. Each
+ * provider module declares HOW to enumerate its models via a pure `modelListing`
+ * descriptor (a static catalog, or a `/models` URL + headers + parse); this
+ * use-case owns only the cross-cutting concerns the descriptor stays free of:
+ * credential resolution, the SSRF gate, and the HTTP call.
+ */
 @Injectable()
 export class GetModelsByProviderUseCase {
     private readonly logger = createLogger(GetModelsByProviderUseCase.name);
 
-    constructor(private readonly providerService: ProviderService) {}
+    constructor(
+        private readonly providerService: ProviderService,
+        @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
+        private readonly organizationParametersService: IOrganizationParametersService,
+        @Optional()
+        @Inject(KODUS_PROVIDER_GATE_TOKEN)
+        private readonly kodusGate?: KodusProviderGate,
+    ) {}
 
-    async execute(provider: string): Promise<ModelResponse> {
+    async execute(
+        provider: string,
+        organizationAndTeamData?: OrganizationAndTeamData,
+        // A just-typed, UNSAVED credential from the connect form. Takes precedence
+        // over the org's saved slot and env keys so the picker can live-list the
+        // real models before the credential is persisted. When an apiKey is
+        // supplied here, the http path is STRICT — a failed live call surfaces the
+        // error instead of degrading to the curated placeholder (the user asked
+        // for the real list, not a stand-in).
+        //
+        // awsBearerToken/awsRegion are Bedrock's equivalent of `apiKey` — Bedrock
+        // never authenticates with a plain apiKey (see below), so a just-typed
+        // bearer token needs its own field to reach the live call before save.
+        // awsAccessKeyId/awsSecretAccessKey (IAM/SigV4) are deliberately NOT
+        // candidate fields: SigV4 needs request signing, not a static header, so
+        // an IAM-only connect can't be live-listed pre-save — it degrades to the
+        // curated fallback below, same as it always has.
+        candidate?: {
+            apiKey?: string;
+            baseURL?: string;
+            awsBearerToken?: string;
+            awsRegion?: string;
+        },
+        // The saved credential to list with when the provider has several (two
+        // OpenAI-compatible gateways). Omitted → the provider's only one.
+        credentialId?: string,
+    ): Promise<ModelResponse> {
         if (!this.providerService.isProviderSupported(provider)) {
             throw new BadRequestException(`Unsupported provider: ${provider}`);
         }
-
-        const byokProvider = provider as BYOKProvider;
-
-        switch (byokProvider) {
-            case BYOKProvider.OPENAI:
-                return this.getOpenAIModels(process.env.API_OPEN_AI_API_KEY);
-
-            case BYOKProvider.ANTHROPIC:
-                return this.getAnthropicModels(
-                    process.env.API_ANTHROPIC_API_KEY,
-                );
-
-            case BYOKProvider.GOOGLE_GEMINI:
-                return this.getGeminiModels(process.env.API_GOOGLE_AI_API_KEY);
-
-            case BYOKProvider.GOOGLE_VERTEX:
-                return this.getVertexModels();
-
-            case BYOKProvider.OPEN_ROUTER:
-                return this.getOpenRouterModels(
-                    process.env.API_OPEN_ROUTER_API_KEY,
-                );
-
-            case BYOKProvider.NOVITA:
-                return this.getNovitaModels(process.env.API_NOVITA_AI_API_KEY);
-
-            case BYOKProvider.OPENAI_COMPATIBLE:
-                return this.getOpenAICompatibleModels(
-                    process.env.API_OPEN_AI_API_KEY,
-                    process.env.API_OPENAI_FORCE_BASE_URL ||
-                        'https://api.openai.com',
-                );
-
-            case BYOKProvider.AMAZON_BEDROCK:
-                return this.getBedrockModels();
-
-            case BYOKProvider.ANTHROPIC_COMPATIBLE:
-                // Listing needs the user's baseURL + key, which aren't
-                // available here; the frontend forces free-form model input
-                // for baseURL-requiring providers, so this is never called
-                // in the normal flow.
-                throw new BadRequestException(
-                    'Model listing is not available for anthropic_compatible — enter the model ID manually.',
-                );
-
-            default:
-                throw new BadRequestException(
-                    `Unsupported provider: ${provider}`,
-                );
-        }
-    }
-
-    /**
-     * Bedrock model IDs are region-scoped and cross-region inference
-     * profiles vary by AWS account. We can't list them generically without
-     * the user's AWS credentials (which are entered later in the wizard),
-     * so this returns a curated set of "us.*" cross-region inference
-     * profiles that cover the most common code-review use cases.
-     *
-     * Users on eu/apac regions or with custom inference profiles can still
-     * paste a model ID manually — the frontend allows free-form input on
-     * the Bedrock model field.
-     */
-    private getBedrockModels(): ModelResponse {
-        // Lookup by the Anthropic-style suffix (everything after
-        // "us.anthropic.") so we still pick up reasoning config from
-        // getModelCapabilities even though the catalog ID is prefixed.
-        const reasoningKeyOf = (id: string): string => {
-            const match = id.match(/^[a-z]{2,5}\.anthropic\.(.+?)-v\d+:\d+$/);
-            return match ? match[1] : id;
-        };
-
-        const catalog: Array<{ id: string; name: string }> = [
-            {
-                id: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
-                name: 'Claude Sonnet 4.5 (us, cross-region)',
-            },
-            {
-                id: 'us.anthropic.claude-sonnet-4-20250514-v1:0',
-                name: 'Claude Sonnet 4 (us, cross-region)',
-            },
-            {
-                id: 'us.anthropic.claude-opus-4-1-20250805-v1:0',
-                name: 'Claude Opus 4.1 (us, cross-region)',
-            },
-            {
-                id: 'us.anthropic.claude-opus-4-20250514-v1:0',
-                name: 'Claude Opus 4 (us, cross-region)',
-            },
-            {
-                id: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
-                name: 'Claude 3.7 Sonnet (us, cross-region)',
-            },
-            {
-                id: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
-                name: 'Claude 3.5 Sonnet v2 (us, cross-region)',
-            },
-            {
-                id: 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
-                name: 'Claude 3.5 Haiku (us, cross-region)',
-            },
-        ];
-
-        return {
-            provider: BYOKProvider.AMAZON_BEDROCK,
-            models: catalog.map(({ id, name }) => {
-                const capabilities = getModelCapabilities(reasoningKeyOf(id));
-                return {
-                    id,
-                    name,
-                    ...(capabilities.supportsReasoning && {
-                        supportsReasoning: true,
-                        reasoningConfig: capabilities.reasoningConfig,
-                    }),
-                };
-            }),
-        };
-    }
-
-    private async getOpenAIModels(apiKey?: string): Promise<ModelResponse> {
-        try {
-            const response = await axios.get<OpenAIResponse>(
-                'https://api.openai.com/v1/models',
-                {
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json',
-                    },
-                },
-            );
-
-            const models = {
-                provider: BYOKProvider.OPENAI,
-                models: response.data.data.map((model: OpenAIModel) => {
-                    const capabilities = getModelCapabilities(model.id);
-                    const modelResult = {
-                        id: model.id,
-                        name: model.id,
-                        ...(capabilities.supportsReasoning && {
-                            supportsReasoning: true,
-                            reasoningConfig: capabilities.reasoningConfig,
-                        }),
-                    };
-
-                    return modelResult;
-                }),
-            };
-
-            return models;
-        } catch (error) {
-            throw new BadRequestException(
-                `Error fetching OpenAI models: ${(error as Error).message}`,
-            );
-        }
-    }
-
-    private async getAnthropicModels(apiKey?: string): Promise<ModelResponse> {
-        try {
-            const response = await axios.get<AnthropicResponse>(
-                'https://api.anthropic.com/v1/models',
-                {
-                    headers: {
-                        'x-api-key': apiKey,
-                        'anthropic-version': '2023-06-01',
-                        'Content-Type': 'application/json',
-                    },
-                },
-            );
-
-            return {
-                provider: BYOKProvider.ANTHROPIC,
-                models: response.data.data.map((model: AnthropicModel) => ({
-                    id: model.id,
-                    name: model.display_name || model.id,
-                })),
-            };
-        } catch (error) {
-            throw new BadRequestException(
-                `Error fetching Anthropic models: ${(error as Error).message}`,
-            );
-        }
-    }
-
-    private async getGeminiModels(apiKey?: string): Promise<ModelResponse> {
-        try {
-            const response = await axios.get<GeminiResponse>(
-                'https://generativelanguage.googleapis.com/v1beta/models',
-                {
-                    headers: {
-                        'x-goog-api-key': apiKey,
-                    },
-                    timeout: 10000, // 10 segundos timeout
-                },
-            );
-
-            const models = {
-                provider: BYOKProvider.GOOGLE_GEMINI,
-                models: response.data.models
-                    .filter((model: GeminiModel) =>
-                        model.name.includes('gemini'),
-                    )
-                    .map((model: GeminiModel) => {
-                        const modelId = model.name.split('/')[1];
-                        const capabilities = getModelCapabilities(modelId);
-
-                        const formatModelName = (str: string): string => {
-                            return str
-                                .split('-')
-                                .map((word, index) => {
-                                    if (index === 0) {
-                                        // First word always capitalized
-                                        return (
-                                            word.charAt(0).toUpperCase() +
-                                            word.slice(1).toLowerCase()
-                                        );
-                                    }
-                                    // Numbers with dots stay as they are
-                                    if (/^\d+\.\d+$/.test(word)) {
-                                        return word;
-                                    }
-                                    // Other words capitalize first letter
-                                    return (
-                                        word.charAt(0).toUpperCase() +
-                                        word.slice(1).toLowerCase()
-                                    );
-                                })
-                                .join(' ');
-                        };
-
-                        return {
-                            id: modelId,
-                            name: formatModelName(modelId),
-                            ...(capabilities.supportsReasoning && {
-                                supportsReasoning: true,
-                                reasoningConfig: capabilities.reasoningConfig,
-                            }),
-                        };
-                    }),
-            };
-
-            return models;
-        } catch (error) {
-            throw new BadRequestException(
-                `Error fetching Gemini models: ${(error as Error).message}`,
-            );
-        }
-    }
-    private async getOpenRouterModels(apiKey?: string): Promise<ModelResponse> {
-        try {
-            const response = await axios.get<OpenAIResponse>(
-                'https://openrouter.ai/api/v1/models',
-                {
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json',
-                    },
-                },
-            );
-
-            return {
-                provider: BYOKProvider.OPEN_ROUTER,
-                models: response.data.data.map((model: OpenAIModel) => ({
-                    id: model.id,
-                    name: model.id,
-                })),
-            };
-        } catch (error) {
-            throw new BadRequestException(
-                `Error fetching OpenRouter models: ${(error as Error).message}`,
-            );
-        }
-    }
-
-    private async getNovitaModels(apiKey?: string): Promise<ModelResponse> {
-        try {
-            const response = await axios.get<OpenAIResponse>(
-                'https://api.novita.ai/v3/openai/models',
-                {
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json',
-                    },
-                },
-            );
-
-            return {
-                provider: BYOKProvider.NOVITA,
-                models: response.data.data.map((model: OpenAIModel) => ({
-                    id: model.id,
-                    name: model.id,
-                })),
-            };
-        } catch (error) {
-            throw new BadRequestException(
-                `Error fetching Novita models: ${(error as Error).message}`,
-            );
-        }
-    }
-
-    private async getOpenAICompatibleModels(
-        apiKey?: string,
-        baseUrl?: string,
-    ): Promise<ModelResponse> {
-        if (!baseUrl) {
-            throw new BadRequestException(
-                'baseUrl is required for OpenAI Compatible',
-            );
-        }
-
-        try {
-            const modelsUrl = baseUrl.endsWith('/')
-                ? `${baseUrl}v1/models`
-                : `${baseUrl}/v1/models`;
-
-            const response = await axios.get<OpenAIResponse>(modelsUrl, {
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
+        // Private alpha: the Kodus catalog is not listed for an org outside it.
+        if (
+            isPlatformFundedProvider(provider) &&
+            !(await this.kodusGate?.isEnabledFor(
+                organizationAndTeamData?.organizationId,
+            ))
+        ) {
+            this.logger.warn({
+                message: 'Refused to list the Kodus catalog: org outside the private alpha',
+                context: GetModelsByProviderUseCase.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    provider,
                 },
             });
+            throw new BadRequestException(KODUS_PROVIDER_NOT_ENABLED_MESSAGE);
+        }
 
-            return {
-                provider: BYOKProvider.OPENAI_COMPATIBLE,
-                models: response.data.data.map((model: OpenAIModel) => ({
-                    id: model.id,
-                    name: model.id,
-                })),
-            };
-        } catch (error) {
+        const byokProvider = provider as BYOKProvider;
+        const candidateKey = candidate?.apiKey?.trim() || undefined;
+        const candidateBaseURL = candidate?.baseURL?.trim() || undefined;
+        // Scoped to Bedrock: these fields mean nothing to any other provider's
+        // listing (only bedrock/listing.ts reads awsBearerToken/awsRegion), so a
+        // caller sending them alongside a different `provider` must not affect
+        // that provider's strict/lenient fallback gate below.
+        const isBedrockCandidate = byokProvider === BYOKProvider.AMAZON_BEDROCK;
+        const candidateAwsBearerToken = isBedrockCandidate
+            ? candidate?.awsBearerToken?.trim() || undefined
+            : undefined;
+        const candidateAwsRegion = isBedrockCandidate
+            ? candidate?.awsRegion?.trim() || undefined
+            : undefined;
+        // A candidate CREDENTIAL makes this a "the user is actively trying
+        // THIS credential" request — strict-mode gate for both catch branches
+        // below. Region is deliberately NOT included: the connect form seeds
+        // `awsRegion` from the saved credential on every edit of an existing
+        // Bedrock config (page.client.tsx), so it rides along on essentially
+        // every request regardless of whether the user typed a new one.
+        // Counting it here would flip the saved-credential (edit form) path to
+        // strict on ANY edit — a lapsed saved bearer token or a transient AWS
+        // hiccup would 400 a user editing an unrelated field (e.g.
+        // temperature) instead of degrading to the curated catalog like every
+        // other saved-credential path does.
+        const hasCandidateCredential =
+            !!candidateKey || !!candidateAwsBearerToken;
+
+        const providerModule = REGISTRY.has(provider)
+            ? REGISTRY.get(provider)
+            : null;
+        const listing = providerModule?.modelListing?.(provider) ?? null;
+
+        if (!listing || listing.kind === 'manual') {
+            // A brand with a `manual` listing and no live `/models` call (e.g.
+            // Z.ai/GLM over the Anthropic protocol) can't be enumerated — the user
+            // types the model id manually.
             throw new BadRequestException(
-                `Error fetching OpenAI Compatible models: ${(error as Error).message}`,
+                `Model listing is not available for ${provider} — enter the model ID manually.`,
             );
         }
-    }
 
-    /**
-     * Vertex models can't be listed generically: per-project/region
-     * availability requires the user's service-account JSON, which isn't
-     * available to this (GET, credential-less) endpoint. Listing it live
-     * would mean putting a sensitive ~3KB SA JSON in a query string.
-     *
-     * So, like Bedrock, return a curated catalog. It covers both Vertex
-     * model families served via different protocols:
-     *   - Gemini (`gemini-*`)  → Gemini protocol  (createVertex)
-     *   - Claude (`claude-*@…`) → Anthropic protocol on Vertex MaaS
-     *                            (createVertexAnthropic)
-     * Model-id routing happens in `byok-to-vercel.ts`. Users on other
-     * regions or with custom/newer models can still paste a model ID —
-     * the Vertex model field allows free-form input.
-     *
-     * Vertex Claude ID convention (per Anthropic's official Vertex docs):
-     * recent models use a bare id (e.g. `claude-opus-4-8`), older ones use
-     * the `@<version>` suffix (e.g. `claude-sonnet-4-5@20250929`). Both
-     * route through createVertexAnthropic. Catalog reflects models that are
-     * current (non-deprecated) on Vertex as of 2026-06.
-     */
-    private getVertexModels(): ModelResponse {
-        const catalog: Array<{ id: string; name: string }> = [
-            // gemini-3-pro-preview was discontinued on Vertex (2026-03-26);
-            // Google's migration target is gemini-3.1-pro-preview.
-            { id: 'gemini-3.1-pro-preview', name: 'Vertex Gemini 3.1 Pro' },
-            { id: 'gemini-3.5-flash', name: 'Vertex Gemini 3.5 Flash' },
-            { id: 'gemini-2.5-pro', name: 'Vertex Gemini 2.5 Pro' },
-            { id: 'gemini-2.5-flash', name: 'Vertex Gemini 2.5 Flash' },
-            // Only Claude models served by the GLOBAL endpoint (bare ids) are
-            // listed, so any catalog pick works with the default global region
-            // out of the box. Older @date-suffixed Claude models (Sonnet 4.5,
-            // Haiku 4.5, …) are region-only (e.g. us-east5) — users who want
-            // those can type the id manually and pin the region.
-            { id: 'claude-opus-4-8', name: 'Vertex Claude Opus 4.8' },
-            { id: 'claude-opus-4-7', name: 'Vertex Claude Opus 4.7' },
-            { id: 'claude-sonnet-4-6', name: 'Vertex Claude Sonnet 4.6' },
-        ];
+        if (listing.kind === 'static') {
+            // Never fetched — a hand-maintained list that proves nothing about
+            // the credential.
+            return {
+                provider: byokProvider,
+                models: listing.models,
+                exercisedCredential: false,
+            };
+        }
 
-        // Capability lookup keys on a plain model name; strip the Vertex
-        // `@<version>` suffix so versioned Claude entries resolve their
-        // reasoning config (bare ids pass through unchanged).
-        const reasoningKeyOf = (id: string): string => id.split('@')[0];
+        // Prefer the org's OWN saved BYOK credentials so the catalog reflects the
+        // user's actual endpoint/key (e.g. an openai_compatible proxy like
+        // Moonshot) rather than Kodus' bundled env keys. Falls back to the
+        // descriptor's env vars when no saved slot matches (e.g. setup wizard).
+        const creds = await resolveByokSlot(
+            this.organizationParametersService,
+            byokProvider,
+            organizationAndTeamData,
+            credentialId,
+        );
 
-        return {
-            provider: BYOKProvider.GOOGLE_VERTEX,
-            models: catalog.map(({ id, name }) => {
-                const capabilities = getModelCapabilities(reasoningKeyOf(id));
-                return {
-                    id,
-                    name,
-                    ...(capabilities.supportsReasoning && {
-                        supportsReasoning: true,
-                        reasoningConfig: capabilities.reasoningConfig,
+        // Amazon Bedrock authenticates the list call with a bearer token + region
+        // (never an apiKey). A just-typed candidate wins over the saved slot, same
+        // precedence as apiKey above, so a fresh connect can list live too.
+        const awsBearerToken = candidateAwsBearerToken ?? creds?.awsBearerToken;
+        const awsRegion = candidateAwsRegion ?? creds?.awsRegion;
+        const envBaseURL = listing.baseURLEnv
+            ? process.env[listing.baseURLEnv] || undefined
+            : undefined;
+        const baseURL =
+            candidateBaseURL ??
+            creds?.baseURL ??
+            envBaseURL ??
+            listing.defaultBaseURL;
+
+        // A key only ever goes to the host it belongs to. The baseURL can come
+        // from the request or from an org-edited setting, so a key from anywhere
+        // else — the org's saved credential for another endpoint, or Kodus' own
+        // env key — is sent only when the listing call would land on that key's
+        // own host. A listing with a fixed URL (native OpenAI) always matches.
+        const listingOrigin = (base: string | undefined) => {
+            try {
+                return new URL(
+                    listing.url({
+                        apiKey: undefined,
+                        baseURL: base,
+                        awsBearerToken,
+                        awsRegion,
                     }),
-                };
-            }),
+                ).origin;
+            } catch {
+                return undefined;
+            }
         };
+        const targetOrigin = listingOrigin(baseURL);
+        const goesToOwnHost = (keyBaseURL: string | undefined) =>
+            targetOrigin !== undefined &&
+            listingOrigin(keyBaseURL) === targetOrigin;
+
+        // A just-typed connect-form key wins over the saved slot and env keys, so
+        // the picker lists the models THAT key can actually reach before it's saved.
+        const apiKey =
+            candidateKey ??
+            (creds?.apiKey &&
+            goesToOwnHost(creds.baseURL ?? listing.defaultBaseURL)
+                ? creds.apiKey
+                : undefined) ??
+            (listing.apiKeyEnv &&
+            goesToOwnHost(envBaseURL ?? listing.defaultBaseURL)
+                ? process.env[listing.apiKeyEnv]
+                : undefined);
+
+        // The stand-in when the live call can't run: the http listing's own
+        // fallbackModels (e.g. Bedrock's curated profiles), if the listing declares
+        // any. No catalog fallback — a brand with no declared fallback surfaces the
+        // failure and the user types the model id.
+        const listingFallback = (): ModelResponse | null => {
+            if (listing.fallbackModels?.length) {
+                // Reached only when the live listing could not run, so the
+                // credential was never exercised.
+                return {
+                    provider: byokProvider,
+                    models: listing.fallbackModels,
+                    exercisedCredential: false,
+                };
+            }
+            return null;
+        };
+
+        // No usable creds yet (no api key AND no bearer token) — a NEW connect
+        // where nothing resolves. The live call would 401, so fall back to the
+        // curated list; the live list takes over once creds are supplied. Skipped
+        // when the caller passed a candidate key (strict live).
+        if (!apiKey && !awsBearerToken) {
+            const fb = listingFallback();
+            if (fb) return fb;
+        }
+
+        if (listing.requiresBaseURL) {
+            if (!baseURL) {
+                throw new BadRequestException(
+                    `baseURL is required for ${provider}.`,
+                );
+            }
+            // SSRF guard: a stored baseURL is user-controlled, so reject
+            // private/reserved IPs, the cloud metadata endpoint, and non-https
+            // before the request — the same guard the connection probe uses.
+            await assertSafeOpenAICompatibleUrl(baseURL);
+        }
+
+        try {
+            const response = await axios.get(
+                listing.url({ apiKey, baseURL, awsBearerToken, awsRegion }),
+                {
+                    headers: listing.headers({
+                        apiKey,
+                        baseURL,
+                        awsBearerToken,
+                        awsRegion,
+                    }),
+                    // baseURL-driven providers: never follow redirects (a public URL
+                    // could 302 onto a private IP / metadata endpoint past the guard).
+                    ...(listing.requiresBaseURL ? { maxRedirects: 0 } : {}),
+                    ...(listing.timeoutMs
+                        ? { timeout: listing.timeoutMs }
+                        : {}),
+                },
+            );
+
+            // The live call authenticated, so this list IS evidence about the key.
+            return {
+                provider: byokProvider,
+                models: listing.parse(response.data),
+                exercisedCredential: true,
+            };
+        } catch (error) {
+            // Live fetch failed (bad/expired key, provider down, parse error).
+            // STRICT when the caller supplied a candidate credential (apiKey OR,
+            // for Bedrock, a bearer token): the user is trying that specific
+            // credential, so surface the failure (→ the UI's "type the model id"
+            // fallback) rather than masking a bad key behind the curated list.
+            // Only the keyless/saved path degrades to the curated catalog.
+            if (!hasCandidateCredential) {
+                const fb = listingFallback();
+                if (fb) {
+                    // Degrading to the curated list is otherwise invisible — the
+                    // picker just shows a static set and the user reads it as
+                    // "live". Log WHY so an expired/invalid saved credential (e.g.
+                    // a lapsed Bedrock bearer token → 403 "Bearer Token has
+                    // expired") is diagnosable instead of silent.
+                    this.logger.warn({
+                        message: `Live model listing for ${provider} failed; served curated fallback`,
+                        context: GetModelsByProviderUseCase.name,
+                        error: error as Error,
+                        metadata: { provider },
+                    });
+                    return fb;
+                }
+            }
+            throw new BadRequestException(
+                `Error fetching ${provider} models: ${(error as Error).message}`,
+            );
+        }
     }
 }

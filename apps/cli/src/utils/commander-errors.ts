@@ -55,9 +55,7 @@ function formatConfigShortcutMisuse(args: string[]): string | null {
 function formatUnknownCommand(args: string[], message?: string): string {
     const command = matchQuotedValue(message, /unknown command '([^']+)'/i);
     const lines = [
-        command
-            ? `Unknown command: \`${command}\`.`
-            : 'Unknown command.',
+        command ? `Unknown command: \`${command}\`.` : 'Unknown command.',
         `Run \`${getProgramName(args)} --help\` to see available commands.`,
     ];
 
@@ -87,7 +85,10 @@ export function formatCommanderError(
         error.code === 'commander.unknownOption' ||
         error.message?.includes('unknown option')
     ) {
-        const option = matchQuotedValue(error.message, /unknown option '([^']+)'/i);
+        const option = matchQuotedValue(
+            error.message,
+            /unknown option '([^']+)'/i,
+        );
         return [
             option ? `Unknown option: \`${option}\`.` : 'Unknown option.',
             `Run \`${getProgramName(args)} --help\` to see available options.`,

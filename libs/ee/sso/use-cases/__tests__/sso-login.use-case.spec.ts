@@ -27,6 +27,7 @@ describe('SSOLoginUseCase', () => {
             authService as any,
             signUpUseCase as any,
             usersService as any,
+            { userLoggedIn: jest.fn() } as any,
         );
 
         return { useCase, authService, signUpUseCase, usersService };

@@ -1,4 +1,9 @@
-import type { ContextEvidence, ContextLayer, ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import { readAttemptedSlot } from '@libs/llm/model-failover';
+import type {
+    ContextEvidence,
+    ContextLayer,
+    ContextPack,
+} from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { IExternalPromptContext } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters/services/context/interfaces/code-review-context-pack.interface';
 import { AutomationExecutionEntity } from '@libs/automation/domain/automationExecution/entities/automation-execution.entity';
@@ -6,11 +11,23 @@ import {
     CreateSandboxParams,
     SandboxInstance,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
+import { ManagedTool } from '@libs/code-review/infrastructure/adapters/services/ci-evidence/recognize-ci-analyzers';
+import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
+import { RouteDecision } from '@libs/code-review/infrastructure/analyzers/tool.contract';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
+import type { PrDecisionRecord } from '@libs/code-review/domain/contracts/pr-decision-store.contract';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import type { CustomAgentCliProvisioning } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
+import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
 import { PlatformType } from '@libs/core/domain/enums';
+import type {
+    ApprovalDecision,
+    ApprovalRiskAssessment,
+} from '@libs/code-review/domain/approval/approval-decision';
 import {
     AnalysisContext,
     AutomaticReviewStatus,
@@ -23,7 +40,6 @@ import {
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PipelineContext } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
-import { IClusterizedSuggestion } from '@libs/kodyFineTuning/domain/interfaces/kodyFineTuning.interface';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
 export type PullRequestType = {
@@ -34,6 +50,8 @@ export type PullRequestType = {
             fullName: string;
         };
         ref: string;
+        /** The target branch's commit, when the host's pull request has it. */
+        sha?: string;
     };
     head?: {
         sha: string;
@@ -52,10 +70,6 @@ export type PullRequestType = {
 };
 
 export interface CodeReviewPipelineContext extends PipelineContext {
-    dryRun: {
-        enabled: boolean;
-        id?: string;
-    };
     organizationAndTeamData: OrganizationAndTeamData;
     repository: Repository;
     branch: string;
@@ -91,11 +105,30 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     /** List of files ignored by configuration patterns */
     ignoredFiles?: string[];
 
+    /**
+     * The same ignored files, with their diffs.
+     *
+     * `ignorePaths` answers "do not comment on this file", which is not the
+     * same question as "do not check this file at all". Lockfiles are ignored
+     * by default and are also the only place a dependency advisory can be
+     * found, so the deterministic analyzers read this alongside `changedFiles`
+     * and let each tool's own `selectFiles` decide what it wants.
+     */
+    ignoredFileChanges?: FileChange[];
+
     lastExecution?: {
         commentId?: any;
         noteId?: any;
         threadId?: any;
         lastAnalyzedCommit?: any;
+    };
+    /** The status note of the latest finished run, partial or failed ones
+     *  included, which the next run edits (#1721). `lastExecution` is the
+     *  latest SUCCESS only, since it also decides what is reviewed again. */
+    previousStatusNote?: {
+        commentId?: any;
+        noteId?: any;
+        threadId?: any;
     };
     pipelineMetadata?: {
         // Inherited from PipelineContext.pipelineMetadata — re-declared here
@@ -125,8 +158,6 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     pullRequestMessagesConfig?: IPullRequestMessages;
 
-    clusterizedSuggestions?: IClusterizedSuggestion[];
-
     preparedFileContexts: AnalysisContext<PullRequestType>[];
 
     fileAnalysisResults?: Array<{
@@ -155,7 +186,25 @@ export interface CodeReviewPipelineContext extends PipelineContext {
         previousSha: string;
         currentHeadSha?: string;
         totalCommits: number;
+        /** What the rebase left to review (#2037), or why it fell back to a full review. */
+        interdiff?:
+            | {
+                  filesToReview: number;
+                  unchangedFiles: number;
+                  partialFiles: number;
+                  uncomparedFiles: number;
+                  hunksKept: number;
+                  hunksDropped: number;
+              }
+            | { fallback: string };
     };
+
+    /**
+     * After a rebase, the PR files with only the hunks that changed since the
+     * last review (#2037). ResolveConfigStage reviews these instead of the
+     * whole PR diff.
+     */
+    rebaseInterdiffFiles?: FileChange[];
 
     validSuggestionsByPR?: ISuggestionByPR[];
     validCrossFileSuggestions?: CodeSuggestion[];
@@ -176,13 +225,32 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     };
 
     /**
-     * SHA-256 hash of the PR body at the time of the last successful business logic
-     * validation. Written by ProcessFilesPrLevelReviewStage and persisted to
-     * dataExecution.businessLogicHash to enable dedup on subsequent runs.
+     * Set by BusinessLogicValidationStage when a business-logic message was
+     * actually delivered to the PR author. Persisted to
+     * dataExecution.businessLogicValidatedAt and carried across executions, so
+     * the automatic validation runs once per PR instead of once per push.
+     */
+    businessLogicValidatedAt?: string;
+
+    /**
+     * `@kody -v <agent-slug>`: run only that custom agent on this review
+     * (#2172). Unset on every other review.
+     */
+    onlyCustomAgent?: string;
+
+    /**
+     * SHA-256 hash of the PR body at the time of the last successful business
+     * logic validation. Written by ProcessFilesPrLevelReviewStage (legacy EE
+     * path); superseded by businessLogicValidatedAt on the agent pipeline,
+     * which does not key the gate on a body Kody's own summary may rewrite.
      */
     businessLogicPrBodyHash?: string;
 
     lineComments?: CommentResult[];
+
+    /** Approval policy result for this reviewed head; reused by the finish stage. */
+    approvalDecision?: ApprovalDecision;
+    approvalRisk?: ApprovalRiskAssessment;
 
     // Resultados dos comentários de nível de PR
     prLevelCommentResults?: Array<CommentResult>;
@@ -192,6 +260,12 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     /** Bloco com conteúdos de arquivos externos referenciados pelos prompts. */
     externalPromptContext?: IExternalPromptContext;
+    /** Decisions recorded by Kodus Trace, scoped to the changed files. */
+    traceDecisions?: TraceContextDecision[];
+    /** Suggestions already posted on THIS PR in a previous review round —
+     *  the most recent across the whole PR, not only the changed files
+     *  (issue #1313, #2020). */
+    previousDecisions?: PrDecisionRecord[];
     /** Camadas já formatadas para incluir no ContextPack (ex.: arquivos, instruções). */
     externalPromptLayers?: ContextLayer[];
 
@@ -210,6 +284,31 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     /** Graph JSON (nodes + edges) from kodus-graph parse, used by GraphContentFormatter for Tier 1 formatting */
     callGraphJson?: { nodes: any[]; edges: any[] };
+
+    /**
+     * CI results the customer's own pipeline reported for the head commit.
+     * Absent when the host cannot report them, or when there were none.
+     */
+    ciEvidence?: CheckEvidence[];
+
+    /**
+     * Managed tools whose analysis the customer's CI already covers, so we
+     * do not publish the same finding twice or pay to rediscover it.
+     */
+    ciCoveredTools?: ManagedTool[];
+
+    /** In-diff findings from the deterministic tools that ran. */
+    analyzerFindings?: AnalyzerFinding[];
+
+    /**
+     * What the router decided for every registered tool, including the ones
+     * it skipped and why. Absent findings alone cannot distinguish "found
+     * nothing" from "never ran"; this is what tells them apart.
+     */
+    analyzerRouting?: RouteDecision[];
+
+    /** Tools that were selected but failed. Never read as "clean". */
+    analyzerFailures?: string[];
 
     /** Sandbox handle kept alive for safeguard agent verification */
     sandboxHandle?: SandboxInstance;
@@ -237,6 +336,21 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      *  PR command / CLI --runtime). With `environment.trigger: 'command'`
      *  (the default), the runtime stage only runs when this is set. */
     runtimeRequested?: boolean;
+
+    /**
+     * The sandbox lease was superseded (PR closed or force-pushed) while it was
+     * being acquired. The review runs without a sandbox, but it is moot, so it
+     * is not reported as a review that lost its checkout.
+     */
+    sandboxSuperseded?: boolean;
+
+    /**
+     * Team CLIs installed and fenced in the E2B sandbox for the custom agents
+     * that will run (#2172), keyed by agent id, plus the CLI_INSTALL_FAILED
+     * warnings for the ones that could not be. Absent on the local sandbox,
+     * where team CLIs never run.
+     */
+    customAgentClis?: CustomAgentCliProvisioning;
 
     /** Parameters used to create the sandbox — kept for renewal if it expires */
     getFreshCloneParams?: () => Promise<CreateSandboxParams>;
@@ -266,6 +380,13 @@ export interface CodeReviewPipelineContext extends PipelineContext {
         friendlyMessage: string;
         agentName?: string;
         occurredAt: Date;
+        /** Status the provider answered with, when it answered at all. */
+        httpStatus?: number;
+        /** The provider's own sentence, redacted and capped by the classifier. */
+        providerMessage?: string;
+        /** Model id the review actually ran on — the resolved slot's, not the
+         *  configured default, so a routed override is reported as what ran. */
+        model?: string;
     };
 
     /**
@@ -277,6 +398,14 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      * review ran at full fidelity.
      */
     reviewWarnings?: ReviewWarning[];
+
+    /**
+     * Cross-repo context (#1576): which linked repositories were consulted
+     * (and their clone/ref status). Populated by AgentReviewStage after the
+     * agent run. Used for end-review transparency + telemetry. Absent when
+     * the feature is off.
+     */
+    linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata;
 }
 
 export interface DedupTraceSuggestionSummary {
@@ -305,6 +434,8 @@ export interface DedupTraceSummary {
     groupsCount: number;
     removedCount: number;
     errorMessage?: string;
+    /** The follow-up for left-out suggestions failed; the stage kept them as they were. */
+    followupError?: string;
     groups?: DedupTraceGroupSummary[];
     unique?: DedupTraceSuggestionSummary[];
 }
@@ -337,3 +468,48 @@ export interface DocumentationItem {
     snippet: string;
     source: 'exa-search';
 }
+
+/**
+ * The model the review ACTUALLY ran on.
+ *
+ * Read from the resolved slot rather than the configured default, so a routed
+ * or per-task override is reported as what ran instead of what was configured.
+ * Both failure paths that record `lastReviewError` already read `provider` off
+ * this same slot; taking the model from anywhere else would let a report name a
+ * provider and a model that never met.
+ */
+export const resolvedModel = (
+    context: Pick<CodeReviewPipelineContext, 'codeReviewConfig'>,
+    err?: unknown,
+): string | undefined => {
+    // The cascade is primary → fallback, so an error that survived both belongs
+    // to the fallback. Reporting the resolved slot there names a model that did
+    // not produce this failure — worse than saying nothing, because it reads as
+    // fact. `runWithModelFailover` stamps the attempt it actually ran.
+    const attempted = readAttemptedSlot(err)?.model;
+    if (typeof attempted === 'string' && attempted.length > 0) return attempted;
+
+    const model = context.codeReviewConfig?.resolvedModelSlot?.model;
+    return typeof model === 'string' && model.length > 0 ? model : undefined;
+};
+
+/**
+ * The provider that answered the failing attempt.
+ *
+ * Kept beside {@link resolvedModel} so the two are always read from the SAME
+ * attempt: a fallback model reported next to the primary's provider is a pair
+ * that never existed, which is the failure mode this helper prevents rather than
+ * a detail it improves.
+ */
+export const resolvedProvider = (
+    context: Pick<CodeReviewPipelineContext, 'codeReviewConfig'>,
+    err?: unknown,
+): string | undefined => {
+    const attempted = readAttemptedSlot(err)?.provider;
+    if (typeof attempted === 'string' && attempted.length > 0) return attempted;
+
+    const provider = context.codeReviewConfig?.resolvedModelSlot?.provider;
+    return typeof provider === 'string' && provider.length > 0
+        ? provider
+        : undefined;
+};

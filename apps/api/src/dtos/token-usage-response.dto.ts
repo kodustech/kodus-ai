@@ -150,6 +150,32 @@ export class DailyUsageByPrResponseDto extends ApiResponseBaseDto {
     data: DailyUsageByPrDto[];
 }
 
+export class UsageByReviewDto extends TokenUsageBaseDto {
+    @ApiProperty({ description: "The review run's correlation id" })
+    review: string;
+
+    @ApiProperty({ required: false })
+    prNumber?: number;
+
+    @ApiProperty({ required: false })
+    startedAt?: string;
+}
+
+export class UsageByReviewResponseDto extends ApiResponseBaseDto {
+    @ApiProperty({ type: UsageByReviewDto, isArray: true })
+    data: UsageByReviewDto[];
+}
+
+export class UsageByAreaDto extends TokenUsageBaseDto {
+    @ApiProperty({ description: 'Process area (review, kody_rules, …)' })
+    area: string;
+}
+
+export class UsageByAreaResponseDto extends ApiResponseBaseDto {
+    @ApiProperty({ type: UsageByAreaDto, isArray: true })
+    data: UsageByAreaDto[];
+}
+
 export class UsageByDeveloperDto extends TokenUsageBaseDto {
     @ApiProperty()
     developer: string;

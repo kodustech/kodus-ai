@@ -1,0 +1,34 @@
+{
+    "name": "closes-issue-reads-its-criteria-with-the-run-tenant",
+    "issue": "#1528",
+    "repository": {
+        "issues": [
+            {
+                "number": 9,
+                "title": "Show the assigned badge",
+                "body": "Agents miss their own tickets.\n\n## Acceptance criteria\n- Show the badge only when the ticket is assigned to the current user\n- Unassigned tickets never show it"
+            }
+        ]
+    },
+    "gitIssuesConnected": true,
+    "trackers": [],
+    "pullRequest": {
+        "title": "feat: assigned badge",
+        "body": "Closes #9",
+        "branch": "feature/assigned-badge"
+    },
+    "expect": {
+        "outcome": "validated",
+        "criteria": [
+            "Show the badge only when the ticket is assigned to the current user",
+            "Unassigned tickets never show it"
+        ],
+        "toolsCalled": [
+            "KODUS_GET_ISSUE"
+        ],
+        "commentNotContains": [
+            "Need Task Information",
+            "Insufficient Task Context"
+        ]
+    }
+}

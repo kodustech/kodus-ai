@@ -1,0 +1,26 @@
+[
+    {
+        "id": "missing-requirement",
+        "checks": "Reports the gap when PROJ-101 asks soft-delete to revoke sessions and the PR only sets deleted_at",
+        "pr": { "number": 101, "title": "Soft-delete users", "body": "Adds soft delete for user accounts.\n\nCloses PROJ-101.", "headRef": "feat/PROJ-101-soft-delete" },
+        "ticket": { "key": "PROJ-101", "task": "missing-requirement.task.md" },
+        "diff": "missing-requirement.diff",
+        "expect": { "outcome": "gap_found", "mentions": ["session"] }
+    },
+    {
+        "id": "fully-implemented",
+        "checks": "Passes the PR when it does everything PROJ-102 asks: lastSyncedAt stored, updated on sync, tested",
+        "pr": { "number": 102, "title": "Record the last sync time", "body": "Stores when the last successful sync ran.\n\nCloses PROJ-102.", "headRef": "feat/PROJ-102-last-synced" },
+        "ticket": { "key": "PROJ-102", "task": "fully-implemented.task.md" },
+        "diff": "fully-implemented.diff",
+        "expect": { "outcome": "success" }
+    },
+    {
+        "id": "no-task-context",
+        "checks": "Claims no gap when the linked ticket PROJ-103 cannot be read",
+        "pr": { "number": 103, "title": "Add formatPercent", "body": "Adds a percent formatter.\n\nCloses PROJ-103.", "headRef": "feat/PROJ-103-format-percent" },
+        "ticket": { "key": "PROJ-103", "task": null },
+        "diff": "no-task-context.diff",
+        "expect": { "outcome": "skipped" }
+    }
+]

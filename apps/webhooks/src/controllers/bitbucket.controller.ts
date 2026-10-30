@@ -54,6 +54,14 @@ export class BitbucketController {
                     event,
                     payload: {
                         ...payload,
+                        // Bitbucket Data Center sends the pull request under
+                        // `pullRequest` (capital R), while Cloud sends `pullrequest`.
+                        // Normalize once here so the mappers and the handler can rely
+                        // on a single key.
+                        // https://confluence.atlassian.com/bitbucketserver/event-payload-938025882.html
+                        ...(isDataCenterEvent && payload?.pullRequest
+                            ? { pullrequest: payload.pullRequest }
+                            : {}),
                         isDataCenterEvent,
                     },
                 })

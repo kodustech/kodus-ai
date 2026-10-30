@@ -14,12 +14,49 @@ import {
 } from "@components/ui/tooltip";
 import { formatUsd } from "@services/usage/format";
 import {
+    CostBreakdown,
     EnrichedModelUsage,
     ModelPricingInfo,
+    TierUsage,
 } from "@services/usage/types";
 import { AlertTriangleIcon, InfoIcon } from "lucide-react";
 
 import { M } from "../_lib/constants";
+
+/** Sum a slice of bracket buckets into one (for the ≤/>threshold collapse). */
+function mergeTierUsage(buckets: TierUsage[]): TierUsage {
+    return buckets.reduce(
+        (acc, b) => ({
+            input: acc.input + b.input,
+            output: acc.output + b.output,
+            total: acc.total + b.total,
+            outputReasoning: acc.outputReasoning + b.outputReasoning,
+            cacheRead: acc.cacheRead + b.cacheRead,
+            cacheWrite: acc.cacheWrite + b.cacheWrite,
+        }),
+        {
+            input: 0,
+            output: 0,
+            total: 0,
+            outputReasoning: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+        },
+    );
+}
+
+function mergeCost(costs: CostBreakdown[]): CostBreakdown {
+    return costs.reduce(
+        (acc, c) => ({
+            input: acc.input + c.input,
+            output: acc.output + c.output,
+            cacheRead: acc.cacheRead + c.cacheRead,
+            cacheWrite: acc.cacheWrite + c.cacheWrite,
+            total: acc.total + c.total,
+        }),
+        { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    );
+}
 
 function formatTokens(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
@@ -64,10 +101,19 @@ function PricingTooltip({
 }) {
     if (!info?.pricing) return null;
     const { input, output, cacheRead, cacheWrite } = info.pricing;
-    const hasTier =
-        input.tier || output.tier || cacheRead.tier || cacheWrite.tier;
+    const hasTier = !!(
+        input.tiers?.length ||
+        output.tiers?.length ||
+        cacheRead.tiers?.length ||
+        cacheWrite.tiers?.length
+    );
 
-    const row = (label: string, rate: { default: number; tier?: { rate: number } }) => (
+    // Collapsed display: the ">threshold" column shows the first tier's rate
+    // (a multi-tier model's higher bands aren't broken out in the tooltip).
+    const row = (
+        label: string,
+        rate: { default: number; tiers?: Array<{ rate: number }> },
+    ) => (
         <tr>
             <td className="text-text-secondary pr-3">{label}</td>
             <td className="text-text-primary pr-3 text-right tabular-nums">
@@ -75,7 +121,9 @@ function PricingTooltip({
             </td>
             {hasTier && (
                 <td className="text-text-primary text-right tabular-nums">
-                    {rate.tier ? `$${(rate.tier.rate * M).toFixed(4)}` : "—"}
+                    {rate.tiers?.[0]
+                        ? `$${(rate.tiers[0].rate * M).toFixed(4)}`
+                        : "—"}
                 </td>
             )}
         </tr>
@@ -157,21 +205,36 @@ function ModelBlock({
     row: EnrichedModelUsage;
     pricingInfo: ModelPricingInfo | undefined;
 }) {
-    const uncachedInput = Math.max(0, row.input - (row.cacheRead ?? 0));
-    const totalUncached =
-        (row.byTier?.le.input ?? 0) -
-        (row.byTier?.le.cacheRead ?? 0) +
-        ((row.byTier?.gt.input ?? 0) - (row.byTier?.gt.cacheRead ?? 0));
-    const inputThreshold = pricingInfo?.pricing?.input?.tier?.threshold;
+    const uncachedInput = Math.max(
+        0,
+        row.input - (row.cacheRead ?? 0) - (row.cacheWrite ?? 0),
+    );
     const isTiered = !!row.byTier && !!row.costByTier;
+
+    // The cost pipeline is N-tier internally; the table collapses it to two
+    // display buckets: `le` = the default-rate band (bracket 0), `gt` = every
+    // tiered band summed (brackets ≥1), with the cost summed correctly across
+    // whatever number of tiers the model has.
+    const le = isTiered ? row.byTier![0] : undefined;
+    const gt = isTiered ? mergeTierUsage(row.byTier!.slice(1)) : undefined;
+    const leCost = isTiered ? row.costByTier![0] : undefined;
+    const gtCost = isTiered ? mergeCost(row.costByTier!.slice(1)) : undefined;
+    // Label uses the FIRST breakpoint ("≤/>threshold"); for a multi-tier model
+    // the ">threshold" line blends the bands above it (cost stays exact).
+    const inputThreshold = pricingInfo?.pricing?.input?.tiers?.[0]?.threshold;
     const showCacheWrite = (row.cacheWrite ?? 0) > 0;
 
-    const leUncached = isTiered
-        ? Math.max(0, row.byTier!.le.input - row.byTier!.le.cacheRead)
+    // Uncached = total input minus BOTH cacheRead and cacheWrite (ai@7:
+    // input = noCache + cacheRead + cacheWrite); the cacheWrite tokens are
+    // priced on their own Cache-write row, so leaving them in here would
+    // double-count them.
+    const leUncached = le
+        ? Math.max(0, le.input - le.cacheRead - le.cacheWrite)
         : 0;
-    const gtUncached = isTiered
-        ? Math.max(0, row.byTier!.gt.input - row.byTier!.gt.cacheRead)
+    const gtUncached = gt
+        ? Math.max(0, gt.input - gt.cacheRead - gt.cacheWrite)
         : 0;
+    const totalUncached = leUncached + gtUncached;
 
     return (
         <Card className="p-0">
@@ -230,13 +293,13 @@ function ModelBlock({
                                 <td className="py-2 text-right">
                                     <PriceCell
                                         tokens={leUncached}
-                                        cost={row.costByTier!.le.input}
+                                        cost={leCost!.input}
                                     />
                                 </td>
                                 <td className="py-2 text-right">
                                     <PriceCell
                                         tokens={gtUncached}
-                                        cost={row.costByTier!.gt.input}
+                                        cost={gtCost!.input}
                                     />
                                 </td>
                             </>
@@ -263,14 +326,14 @@ function ModelBlock({
                             <>
                                 <td className="py-2 text-right">
                                     <PriceCell
-                                        tokens={row.byTier!.le.cacheRead}
-                                        cost={row.costByTier!.le.cacheRead}
+                                        tokens={le!.cacheRead}
+                                        cost={leCost!.cacheRead}
                                     />
                                 </td>
                                 <td className="py-2 text-right">
                                     <PriceCell
-                                        tokens={row.byTier!.gt.cacheRead}
-                                        cost={row.costByTier!.gt.cacheRead}
+                                        tokens={gt!.cacheRead}
+                                        cost={gtCost!.cacheRead}
                                     />
                                 </td>
                             </>
@@ -295,14 +358,14 @@ function ModelBlock({
                             <>
                                 <td className="py-2 text-right">
                                     <PriceCell
-                                        tokens={row.byTier!.le.output}
-                                        cost={row.costByTier!.le.output}
+                                        tokens={le!.output}
+                                        cost={leCost!.output}
                                     />
                                 </td>
                                 <td className="py-2 text-right">
                                     <PriceCell
-                                        tokens={row.byTier!.gt.output}
-                                        cost={row.costByTier!.gt.output}
+                                        tokens={gt!.output}
+                                        cost={gtCost!.output}
                                     />
                                 </td>
                             </>
@@ -327,14 +390,14 @@ function ModelBlock({
                                 <>
                                     <td className="py-2 text-right">
                                         <PriceCell
-                                            tokens={row.byTier!.le.cacheWrite}
-                                            cost={row.costByTier!.le.cacheWrite}
+                                            tokens={le!.cacheWrite}
+                                            cost={leCost!.cacheWrite}
                                         />
                                     </td>
                                     <td className="py-2 text-right">
                                         <PriceCell
-                                            tokens={row.byTier!.gt.cacheWrite}
-                                            cost={row.costByTier!.gt.cacheWrite}
+                                            tokens={gt!.cacheWrite}
+                                            cost={gtCost!.cacheWrite}
                                         />
                                     </td>
                                 </>
@@ -372,9 +435,7 @@ export const ModelBreakdownTable = ({
     if (rows.length === 0) return null;
     return (
         <div className="flex flex-col gap-3">
-            <h2 className="text-text-secondary text-sm font-medium uppercase tracking-wide">
-                Per-model breakdown
-            </h2>
+            <h2 className="text-sm font-semibold">Per-model breakdown</h2>
             <Accordion type="multiple" className="flex flex-col gap-3">
                 {rows.map((row) => (
                     <ModelBlock

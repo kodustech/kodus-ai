@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
+import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { MessageTemplateProcessor } from '@libs/code-review/infrastructure/adapters/services/messageTemplateProcessor.service';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { ObservabilityService } from '@libs/core/log/observability.service';
+import { setLlmObservability } from '@libs/llm/llm-observability';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -65,6 +66,9 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
                 return { text: LLM_SUMMARY };
             }),
         };
+        // LLM.run reads observability through the port, not DI — register the mock
+        // so the summary call is intercepted (no live model call).
+        setLlmObservability(mockObservabilityService as any);
 
         mockCodeManagementService = {
             getPullRequestByNumber: jest.fn(),
@@ -80,9 +84,9 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 { provide: MessageTemplateProcessor, useValue: {} },
-                { provide: PromptRunnerService, useValue: {} },
                 {
                     provide: ObservabilityService,
                     useValue: mockObservabilityService,
@@ -135,7 +139,6 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
             mockOrganizationAndTeamData as any,
             'en-US',
             summaryConfig as any,
-            undefined, // no byokConfig
             true, // isCommitRun = true
         );
 
@@ -177,7 +180,6 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
             mockOrganizationAndTeamData as any,
             'en-US',
             summaryConfig as any,
-            undefined,
             true, // isCommitRun = true
         );
 
@@ -216,7 +218,6 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
             mockOrganizationAndTeamData as any,
             'en-US',
             summaryConfig as any,
-            undefined,
             true, // isCommitRun = true
         );
 

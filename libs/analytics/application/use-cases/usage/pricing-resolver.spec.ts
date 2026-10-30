@@ -15,10 +15,12 @@ const catalogPricing = (opts: {
             input: {
                 default: perToken(opts.inputPerM),
                 ...(opts.inputPerMTier !== undefined && {
-                    tier: {
-                        threshold: 200_000,
-                        rate: perToken(opts.inputPerMTier),
-                    },
+                    tiers: [
+                        {
+                            threshold: 200_000,
+                            rate: perToken(opts.inputPerMTier),
+                        },
+                    ],
                 }),
             },
             output: { default: perToken(opts.outputPerM) },
@@ -73,7 +75,7 @@ describe('PricingResolver', () => {
             cacheWrite: { default: 0 },
         });
         // Manual pricing is flat — no tiered rate.
-        expect(resolved.rates.input.tier).toBeUndefined();
+        expect(resolved.rates.input.tiers).toBeUndefined();
         expect(tokenPricingUseCase.execute).not.toHaveBeenCalled();
     });
 
@@ -93,7 +95,7 @@ describe('PricingResolver', () => {
         expect(resolved.priced).toBe(true);
         expect(resolved.rates.input).toEqual({
             default: 2e-6,
-            tier: { threshold: 200_000, rate: 4e-6 },
+            tiers: [{ threshold: 200_000, rate: 4e-6 }],
         });
         expect(resolved.rates.output).toEqual({ default: 12e-6 });
         expect(tokenPricingUseCase.execute).toHaveBeenCalledWith('gemini-3.1-pro');

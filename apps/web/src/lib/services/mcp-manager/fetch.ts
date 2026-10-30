@@ -238,7 +238,6 @@ export const createMCPCustomPlugin = async (data: {
     oauthScopes?: string[];
     dynamicRegistration?: boolean;
 }) => {
-    console.log(data);
     const response = await mcpManagerFetch<CustomMCPPlugin>(
         `/mcp/integration/custom`,
         {

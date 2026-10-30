@@ -74,7 +74,8 @@ interface IWebhookGitlabChanges {
     milestone_id: Compare<number | null>;
     updated_by_id: Compare<number | null>;
     updated_at: Compare<string>;
-    draft: Compare<boolean>;
+    draft?: Compare<boolean | null>;
+    work_in_progress?: Compare<boolean | null>;
     labels: Compare<IWebhookGitlabLabel[]>;
     last_edited_at: Compare<string | null>;
     last_edited_by_id: Compare<number | null>;
@@ -107,7 +108,8 @@ interface IWebhookGitlabMergeRequest {
     source: IWebhookGitlabProject;
     target: IWebhookGitlabProject;
     last_commit: IWebhookGitlabCommit;
-    work_in_progress: boolean;
+    work_in_progress?: boolean | null;
+    draft?: boolean | null;
     assignee: IWebhookGitlabUser;
     approved_by_ids?: number[];
     approver_ids?: number[];
@@ -189,8 +191,8 @@ interface IWebhookGitlabMergeRequestAttributes {
     state_id: number;
     state: WebhookGitlabMergeRequestState;
     blocking_discussions_resolved: boolean;
-    work_in_progress: boolean;
-    draft: boolean;
+    work_in_progress?: boolean | null;
+    draft?: boolean | null;
     first_contribution: boolean;
     target_project_id: number;
     description: string;
@@ -231,6 +233,7 @@ interface IWebhookGitlabCommentAttributes {
 export interface IWebhookGitlabMergeRequestEvent {
     object_kind: 'merge_request';
     event_type: 'merge_request';
+    action?: string;
     user: IWebhookGitlabUser;
     project: IWebhookGitlabProject;
     repository: IWebhookGitlabRepository;

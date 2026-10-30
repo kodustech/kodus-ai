@@ -3,13 +3,18 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Repository, EntityManager } from 'typeorm';
 
 import { createLogger } from '@libs/core/log/logger';
-import { IWorkflowJobRepository } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
+import {
+    IWorkflowJobRepository,
+    StaleWorkflowJobReapResult,
+} from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
 import { IWorkflowJob } from '@libs/core/workflow/domain/interfaces/workflow-job.interface';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { IJobExecutionHistory } from '@libs/core/workflow/domain/interfaces/job-execution-history.interface';
 
 import { WorkflowJobModel } from './schemas/workflow-job.model';
+import { stripNulCharsWithReport } from './strip-nul';
 
 @Injectable()
 export class WorkflowJobRepository implements IWorkflowJobRepository {
@@ -20,6 +25,59 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         private readonly repository: Repository<WorkflowJobModel>,
     ) {}
 
+    /**
+     * Strip NUL characters from every jsonb-bound field, and say so when it
+     * happened.
+     *
+     * The stripping on its own is invisible by design: it turns a loud failure
+     * into a quiet success. That is right for the customer and wrong for us --
+     * without this log we would never learn how often a NUL arrives, which
+     * field carries it, or whether it is one broken integration or a long tail.
+     *
+     * Logged at `warn`, not `error`: the job is saved and the review runs, so
+     * nothing is broken any more; but content did change on the way in, and
+     * that is worth someone's attention. Field PATHS only -- the values are
+     * customer code and never belong in a log line.
+     */
+    private sanitizeJsonbFields<T extends Record<string, unknown>>(
+        fields: T,
+        context: Record<string, unknown>,
+    ): T {
+        const out = {} as T;
+        const strippedPaths: string[] = [];
+
+        for (const [field, value] of Object.entries(fields)) {
+            if (value === undefined) {
+                out[field as keyof T] = value as T[keyof T];
+                continue;
+            }
+
+            const report = stripNulCharsWithReport(value);
+            out[field as keyof T] = report.value as T[keyof T];
+
+            if (report.stripped) {
+                strippedPaths.push(
+                    ...report.paths.map((path) => `${field}.${path}`),
+                );
+            }
+        }
+
+        if (strippedPaths.length) {
+            this.logger.warn({
+                message:
+                    'Stripped NUL character(s) before writing jsonb — the row would have been rejected',
+                context: WorkflowJobRepository.name,
+                metadata: {
+                    ...context,
+                    strippedPaths,
+                    strippedCount: strippedPaths.length,
+                },
+            });
+        }
+
+        return out;
+    }
+
     async create(
         job: Omit<IWorkflowJob, 'id' | 'createdAt' | 'updatedAt'>,
         transactionManager?: EntityManager,
@@ -29,11 +87,33 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 ? transactionManager.getRepository(WorkflowJobModel)
                 : this.repository;
 
+            // The four jsonb columns below carry content this service did not
+            // author -- webhook bodies, branch and file names, diffs, model
+            // output. A single NUL in any of them makes PostgreSQL reject the
+            // whole INSERT (`unsupported Unicode escape sequence`), the
+            // transaction rolls back, and the webhook that asked for the review
+            // is dropped with nothing the customer can see. Sanitising at the
+            // column boundary is the only place that covers every producer.
+            const sanitized = this.sanitizeJsonbFields(
+                {
+                    payload: job.payload,
+                    metadata: job.metadata,
+                    waitingForEvent: job.waitingForEvent,
+                    pipelineState: job.pipelineState,
+                },
+                {
+                    operation: 'create',
+                    correlationId: job.correlationId,
+                    workflowType: job.workflowType,
+                    organizationId: job.organizationAndTeamData?.organizationId,
+                },
+            );
+
             const model = repo.create({
                 correlationId: job.correlationId,
                 workflowType: job.workflowType,
                 handlerType: job.handlerType,
-                payload: job.payload,
+                payload: sanitized.payload,
                 status: job.status,
                 priority: job.priority,
                 retryCount: job.retryCount,
@@ -46,9 +126,9 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 startedAt: job.startedAt,
                 completedAt: job.completedAt,
                 currentStage: job.currentStage,
-                metadata: job.metadata,
-                waitingForEvent: job.waitingForEvent,
-                pipelineState: job.pipelineState,
+                metadata: sanitized.metadata,
+                waitingForEvent: sanitized.waitingForEvent,
+                pipelineState: sanitized.pipelineState,
             });
 
             const saved = await repo.save(model);
@@ -97,13 +177,25 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 updateData.completedAt = data.completedAt;
             if (data.currentStage !== undefined)
                 updateData.currentStage = data.currentStage;
-            if (data.metadata !== undefined)
-                updateData.metadata = data.metadata;
+            // Same jsonb constraint as create(): an UPDATE carrying a NUL
+            // fails identically, and pipelineState is rewritten on every stage
+            // transition -- the most frequent write of the four.
+            const patch = this.sanitizeJsonbFields(
+                {
+                    payload: data.payload,
+                    metadata: data.metadata,
+                    waitingForEvent: data.waitingForEvent,
+                    pipelineState: data.pipelineState,
+                },
+                { operation: 'update', jobId: id },
+            );
+
+            if (data.metadata !== undefined) updateData.metadata = patch.metadata;
             if (data.waitingForEvent !== undefined)
-                updateData.waitingForEvent = data.waitingForEvent;
+                updateData.waitingForEvent = patch.waitingForEvent;
             if (data.pipelineState !== undefined)
-                updateData.pipelineState = data.pipelineState;
-            if (data.payload !== undefined) updateData.payload = data.payload;
+                updateData.pipelineState = patch.pipelineState;
+            if (data.payload !== undefined) updateData.payload = patch.payload;
 
             await this.repository.update({ uuid: id }, updateData);
 
@@ -173,6 +265,54 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
                 context: WorkflowJobRepository.name,
                 error,
                 metadata: { query },
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * Reaps jobs orphaned in PROCESSING by a crashed/evicted worker.
+     *
+     * Only `PROCESSING` rows are eligible (never `PENDING` or the
+     * legitimately-paused `WAITING_FOR_EVENT`), and only those whose
+     * `updatedAt` predates the cutoff — a job still making progress bumps
+     * `updatedAt` (currentStage/pipelineState updates) and is left alone.
+     * Single UPDATE ... RETURNING so the selection and mutation are atomic.
+     */
+    async failStaleProcessing(params: {
+        olderThan: Date;
+        lastError: string;
+        errorClassification: ErrorClassification;
+    }): Promise<StaleWorkflowJobReapResult[]> {
+        try {
+            const result = await this.repository
+                .createQueryBuilder()
+                .update(WorkflowJobModel)
+                .set({
+                    status: JobStatus.FAILED,
+                    errorClassification: params.errorClassification,
+                    lastError: params.lastError,
+                    completedAt: () => 'NOW()',
+                })
+                .where('status = :status', { status: JobStatus.PROCESSING })
+                .andWhere('"updatedAt" < :olderThan', {
+                    olderThan: params.olderThan,
+                })
+                .returning([
+                    'uuid',
+                    'workflowType',
+                    'organizationId',
+                    'startedAt',
+                ])
+                .execute();
+
+            return (result.raw ?? []) as StaleWorkflowJobReapResult[];
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to reap stale PROCESSING workflow jobs',
+                context: WorkflowJobRepository.name,
+                error,
+                metadata: { olderThan: params.olderThan },
             });
             throw error;
         }

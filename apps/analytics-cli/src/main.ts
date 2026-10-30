@@ -4,14 +4,11 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { Logger, Module } from '@nestjs/common';
 
-import { LLMModule } from '@kodus/kodus-common/llm';
-
 import {
     AnalyticsWarehouseModule,
     BackfillOrchestratorService,
     PullRequestIngestionService,
 } from '@libs/ee/analytics-warehouse';
-import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { SharedConfigModule } from '@libs/shared/infrastructure/shared-config.module';
 import { SharedLogModule } from '@libs/shared/infrastructure/shared-log.module';
 import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
@@ -53,8 +50,6 @@ import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
         // LLM is only used by the classifier provider registered inside
         // AnalyticsWarehouseModule; the backfill orchestrator itself
         // doesn't call any model. Required here so Nest can resolve the
-        // classifier's `PromptRunnerService` dep at bootstrap.
-        LLMModule.forRoot({ logger: LoggerWrapperService }),
         AnalyticsWarehouseModule.forRoot(),
     ],
 })
@@ -142,9 +137,7 @@ async function main() {
     const onSignal = (sig: string) => {
         if (signaled) return;
         signaled = true;
-        logger.warn(
-            `received ${sig} — finishing current window then exiting`,
-        );
+        logger.warn(`received ${sig} — finishing current window then exiting`);
         ac.abort();
     };
     process.on('SIGINT', () => onSignal('SIGINT'));
@@ -183,7 +176,6 @@ async function main() {
 }
 
 main().catch((err) => {
-     
     console.error('backfill crashed:', err);
     process.exit(1);
 });

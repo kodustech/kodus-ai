@@ -23,6 +23,7 @@ describe('GitHubPullRequestHandler', () => {
     let savePullRequestUseCase: { execute: jest.Mock };
     let codeManagementService: {
         getCommitsForPullRequestForCodeReview: jest.Mock;
+        getPullRequest: jest.Mock;
     };
     let generateIssuesFromPrClosedUseCase: { execute: jest.Mock };
     let enqueueCodeReviewJobUseCase: { execute: jest.Mock };
@@ -72,6 +73,11 @@ describe('GitHubPullRequestHandler', () => {
             getCommitsForPullRequestForCodeReview: jest
                 .fn()
                 .mockResolvedValue([]),
+            getPullRequest: jest.fn().mockResolvedValue({
+                number: 42,
+                head: { ref: 'feature', sha: 'new-head-sha' },
+                base: { ref: 'main', sha: 'base-sha' },
+            }),
         };
         generateIssuesFromPrClosedUseCase = {
             execute: jest.fn(),
@@ -211,5 +217,53 @@ describe('GitHubPullRequestHandler', () => {
                 }),
             }),
         );
+    });
+
+    describe('`@kody -v <agent>` comments', () => {
+        const comment = (body: string) => ({
+            event: 'issue_comment',
+            platformType: PlatformType.GITHUB,
+            payload: {
+                action: 'created',
+                issue: { number: 42, pull_request: {} },
+                comment: { id: 777, body },
+                repository: {
+                    id: 12345,
+                    name: 'test-repo',
+                    full_name: 'org/test-repo',
+                },
+                sender: { id: 1 },
+            },
+        });
+
+        it('runs a review of only that custom agent', async () => {
+            await handler.execute(comment('@kody -v ledger-rules') as any);
+
+            expect(enqueueCodeReviewJobUseCase.execute).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    codeManagementPayload: expect.objectContaining({
+                        origin: 'command',
+                        onlyCustomAgent: 'ledger-rules',
+                        triggerCommentId: '777',
+                    }),
+                }),
+            );
+        });
+
+        it('leaves `@kody -v business-logic` to the business validation', async () => {
+            await handler
+                .execute(comment('@kody -v business-logic') as any)
+                .catch(() => undefined);
+
+            expect(enqueueCodeReviewJobUseCase.execute).not.toHaveBeenCalled();
+        });
+
+        it('sets no agent on a plain review command', async () => {
+            await handler.execute(comment('@kody start-review') as any);
+
+            const [{ codeManagementPayload }] =
+                enqueueCodeReviewJobUseCase.execute.mock.calls[0];
+            expect(codeManagementPayload.onlyCustomAgent).toBeUndefined();
+        });
     });
 });

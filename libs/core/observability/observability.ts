@@ -720,6 +720,8 @@ export class ObservabilitySystem {
                     flushIntervalMs:
                         this.config.mongodb.flushIntervalMs || 30000,
                     ttlDays: this.config.mongodb.ttlDays ?? 0, // Default 0 (Infinite Retention) for Time-Series
+                    enableObservability:
+                        this.config.mongodb.enableObservability ?? true,
                     secondaryIndexes: this.config.mongodb.secondaryIndexes || [
                         'metadata.component',
                         'metadata.tenantId',

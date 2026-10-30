@@ -11,19 +11,22 @@ export default async function Route(context: {
     params: Promise<{ id: string }>;
     searchParams: Promise<{ repositoryId?: string; directoryId?: string }>;
 }) {
-    const params = await context.params;
-    const searchParams = await context.searchParams;
-
-    const rulesResponse = await getLibraryKodyRulesWithFeedback({
-        page: 1,
-        limit: 1000, // Use maximum allowed limit to get all rules
-    });
+    // params, searchParams, the rules list and the selected team id are all
+    // independent — resolve them in one round-trip instead of chaining four.
+    // getTeamParameters still depends on teamId and runs after the rule guard.
+    const [params, searchParams, rulesResponse, teamId] = await Promise.all([
+        context.params,
+        context.searchParams,
+        getLibraryKodyRulesWithFeedback({
+            page: 1,
+            limit: 1000, // Use maximum allowed limit to get all rules
+        }),
+        getGlobalSelectedTeamId(),
+    ]);
 
     const rules = rulesResponse?.data || [];
     const rule = rules.find((r) => r.uuid === params.id);
     if (!rule) redirect("/library/kody-rules");
-
-    const teamId = await getGlobalSelectedTeamId();
 
     const { configValue } = await getTeamParameters<{
         configValue: AutomationCodeReviewConfigType;

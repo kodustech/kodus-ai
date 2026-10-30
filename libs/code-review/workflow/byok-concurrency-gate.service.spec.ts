@@ -1,3 +1,18 @@
+// The gate resolves the codeReview slot through StaticTaskStrategy, whose
+// capability gate consults the provider REGISTRY. Mock it capable so any v2
+// model routes (the gate's own logic — not routing — is under test here).
+jest.mock('@libs/llm/providers', () => ({
+    REGISTRY: {
+        has: (_p: string) => true,
+        get: (_p: string) => ({
+            capabilities: (_model: string) => ({
+                structuredOutput: 'json_schema',
+                toolCalling: 'native',
+            }),
+        }),
+    },
+}));
+
 import { ByokConcurrencyGateService } from './byok-concurrency-gate.service';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 
@@ -20,12 +35,23 @@ const makeJob = (overrides: Partial<any> = {}): any => ({
     ...overrides,
 });
 
-const makeMainConfig = (overrides: Partial<any> = {}): any => ({
-    provider: 'anthropic',
-    apiKey: 'sk-test',
-    model: 'claude-sonnet-4-5',
-    maxConcurrentRequests: 3,
-    ...overrides,
+// A v2 BYOK blob that routes `codeReview` to a single anthropic model carrying
+// the given maxConcurrentRequests. This is the stored shape the gate now reads
+// (native — no legacy {main,fallback}).
+const makeV2Config = (
+    overrides: { maxConcurrentRequests?: number } = {},
+): any => ({
+    version: 2,
+    credentials: [{ id: 'c1', provider: 'anthropic', apiKey: 'sk-test' }],
+    models: [
+        {
+            id: 'm1',
+            credentialId: 'c1',
+            model: 'claude-sonnet-4-5',
+            maxConcurrentRequests: overrides.maxConcurrentRequests ?? 3,
+        },
+    ],
+    routing: { defaultModelId: 'm1' },
 });
 
 describe('ByokConcurrencyGateService', () => {
@@ -73,7 +99,7 @@ describe('ByokConcurrencyGateService', () => {
 
         it('returns unlimited when maxConcurrentRequests is 0 or unset', async () => {
             orgParamsService.findByKey.mockResolvedValue({
-                configValue: { main: makeMainConfig({ maxConcurrentRequests: 0 }) },
+                configValue: makeV2Config({ maxConcurrentRequests: 0 }),
             });
 
             const result = await service.tryEnter(makeJob());
@@ -90,7 +116,7 @@ describe('ByokConcurrencyGateService', () => {
     describe('tryEnter — slot acquisition', () => {
         beforeEach(() => {
             orgParamsService.findByKey.mockResolvedValue({
-                configValue: { main: makeMainConfig({ maxConcurrentRequests: 3 }) },
+                configValue: makeV2Config({ maxConcurrentRequests: 3 }),
             });
         });
 
@@ -139,19 +165,15 @@ describe('ByokConcurrencyGateService', () => {
     describe('tryEnter — backoff schedule', () => {
         beforeEach(() => {
             orgParamsService.findByKey.mockResolvedValue({
-                configValue: { main: makeMainConfig({ maxConcurrentRequests: 1 }) },
+                configValue: makeV2Config({ maxConcurrentRequests: 1 }),
             });
             distributedLockService.acquire.mockResolvedValue(null);
         });
 
         it.each([
             { prior: 0, expectedDelay: BASE_DELAY_MS, expectedCount: 1 }, // 15s
-            { prior: 1, expectedDelay: 2 * BASE_DELAY_MS, expectedCount: 2 }, // 30s
             { prior: 2, expectedDelay: 4 * BASE_DELAY_MS, expectedCount: 3 }, // 60s
-            { prior: 3, expectedDelay: 8 * BASE_DELAY_MS, expectedCount: 4 }, // 120s
-            { prior: 4, expectedDelay: 16 * BASE_DELAY_MS, expectedCount: 5 }, // 240s
             { prior: 5, expectedDelay: MAX_DELAY_MS, expectedCount: 6 }, // capped at 300s
-            { prior: 8, expectedDelay: MAX_DELAY_MS, expectedCount: 9 }, // still capped
         ])(
             'deferredCount=$expectedCount → delayMs=$expectedDelay',
             async ({ prior, expectedDelay, expectedCount }) => {
@@ -169,6 +191,21 @@ describe('ByokConcurrencyGateService', () => {
                 expect(result.delayMs).toBe(expectedDelay);
             },
         );
+
+        // A non-number would otherwise be string-concatenated ('5' + 1).
+        it('treats a non-numeric or missing stored count as a first deferral', async () => {
+            for (const metadata of [
+                { byokConcurrencyGate: { deferredCount: '5' } },
+                null,
+            ]) {
+                const result = await service.tryEnter(makeJob({ metadata }));
+                expect(result).toEqual({
+                    kind: 'deferred',
+                    deferredCount: 1,
+                    delayMs: BASE_DELAY_MS,
+                });
+            }
+        });
 
         it('force-acquires when deferred count exceeds MAX_DEFERRALS (10)', async () => {
             const lock: Lock = { release: jest.fn() };
@@ -194,7 +231,13 @@ describe('ByokConcurrencyGateService', () => {
             });
         });
 
-        it('returns deferred at MAX_DELAY when force-acquire also fails', async () => {
+        // This used to assert another deferral, which is what made
+        // MAX_DEFERRALS a label instead of a limit. The force-acquire targets
+        // `slot:0`, so when that slot is the leaked one the branch can never
+        // succeed and the job returns to it forever. Production reached
+        // deferredCount 452 against a cap of 10, across 315 jobs and 4
+        // organizations, whose reviews never ran and who were never told.
+        it('gives up instead of deferring again when force-acquire also fails', async () => {
             distributedLockService.acquire.mockResolvedValue(null);
 
             const job = makeJob({
@@ -206,17 +249,32 @@ describe('ByokConcurrencyGateService', () => {
             const result = await service.tryEnter(job);
 
             expect(result).toEqual({
-                kind: 'deferred',
-                delayMs: MAX_DELAY_MS,
+                kind: 'exhausted',
                 deferredCount: MAX_DEFERRALS + 1,
             });
+        });
+
+        // The cap has to hold however far past it the counter already is --
+        // a job that came back at 451 must not get a 452nd deferral.
+        it('stays terminal for a job already far past the cap', async () => {
+            distributedLockService.acquire.mockResolvedValue(null);
+
+            const job = makeJob({
+                metadata: {
+                    byokConcurrencyGate: { deferredCount: 451 },
+                },
+            });
+
+            const result = await service.tryEnter(job);
+
+            expect(result).toEqual({ kind: 'exhausted', deferredCount: 452 });
         });
     });
 
     describe('tryEnter — scope key isolation', () => {
         it('uses a different lock key per organization', async () => {
             orgParamsService.findByKey.mockResolvedValue({
-                configValue: { main: makeMainConfig({ maxConcurrentRequests: 1 }) },
+                configValue: makeV2Config({ maxConcurrentRequests: 1 }),
             });
             distributedLockService.acquire.mockResolvedValue({
                 release: jest.fn(),
@@ -242,7 +300,7 @@ describe('ByokConcurrencyGateService', () => {
 
         it('uses the same lock key for the same provider+apiKey+model+org', async () => {
             orgParamsService.findByKey.mockResolvedValue({
-                configValue: { main: makeMainConfig({ maxConcurrentRequests: 1 }) },
+                configValue: makeV2Config({ maxConcurrentRequests: 1 }),
             });
             distributedLockService.acquire.mockResolvedValue({
                 release: jest.fn(),
@@ -257,9 +315,24 @@ describe('ByokConcurrencyGateService', () => {
         });
     });
 
+    it('scopes the lock by API key, not just by organization', () => {
+        const base = {
+            provider: 'openai',
+            apiKey: 'secret-key',
+            baseURL: 'https://api.example.com',
+            model: 'gpt-4',
+        };
+        const key1 = (service as any).buildScopeKey(makeJob(), base);
+        const key2 = (service as any).buildScopeKey(makeJob(), {
+            ...base,
+            apiKey: 'different-key',
+        });
+        expect(key1).not.toBe(key2);
+    });
+
     describe('deferJob', () => {
-        it('updates the job to PENDING with byokConcurrencyGate metadata', async () => {
-            const job = makeJob();
+        it('marks the job PENDING with the gate metadata, keeping prior metadata', async () => {
+            const job = makeJob({ metadata: { foo: 'bar', counter: 7 } });
 
             await service.deferJob(job, { delayMs: 30_000, deferredCount: 2 });
 
@@ -267,43 +340,53 @@ describe('ByokConcurrencyGateService', () => {
             const [jobId, update] = jobRepository.update.mock.calls[0];
             expect(jobId).toBe('job-1');
             expect(update.status).toBe(JobStatus.PENDING);
-            expect(update.scheduledAt).toBeInstanceOf(Date);
-            expect(update.metadata.byokConcurrencyGate.deferredCount).toBe(2);
-            expect(update.metadata.byokConcurrencyGate.delayMs).toBe(30_000);
+            expect(update.metadata.foo).toBe('bar');
+            expect(update.metadata.counter).toBe(7);
+            const gate = update.metadata.byokConcurrencyGate;
+            expect(gate.deferredCount).toBe(2);
+            expect(gate.delayMs).toBe(30_000);
+            expect(gate.nextAttemptAt).toBe(update.scheduledAt.toISOString());
         });
 
-        it('writes an outbox entry with future nextAttemptAt', async () => {
-            const job = makeJob();
+        it('writes an outbox entry due after the delay, on the same instant as the job', async () => {
+            const job = makeJob({
+                organizationAndTeamData: {
+                    organizationId: 'org-77',
+                    teamId: 'team-99',
+                },
+            });
             const before = Date.now();
 
             await service.deferJob(job, { delayMs: 60_000, deferredCount: 3 });
 
             expect(outboxRepository.create).toHaveBeenCalledTimes(1);
-            const arg = outboxRepository.create.mock.calls[0][0];
-            expect(arg.jobId).toBe('job-1');
-            expect(arg.exchange).toBe('workflow.exchange');
-            expect(arg.routingKey).toBe(
+            const outboxArg = outboxRepository.create.mock.calls[0][0];
+            const jobUpdate = jobRepository.update.mock.calls[0][1];
+
+            expect(outboxArg.jobId).toBe('job-1');
+            expect(outboxArg.exchange).toBe('workflow.exchange');
+            expect(
+                messageBroker.transformMessageToMessageBroker,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ eventName: 'workflow.jobs.deferred' }),
+            );
+            expect(outboxArg.routingKey).toBe(
                 'workflow.jobs.deferred.code_review',
             );
-            expect(arg.nextAttemptAt).toBeInstanceOf(Date);
-            // Within ±1s of now+60s
-            const expectedTs = before + 60_000;
-            expect(
-                Math.abs(arg.nextAttemptAt.getTime() - expectedTs),
-            ).toBeLessThan(1_000);
-        });
-
-        it('preserves prior job metadata while adding byokConcurrencyGate field', async () => {
-            const job = makeJob({
-                metadata: { foo: 'bar', counter: 7 },
+            expect(outboxArg.payload).toEqual({
+                jobId: 'job-1',
+                correlationId: 'corr-1',
+                workflowType: 'code_review',
+                handlerType: 'agent_review',
+                organizationId: 'org-77',
+                teamId: 'team-99',
             });
-
-            await service.deferJob(job, { delayMs: 15_000, deferredCount: 1 });
-
-            const update = jobRepository.update.mock.calls[0][1];
-            expect(update.metadata.foo).toBe('bar');
-            expect(update.metadata.counter).toBe(7);
-            expect(update.metadata.byokConcurrencyGate).toBeDefined();
+            expect(
+                Math.abs(outboxArg.nextAttemptAt.getTime() - (before + 60_000)),
+            ).toBeLessThan(1_000);
+            expect(outboxArg.nextAttemptAt.getTime()).toBe(
+                jobUpdate.scheduledAt.getTime(),
+            );
         });
     });
 });

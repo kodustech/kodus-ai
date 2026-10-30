@@ -1,8 +1,4 @@
-export type RepositorySettingsSeverity =
-    | 'low'
-    | 'medium'
-    | 'high'
-    | 'critical';
+export type RepositorySettingsSeverity = 'low' | 'medium' | 'high' | 'critical';
 
 export type RepositorySettingsLevel =
     | 'default'

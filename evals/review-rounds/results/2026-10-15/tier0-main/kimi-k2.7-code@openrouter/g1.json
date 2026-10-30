@@ -1,0 +1,604 @@
+{
+  "model": "kimi-k2.7-code@openrouter",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "53d0ebdf770e24c6841bb578c550fdf5cfc9f5fc4a717a339b1de93e7a48047d"
+  },
+  "startedAt": "2026-10-15T16:21:24.780Z",
+  "updatedAt": "2026-10-15T16:38:21.676Z",
+  "complete": true,
+  "selectedCases": [
+    "R2-consequence-status-implemented",
+    "K4-rule-repeats-declined-bug",
+    "P18-rule-timeout-out-of-40"
+  ],
+  "casesSourceDigest": "939ce593ae44bbc2b60432207fad817e692a493dc29a4aa520976c2857a57fd3",
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 4,
+        "violations": 2,
+        "rate": 0.5
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 2,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 6,
+        "violations": 0,
+        "rate": 0
+      },
+      "index-reference (#2039)": {
+        "n": 12,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R2-consequence-status-implemented · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "K4-rule-repeats-declined-bug · finishRun-repeat [not_deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 0
+      },
+      "K4-rule-repeats-declined-bug · finishBatch-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P18-rule-timeout-out-of-40 · geocode-timeout-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 2,
+        "delivered": 2
+      },
+      "P18-rule-timeout-out-of-40 · timezone-timeout-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 231054,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The changed fetchStatus propagates NotReadyError unchanged, which activates pollCharge's handler that calls the non-idempotent gw.submit. WHY: errors.ts documents NotReadyError as 'the gateway has the charge but has not settled it yet', while pollCharge treats it as 'the gateway never received it' and resubmits; because submit creates a new charge every time, this can produce duplicate charges for a single transaction. HOW: Clarify the intended semantics in errors.ts (or in pollCharge's comment) and align the handler — if NotReadyError means the charge is pending, pollCharge should retry fetchStatus or wait instead of resubmitting.",
+          "keep": true,
+          "rationale": "Verified: errors.ts documents NotReadyError as 'the gateway has the charge but has not settled it yet (transient)', while poller.ts's pollCharge comment states 'NotReadyError means \"the gateway never received it\": resubmit' and its handler calls gw.submit(charge.payload). gateway.ts documents submit as 'NOT idempotent: every call creates a new charge.' The changed fetchStatus (status.ts:8-9) now propagates NotReadyError unchanged, so it reaches pollCharge's resubmit path. This is a different failure (duplicate charges) from the prior review entry, which only addressed misclassifying NotReadyError as FailedError; that entry's fix actually enables this new problem. The finding should be kept and can reference revisesSuggestionId 'round-a-propagate'.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `fetchStatus` now propagates `NotReadyError` unchanged, `pollCharge` treats it as a missing charge and calls the non-idempotent `gw.submit`, which can create duplicate charges for a single transaction. Update `errors.ts` or `pollCharge`'s comment to clarify that `NotReadyError` means the charge exists but is unsettled, then change `pollCharge` to retry `fetchStatus` or wait instead of resubmitting."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "R2-consequence-status-implemented",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 295702,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError from fetchStatus lets pollCharge catch it and call gw.submit, which the Gateway interface documents as non-idempotent ('every call creates a new charge'). WHY: When a charge exists but is not yet settled (the documented meaning of NotReadyError in errors.ts), the poller will create a duplicate charge instead of waiting. HOW: Decide the intended contract—if NotReadyError really means 'not settled,' pollCharge must not resubmit; if it means 'never received,' fix errors.ts and ensure status never returns it for an existing charge, or make submit idempotent.",
+          "keep": true,
+          "rationale": "The claim is technically correct. errors.ts documents NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\", while gateway.ts documents submit as \"NOT idempotent: every call creates a new charge.\" status.ts:8-9 re-throws NotReadyError, and poller.ts catches it and calls gw.submit(charge.payload), which would create a duplicate charge for an existing, not-yet-settled charge. This is a real contract inconsistency with a concrete data-loss path.\n\nThis is not a repeat of the previous decision (round-a-propagate). That entry complained that NotReadyError was wrapped as FailedError, causing a not-settled charge to be reported as failed; its suggested fix was to propagate NotReadyError unchanged. The current finding describes a different failure mode caused by implementing that propagation: the caller (pollCharge) now misinterprets the propagated NotReadyError and creates a duplicate charge. Per the instructions, a consequence of applying an earlier suggestion is a different problem, so it should not be dropped as a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "path": "src/billing",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class NotReadyError|NotReadyError",
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nRe-throwing `NotReadyError` from `fetchStatus` lets `pollCharge` call `gw.submit`, which the `Gateway` interface documents as non-idempotent, so an existing but unsettled charge triggers a duplicate charge instead of waiting. Decide the intended contract: if `NotReadyError` means 'not settled,' `pollCharge` must not resubmit; if it means 'never received,' fix `errors.ts` and ensure `status` never returns it for an existing charge, or make `submit` idempotent."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 85513,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "If `finishBatch` crashes between `db.results.insertMany` and `db.progress.update`, the results would be visible for a job whose progress was never recorded. Swap the two calls so `db.progress.update` runs first."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "K4-rule-repeats-declined-bug",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 149586,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "text": "In `finishBatch`, inserting results before updating progress means a crash between the two awaits would expose results for a job whose progress was never recorded, violating Rule [1]. Swap the order so `db.progress.update` runs before `db.results.insertMany`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 178978,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "A hanging `fetch` to the geocoding provider can consume the full 10-second function limit. Add an `AbortSignal.timeout` constant such as `GEO_TIMEOUT_MS`, set below `maxDuration`, and pass it as the `signal` option."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/geocode-address.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The literal `2` in `z.string().length(2)` is a magic number that obscures the validation intent. Replace it with a named constant like `COUNTRY_CODE_LENGTH`."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/functions/geocode-address.ts",
+          "line": 23,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The literal `502` in the error response violates the magic-number rule. Use a named constant such as `HTTP_STATUS_BAD_GATEWAY`."
+        },
+        {
+          "sourceIndex": 3,
+          "file": "src/functions/geocode-address.ts",
+          "line": 28,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The literal `404` in the not-found response violates the magic-number rule. Use a named constant such as `HTTP_STATUS_NOT_FOUND`."
+        },
+        {
+          "sourceIndex": 4,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "A hanging timezone `fetch` can push the function past its 10-second limit. Pass an `AbortSignal.timeout` value (for example, 8000 ms, shorter than `FUNCTION_LIMIT_SECONDS`) in the fetch options."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P18-rule-timeout-out-of-40",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 69662,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/functions/geocode-address.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The bare `2` in `z.string().length(2)` hides that it is the ISO country-code length and violates rule [15]. Define `ISO_COUNTRY_CODE_LENGTH` at the top of `src/functions/geocode-address.ts` and pass it to `length`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/functions/geocode-address.ts",
+          "line": 18,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "Without an explicit timeout, the outbound `fetch` can hang until the function hits `maxDuration: FUNCTION_LIMIT_SECONDS`, violating rule [21]. Add `signal: AbortSignal.timeout(8000)` to the `fetch` call so it fails before the 10-second limit."
+        },
+        {
+          "sourceIndex": 2,
+          "file": "src/functions/timezone-for-point.ts",
+          "line": 12,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-http-timeout"
+          ],
+          "marked": false,
+          "text": "The timezone `fetch` has no `signal`, so it can hang until the 10-second function limit is reached. Pass `signal: AbortSignal.timeout(8000)` to the `fetch` call so it fails cleanly before the function is killed."
+        }
+      ],
+      "claims": [
+        {
+          "id": "geocode-timeout-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "timezone-timeout-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

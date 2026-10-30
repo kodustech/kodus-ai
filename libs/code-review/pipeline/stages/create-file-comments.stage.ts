@@ -1,3 +1,4 @@
+import { reviewedCommitIn } from '@libs/code-review/utils/reviewed-commit';
 import { createLogger } from '@libs/core/log/logger';
 import {
     COMMENT_MANAGER_SERVICE_TOKEN,
@@ -11,11 +12,13 @@ import {
     calculateCommentEndLine,
     calculateCommentStartLine,
 } from '@libs/common/utils/comment-builder.utils';
+import { resolveAddedLineAnchor } from '@libs/common/utils/resolve-added-line-anchor';
 import { PlatformType } from '@libs/core/domain/enums';
 import {
     ClusteringType,
     CodeReviewConfig,
     CodeSuggestion,
+    Comment,
     CommentResult,
     FileChange,
     FallbackSuggestionsBySeverity,
@@ -26,13 +29,10 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import {
-    DRY_RUN_SERVICE_TOKEN,
-    IDryRunService,
-} from '@libs/dryRun/domain/contracts/dryRun.service.contract';
-import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { Inject, Injectable } from '@nestjs/common';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
@@ -54,9 +54,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
 
         @Inject(SUGGESTION_SERVICE_TOKEN)
         private readonly suggestionService: ISuggestionService,
-
-        @Inject(DRY_RUN_SERVICE_TOKEN)
-        private readonly dryRunService: IDryRunService,
     ) {
         super();
     }
@@ -107,7 +104,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             repository: context.repository,
             prNumber: context.pullRequest.number,
             platformType: context.platformType as PlatformType,
-            dryRun: context.dryRun,
         });
 
         if (validSuggestions.length === 0) {
@@ -129,7 +125,11 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 return context;
             }
 
-            const lastAnalyzedCommit = allCommits[allCommits.length - 1];
+            // The head this review read, while the PR still has it: a
+            // date-sorted list can end on another commit after a rebase.
+            const lastAnalyzedCommit =
+                reviewedCommitIn(allCommits, context.pullRequest?.head?.sha) ??
+                allCommits[allCommits.length - 1];
 
             // Persist changed files (and any discarded suggestions) even when
             // there are no valid suggestions — otherwise PRs with nothing to
@@ -145,7 +145,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                     discardedSuggestions,
                     context.platformType,
                     context.fileMetadata,
-                    context.dryRun,
                     allCommits,
                 );
 
@@ -191,7 +190,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 },
             });
 
-            const { lineComments, lastAnalyzedCommit } =
+            const { lineComments, lastAnalyzedCommit, promptReplyErrors } =
                 await this.finalizeReviewProcessing(
                     context,
                     changedFiles,
@@ -210,6 +209,15 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             });
 
             return this.updateContext(context, (draft) => {
+                draft.errors ??= [];
+                for (const error of promptReplyErrors) {
+                    draft.errors.push({
+                        stage: this.stageName,
+                        substage: 'bitbucket-prompt-reply',
+                        severity: 'partial',
+                        error,
+                    });
+                }
                 draft.lineComments = lineComments;
                 draft.lastAnalyzedCommit = lastAnalyzedCommit;
             });
@@ -248,6 +256,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
     ): Promise<{
         lineComments: Array<CommentResult>;
         lastAnalyzedCommit: any;
+        promptReplyErrors: Error[];
     }> {
         const {
             organizationAndTeamData,
@@ -255,7 +264,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             codeReviewConfig,
             repository,
             platformType,
-            dryRun,
         } = context;
 
         // v3 pipeline: suggestions are already severity-normalized and deduplicated
@@ -269,21 +277,23 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             medium: 2,
             low: 1,
         };
-        const sortedPrioritizedSuggestions = [...validSuggestionsToAnalyze].sort(
-            (a, b) => {
-                const fileA = a.relevantFile || '';
-                const fileB = b.relevantFile || '';
-                if (fileA < fileB) return -1;
-                if (fileA > fileB) return 1;
-                const rankA = severityOrder[(a.severity || '').toLowerCase()] ?? 0;
-                const rankB = severityOrder[(b.severity || '').toLowerCase()] ?? 0;
-                return rankB - rankA;
-            },
-        );
+        const sortedPrioritizedSuggestions = [
+            ...validSuggestionsToAnalyze,
+        ].sort((a, b) => {
+            const fileA = a.relevantFile || '';
+            const fileB = b.relevantFile || '';
+            if (fileA < fileB) return -1;
+            if (fileA > fileB) return 1;
+            const rankA = severityOrder[(a.severity || '').toLowerCase()] ?? 0;
+            const rankB = severityOrder[(b.severity || '').toLowerCase()] ?? 0;
+            return rankB - rankA;
+        });
         const allDiscardedSuggestions = [...discardedSuggestionsBySafeGuard];
 
         const fallbackSuggestionsBySeverity =
             this.groupDiscardedByQuantitySuggestions(allDiscardedSuggestions);
+
+        const promptReplyErrors: Error[] = [];
 
         // Create line comments
         const { commentResults, lastAnalyzedCommit } =
@@ -293,7 +303,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 sortedPrioritizedSuggestions,
                 repository,
                 codeReviewConfig,
-                dryRun,
                 context.pipelineMetadata?.lastExecution?.dataExecution
                     ?.lastAnalyzedCommit || null,
                 context.pullRequestMessagesConfig?.globalSettings
@@ -301,6 +310,9 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 fallbackSuggestionsBySeverity,
                 allDiscardedSuggestions,
                 changedFiles,
+                platformType,
+                (error) => promptReplyErrors.push(error),
+                pullRequest?.head?.sha,
             );
 
         // Save pull request suggestions — comments already posted at this point
@@ -315,7 +327,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 allDiscardedSuggestions,
                 platformType,
                 context.fileMetadata,
-                dryRun,
                 context.prAllCommits,
             );
         } catch (error) {
@@ -334,6 +345,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         return {
             lineComments: commentResults,
             lastAnalyzedCommit,
+            promptReplyErrors,
         };
     }
 
@@ -370,12 +382,14 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         sortedPrioritizedSuggestions: any[],
         repository: Partial<Repository>,
         codeReviewConfig: CodeReviewConfig,
-        dryRun: CodeReviewPipelineContext['dryRun'],
         lastAnalyzedCommitFromContext: any,
         suggestionCopyPrompt?: boolean,
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
         allDiscardedSuggestions?: Partial<CodeSuggestion>[],
         changedFiles: FileChange[] = [],
+        platformType?: PlatformType,
+        onPromptReplyError?: (error: Error) => void,
+        reviewedCommit?: string,
     ) {
         try {
             // Children in a cluster are merged into their parent's
@@ -384,15 +398,14 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             // so they still reach Mongo instead of vanishing silently
             // — helps reconcile when a cluster link gets orphaned.
             const relatedOrphans = sortedPrioritizedSuggestions.filter(
-                (s) =>
-                    s.clusteringInformation?.type === ClusteringType.RELATED,
+                (s) => s.clusteringInformation?.type === ClusteringType.RELATED,
             );
             if (relatedOrphans.length > 0 && allDiscardedSuggestions) {
                 for (const orphan of relatedOrphans) {
                     allDiscardedSuggestions.push({
                         ...orphan,
-                        priorityStatus:
-                            PriorityStatus.DISCARDED_BY_CLUSTERING,
+                        priorityStatus: PriorityStatus.DISCARDED_BY_CLUSTERING,
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
                     });
                 }
                 this.logger.log({
@@ -414,30 +427,87 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                     .map((f) => f.filename),
             );
 
-            const lineComments = sortedPrioritizedSuggestions
-                .filter(
-                    (suggestion) =>
-                        suggestion.clusteringInformation?.type !==
-                            ClusteringType.RELATED &&
-                        !removedFiles.has(suggestion.relevantFile),
-                )
-                .map((suggestion) => {
-                    return {
-                        path: suggestion.relevantFile,
-                        body: {
-                            language: repository?.language,
-                            improvedCode: suggestion?.improvedCode,
-                            suggestionContent: suggestion?.suggestionContent,
-                            actionStatement:
-                                suggestion?.clusteringInformation
-                                    ?.actionStatement || '',
-                        },
-                        start_line: calculateCommentStartLine(suggestion),
-                        line: calculateCommentEndLine(suggestion),
-                        side: 'RIGHT',
-                        suggestion,
-                    };
+            const candidateSuggestions = sortedPrioritizedSuggestions.filter(
+                (suggestion) =>
+                    suggestion.clusteringInformation?.type !==
+                        ClusteringType.RELATED &&
+                    !removedFiles.has(suggestion.relevantFile),
+            );
+
+            // GitLab only: a discussion anchored on a context (unchanged) line
+            // loses its "Resolve" control once its diff version is superseded by
+            // a rebase/force-push, while an added-line anchor survives. Snap each
+            // comment onto an added line within the span it already covers; if the
+            // span has no added line, the comment is about unchanged code — discard
+            // it (as `discarded-by-code-diff`) rather than post a fragile note.
+            // Other providers are left untouched: GitHub already rejects
+            // non-added-line comments, and Bitbucket/Azure have no such reports.
+            const isGitlab = platformType === PlatformType.GITLAB;
+            const patchByFile = new Map(
+                changedFiles.map((file) => [file.filename, file.patch]),
+            );
+
+            const lineComments: Comment[] = [];
+            for (const suggestion of candidateSuggestions) {
+                let startLine = calculateCommentStartLine(suggestion);
+                let line = calculateCommentEndLine(suggestion);
+
+                if (isGitlab && typeof line === 'number') {
+                    const patch = patchByFile.get(suggestion.relevantFile);
+                    if (patch) {
+                        const anchor = resolveAddedLineAnchor(
+                            patch,
+                            suggestion.relevantFile,
+                            { startLine, line },
+                        );
+
+                        if (!anchor) {
+                            allDiscardedSuggestions?.push({
+                                ...suggestion,
+                                priorityStatus:
+                                    PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                                deliveryStatus: DeliveryStatus.NOT_SENT,
+                            });
+                            // Remove it from the prioritized list too, so it isn't
+                            // persisted a second time as a phantom `failed` (it's
+                            // never posted, so verifyIfSuggestionsWereSent would
+                            // otherwise stamp it FAILED). Safe to splice: this array
+                            // is a fresh copy built in finalizeReviewProcessing; we
+                            // drop the entry, we don't mutate the frozen suggestion.
+                            const prioritizedIndex =
+                                sortedPrioritizedSuggestions.indexOf(
+                                    suggestion,
+                                );
+                            if (prioritizedIndex !== -1) {
+                                sortedPrioritizedSuggestions.splice(
+                                    prioritizedIndex,
+                                    1,
+                                );
+                            }
+                            continue;
+                        }
+
+                        startLine = anchor.startLine;
+                        line = anchor.line;
+                    }
+                }
+
+                lineComments.push({
+                    path: suggestion.relevantFile,
+                    body: {
+                        language: repository?.language,
+                        improvedCode: suggestion?.improvedCode,
+                        suggestionContent: suggestion?.suggestionContent,
+                        actionStatement:
+                            suggestion?.clusteringInformation
+                                ?.actionStatement || '',
+                    },
+                    start_line: startLine,
+                    line,
+                    side: 'RIGHT',
+                    suggestion,
                 });
+            }
 
             const { lastAnalyzedCommit, commentResults } =
                 await this.commentManagerService.createLineComments(
@@ -450,9 +520,11 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                     },
                     lineComments,
                     codeReviewConfig?.languageResultPrompt,
-                    dryRun,
                     suggestionCopyPrompt,
                     fallbackSuggestionsBySeverity,
+                    platformType,
+                    onPromptReplyError,
+                    reviewedCommit,
                 );
 
             return { lastAnalyzedCommit, commentResults };
@@ -484,7 +556,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         discardedSuggestions: Partial<CodeSuggestion>[],
         platformType: string,
         fileMetadata?: Map<string, any>,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
         prCommits?: Commit[],
     ) {
         const enrichedFiles = changedFiles.map((file) => {
@@ -498,18 +569,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             }
             return file;
         });
-
-        if (dryRun?.enabled) {
-            await this.dryRunService.addFilesToDryRun({
-                organizationAndTeamData,
-                id: dryRun?.id,
-                files: enrichedFiles,
-                prioritizedSuggestions: sortedPrioritizedSuggestions as any,
-                unusedSuggestions: discardedSuggestions as any,
-            });
-
-            return;
-        }
 
         // Update status for originally prioritized suggestions based on comment results
         const suggestionsWithStatus =
@@ -546,6 +605,10 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             platformType,
             organizationAndTeamData,
             pullRequestCommits as unknown as ICommit[],
+            undefined,
+            // `pullRequest` is the PR as the review found it: a close or merge
+            // processed while the review ran stays.
+            { keepStoredState: true },
         );
     }
 }

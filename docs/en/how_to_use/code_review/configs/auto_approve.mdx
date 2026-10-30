@@ -1,0 +1,124 @@
+---
+title: "Auto-approve"
+description: "When Kody approves a pull request, how to limit which PRs it may approve, and what it does when it holds approval."
+---
+
+Turn on **Automatic PR approval** in **Code review → General** (`pullRequestApprovalActive`, off by
+default). Kody approves through your Git provider's review. It never merges.
+
+## When Kody approves
+
+Kody approves a PR at one of two moments:
+
+- **After a clean review.** The review posted no suggestions and none of its steps failed. A failed
+  PR summary is the only failure that doesn't block approval.
+- **After its comments are resolved.** Every 2 minutes, Kody checks the open PRs it reviewed in the
+  last 7 days and approves those where every comment it left is resolved.
+
+Either way, Kody approves the commit it reviewed: if someone pushed after Kody's last review, it
+waits for the next review. A run started with `@kody -v <agent>` runs only that custom agent, so it
+never approves.
+
+## Conditional approval (Beta)
+
+Available on **Teams and Enterprise** plans with beta access. The conditions show up under
+**Automatic PR approval** and can be set at Global, Repository or Directory scope, like the other
+settings. They apply to the whole PR, not only to the commits since Kody's last review.
+
+### Which PRs can be auto-approved?
+
+All PRs are eligible by default. To limit them:
+
+- **PR labels** (`approvalLabels`): the PR must carry at least one of these labels.
+- **PR authors** (`approvalAuthors`): the PR must be opened by one of these provider logins.
+
+Case doesn't matter. If you set both, a PR must match both. Up to 50 labels and 50 authors.
+
+Kody checks labels again before approving, so you can add an approval label after the review: Kody
+approves within a few minutes, as long as nothing was pushed since.
+
+### When is human approval required?
+
+- **Paths requiring human approval** (`approvalSensitivePaths`): glob patterns such as
+  `src/auth/**`, up to 100. If any changed file matches, Kody holds approval. A renamed file counts
+  under both its old and its new path.
+- **Assess PR risk** (`approvalRiskActive`): Kody approves only PRs it assesses as low risk. See
+  [Risk assessment](#risk-assessment).
+- **Additional team guidance** (`approvalRiskInstructions`): appears once **Assess PR risk** is on.
+  Up to 4,000 characters of context for the assessment, e.g. *Require a person to approve payment
+  retry changes*.
+
+### Risk assessment
+
+Kody runs the assessment with your code review model (your BYOK model, if you set one). It reads
+the whole PR diff (up to 50,000 characters), the title and description, your team guidance, and the
+history of each changed file and directory: how many merged PRs touched it and how many of those
+fixed a bug.
+
+A merged PR counts as a bug fix when it closes an issue labeled `bug`, `defect` or `regression`, or
+when its title says fix, bug, regression or hotfix. Kody collects this history in the background
+every 2 hours, on **GitHub and GitLab** only. The first scan covers the last 30 days, and the
+history grows from there up to one year. See it in **Cockpit → Code hotspots**.
+
+Only **low** risk approves; **medium** and **high** hold the PR for a person. Kody also holds when:
+
+- the PR changes control flow (`if`, `return`, `throw`) in source files and adds no test;
+- the assessment could not run, for example because the model call failed.
+
+A file with no history is not treated as safe. On Bitbucket, Azure Repos and Forgejo, and before
+the first scan, Kody assesses without history.
+
+<Note>
+  Turning on **Assess PR risk** doesn't undo approvals: a PR Kody already approved keeps the
+  approval for that commit, and Kody assesses the next one. A PR Kody reviewed before but didn't
+  approve waits for its next commit.
+</Note>
+
+### What Kody posts on the PR
+
+With conditions set, the end-of-review comment ends with **Automatic approval eligible** or
+**Automatic approval held** and the reason. Kody also keeps one separate comment, **Automatic
+approval completed** or **Automatic approval held**, and edits it on later reviews instead of
+posting a new one. A PR outside your label or author filters gets no separate comment, unless Kody
+had approved it or commented on it before.
+
+When a later review holds a PR that Kody had approved (a new commit gets suggestions or touches a
+sensitive path, or the PR lost its approval label), Kody withdraws its own approval. Approvals from
+people stay.
+
+If Kody can't confirm its comment was published, the PR shows **Approval note unverified** in
+**Reviews → Pull requests**, with the reason Kody tried to post. Check the PR comments and the
+repository integration permissions.
+
+<Note>
+  If your organization loses beta access or leaves the Teams and Enterprise plans, saved conditions
+  keep holding approval; Kody doesn't fall back to approving every clean PR. **Code review →
+  General** then shows **Saved conditions are holding automatic approval** and a **Clear saved
+  conditions** button.
+</Note>
+
+### Platforms
+
+| Provider | Labels | Code history | Notes |
+| --- | --- | --- | --- |
+| GitHub | Yes | Yes | |
+| GitLab | Yes | Yes | |
+| Forgejo | Yes | No | To withdraw an approval, the token user must be a repository admin. See [Forgejo Access Token](/en/how_to_use/code_review/general_config/forgejo_pat). |
+| Bitbucket | Ignored | No | The other conditions still apply. |
+| Azure Repos | No | No | While labels are configured, every PR is held for a person. |
+
+## kodus-config.yml
+
+Kody reads these keys only when **kodus Config File Overrides Web Preferences** is on. See
+[Config Priority](/en/how_to_use/code_review/configs/general#config-priority).
+
+```yaml
+pullRequestApprovalActive: true
+approvalLabels: ['docs', 'chore'] # any of these; empty = every PR
+approvalAuthors: [] # provider logins; empty = every author
+approvalSensitivePaths:
+    - 'src/auth/**'
+    - '**/migrations/**'
+approvalRiskActive: true
+approvalRiskInstructions: 'Require a person to approve payment retry changes.'
+```

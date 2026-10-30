@@ -9,19 +9,21 @@ import {
     getNegativeFeedbackByCategory,
     getNegativeFeedbackWeekly,
     getNegativeVoteRate,
+    getRepositoriesHealth,
     getReviewOperationalMetrics,
     getReviewOperationalOutcomesWeekly,
-    getRepositoriesHealth,
 } from "../_services/analytics/review/fetch";
-import { FeedbackSection } from "./_components/feedback-section";
+import {
+    FeedbackSection,
+    RateBySeverityChart,
+    ReviewOperationalOutcomesChart,
+    WeeklyImplementationChart,
+} from "./_components/charts.no-ssr";
 import { RateByCategoryChart } from "./_components/rate-by-category-chart";
-import { RateBySeverityChart } from "./_components/rate-by-severity-chart";
-import { ReviewCards } from "./_components/review-cards";
-import { ReviewOperationalOutcomesChart } from "./_components/review-operational-outcomes-chart";
-import { ReviewSection } from "./_components/review-section";
 import { RepositoriesHealthTable } from "./_components/repositories-health-table";
+import { ReviewCards } from "./_components/review-cards";
+import { ReviewSection } from "./_components/review-section";
 import { RulesHealthTable } from "./_components/rules-health-table";
-import { WeeklyImplementationChart } from "./_components/weekly-implementation-chart";
 
 export default async function KodusReviewTab() {
     const { startDate, endDate } = await getSelectedDateRange();

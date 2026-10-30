@@ -1,0 +1,18 @@
+{
+    "__doc": [
+        "Floors per tranche for run-stage.js --gate, as ratios: the share of vuln samples whose vulnerable lines an analyzer flagged, and the share of noise samples left quiet.",
+        "Calibrated 2026-10-16 with betterleaks 1.8.1 (the version docker/Dockerfile pins) and the secret scan on (the dependency scan has nothing to read: the corpus holds no lockfiles). Two runs each, identical sample by sample: vuln 6 of 66 (the six planted credentials; the 60 published advisories carry none, and the scan raised nothing on them), noise 14 of 14. No model: floor = observed, so one sample lost fails.",
+        "Deliberate break: production's SecretScanTool.selectFiles returning no file: vuln 0 of 66, gate red (exit 1).",
+        "RATCHET: a PR that moves a value on purpose (a tool, its version, the corpus) recalibrates here in the same PR, with its runs as evidence."
+    ],
+    "tranches": {
+        "vuln": {
+            "floor": 0.09,
+            "observed": 0.091
+        },
+        "noise": {
+            "floor": 1,
+            "observed": 1
+        }
+    }
+}

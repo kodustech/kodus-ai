@@ -6,11 +6,11 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import { formatISO, subWeeks } from "date-fns";
 import { getCodeHealthBugRatioAnalytics } from "src/features/ee/cockpit/_services/analytics/code-health/fetch";
 import { getPercentageDiff } from "src/features/ee/cockpit/_services/analytics/utils";
 
 import { InsightsBadge } from "../_components/insights-badge";
+import { getSelectedDateRange } from "../_helpers/get-selected-date-range";
 import { PercentageDiff } from "../_components/percentage-diff";
 import { extractApiData } from "../_helpers/api-data-extractor";
 import { BugRatioAnalyticsHeader } from "./_components/header";
@@ -42,12 +42,11 @@ const comparisonParameters = {
 >;
 
 export default async function BugRatioAnalytics() {
-    const endDate = new Date();
-    const startDate = subWeeks(endDate, 2);
+    const selectedDateRange = await getSelectedDateRange();
 
     const response = await getCodeHealthBugRatioAnalytics({
-        startDate: formatISO(startDate, { representation: "date" }),
-        endDate: formatISO(endDate, { representation: "date" }),
+        startDate: selectedDateRange.startDate,
+        endDate: selectedDateRange.endDate,
     });
     const data = extractApiData(response);
 

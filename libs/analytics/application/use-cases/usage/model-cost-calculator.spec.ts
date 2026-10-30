@@ -22,7 +22,7 @@ const pricingFromMillions = (opts: {
     const withTier = (def: number, tieredPerM?: number) => ({
         default: def,
         ...(tieredPerM !== undefined
-            ? { tier: { threshold: 200_000, rate: perToken(tieredPerM) ?? 0 } }
+            ? { tiers: [{ threshold: 200_000, rate: perToken(tieredPerM) ?? 0 }] }
             : {}),
     });
     return {
@@ -119,37 +119,36 @@ describe('ModelCostCalculator', () => {
                 cacheRead: 200_000,
                 cacheWrite: 50_000,
                 model: 'g',
-                byTier: {
-                    le: tier({
+                byTier: [tier({
                         input: 200_000,
                         output: 100_000,
                         cacheRead: 50_000,
                         cacheWrite: 20_000,
-                    }),
-                    gt: tier({
+                    }), tier({
                         input: 800_000,
                         output: 400_000,
                         cacheRead: 150_000,
                         cacheWrite: 30_000,
-                    }),
-                },
+                    })],
             },
         ]);
 
+        // input_tokens (ai@7) already INCLUDES cacheRead AND cacheWrite, so the
+        // full-price pool subtracts BOTH.
         // le bucket at default rates:
-        //   uncached 150K × $2/M = $0.30
+        //   uncached (200K−50K−20K)=130K × $2/M = $0.26
         //   cacheRead 50K × $0.20/M = $0.01
         //   cacheWrite 20K × $0 = $0
         //   output 100K × $12/M = $1.20
-        //   le subtotal = $1.51
+        //   le subtotal = $1.47
         // gt bucket at tier rates:
-        //   uncached 650K × $4/M = $2.60
+        //   uncached (800K−150K−30K)=620K × $4/M = $2.48
         //   cacheRead 150K × $0.40/M = $0.06
         //   cacheWrite 30K × $0 (no tier rate → 0) = $0
         //   output 400K × $18/M = $7.20
-        //   gt subtotal = $9.86
-        // total = $11.37
-        expect(total).toBeCloseTo(11.37, 10);
+        //   gt subtotal = $9.74
+        // total = $11.21
+        expect(total).toBeCloseTo(11.21, 10);
     });
 
     it('falls back to default rates when a tier rate is missing on a non-tiered field', async () => {
@@ -172,18 +171,89 @@ describe('ModelCostCalculator', () => {
                 outputReasoning: 0,
                 cacheWrite: 100_000,
                 model: 'g',
-                byTier: {
-                    le: tier(),
-                    gt: tier({ input: 300_000, cacheWrite: 100_000 }),
-                },
+                byTier: [tier(), tier({ input: 300_000, cacheWrite: 100_000 })],
             },
         ]);
 
-        // gt bucket:
-        //   input 300K × $4/M (tier rate) = $1.20
+        // gt bucket (input already includes the 100K cacheWrite → subtract it):
+        //   uncached (300K−100K)=200K × $4/M (tier rate) = $0.80
         //   cacheWrite 100K × $2.5/M (no tier rate → fallback to default) = $0.25
-        //   total = $1.45
-        expect(total).toBeCloseTo(1.45, 10);
+        //   total = $1.05
+        expect(total).toBeCloseTo(1.05, 10);
+    });
+
+    it('does NOT double-bill cache-creation tokens (anthropic cacheWrite premium)', async () => {
+        // Regression: ai@7 reports input_tokens INCLUSIVE of cacheRead AND
+        // cacheWrite. If the full-price pool only subtracts cacheRead, the
+        // cache-write tokens are billed once at the input rate (inside uncached)
+        // AND again at the cacheWrite rate — double billing. Anthropic prices
+        // cache creation at 1.25× input, so the premium makes the bug visible.
+        tokenPricingUseCase.execute.mockResolvedValue(
+            pricingFromMillions({
+                inputPerM: 10,
+                outputPerM: 0,
+                cacheReadPerM: 1,
+                cacheWritePerM: 12.5, // 1.25× input
+            }),
+        );
+
+        const total = await calculator.totalCost([
+            {
+                // 1M input = 400K fresh + 500K cacheRead + 100K cacheWrite
+                input: 1_000_000,
+                output: 0,
+                outputReasoning: 0,
+                cacheRead: 500_000,
+                cacheWrite: 100_000,
+                model: 'claude',
+            },
+        ]);
+
+        // Correct: uncached (1M−500K−100K)=400K×$10/M=$4.00
+        //          + cacheRead 500K×$1/M=$0.50 + cacheWrite 100K×$12.5/M=$1.25
+        //          = $5.75  (the old double-billing math gave $6.75)
+        expect(total).toBeCloseTo(5.75, 10);
+    });
+
+    it('prices a 3-bracket (multi-tier) model at each bracket rate', async () => {
+        // Doubao-style: default + two tiers. byTier[0]=default, [1]=first
+        // tier, [2]=second tier.
+        tokenPricingUseCase.execute.mockResolvedValue({
+            id: 'doubao',
+            provider: 'test',
+            pricing: {
+                input: {
+                    default: 1e-6,
+                    tiers: [
+                        { threshold: 32_000, rate: 2e-6 },
+                        { threshold: 128_000, rate: 4e-6 },
+                    ],
+                },
+                output: { default: 0 },
+                cacheRead: { default: 0 },
+                cacheWrite: { default: 0 },
+                prompt: 1e-6,
+                completion: 0,
+                internal_reasoning: 0,
+            },
+        });
+
+        const total = await calculator.totalCost([
+            {
+                input: 600_000,
+                output: 0,
+                outputReasoning: 0,
+                model: 'doubao',
+                byTier: [
+                    tier({ input: 100_000 }), // default rate 1e-6
+                    tier({ input: 200_000 }), // tier 1 rate 2e-6
+                    tier({ input: 300_000 }), // tier 2 rate 4e-6
+                ],
+            },
+        ]);
+
+        // 100K×1 + 200K×2 + 300K×4 (per-M) = 0.10 + 0.40 + 1.20 = 1.70
+        expect(total).toBeCloseTo(1.7, 10);
     });
 
     it('prices each model independently and consults pricing once per model', async () => {
@@ -204,10 +274,7 @@ describe('ModelCostCalculator', () => {
                 output: 100_000,
                 outputReasoning: 0,
                 model: 'gemini',
-                byTier: {
-                    le: tier(),
-                    gt: tier({ input: 500_000, output: 100_000 }),
-                },
+                byTier: [tier(), tier({ input: 500_000, output: 100_000 })],
             },
             {
                 input: 500_000,

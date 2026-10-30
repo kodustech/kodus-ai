@@ -1,12 +1,8 @@
 # License
 
-Kodus is available under a **dual license** model:
+Kodus uses a dual-license model:
 
-- **Open Source License (AGPL-3.0):**  
-  All source code **except** files or directories marked as "enterprise edition" is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0.html).
+- **Open-source code (AGPL-3.0):** Source code outside the Enterprise Code is licensed under the [GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html).
+- **Enterprise Code (Kodus Enterprise Code License):** Files with `.ee.` in the filename or inside an `ee/` directory are governed by the [Kodus Enterprise Code License](./license_ee.md), not AGPL-3.0. That license permits self-hosted Community users to run the unmodified Enterprise Code needed for Community features, including code review and BYOK, internally and in production, within the limits the software enforces. It does not permit Community users to modify the Enterprise Code or use Enterprise-only features. Contributors may fork the repository and modify the Enterprise Code to submit changes back to Kodus.
 
-- **Enterprise License (Commercial):**  
-  Any file or directory that includes `.ee.` in its filename or `ee/` in its path is **not** covered by the AGPL license and is subject to a **commercial license agreement**.  
-  See [LICENSE_EE.md](./license_ee.md) for more information.
-
-By using or distributing this software, you agree to the terms of the applicable licenses.
+By using or distributing Kodus, you agree to the terms that apply to each part of the software.

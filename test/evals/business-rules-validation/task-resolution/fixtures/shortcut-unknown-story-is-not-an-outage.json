@@ -1,0 +1,55 @@
+{
+    "name": "shortcut-unknown-story-is-not-an-outage",
+    "issue": "#1884",
+    "trackers": [
+        {
+            "integrationId": "int-shortcut",
+            "appName": "Shortcut",
+            "provider": "custom",
+            "category": null,
+            "responseShape": "shortcut",
+            "tools": [
+                {
+                    "name": "stories-get-by-id",
+                    "kind": "get",
+                    "idArg": "storyPublicId",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "storyPublicId": {
+                                "type": "number"
+                            }
+                        },
+                        "required": ["storyPublicId"]
+                    }
+                }
+            ],
+            "extraWriteTools": [],
+            "tasks": [
+                {
+                    "id": "123",
+                    "title": "Scale servings",
+                    "description": "Cooks change servings and see amounts recalculated.",
+                    "acceptanceCriteria": [
+                        "Amounts are rounded to two decimals",
+                        "Servings below 1 are rejected"
+                    ]
+                }
+            ]
+        }
+    ],
+    "pullRequest": {
+        "title": "feat: scale servings",
+        "body": "",
+        "branch": "nina/sc-999-scale-servings"
+    },
+    "expect": {
+        "outcome": "silent",
+        "toolsCalled": ["stories-get-by-id"]
+    },
+    "settings": {
+        "taskSource": "int-shortcut",
+        "lookupTool": "stories-get-by-id",
+        "taskIdPattern": "sc-(\\d+)"
+    }
+}

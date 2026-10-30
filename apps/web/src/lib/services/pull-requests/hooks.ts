@@ -7,7 +7,6 @@ import {
     type InfiniteData,
 } from "@tanstack/react-query";
 import { axiosAuthorized } from "src/core/utils/axios";
-import { getJWTToken } from "src/core/utils/session";
 
 import {
     PULL_REQUEST_API,
@@ -15,10 +14,14 @@ import {
     type PullRequestFilters,
 } from "./fetch";
 import type {
+    AwaitingPullRequestsResponse,
+    PullRequestAuthorsResponse,
     PullRequestExecution,
     PullRequestExecutionsPayload,
     PullRequestExecutionsResponse,
     PullRequestFilesResponse,
+    PullRequestsDailyDigestResponse,
+    PullRequestsFacetsResponse,
     PullRequestSuggestionsResponse,
 } from "./types";
 
@@ -36,13 +39,28 @@ const normalizeExecutions = (
     return [];
 };
 
+// Distinct-PR total the backend computed for the current filters (see the use
+// case). Only present on the object-shaped payload; undefined otherwise.
+const pickDistinctPrTotal = (
+    payload: PullRequestExecutionsPayload,
+): number | undefined => {
+    if (!payload || Array.isArray(payload)) return undefined;
+    return payload.pagination?.distinctPrTotal ?? undefined;
+};
+
 const DEFAULT_PAGE_SIZE = 30;
 
 export const useInfinitePullRequestExecutions = (
     filters?: PullRequestFilters,
-    options?: { pageSize?: number },
+    options?: { pageSize?: number; poll?: boolean },
 ) => {
     const pageSize = options?.pageSize ?? filters?.limit ?? DEFAULT_PAGE_SIZE;
+    // Poll the first page as a fallback refresh. Callers that already mount
+    // `usePullRequestExecutionSSE` (which invalidates this query on every
+    // `execution_updated` event) should pass `poll: false` to avoid the
+    // redundant 30s refetch. Defaults to true so views without SSE (e.g. the
+    // PR detail page) keep auto-refreshing.
+    const poll = options?.poll ?? true;
     const baseFilters = useMemo<PullRequestFilters>(() => {
         const next: PullRequestFilters = { limit: pageSize };
 
@@ -69,6 +87,18 @@ export const useInfinitePullRequestExecutions = (
             next.authorPolicy = filters.authorPolicy;
         }
 
+        if (filters?.status) {
+            next.status = filters.status;
+        }
+
+        if (filters?.createdAtFrom) next.createdAtFrom = filters.createdAtFrom;
+        if (filters?.createdAtTo) next.createdAtTo = filters.createdAtTo;
+        if (filters?.severity) next.severity = filters.severity;
+        if (filters?.category) next.category = filters.category;
+        if (filters?.needsAttention) next.needsAttention = true;
+        if (filters?.author) next.author = filters.author;
+        if (filters?.prState) next.prState = filters.prState;
+
         return next;
     }, [
         filters?.teamId,
@@ -78,44 +108,68 @@ export const useInfinitePullRequestExecutions = (
         filters?.pullRequestNumber,
         filters?.hasSentSuggestions,
         filters?.authorPolicy,
+        filters?.status,
+        filters?.createdAtFrom,
+        filters?.createdAtTo,
+        filters?.severity,
+        filters?.category,
+        filters?.needsAttention,
+        filters?.author,
+        filters?.prState,
         pageSize,
     ]);
 
+    // Paged by cursor, not by page number. The backend fills a page by
+    // discarding executions that fail a post-query filter, so it reads more
+    // rows than it returns; `page * limit` restarted inside the window the
+    // previous page had already served, and every fetch came back mostly
+    // repeats. The Map below hid that (repeats overwrite), leaving a scroll
+    // that loaded a full page and grew by a handful of rows — and, when the
+    // filters were aggressive enough, never terminated. `nextCursor` is the
+    // position the last page stopped READING at.
     const { data: infiniteData, ...query } = useInfiniteQuery<
         PullRequestExecutionsResponse,
         Error,
-        InfiniteData<PullRequestExecutionsResponse, number>,
+        InfiniteData<PullRequestExecutionsResponse, string | undefined>,
         [string, PullRequestFilters],
-        number
+        string | undefined
     >({
         queryKey: ["pull-request-executions", baseFilters],
-        initialPageParam: 1,
-        queryFn: async ({ pageParam = 1 }) => {
-            const params = { ...baseFilters, page: pageParam };
+        initialPageParam: undefined,
+        queryFn: async ({ pageParam }) => {
+            const params = pageParam
+                ? { ...baseFilters, cursor: pageParam }
+                : baseFilters;
             const url = PULL_REQUEST_API.GET_EXECUTIONS(params);
 
             return axiosAuthorized.fetcher<PullRequestExecutionsResponse>(url);
         },
-        getNextPageParam: (lastPage, allPages) => {
-            const lastPageSize = normalizeExecutions(lastPage?.data).length;
-
-            if (lastPageSize < pageSize) {
+        getNextPageParam: (lastPage) => {
+            const payload = lastPage?.data;
+            if (!payload || Array.isArray(payload)) {
                 return undefined;
             }
 
-            return allPages.length + 1;
+            // Absent once the scan is exhausted, which is also the only thing
+            // that ends the list — page length no longer decides, because a
+            // page can be short while more rows remain behind the filters.
+            return payload.pagination?.nextCursor ?? undefined;
         },
         retry: false,
     });
 
-    // Poll only the first page every 30s (avoids refetching all loaded pages)
+    // Poll every 30s as a fallback refresh. Skipped when `poll` is false — the
+    // caller relies on SSE instead. (React Query v5 dropped the v4 `refetchPage`
+    // option, so refetch() refreshes all loaded pages; kept minimal since the
+    // only remaining poller is the PR detail view, which loads a single page.)
     const { refetch } = query;
     useEffect(() => {
+        if (!poll) return;
         const id = setInterval(() => {
-            refetch({ refetchPage: (_page, index) => index === 0 });
+            refetch();
         }, 30_000);
         return () => clearInterval(id);
-    }, [refetch]);
+    }, [refetch, poll]);
 
     const items = useMemo(() => {
         const pages = infiniteData?.pages ?? [];
@@ -144,8 +198,103 @@ export const useInfinitePullRequestExecutions = (
         return Array.from(map.values());
     }, [infiniteData]);
 
-    return { ...query, data: infiniteData, items };
+    // Accurate distinct-PR total for the active filters, read from the first
+    // page (same for every page). Undefined until the first page loads or when
+    // the backend couldn't compute it — callers fall back to the loaded count.
+    const filteredPrTotal = useMemo(
+        () => pickDistinctPrTotal(infiniteData?.pages?.[0]?.data),
+        [infiniteData],
+    );
+
+    return { ...query, data: infiniteData, items, filteredPrTotal };
 };
+
+export const usePullRequestsDailyDigest = (teamId?: string) => {
+    return useQuery({
+        queryKey: ["pull-requests-daily-digest", teamId],
+        queryFn: () =>
+            axiosAuthorized.fetcher<PullRequestsDailyDigestResponse>(
+                PULL_REQUEST_API.GET_DAILY_DIGEST(teamId),
+            ),
+        enabled: !!teamId,
+        retry: false,
+        staleTime: 60_000,
+        select: (response) => response.data,
+    });
+};
+
+export const usePullRequestsFacets = (
+    teamId?: string,
+    scope?: "mine" | "team",
+) => {
+    return useQuery({
+        queryKey: ["pull-requests-facets", teamId, scope ?? "team"],
+        queryFn: () =>
+            axiosAuthorized.fetcher<PullRequestsFacetsResponse>(
+                PULL_REQUEST_API.GET_FACETS(teamId, scope),
+            ),
+        enabled: !!teamId,
+        retry: false,
+        // No polling here on purpose: the facets (Needs attention / Awaiting
+        // cards) are refreshed reactively via usePullRequestExecutionSSE. The
+        // verification pass emits `execution_updated` right after it persists
+        // suggestion statuses, so invalidating on that event refetches the
+        // cards at the exact moment the counts change — no periodic load.
+        staleTime: 60_000,
+        select: (response) => response.data,
+    });
+};
+
+export const usePullRequestsAwaiting = (teamId?: string) => {
+    return useQuery({
+        queryKey: ["pull-requests-awaiting", teamId],
+        queryFn: () =>
+            axiosAuthorized.fetcher<AwaitingPullRequestsResponse>(
+                PULL_REQUEST_API.GET_AWAITING(teamId),
+            ),
+        enabled: !!teamId,
+        retry: false,
+        staleTime: 60_000,
+        select: (response) => response.data,
+    });
+};
+
+// Author-search autocomplete options. Loads the full (server-cached) author
+// list once per team and lets the caller filter client-side — so typing does
+// NOT hit the backend per keystroke (the distinct-authors aggregation is
+// expensive). staleTime keeps it cached across opens.
+export const usePullRequestAuthors = (teamId?: string, enabled = true) => {
+    return useQuery({
+        queryKey: ["pull-requests-authors", teamId],
+        queryFn: () =>
+            axiosAuthorized.fetcher<PullRequestAuthorsResponse>(
+                PULL_REQUEST_API.GET_AUTHORS(teamId, undefined, 500),
+            ),
+        enabled: !!teamId && enabled,
+        retry: false,
+        staleTime: 5 * 60_000,
+        select: (response) => response.data,
+    });
+};
+
+// Key + fetcher shared by the hook and the hover-prefetch below, so the
+// prefetched entry lands under the EXACT key the screen's useQuery reads —
+// any drift and the prefetch silently misses and the screen refetches anyway.
+const suggestionsQuery = (
+    repositoryId: string | undefined,
+    prNumber: number | undefined,
+    filters?: { severity?: string; category?: string },
+) => ({
+    queryKey: ["pull-request-suggestions", repositoryId, prNumber, filters],
+    queryFn: () =>
+        axiosAuthorized.fetcher<PullRequestSuggestionsResponse>(
+            PULL_REQUEST_API.GET_SUGGESTIONS({
+                repositoryId: repositoryId!,
+                prNumber: prNumber!,
+                ...filters,
+            }),
+        ),
+});
 
 export const usePullRequestSuggestions = (
     repositoryId: string | undefined,
@@ -153,18 +302,34 @@ export const usePullRequestSuggestions = (
     filters?: { severity?: string; category?: string },
 ) => {
     return useQuery({
-        queryKey: ["pull-request-suggestions", repositoryId, prNumber, filters],
-        queryFn: () =>
-            axiosAuthorized.fetcher<PullRequestSuggestionsResponse>(
-                PULL_REQUEST_API.GET_SUGGESTIONS({
-                    repositoryId: repositoryId!,
-                    prNumber: prNumber!,
-                    ...filters,
-                }),
-            ),
+        ...suggestionsQuery(repositoryId, prNumber, filters),
         enabled: !!repositoryId && !!prNumber,
         retry: false,
     });
+};
+
+/**
+ * Warms the react-query cache for a PR's suggestions on hover/focus of a link
+ * into its review screen. `next/link` already prefetches the ROUTE; this
+ * prefetches the DATA the screen blocks on (page.client gates the whole view
+ * on suggestionsLoading), so an intentful hover turns the open from
+ * spinner→content into content-immediately. The 30s staleTime dedupes repeated
+ * hovers; the screen still background-revalidates on mount, so freshness is
+ * unchanged — this only buys a head start.
+ */
+export const usePrefetchPullRequestReview = () => {
+    const queryClient = useQueryClient();
+    return useCallback(
+        (repositoryId: string, prNumber: number) => {
+            // prefetchQuery swallows its own errors; fire-and-forget matches
+            // the codebase's other prefetch call sites (navbar).
+            queryClient.prefetchQuery({
+                ...suggestionsQuery(repositoryId, prNumber),
+                staleTime: 30_000,
+            });
+        },
+        [queryClient],
+    );
 };
 
 export const usePullRequestFiles = (
@@ -204,6 +369,16 @@ export const usePullRequestExecutionSSE = (enabled = true) => {
         queryClient.invalidateQueries({
             queryKey: ["pull-request-executions"],
         });
+        queryClient.invalidateQueries({
+            queryKey: ["pull-requests-daily-digest"],
+        });
+        // Facets power the Needs attention / Awaiting cards. The suggestion
+        // verification pass emits `execution_updated` after persisting statuses
+        // (see ImplementationVerificationProcessor), so invalidating here makes
+        // the cards refetch at the exact moment the counts change.
+        queryClient.invalidateQueries({
+            queryKey: ["pull-requests-facets"],
+        });
     }, [queryClient]);
 
     useEffect(() => {
@@ -216,11 +391,13 @@ export const usePullRequestExecutionSSE = (enabled = true) => {
             const controller = new AbortController();
             controllerRef.current = controller;
 
-            const accessToken = await getJWTToken();
-            if (!accessToken || cancelled) return;
+            if (cancelled) return;
 
             await fetchEventSource(PULL_REQUEST_SSE.EXECUTION_EVENTS, {
-                headers: { Authorization: `Bearer ${accessToken}` },
+                // The /api/proxy route injects the Bearer from the httpOnly
+                // session cookie server-side (and ignores any client-sent
+                // Authorization), so the browser only needs to send the cookie
+                // — no need to fetch /api/auth/session for a token here.
                 signal: controller.signal,
                 openWhenHidden: false,
 

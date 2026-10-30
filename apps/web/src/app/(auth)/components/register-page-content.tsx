@@ -17,12 +17,15 @@ import {
     EyeClosed,
     LogInIcon,
 } from "lucide-react";
+import { isAxiosError } from "axios";
 import { signIn } from "next-auth/react";
 import {
     Controller,
     FormProvider,
     useForm,
     useFormContext,
+    useFormState,
+    useWatch,
 } from "react-hook-form";
 import type { TODO } from "src/core/types";
 import { cn } from "src/core/utils/components";
@@ -31,12 +34,27 @@ import { z } from "zod";
 
 import { OAuthButtons } from "./oauth";
 
+// Shared between the zod schema and the Sign up button's synchronous validity
+// check, so the two can't drift.
+const NAME_REGEX = /^[\p{L}\s'-]+$/u;
+const PASSWORD_REGEX = /^(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$/;
+
 const GetStarted = () => {
     const multiStep = useMultiStep();
     const form = useFormContext<z.infer<typeof formSchema>>();
-    const emailFieldState = form.getFieldState("email", form.formState);
+    // Subscribe this component to the email field's state. The input is
+    // uncontrolled (value={undefined} + defaultValue), so typing never
+    // re-renders React on its own — setValue updates the RHF store silently.
+    // We must READ errors/dirtyFields off useFormState (not just call it) so the
+    // proxy actually registers the subscription; otherwise Continue stays stuck
+    // disabled until an unrelated re-render (e.g. Fast Refresh) recomputes it.
+    const { errors: formErrors, dirtyFields } = useFormState({
+        control: form.control,
+        name: "email",
+    });
 
-    const { invalid: isEmailInvalid, isDirty: isEmailFilled } = emailFieldState;
+    const isEmailInvalid = !!formErrors.email;
+    const isEmailFilled = !!dirtyFields.email;
 
     const debouncedCallback = useDebouncedCallback((email: string) => {
         form.setValue("email", email, {
@@ -146,7 +164,13 @@ const WithEmail = () => {
         "password",
     );
 
-    const password = form.watch("password");
+    // useWatch (the reactive hook) reliably re-renders on every value change.
+    // The form.watch() method proved unreliable here after a package bump — it
+    // stopped re-rendering this step, freezing the derived button state.
+    const [name, password, confirmPassword] = useWatch({
+        control: form.control,
+        name: ["name", "password", "confirmPassword"],
+    });
     const passwordRules = useMemo(
         () => ({
             hasEightChars: {
@@ -169,8 +193,20 @@ const WithEmail = () => {
         [password],
     );
 
-    const { isValid: isFormValid, isSubmitting: isFormSubmitting } =
-        form.formState;
+    // Compute the button's validity synchronously from the watched values.
+    // handleSubmit still runs the full async validation (incl. the email
+    // existence check) on click, so this only gates the enabled state.
+    const { isSubmitting: isFormSubmitting } = useFormState({
+        control: form.control,
+    });
+
+    const isFormValid =
+        !!name?.trim() &&
+        NAME_REGEX.test(name.trim()) &&
+        (password?.length ?? 0) >= 8 &&
+        PASSWORD_REGEX.test(password ?? "") &&
+        !!confirmPassword &&
+        password === confirmPassword;
 
     const onSubmit = form.handleSubmit(async (data) => {
         try {
@@ -413,7 +449,7 @@ const formSchema = z
             .min(1, {
                 error: "Enter your name",
             })
-            .regex(/^[\p{L}\s'-]+$/u, {
+            .regex(NAME_REGEX, {
                 error: "Name can only contain letters, spaces, hyphens and apostrophes",
             }),
         email: z
@@ -447,8 +483,14 @@ const formSchema = z
                     await checkForEmailExistence(email);
                     return true;
                 } catch (error) {
-                    console.error("Error checking email existence:", error);
-                    return false;
+                    // Only a 409 means the email is genuinely taken. Any other
+                    // failure (timeout, 5xx, network) must not lock the user out
+                    // of sign-up, so treat it as available and let submit surface
+                    // a real error if needed.
+                    if (isAxiosError(error) && error.response?.status === 409) {
+                        return false;
+                    }
+                    return true;
                 }
             }, "The email is already in use"),
         password: z
@@ -459,7 +501,7 @@ const formSchema = z
             .min(8, {
                 error: "Invalid password",
             })
-            .regex(/^(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$/, {
+            .regex(PASSWORD_REGEX, {
                 error: "Password must include at least 1 uppercase letter, 1 number, and 1 special character",
             }),
         confirmPassword: z.string({

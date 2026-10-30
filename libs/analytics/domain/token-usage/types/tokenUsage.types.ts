@@ -6,6 +6,17 @@ export type TokenUsageQueryContract = {
     prNumber?: number;
     timezone?: string; // for day bucketing
     developer?: string;
+    /**
+     * Scope to one repository. Usage spans don't carry a repository id, so
+     * the service resolves this to the repo's PR numbers (`prNumbers`) and
+     * the read matches `attributes.prNumber ∈ prNumbers` — same join the
+     * by-developer view already relies on (PR numbers are assumed unique
+     * enough within an org; a cross-repo number collision over-includes,
+     * matching the existing by-developer behavior).
+     */
+    repositoryId?: string;
+    /** Internal: PR numbers resolved from `repositoryId`. */
+    prNumbers?: number[];
     byok: boolean;
 };
 
@@ -21,7 +32,7 @@ export interface TierUsage {
 
 export interface BaseUsageContract {
     model: string;
-    /** Flat totals across both tiers — sum of byTier.le + byTier.gt. */
+    /** Flat totals across every tier bucket — sum of `byTier`. */
     input: number;
     output: number;
     total: number;
@@ -31,14 +42,13 @@ export interface BaseUsageContract {
     /** Input tokens that created cache entries on this call (Anthropic). */
     cacheWrite?: number;
     /**
-     * Per-tier breakdown. `le` = calls at or below the model's threshold;
-     * `gt` = calls above it. Present only when the model has a tier breakpoint
-     * in its pricing; flat-priced models omit this (all usage is on `default`).
+     * Per-tier breakdown, indexed by bracket: `byTier[0]` = calls at or below
+     * the model's first threshold (billed at `default`), `byTier[k]` = calls
+     * above the k-th threshold (billed at the k-th tier rate). Length is
+     * `thresholds + 1`. Present only for tier-aware models; flat models omit
+     * it (all usage on `default`). The UI collapses this to ≤/>threshold.
      */
-    byTier?: {
-        le: TierUsage;
-        gt: TierUsage;
-    };
+    byTier?: TierUsage[];
 }
 
 export type UsageSummaryContract = BaseUsageContract;
@@ -57,6 +67,58 @@ export interface DailyUsageByPrResultContract extends UsageByPrResultContract {
 
 export interface UsageByDeveloperResultContract extends BaseUsageContract {
     developer: string;
+}
+
+/**
+ * One review run = one `correlationId` (the ambient observability context id
+ * every usage span of a run inherits). A PR reviewed twice yields two rows.
+ */
+export interface UsageByReviewResultContract extends BaseUsageContract {
+    /** The review run's correlation id. */
+    review: string;
+    prNumber?: number;
+    /** Earliest span timestamp of the run — for chronological ordering. */
+    startedAt?: string;
+}
+
+/**
+ * Token spend grouped by process area (`attributes.tu.area` — see
+ * TokenUsageArea in libs/core/log/token-usage-tu.ts). Rows written before the
+ * area backfill ran surface as 'other'.
+ */
+export interface UsageByAreaResultContract extends BaseUsageContract {
+    area: string;
+}
+
+/**
+ * Token spend grouped by the routing TASK × process AREA cross. The TASK
+ * (`attributes.tu.route` — codeReview/prSummary/…, the model-slot the org picked
+ * per task) is the top level; the AREA (the process stage) is the drill-down —
+ * one task fans out over several areas (codeReview → review + suggestions +
+ * cross_file). Pre-launch rows with no stamped `route` are attributed by the
+ * same area→task de-para as deriveTu; unattributable spend surfaces as task ''.
+ */
+export interface UsageByTaskAreaResultContract extends BaseUsageContract {
+    task: string;
+    area: string;
+}
+
+/**
+ * The active window (first/last usage-span timestamp) of a MODEL within a
+ * routing TASK. Lets the per-task view show which model served a task AND when —
+ * so a mid-period provider/model switch reads as two windows instead of a single
+ * misleading model label. Same (task, model) grain as byTaskArea; carries only
+ * the min/max timestamp (token counts come from byTaskArea). Cheap to compute:
+ * `timestamp` is already read (covered) to derive the daily bucket, so the
+ * min/max adds no index cost.
+ */
+export interface UsageByTaskModelSpanContract {
+    task: string;
+    model: string;
+    /** Earliest usage-span timestamp for this (task, model), ISO string. */
+    firstAt: string;
+    /** Latest usage-span timestamp for this (task, model), ISO string. */
+    lastAt: string;
 }
 
 export interface DailyUsageByDeveloperResultContract
@@ -92,10 +154,8 @@ export type ApiPricingSource = 'manual' | 'catalog' | 'missing';
  */
 export interface EnrichedModelUsage extends BaseUsageContract {
     cost: CostBreakdown;
-    costByTier?: {
-        le: CostBreakdown;
-        gt: CostBreakdown;
-    };
+    /** Cost per bracket, aligned index-for-index with `byTier`. */
+    costByTier?: CostBreakdown[];
     pricingSource: ApiPricingSource;
 }
 
@@ -119,6 +179,14 @@ export interface UsageOverviewReportContract {
     summary: UsageSummaryReportContract;
     daily: DailyUsageResultContract[];
     byPr: UsageByPrResultContract[];
+    /** Token spend per process area — powers the "where tokens go" breakdown. */
+    byArea: UsageByAreaResultContract[];
+    /** Token spend per routing task × area — powers the task breakdown that
+     *  drills into each task's areas. */
+    byTaskArea: UsageByTaskAreaResultContract[];
+    /** First/last usage timestamp per routing task × model — powers the
+     *  "models used" timeline inside each task (which model, and when). */
+    byTaskModelSpan: UsageByTaskModelSpanContract[];
 }
 
 export interface TokenUsageBreakdown {

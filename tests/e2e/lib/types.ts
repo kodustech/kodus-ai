@@ -1,3 +1,7 @@
+import type { ChangedFile, InlineCommentRef } from './diff-position.js';
+
+export type { ChangedFile, InlineCommentRef };
+
 export type Target = 'cloud' | 'self-hosted';
 
 export type ProviderName =
@@ -35,6 +39,8 @@ export interface OpenPRArgs {
     title: string;
     body: string;
     fixtureFiles: Record<string, string>;
+    /** Repo-relative paths to git-rm in the same commit (lifecycle tests: file removal must remove the synced rule). */
+    deleteFiles?: string[];
     baseBranch?: string;
 }
 
@@ -67,6 +73,14 @@ export interface ReviewSignal {
     issueComments: number;
     reviews: number;
     sample?: string;
+    /**
+     * Anchors of the inline comments Kody posted, when the provider can report
+     * them. Counting comments proves a review happened; these prove it landed
+     * on the right lines — the check that the GitLab "comments only on added
+     * lines" bug slipped past. Providers that don't populate it leave the
+     * placement assertion self-skipping.
+     */
+    inlineComments?: InlineCommentRef[];
     // Set when Kody posted a license-related notification (e.g. "Your
     // trial has ended! Activate your plan…" or a BYOK prompt) instead of
     // a real review. Scenarios that expect the entitlement gate to
@@ -79,6 +93,11 @@ export interface ReviewSignal {
         message: string;
         kind: 'trial-ended' | 'byok-required' | 'no-license' | 'other';
     };
+}
+
+export interface ReviewThread {
+    id: string;
+    body: string;
 }
 
 export interface WebhookInfo {
@@ -149,12 +168,27 @@ export interface Provider {
         token: string,
     ): Promise<{ id: string }>;
     // Optional: polls for Kody's conversational reply to an `@kody <question>`
-    // new non-trigger, non-code-review comment, or null at timeout. Only GitHub
-    // is wired; the conversation scenario gates on its presence.
+    // new non-trigger, non-code-review comment, or null at timeout. Wired on
+    // github/gitlab/bitbucket/azure-devops; the conversation scenario gates
+    // on its presence.
     pollForKodyReply?(
         pr: { number: number },
         opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
     ): Promise<{ id: string; body: string } | null>;
+    // Optional (#1946): the review threads Kody opened on a PR, a reply
+    // inside one as another identity, and the thread read back in order.
+    // Drive conversation-implicit-reply (answers without @kody).
+    listKodyThreads?(prNumber: number): Promise<ReviewThread[]>;
+    replyInThread?(
+        prNumber: number,
+        threadId: string,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }>;
+    threadComments?(
+        prNumber: number,
+        threadId: string,
+    ): Promise<ReviewThread[]>;
     // Optional: merges a PR (falls back to close). Drives the closed/merged-PR
     // webhook that triggers kody-issues generation (v2/BYOK path).
     mergePR?(pr: OpenedPR): Promise<void>;
@@ -186,6 +220,32 @@ export interface Provider {
         pr: { number: number },
         opts: { sinceIso: string; timeoutSec?: number },
     ): Promise<boolean>;
+    // Optional: the files this PR changes, with their unified-diff patches.
+    // Feeds the review-placement assertion (lib/diff-position.ts) — without
+    // the diff there is nothing to validate a comment's anchor against.
+    // Providers that don't implement it make the assertion self-skip.
+    listChangedFiles?(pr: { number: number }): Promise<ChangedFile[]>;
+    // Optional: pushes a follow-up commit onto an ALREADY-OPEN PR's branch —
+    // used by scenarios that need a real 2nd review round (e.g. "the
+    // developer applies the suggestion for real", not just an `@kody
+    // review` re-trigger on the same diff). Optional because it needs a
+    // real git remote (cloneUrl), same constraint openPR already has.
+    pushFollowupCommit?(
+        pr: OpenedPR,
+        files: Record<string, string>,
+        commitMessage: string,
+    ): Promise<void>;
+    // Optional: raw bodies of Kody's real review comments (inline + PR-level,
+    // status/license-notice placeholders excluded) posted since `sinceIso`,
+    // optionally restricted to comments anchored to `path`. `pollForReview`
+    // only returns counts + one truncated sample — scenarios that need to
+    // pattern-match content across ALL of a round's comments (e.g. "did any
+    // comment re-raise the issue this file's fix already addressed") need
+    // this instead.
+    listReviewCommentBodies?(
+        pr: { number: number },
+        opts: { sinceIso: string; path?: string },
+    ): Promise<string[]>;
     // Idempotent pre-flight sweep — closes/abandons every PR (or MR) on
     // the fixture repo whose title starts with `[e2e]` and is still
     // open. Called once per (provider, target) pair at matrix start,
@@ -265,6 +325,26 @@ export class ScenarioSkipError extends Error {
 
 export type ScenarioStatus = 'passed' | 'failed' | 'skipped' | 'blocked';
 
+// WHY a result is `skipped`. Before this existed, four unrelated outcomes
+// collapsed into one number and the run reported green either way:
+//
+//   not-applicable  the scenario's appliesTo excludes this cell. EXPECTED —
+//                   it is the matrix being sparse by design, not a gap.
+//   setup           a required secret/fixture/license file is absent, so the
+//                   scenario cannot run here. A COVERAGE GAP: the check we
+//                   believe we have is not actually running.
+//   infra           the scenario SHOULD have run and we could not verify it —
+//                   GitHub quota exhausted, target unreachable. NOT a pass.
+//
+// Only `not-applicable` is silent. `setup` is reported; `infra` on a P0
+// scenario makes the whole run INCONCLUSIVE (see cli/run-matrix.ts).
+export type SkipKind = 'not-applicable' | 'setup' | 'infra';
+
+// A run's bottom line. `inconclusive` is the state the matrix could not
+// express before: nothing failed, but we did not verify enough to call it
+// green either.
+export type RunVerdict = 'green' | 'inconclusive' | 'red';
+
 export interface ScenarioResult {
     scenarioId: string;
     cell: {
@@ -273,6 +353,16 @@ export interface ScenarioResult {
         license: LicenseMode;
     };
     status: ScenarioStatus;
+    /** Set whenever `status === 'skipped'`. See SkipKind. */
+    skipKind?: SkipKind;
+    /**
+     * True when the scenario failed on attempt 1 and passed on the retry.
+     * `status` stays `passed` (it did pass), but a cell that only passes on
+     * the second try is a flake, and a flake that nobody counts is how an
+     * intermittent product bug stays invisible. `lib/history.ts` carries this
+     * into the durable log so `e2e:report` can compute a real flake rate.
+     */
+    flaky?: boolean;
     durationMs: number;
     evidence: Record<string, unknown>;
     errorMessage?: string;
@@ -300,6 +390,18 @@ export interface MatrixCell {
     target: Target;
     provider: ProviderName;
     license: LicenseMode;
+    /**
+     * Restrict this cell to a specific set of scenarios.
+     *
+     * Exists for CANARY cells: once the matrix moves to GitHub App auth, one
+     * cell stays on a PAT purely to prove the token path still works, and it
+     * should run a single review scenario rather than the whole suite. Without
+     * this the only way to express that was a separate matrix file, which
+     * drifts from the real one.
+     *
+     * Omitted → every scenario whose appliesTo matches the cell.
+     */
+    only?: string[];
 }
 
 export interface MatrixConfig {

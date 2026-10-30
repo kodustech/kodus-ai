@@ -13,7 +13,7 @@ import { OverrideIndicatorForm } from "../../../_components/override";
 import type { CodeReviewFormType } from "../../../_types";
 import { SeverityLevelsExplanationModal } from "./security-levels-explanation-modal";
 
-const severityLevelFilterOptions = {
+export const severityLevelFilterOptions = {
     low: { label: "Low/All", value: 0 },
     medium: { label: "Medium", value: 1 },
     high: { label: "High", value: 2 },

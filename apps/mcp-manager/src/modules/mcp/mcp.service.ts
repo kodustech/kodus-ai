@@ -6,12 +6,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { IntegrationOAuthService } from '../integrations/integration-oauth.service';
 import { MCPIntegrationAuthType } from '../integrations/enums/integration.enum';
 import { MCPIntegrationInterface } from '../integrations/interfaces/mcp-integration.interface';
 import { IntegrationsService } from '../integrations/integrations.service';
 import {
+    MCPIntegration,
     MCPProviderType,
     MCPTool,
 } from '../providers/interfaces/provider.interface';
@@ -43,9 +44,57 @@ const MANAGED_CATEGORY_BY_ID: Record<string, string> = Object.fromEntries(
         .map((server) => [server.id, server.category as string]),
 );
 
+// Managed integrations Kodus no longer runs. Their connection rows outlive the
+// catalog entry, and every review would still try to register them (a 404 per
+// server, per review) — and on the free plan, which keeps the OLDEST three
+// connections, a dead one can hold the slot a working one needs. They are left
+// out of every connection listing; the rows themselves are kept.
+//   - context7-default: dropped from the catalog on 2026-07-01 (5702c4c26).
+//   - kodus-github-issues-default: replaced by kodus-issues-default on
+//     2026-06-12 (c6bc2dd64); /mcp/github-issues no longer exists.
+export const RETIRED_MANAGED_INTEGRATION_IDS = [
+    'context7-default',
+    'kodus-github-issues-default',
+];
+
+// The available-integrations catalog comes from a slow per-provider fetch
+// (external round-trip), but it's static-ish. Cache it briefly per
+// (org, page, size, appName). Connection state is always read live and merged
+// afterwards, so isConnected/connectionStatus never go stale on a cache hit.
+const INTEGRATIONS_CATALOG_TTL_MS = 5 * 60 * 1000;
+
 @Injectable()
 export class McpService {
     private readonly logger = new Logger(McpService.name);
+
+    // Short-lived, request-independent cache of the integrations catalog
+    // (see INTEGRATIONS_CATALOG_TTL_MS). Keyed per org + pagination + filter.
+    private readonly integrationsCatalogCache = new Map<
+        string,
+        { expires: number; value: MCPIntegration[] }
+    >();
+
+    private getCachedCatalog(key: string): MCPIntegration[] | undefined {
+        const entry = this.integrationsCatalogCache.get(key);
+        if (!entry) return undefined;
+        if (entry.expires <= Date.now()) {
+            this.integrationsCatalogCache.delete(key);
+            return undefined;
+        }
+        return entry.value;
+    }
+
+    private setCachedCatalog(key: string, value: MCPIntegration[]): void {
+        // Bound growth: evict expired entries before inserting a new one.
+        const now = Date.now();
+        for (const [k, v] of this.integrationsCatalogCache) {
+            if (v.expires <= now) this.integrationsCatalogCache.delete(k);
+        }
+        this.integrationsCatalogCache.set(key, {
+            expires: now + INTEGRATIONS_CATALOG_TTL_MS,
+            value,
+        });
+    }
 
     constructor(
         private providerFactory: ProviderFactory,
@@ -58,12 +107,28 @@ export class McpService {
 
     async getConnections(query: QueryDto, organizationId: string) {
         const { page, pageSize, ...where } = query;
+        if (
+            where.integrationId &&
+            RETIRED_MANAGED_INTEGRATION_IDS.includes(where.integrationId)
+        ) {
+            return { items: [], total: 0 };
+        }
         const [items, total] = await this.connectionRepository.findAndCount({
             // organizationId LAST so the auth-derived tenant always wins: a
             // client-supplied `organizationId` in the query must never override
             // it (cross-tenant leak). Defense-in-depth: the field is also gone
             // from QueryDto so it can't be passed at all.
-            where: { ...where, organizationId },
+            where: {
+                ...where,
+                integrationId:
+                    where.integrationId ??
+                    Not(In(RETIRED_MANAGED_INTEGRATION_IDS)),
+                organizationId,
+            },
+            // Deterministic order: the free-plan cap keeps the first 3
+            // connections (libs/mcp-server getConnections slice), so "first"
+            // must be stable — oldest connections win.
+            order: { createdAt: 'ASC' },
             skip: (page - 1) * pageSize,
             take: pageSize,
         });
@@ -90,30 +155,45 @@ export class McpService {
     }
 
     async getIntegrations(query: QueryDto, organizationId: string) {
-        const providers = this.providerFactory.getProviders();
         const { page, pageSize, appName } = query;
+        const cacheKey = `${organizationId}:${page}:${pageSize}:${appName ?? ''}`;
 
-        const results = await Promise.allSettled(
-            providers.map((provider) =>
-                provider.getIntegrations(String(page), pageSize, {
-                    appName,
-                    organizationId,
-                }),
-            ),
-        );
+        let integrations = this.getCachedCatalog(cacheKey);
 
-        const integrations = results.flatMap((result, index) => {
-            if (result.status === 'fulfilled') {
-                return result.value ?? [];
-            }
-            this.logger.error(
-                `Failed to load integrations from provider ${providers[index].constructor.name}`,
-                result.reason instanceof Error
-                    ? result.reason.stack
-                    : String(result.reason),
+        if (!integrations) {
+            const providers = this.providerFactory.getProviders();
+
+            const results = await Promise.allSettled(
+                providers.map((provider) =>
+                    provider.getIntegrations(String(page), pageSize, {
+                        appName,
+                        organizationId,
+                    }),
+                ),
             );
-            return [];
-        });
+
+            let hadFailure = false;
+            integrations = results.flatMap((result, index) => {
+                if (result.status === 'fulfilled') {
+                    return result.value ?? [];
+                }
+                hadFailure = true;
+                this.logger.error(
+                    `Failed to load integrations from provider ${providers[index].constructor.name}`,
+                    result.reason instanceof Error
+                        ? result.reason.stack
+                        : String(result.reason),
+                );
+                return [];
+            });
+
+            // Never cache a degraded catalog from a provider that momentarily
+            // failed — only a complete result.
+            if (!hadFailure) {
+                this.setCachedCatalog(cacheKey, integrations);
+            }
+        }
+
         const connections = await this.connectionRepository.find({
             where: { organizationId },
         });
@@ -453,7 +533,15 @@ export class McpService {
     async getCustomIntegrationConnectionConfig(
         organizationId: string,
         integrationId: string,
-    ): Promise<MCPIntegrationInterface & { accessToken?: string; refreshToken?: string; tokenExpiry?: number; scopes?: string[] } | null> {
+    ): Promise<
+        | (MCPIntegrationInterface & {
+              accessToken?: string;
+              refreshToken?: string;
+              tokenExpiry?: number;
+              scopes?: string[];
+          })
+        | null
+    > {
         try {
             const { integration } =
                 await this.integrationsService.getValidAccessToken(

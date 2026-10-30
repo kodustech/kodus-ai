@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import {
     ForbiddenException,
     HttpException,
+    HttpStatus,
     NotFoundException,
     UnauthorizedException,
 } from '@nestjs/common';
@@ -14,7 +15,6 @@ import { EnqueueCliReviewUseCase } from '@libs/cli-review/application/use-cases/
 import { GetCliReviewJobStatusUseCase } from '@libs/cli-review/application/use-cases/get-cli-review-job-status.use-case';
 import { WaitForCliReviewJobUseCase } from '@libs/cli-review/application/use-cases/wait-for-cli-review-job.use-case';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
-import { SubmitCliSessionCaptureUseCase } from '@libs/cli-review/application/use-cases/submit-cli-session-capture.use-case';
 import { AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/authenticated-rate-limiter.service.contract';
 import { TRIAL_RATE_LIMITER_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/trial-rate-limiter.service.contract';
 import { GITHUB_PUBLIC_PR_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/github-public-pr.service.contract';
@@ -31,6 +31,13 @@ import { PublicPrReviewUseCase } from '@libs/cli-review/application/use-cases/pu
 import { ListFeaturedPublicReviewsUseCase } from '@libs/cli-review/application/use-cases/list-featured-public-reviews.use-case';
 import { GetFeaturedPublicReviewUseCase } from '@libs/cli-review/application/use-cases/get-featured-public-review.use-case';
 import { ValidateCliKeyUseCase } from '@libs/cli-review/application/use-cases/validate-cli-key.use-case';
+
+// Only a DI token here (the suite provides a mock via useValue); the real
+// module drags in the whole review pipeline and cost ~2s of import per run.
+jest.mock(
+    '@libs/cli-review/application/use-cases/execute-cli-review.use-case',
+    () => ({ ExecuteCliReviewUseCase: class ExecuteCliReviewUseCase {} }),
+);
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -81,30 +88,6 @@ function makeTeamEntity(overrides: { uuid?: string; orgUuid?: string } = {}) {
 
 const MINIMAL_BODY: CliReviewRequestDto = {
     diff: 'diff --git a/x b/x\n+const x = 1;',
-};
-
-const SESSION_CAPTURE_BODY = {
-    branch: 'feat/auth',
-    sha: 'a1b2c3d4e5f6',
-    orgRepo: 'kodustech/cli',
-    agent: 'claude-code',
-    event: 'stop',
-    signals: {
-        sessionId: 'sess-abc',
-        turnId: 'turn-123',
-        prompt: 'Refactor auth to use JWT',
-        assistantMessage: 'I decided to use JWT for stateless authentication.',
-        modifiedFiles: ['src/auth/jwt.ts', 'src/auth/middleware.ts'],
-        toolUses: [
-            {
-                tool: 'Write',
-                filePath: 'src/auth/jwt.ts',
-                summary: 'Created JWT helper',
-            },
-        ],
-    },
-    summary: 'Refactored auth module',
-    capturedAt: '2025-06-01T10:30:00.000Z',
 };
 
 function makeRes() {
@@ -163,9 +146,6 @@ const mockGetCliReviewJobStatus = {
 const mockWaitForCliReviewJob = {
     execute: jest.fn().mockResolvedValue({ suggestions: [] }),
 };
-const mockSubmitCliSessionCapture = {
-    execute: jest.fn().mockResolvedValue({ id: 'cap_abc123', accepted: true }),
-};
 const mockTriggerBusinessValidation = {
     execute: jest.fn(),
 };
@@ -186,7 +166,9 @@ const mockGetFeaturedReview = { execute: jest.fn() };
 describe('CliReviewController', () => {
     let controller: CliReviewController;
 
-    beforeEach(async () => {
+    // The controller and ValidateCliKeyUseCase are stateless (all mocks are
+    // module-level), so compile the Nest module once instead of per test.
+    beforeAll(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CliReviewController,
@@ -205,10 +187,6 @@ describe('CliReviewController', () => {
                 {
                     provide: WaitForCliReviewJobUseCase,
                     useValue: mockWaitForCliReviewJob,
-                },
-                {
-                    provide: SubmitCliSessionCaptureUseCase,
-                    useValue: mockSubmitCliSessionCapture,
                 },
                 {
                     provide: IngestSessionEventUseCase,
@@ -272,7 +250,9 @@ describe('CliReviewController', () => {
         }).compile();
 
         controller = module.get(CliReviewController);
+    });
 
+    beforeEach(() => {
         jest.clearAllMocks();
 
         // Default happy-path stubs
@@ -284,10 +264,6 @@ describe('CliReviewController', () => {
         });
         mockRateLimiter.checkRateLimit.mockResolvedValue({ allowed: true });
         mockExecuteCliReview.execute.mockResolvedValue({ suggestions: [] });
-        mockSubmitCliSessionCapture.execute.mockResolvedValue({
-            id: 'cap_abc123',
-            accepted: true,
-        });
         mockCliDeviceService.validateOrRegisterDevice.mockResolvedValue({});
     });
 
@@ -587,102 +563,20 @@ describe('CliReviewController', () => {
     // POST /cli/memory/captures
     // =========================================================================
 
-    describe('POST /cli/memory/captures', () => {
-        it('submits capture with valid x-team-key', async () => {
-            mockTeamCliKeyService.validateKey.mockResolvedValue(TEAM_KEY_DATA);
-
-            const result = await controller.submitSessionCapture(
-                SESSION_CAPTURE_BODY as any,
-                TEAM_KEY,
-                undefined,
-                undefined,
-            );
-
-            expect(mockTeamCliKeyService.validateKey).toHaveBeenCalledWith(
-                TEAM_KEY,
-            );
-            expect(mockSubmitCliSessionCapture.execute).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    organizationAndTeamData: {
-                        organizationId: ORG_ID,
-                        teamId: TEAM_ID,
-                    },
-                    input: expect.objectContaining({
-                        branch: SESSION_CAPTURE_BODY.branch,
-                        orgRepo: SESSION_CAPTURE_BODY.orgRepo,
-                        event: 'stop',
-                    }),
-                }),
-            );
-            expect(result).toEqual({ id: 'cap_abc123', accepted: true });
-        });
-
-        it('submits capture with team key sent via Bearer kodus_ token', async () => {
-            mockTeamCliKeyService.validateKey.mockResolvedValue(TEAM_KEY_DATA);
-
-            await controller.submitSessionCapture(
-                SESSION_CAPTURE_BODY as any,
-                undefined,
-                BEARER_TEAM_KEY,
-                undefined,
-            );
-
-            expect(mockTeamCliKeyService.validateKey).toHaveBeenCalledWith(
-                TEAM_KEY,
-            );
-            expect(mockSubmitCliSessionCapture.execute).toHaveBeenCalled();
-        });
-
-        it('submits capture with JWT auth route', async () => {
-            mockTeamService.findById.mockResolvedValue(makeTeamEntity());
-
-            await controller.submitSessionCapture(
-                SESSION_CAPTURE_BODY as any,
-                undefined,
-                BEARER_JWT,
-                TEAM_ID,
-            );
-
-            expect(mockJwtService.verify).toHaveBeenCalledWith(VALID_JWT, {
-                secret: 'test-secret',
-            });
-            expect(mockSubmitCliSessionCapture.execute).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    organizationAndTeamData: {
-                        organizationId: ORG_ID,
-                        teamId: TEAM_ID,
-                    },
-                    input: expect.objectContaining({
-                        branch: SESSION_CAPTURE_BODY.branch,
-                        orgRepo: SESSION_CAPTURE_BODY.orgRepo,
-                        event: 'stop',
-                    }),
-                }),
-            );
-        });
-
-        it('throws 401 when auth is missing', async () => {
-            await expect(
-                controller.submitSessionCapture(
-                    SESSION_CAPTURE_BODY as any,
-                    undefined,
-                    undefined,
-                    undefined,
-                ),
-            ).rejects.toThrow(UnauthorizedException);
-        });
-
-        it('throws 401 when team key is invalid', async () => {
-            mockTeamCliKeyService.validateKey.mockResolvedValue(null);
-
-            await expect(
-                controller.submitSessionCapture(
-                    SESSION_CAPTURE_BODY as any,
-                    TEAM_KEY,
-                    undefined,
-                    undefined,
-                ),
-            ).rejects.toThrow(UnauthorizedException);
+    describe('POST /cli/memory/captures (retired)', () => {
+        it('answers 410 Gone so an unupgraded CLI degrades quietly', () => {
+            try {
+                controller.submitSessionCapture();
+                throw new Error('expected submitSessionCapture to throw');
+            } catch (error) {
+                expect(error).toBeInstanceOf(HttpException);
+                expect((error as HttpException).getStatus()).toBe(
+                    HttpStatus.GONE,
+                );
+                expect((error as HttpException).getResponse()).toMatchObject({
+                    code: 'CLI_SESSION_CAPTURE_GONE',
+                });
+            }
         });
     });
 
@@ -791,11 +685,7 @@ describe('CliReviewController', () => {
                     makeTeamEntity(),
                 );
 
-                const result = await runValidate(
-                    undefined,
-                    BEARER_JWT,
-                    ORG_ID,
-                );
+                const result = await runValidate(undefined, BEARER_JWT, ORG_ID);
 
                 expect(result.valid).toBe(true);
                 expect(result.teamId).toBe(TEAM_ID);
@@ -978,49 +868,6 @@ describe('CliReviewController', () => {
                         organizationId: ORG_ID,
                         email: USER_EMAIL,
                     }),
-                );
-            });
-
-            it('returns 401 for invalid JWT', async () => {
-                mockJwtService.verify.mockImplementation(() => {
-                    throw new Error('jwt malformed');
-                });
-                const res = makeRes();
-
-                await controller.validateKey(
-                    undefined,
-                    BEARER_JWT,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    res,
-                );
-
-                expect(res.status).toHaveBeenCalledWith(401);
-                expect(res.json).toHaveBeenCalledWith(
-                    expect.objectContaining({ valid: false }),
-                );
-            });
-        });
-
-        describe('No auth', () => {
-            it('returns 401 when no auth is provided', async () => {
-                const res = makeRes();
-
-                await controller.validateKey(
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    undefined,
-                    res,
-                );
-
-                expect(res.status).toHaveBeenCalledWith(401);
-                expect(res.json).toHaveBeenCalledWith(
-                    expect.objectContaining({ valid: false }),
                 );
             });
         });
@@ -1462,28 +1309,6 @@ describe('CliReviewController', () => {
     // =========================================================================
 
     describe('POST /cli/review – Rate limiting with team key', () => {
-        it('throws 429 when rate limit is exceeded with team key auth', async () => {
-            mockTeamCliKeyService.validateKey.mockResolvedValue(TEAM_KEY_DATA);
-            mockRateLimiter.checkRateLimit.mockResolvedValue({
-                allowed: false,
-                remaining: 0,
-                resetAt: new Date('2026-01-01T00:00:00Z'),
-            });
-
-            await expect(
-                controller.review(MINIMAL_BODY, TEAM_KEY),
-            ).rejects.toThrow(HttpException);
-
-            try {
-                await controller.review(MINIMAL_BODY, TEAM_KEY);
-            } catch (error) {
-                expect(error.getStatus()).toBe(429);
-                const response = error.getResponse();
-                expect(response.remaining).toBe(0);
-                expect(response.resetAt).toBeDefined();
-            }
-        });
-
         it('passes rate limit check with the correct team uuid', async () => {
             mockTeamCliKeyService.validateKey.mockResolvedValue(TEAM_KEY_DATA);
 
@@ -1714,7 +1539,9 @@ describe('CliReviewController', () => {
             });
 
             try {
-                await controller.publicPrReview(PUBLIC_BODY, { status: jest.fn() });
+                await controller.publicPrReview(PUBLIC_BODY, {
+                    status: jest.fn(),
+                });
                 throw new Error('expected publicPrReview to throw');
             } catch (error) {
                 expect(error).toBeInstanceOf(HttpException);
@@ -1739,7 +1566,9 @@ describe('CliReviewController', () => {
             });
 
             try {
-                await controller.publicPrReview(PUBLIC_BODY, { status: jest.fn() });
+                await controller.publicPrReview(PUBLIC_BODY, {
+                    status: jest.fn(),
+                });
                 throw new Error('expected publicPrReview to throw');
             } catch (error) {
                 expect(error).toBeInstanceOf(HttpException);

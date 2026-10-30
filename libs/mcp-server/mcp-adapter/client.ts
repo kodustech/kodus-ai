@@ -695,7 +695,10 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
     }
 
     async disconnect(): Promise<void> {
-        if (!this.connected) return;
+        if (!this.connected) {
+            this.sessionManager.destroy();
+            return;
+        }
 
         try {
             await this.client.close();
@@ -1183,6 +1186,18 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
                 name,
                 arguments: args || {},
             })) as CallToolResult;
+
+            // MCP tools report execution failures via isError + content text
+            // rather than throwing. Surface them as exceptions so callers don't
+            // mistake error messages (e.g. "MCP error -32602 ...") for real data.
+            if (result?.isError) {
+                const errorText = result.content
+                    ?.filter((item: any) => item.type === 'text')
+                    ?.map((item: any) => item.text)
+                    ?.join('\n') || 'Tool execution failed';
+
+                throw new Error(`Tool ${name} failed: ${errorText}`);
+            }
 
             this.metricsCollector.recordRequest(
                 'tool_call',
@@ -1741,6 +1756,7 @@ export class SpecCompliantMCPClient extends EventEmitter<MCPClientEvents> {
             clearInterval(this.metricsIntervalId);
             this.metricsIntervalId = undefined;
         }
+        this.sessionManager.destroy();
 
         // Clear caches
         this.resourcesCache = null;

@@ -126,11 +126,28 @@ describe('BitbucketController', () => {
         });
     });
 
-    describe('unsupported events - should NOT enqueue', () => {
-        it('should ignore "repo:push" event', async () => {
+    describe('Data Center events', () => {
+        /**
+         * Bitbucket Data Center sends the pull request under `pullRequest`
+         * (capital R), while Cloud sends `pullrequest`.
+         * @see https://confluence.atlassian.com/bitbucketserver/event-payload-938025882.html
+         */
+        const dataCenterBody = {
+            eventKey: 'pr:opened',
+            pullRequest: {
+                id: 1,
+                title: 'a new file added',
+                toRef: {
+                    displayId: 'master',
+                    repository: { id: 84, name: 'repo-1' },
+                },
+            },
+        };
+
+        it('should normalize the Data Center "pullRequest" key to "pullrequest"', async () => {
             mockRequest = {
-                headers: { 'x-event-key': 'repo:push' },
-                body: { push: { changes: [] } },
+                headers: { 'x-event-key': 'pr:opened' },
+                body: dataCenterBody,
             };
 
             controller.handleWebhook(
@@ -139,19 +156,29 @@ describe('BitbucketController', () => {
             );
 
             expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.OK);
-            expect(mockResponse.send).toHaveBeenCalledWith(
-                'Webhook ignored (event not supported)',
-            );
+            expect(mockResponse.send).toHaveBeenCalledWith('Webhook received');
 
             await new Promise((resolve) => setImmediate(resolve));
 
-            expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
+            const enqueued = enqueueWebhookUseCase.execute.mock.calls[0][0];
+
+            expect(enqueued.payload.pullrequest).toEqual(
+                dataCenterBody.pullRequest,
+            );
+            expect(enqueued.payload.isDataCenterEvent).toBe(true);
         });
 
-        it('should ignore "repo:fork" event', async () => {
+        it.each([
+            'pr:opened',
+            'pr:modified',
+            'pr:reviewer:updated',
+            'pr:comment:added',
+            'pr:merged',
+            'pr:declined',
+        ])('should enqueue "%s" with the normalized key', async (event) => {
             mockRequest = {
-                headers: { 'x-event-key': 'repo:fork' },
-                body: { fork: {} },
+                headers: { 'x-event-key': event },
+                body: { ...dataCenterBody, eventKey: event },
             };
 
             controller.handleWebhook(
@@ -159,19 +186,21 @@ describe('BitbucketController', () => {
                 mockResponse as Response,
             );
 
-            expect(mockResponse.send).toHaveBeenCalledWith(
-                'Webhook ignored (event not supported)',
-            );
-
             await new Promise((resolve) => setImmediate(resolve));
 
-            expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
+            expect(enqueueWebhookUseCase.execute).toHaveBeenCalledTimes(1);
+
+            const enqueued = enqueueWebhookUseCase.execute.mock.calls[0][0];
+
+            expect(enqueued.event).toBe(event);
+            expect(enqueued.payload.isDataCenterEvent).toBe(true);
+            expect(enqueued.payload.pullrequest).toBeDefined();
         });
 
-        it('should ignore "issue:created" event', async () => {
+        it('should not invent a "pullrequest" key when Data Center sends none', async () => {
             mockRequest = {
-                headers: { 'x-event-key': 'issue:created' },
-                body: { issue: {} },
+                headers: { 'x-event-key': 'pr:opened' },
+                body: { eventKey: 'pr:opened' },
             };
 
             controller.handleWebhook(
@@ -179,60 +208,44 @@ describe('BitbucketController', () => {
                 mockResponse as Response,
             );
 
-            expect(mockResponse.send).toHaveBeenCalledWith(
-                'Webhook ignored (event not supported)',
+            await new Promise((resolve) => setImmediate(resolve));
+
+            const enqueued = enqueueWebhookUseCase.execute.mock.calls[0][0];
+
+            expect(enqueued.payload.pullrequest).toBeUndefined();
+            expect(enqueued.payload.isDataCenterEvent).toBe(true);
+        });
+
+        it('should not normalize "pullRequest" on a Cloud event', async () => {
+            // A Cloud event whose body happens to carry a capital-R
+            // `pullRequest` key must pass through untouched — normalization
+            // is gated on the event being a Data Center one.
+            mockRequest = {
+                headers: { 'x-event-key': 'pullrequest:created' },
+                body: {
+                    pullrequest: { id: 1 },
+                    pullRequest: { id: 999 },
+                },
+            };
+
+            controller.handleWebhook(
+                mockRequest as Request,
+                mockResponse as Response,
             );
 
             await new Promise((resolve) => setImmediate(resolve));
 
-            expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
-        });
+            const enqueued = enqueueWebhookUseCase.execute.mock.calls[0][0];
 
+            expect(enqueued.payload.pullrequest).toEqual({ id: 1 });
+            expect(enqueued.payload.isDataCenterEvent).toBe(false);
+        });
+    });
+
+    describe('unsupported events - should NOT enqueue', () => {
         it('should ignore "pullrequest:approved" event', async () => {
             mockRequest = {
                 headers: { 'x-event-key': 'pullrequest:approved' },
-                body: { pullrequest: { id: 1 } },
-            };
-
-            controller.handleWebhook(
-                mockRequest as Request,
-                mockResponse as Response,
-            );
-
-            expect(mockResponse.send).toHaveBeenCalledWith(
-                'Webhook ignored (event not supported)',
-            );
-
-            await new Promise((resolve) => setImmediate(resolve));
-
-            expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
-        });
-
-        it('should ignore "pullrequest:unapproved" event', async () => {
-            mockRequest = {
-                headers: { 'x-event-key': 'pullrequest:unapproved' },
-                body: { pullrequest: { id: 1 } },
-            };
-
-            controller.handleWebhook(
-                mockRequest as Request,
-                mockResponse as Response,
-            );
-
-            expect(mockResponse.send).toHaveBeenCalledWith(
-                'Webhook ignored (event not supported)',
-            );
-
-            await new Promise((resolve) => setImmediate(resolve));
-
-            expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
-        });
-
-        it('should ignore "pullrequest:changes_request_created" event', async () => {
-            mockRequest = {
-                headers: {
-                    'x-event-key': 'pullrequest:changes_request_created',
-                },
                 body: { pullrequest: { id: 1 } },
             };
 

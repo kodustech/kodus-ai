@@ -1,6 +1,8 @@
 # Dependencies & build output
 node_modules
 **/node_modules
+.pnpm-store
+**/.pnpm-store
 dist
 **/dist
 **/.next

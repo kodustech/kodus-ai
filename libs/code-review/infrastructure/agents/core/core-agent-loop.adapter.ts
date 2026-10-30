@@ -21,22 +21,29 @@
  *  - discardedBySeverity is [] by design: the new path has no severity
  *    pre-filter — verify alone decides keep/drop.
  */
+import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
+import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
+import { OverflowRecoveringRunner } from './overflow-recovering-runner';
+import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compression/token-estimator';
 import { DiffCoverageLedger } from '@libs/code-review/infrastructure/agents/adapters/diff-coverage-ledger.adapter';
 import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
-import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
-import { anthropicSystemCacheControl } from '@libs/llm/system-cache';
+import { buildRepoInstructionTool } from '@libs/code-review/infrastructure/agents/adapters/repo-instruction-tool';
+import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 import {
+    FINDER_DONE_TOOL,
     buildFinderAgentSpec,
     runFinderWithVerify,
     recoverFindingsFromProse,
+    submitResultTool,
 } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import {
     buildFindingsFromVerify,
     summarizeFunnel,
 } from '@libs/code-review/infrastructure/agents/core/review-finding';
+import { inspectFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import { createLogger } from '@libs/core/log/logger';
 import {
     type AgentLoopInput,
@@ -49,15 +56,31 @@ import { buildProviderOptions } from '@libs/llm/reasoning-options';
 // buildAgentAnomalies is review-specific (anomaly summary shapes) — lives in its
 // own module (relocated out of the legacy llm/agent-loop.ts).
 import { buildAgentAnomalies } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
+import {
+    AstGrepOutputLog,
+    makeTargetBranchGuideLister,
+    makeTargetBranchGuideReader,
+    recordAstGrepOutputs,
+} from '@libs/code-review/infrastructure/agents/core/convention-check';
 
 const funnelLogger = createLogger('review-funnel');
 
-export async function runAgentLoopViaCore(
+/**
+ * What one review agent runs with, its finder and its verifier alike: the
+ * runner (wrapped to recover from a context overflow when the window is
+ * known), the investigation tools, the provider options and the model ids.
+ * Called by runAgentLoopViaCore; the funnel's verify eval builds its verifier
+ * from it too.
+ */
+export function finderRunEnvironment(
     input: AgentLoopInput,
     secrets: AgentLoopSecrets,
-): Promise<AgentLoopOutput> {
-    const model = wrapByokModel(input.model, {
-        byokConfig: secrets.byokConfig,
+) {
+    // The adapter resolves ONLY the slot — LLM.run (inside the runner) builds +
+    // wraps the model (limiter with the finder's own queueTimeoutMs + reporter),
+    // derives tuning, applies the prompt-cache, and records the cost span. The
+    // finder's config-derived reasoning is passed as a spec override below.
+    const runner = new AiSdkAgentRunner(secrets.byokConfig, {
         organizationId: input.telemetryMetadata?.organizationId,
         provider:
             typeof input.byokProvider === 'string'
@@ -67,19 +90,45 @@ export async function runAgentLoopViaCore(
         reporter: secrets.byokErrorReporter,
     });
 
-    const runner = new AiSdkAgentRunner({ resolve: () => model });
-
-    const { registry: tools, cache: toolCache } = buildFinderToolRegistry({
+    const { registry: baseTools, cache: toolCache } = buildFinderToolRegistry({
         remoteCommands: secrets.remoteCommands,
+        gitHubToken: secrets.gitHubToken,
         repositoryFullName: input.repositoryFullName,
+        documentationSearchService: secrets.documentationSearchService,
+        documentationSearchOptions: secrets.documentationSearchOptions,
         callGraph: input.callGraph,
         outlineFirst: input.outlineFirst,
+        linkedRepoAccess: secrets.linkedRepoAccess,
+        extraTools: secrets.extraTools,
     });
+    // Without a sandbox or tools of the agent's own there are no repository
+    // tools; that decides the self-contained regime, before the instructions
+    // tool is added.
+    const isSelfContained = baseTools.list().length === 0;
+    const reviewTools =
+        input.listsRepoInstructions && input.repoInstructions?.files?.length
+            ? new InMemoryToolRegistry([
+                  ...baseTools.list(),
+                  buildRepoInstructionTool(input.repoInstructions),
+              ])
+            : baseTools;
 
-    const coverageLedger = new DiffCoverageLedger({
-        changedFiles: input.changedFiles,
-        fileTiers: input.fileTiers,
-    });
+    // Second pass for convention findings (custom agents): needs the guides
+    // as they are on the target branch, so only with a sandbox that can run
+    // git. Without one, convention findings fall back to HV2 like any other.
+    const readGuide =
+        input.conventionGuides !== undefined
+            ? makeTargetBranchGuideReader(
+                  secrets.remoteCommands,
+                  input.baseBranch,
+              )
+            : undefined;
+    // What ast-grep matched in this review: a convention finding it backs
+    // needs no model check.
+    const astGrepLog = readGuide ? new AstGrepOutputLog() : undefined;
+    const tools = astGrepLog
+        ? recordAstGrepOutputs(reviewTools, astGrepLog)
+        : reviewTools;
 
     // Reasoning/thinking config (provider-specific) → providerOptions, forwarded
     // to every model call (finder + verifier). Ported from the legacy loop.
@@ -90,46 +139,165 @@ export async function runAgentLoopViaCore(
             reasoningEffort: input.reasoningEffort,
             reasoningConfigOverride: input.reasoningConfigOverride,
             byokProvider: input.byokProvider,
+            modelName: input.modelName,
             openrouterProviderOrder: input.openrouterProviderOrder,
             openrouterAllowFallbacks: input.openrouterAllowFallbacks,
         },
     );
 
-    // Anthropic prompt caching for the (large, static) system prompt — ported
-    // from the legacy `withAnthropicCacheControl`. Cached across the loop's many
-    // steps + every verifier run, so Claude models don't re-pay the system
-    // prompt's input tokens each step. No-op for non-Anthropic models.
-    const systemProviderOptions = anthropicSystemCacheControl(
-        input.model,
+    const contextWindowTokens = input.contextWindowTokens;
+    // Fixed per-request overhead (system prompt + tool schemas) the provider
+    // re-sends on EVERY step. Counting it lets the compressor reserve a real
+    // budget for the accumulating tool-loop messages instead of over-committing
+    // the window — the miss behind the mid-loop overflow (issue #1574).
+    // buildFinderAgentSpec adds submitResultTool to the model's tool set, so its
+    // schema (~210 tokens) is part of the real overhead and must be counted too
+    // — it matters on small windows where the safety margin is tight.
+    const overheadTokens = contextWindowTokens
+        ? estimateOverheadTokens(input.systemPrompt, [
+              ...tools.list(),
+              submitResultTool,
+          ])
+        : 0;
+    // The finder spec's modelId is NOT used to resolve the model (LLM.run does
+    // that, from the slot). It IS used to decide provider-native strict tool use
+    // (supportsStrictTools), so pass the REAL model id straight off the resolved
+    // slot — the same id `buildModelFromSlot` would have stamped on the built
+    // model. Undefined (managed/env default → no slot) degrades to 'resolved',
+    // which disables strict — parity with before, since the managed default
+    // isn't a strict-capable (Gemini) model.
+    const specModelId = secrets.byokConfig?.model ?? 'resolved';
+    // The runtime failover target (if the slot has one). Strict tool use must
+    // account for it: LLM.run can swap primary → fallback mid-call, and a strict
+    // tool built for the primary would be rejected by a non-strict fallback
+    // (e.g. Gemini primary → OpenAI fallback). See supportsStrictToolsForRun.
+    const fallbackModelId = secrets.byokConfig?.fallback?.model;
+    // Overflow net (issue #1574): if a mis-sized window lets any finder sub-run
+    // overflow mid-loop, re-run THAT pass once at a tighter window instead of
+    // failing the review. Wrapping the shared runner covers every pass (base +
+    // resamples + synthesis-rescue) at one seam. Only when a window is known —
+    // otherwise `tighten` can't scale anything, so we skip the wrapper entirely.
+    const tightenCompression = (spec: AgentSpec, scale: number) =>
+        contextWindowTokens
+            ? {
+                  ...spec,
+                  policies: spec.policies.map((p) =>
+                      p.name === 'compression'
+                          ? new CompressionPolicy(
+                                new ContextWindowCompressor(
+                                    Math.floor(contextWindowTokens * scale),
+                                    { overheadTokens },
+                                ),
+                            )
+                          : p,
+                  ),
+              }
+            : spec;
+    const finderRunner = contextWindowTokens
+        ? new OverflowRecoveringRunner(runner, tightenCompression)
+        : runner;
+
+    return {
+        tools,
+        toolCache,
+        isSelfContained,
+        providerOptions,
+        contextWindowTokens,
+        overheadTokens,
+        specModelId,
+        fallbackModelId,
+        finderRunner,
+        readGuide,
+        astGrepLog,
+        // What verify runs with (verifyFindings), as runFinderWithVerify gets it.
+        verifyParams: {
+            runner: finderRunner,
+            modelId: specModelId,
+            fallbackModelId,
+            tools,
+            providerOptions,
+            previousDecisions: input.previousDecisions,
+            repoInstructions: input.repoInstructions,
+            checksInstructionCitations: input.conventionGuides === undefined,
+            telemetryMetadata: input.telemetryMetadata,
+            agentName: input.agentName,
+            usageRunName: input.usageRunName,
+        },
+    };
+}
+
+/**
+ * A submitResult payload that arrived whole: the findings schema accepts it
+ * and recovery dropped none of its items. On a cut turn a dropped item means
+ * the result was damaged; the valid items still ship, the run is partial.
+ */
+function isWholeResult(payload: unknown): boolean {
+    // Silent: extractFindings already logged this artifact. Items salvaged
+    // before a break mean a cut payload: only those items survived (escaping
+    // or dropping text after a whole array loses none). A
+    // provider text node is not a finding the cut damaged (findings-schema.ts).
+    const { result, drops, recoveries } = inspectFindingsResult(
+        payload,
+        undefined,
+        { silent: true },
     );
+    return (
+        !!result &&
+        !recoveries.some((r) => r.includes('salvaged-items')) &&
+        drops.every((d) => d.reason === 'provider-text-node')
+    );
+}
+
+export async function runAgentLoopViaCore(
+    input: AgentLoopInput,
+    secrets: AgentLoopSecrets,
+): Promise<AgentLoopOutput> {
+    const {
+        tools,
+        toolCache,
+        isSelfContained,
+        providerOptions,
+        contextWindowTokens,
+        overheadTokens,
+        specModelId,
+        fallbackModelId,
+        verifyParams,
+        readGuide,
+        astGrepLog,
+    } = finderRunEnvironment(input, secrets);
+
+    const coverageLedger = new DiffCoverageLedger({
+        changedFiles: input.changedFiles,
+        fileTiers: input.fileTiers,
+    });
 
     // Recall-pass gating — ported from the legacy loop: skip the heavy passes in
     // fast mode, self-contained (no tools) trial flow, or when the caller asks.
-    const isSelfContained = tools.list().length === 0;
     const skipHeavyPasses =
         input.reviewMode === 'fast' ||
         isSelfContained ||
         !!input.skipHeavyPasses;
     const skipSynthesisRescue = !!input.skipSynthesisRescue;
 
-    const contextWindowTokens = input.contextWindowTokens;
-    // The AgentSpec.modelId is NOT used to resolve the model (the runner's
-    // resolver above ignores it and always returns `model`). It IS used to
-    // decide provider-native strict tool use (supportsStrictTools), so pass the
-    // REAL model id — a placeholder like 'resolved' would disable strict for
-    // every model (it matches neither the Gemini nor the Claude pattern).
-    const specModelId = (input.model as any)?.modelId ?? 'resolved';
+    // The ledger is read back below for the coverage summary.
     const finderSpec = buildFinderAgentSpec({
         systemPrompt: input.systemPrompt,
         modelId: specModelId,
+        fallbackModelId,
+        usageRunName: input.usageRunName,
+        agentName: input.agentName,
         tools,
+        labels: input.allowedLabels,
         coverageLedger,
         compressor: contextWindowTokens
-            ? new ContextWindowCompressor(contextWindowTokens)
+            ? new ContextWindowCompressor(contextWindowTokens, {
+                  overheadTokens,
+              })
             : undefined,
         maxSteps: input.maxSteps ?? 20,
         providerOptions,
-        systemProviderOptions,
+        acceptsRevisions: !!input.previousDecisions?.length,
+        acceptsConventions: !!readGuide,
     });
 
     // Standard agent run context: runId + a signal that aborts on the parent job
@@ -140,18 +308,65 @@ export async function runAgentLoopViaCore(
         parentSignal: input.parentSignal,
     });
 
+    // A custom agent checks its findings on its own model (#2172). Same slot
+    // as the finder, or none given: verify stays on the finder's runner.
+    const verifySlot = secrets.verifyByokConfig;
+    const verifyOnOwnModel =
+        !!verifySlot &&
+        (verifySlot.provider !== secrets.byokConfig?.provider ||
+            verifySlot.model !== secrets.byokConfig?.model);
+    const ownVerify = verifyOnOwnModel
+        ? {
+              verifyRunner: new AiSdkAgentRunner(verifySlot, {
+                  organizationId: input.telemetryMetadata?.organizationId,
+                  provider:
+                      typeof verifySlot.provider === 'string'
+                          ? verifySlot.provider
+                          : undefined,
+                  queueTimeoutMs: secrets.byokQueueTimeoutMs,
+                  reporter: secrets.byokErrorReporter,
+              }),
+              verifyModelId: verifySlot.model ?? 'resolved',
+              verifyFallbackModelId: verifySlot.fallback?.model,
+              verifyProviderOptions: buildProviderOptions(
+                  `${input.agentName ?? 'finder'}/verify`,
+                  input.telemetryMetadata,
+                  {
+                      reasoningEffort: verifySlot.reasoningEffort,
+                      reasoningConfigOverride:
+                          verifySlot.reasoningConfigOverride,
+                      byokProvider: verifySlot.provider,
+                      modelName: verifySlot.model,
+                      openrouterProviderOrder:
+                          verifySlot.openrouterProviderOrder,
+                      openrouterAllowFallbacks:
+                          verifySlot.openrouterAllowFallbacks,
+                  },
+              ),
+          }
+        : {};
+
     const r = await runFinderWithVerify(
         {
-            runner,
+            ...verifyParams,
+            ...ownVerify,
             finderSpec,
-            modelId: specModelId,
-            tools,
-            providerOptions,
-            systemProviderOptions,
             skipHeavyPasses,
             skipSynthesisRescue,
-            telemetryMetadata: input.telemetryMetadata,
-            agentName: input.agentName,
+            teamSystemTools: input.teamSystemTools,
+            laneFocus: input.laneFocus,
+            ...(readGuide && {
+                conventionCheck: {
+                    readGuide,
+                    listGuideDir: makeTargetBranchGuideLister(
+                        secrets.remoteCommands,
+                        input.baseBranch,
+                    ),
+                    guideFiles: input.conventionGuides,
+                    teamInstructions: input.teamInstructions,
+                    astGrepLog,
+                },
+            }),
             // Wire the prose-findings recovery to the internal-model fallback.
             // The finder/recall passes stay decoupled from BYOK — they only see
             // the ProseRecoverer function.
@@ -160,6 +375,8 @@ export async function runAgentLoopViaCore(
                     reasoning,
                     secrets.byokConfig,
                     input.telemetryMetadata?.organizationId,
+                    input.usageRunName,
+                    input.previousDecisions,
                 ),
         },
         { prompt: input.userPrompt },
@@ -222,7 +439,11 @@ export async function runAgentLoopViaCore(
         (fu.cacheReadTokens ?? 0) + vu.cacheReadTokens + ru.cacheReadTokens;
 
     // Verify funnel made observable: before = kept + dropped, after = kept.
-    const verifiedBefore = r.kept.length + r.droppedByVerify.length;
+    const verifiedBefore =
+        r.kept.length +
+        r.droppedByVerify.length +
+        r.unverified.length +
+        r.droppedByQuoteCheck.length;
     const verification: VerificationTraceSummary | null =
         verifiedBefore === 0
             ? null
@@ -230,13 +451,17 @@ export async function runAgentLoopViaCore(
                   beforeCount: verifiedBefore,
                   afterCount: r.kept.length,
                   droppedByVerifier: r.droppedByVerify.length,
+                  unverified: r.unverified.length,
+                  ...(r.droppedByQuoteCheck.length > 0 && {
+                      droppedByQuoteCheck: r.droppedByQuoteCheck.length,
+                  }),
                   droppedByEvidenceFilter: 0,
                   decisions: [
                       ...r.kept.map((f, i) => ({
                           index: i,
                           relevantFile: f.relevantFile,
                           action: 'keep' as const,
-                          parseMode: 'direct' as const,
+                          parseMode: r.keptParseMode[i] ?? 'default-keep',
                           rationale: '',
                           verifierEvidence: r.keptEvidence[i] ?? {
                               strongFiles: [],
@@ -247,12 +472,51 @@ export async function runAgentLoopViaCore(
                           index: r.kept.length + i,
                           relevantFile: d.finding.relevantFile,
                           action: 'drop' as const,
-                          parseMode: 'direct' as const,
+                          parseMode: d.parseMode,
                           rationale: d.evidence ?? '',
                           verifierEvidence: d.verifierEvidence,
                       })),
+                      ...r.unverified.map((u, i) => ({
+                          index: r.kept.length + r.droppedByVerify.length + i,
+                          relevantFile: u.finding.relevantFile,
+                          action: 'drop' as const,
+                          parseMode: 'verify-error' as const,
+                          rationale: u.error,
+                          verifierEvidence: { strongFiles: [], weakFiles: [] },
+                      })),
                   ],
               };
+
+    // A finder run that ended without submitting a result did not finish
+    // looking: it ran out of steps, or the provider cut its turn so the tools
+    // it asked for never ran (the runner records that as `tool.skipped`). A run
+    // that answered in prose is not incomplete; prose recovery owns it (#2171).
+    // The runner makes an artifact of every requested result call, executed or
+    // not, so a turn cut while writing submitResult leaves one holding raw,
+    // unparseable input, an object that is no findings result (`{}`), or items
+    // recovery had to drop: only a result that arrived whole counts.
+    // The submitResult the review publishes: extractFindings reads the last.
+    const published = [...r.finderState.artifacts]
+        .reverse()
+        .find((a) => a.type === FINDER_DONE_TOOL);
+    const submitted = !!published && isWholeResult(published.payload);
+    const incompleteReason: AgentLoopOutput['incompleteReason'] =
+        r.finderState.status === 'budget-exhausted'
+            ? 'budget-exhausted'
+            : !submitted &&
+                r.finderState.status !== 'error' &&
+                r.finderState.trace.some((e) => e.kind === 'tool.skipped')
+              ? 'truncated'
+              : undefined;
+
+    // When the finder run errored (a provider/model throw the harness caught
+    // and turned into an error-status result), surface the underlying message
+    // so the caller can classify it and fall back / fail loudly instead of
+    // returning a silent empty review.
+    const errorEvent =
+        r.finderState.status === 'error'
+            ? r.finderState.trace.find((e) => e.kind === 'error')
+            : undefined;
 
     return {
         findings: { reasoning: r.reasoning, suggestions: r.kept as any },
@@ -260,6 +524,15 @@ export async function runAgentLoopViaCore(
         steps: r.finderState.steps.length,
         toolCalls,
         finishReason: r.finderState.status,
+        ...(incompleteReason && { incompleteReason }),
+        submittedResult: submitted,
+        ...(errorEvent && {
+            errorMessage: (errorEvent.detail?.message as string) || undefined,
+            errorName: (errorEvent.detail?.name as string) || undefined,
+            errorStatus: (errorEvent.detail?.status as number) ?? undefined,
+            errorResponseBody:
+                (errorEvent.detail?.responseBody as string) || undefined,
+        }),
         source: r.kept.length || r.reasoning ? 'json-parse' : 'empty',
         usage: {
             inputTokens,
@@ -270,7 +543,17 @@ export async function runAgentLoopViaCore(
             totalTokens: inputTokens + outputTokens,
         },
         discardedBySeverity: [],
-        droppedByVerify: r.droppedByVerify.map((d) => d.finding) as any,
+        droppedByVerify: r.droppedByVerify.map((d) => ({
+            ...d.finding,
+            discardReason: d.evidence,
+        })) as any,
+        unverifiedByVerify: r.unverified.map((u) => u.finding) as any,
+        ...(r.droppedByQuoteCheck.length > 0 && {
+            droppedByQuoteCheck: r.droppedByQuoteCheck.map((q) => ({
+                ...q.finding,
+                discardReason: q.detail,
+            })) as any,
+        }),
         coverage,
         verification,
         verificationUsage: {

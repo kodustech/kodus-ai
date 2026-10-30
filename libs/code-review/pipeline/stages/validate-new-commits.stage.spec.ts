@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { PlatformType } from '@libs/core/domain/enums';
 import { ValidateNewCommitsStage } from './validate-new-commits.stage';
 import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
@@ -21,6 +22,8 @@ describe('ValidateNewCommitsStage', () => {
 
         mockPullRequestManagerService = {
             getNewCommitsSinceLastExecution: jest.fn(),
+            // null: the PR diff at the earlier head could not be read.
+            getRebaseInterdiff: jest.fn().mockResolvedValue(null),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -70,6 +73,43 @@ describe('ValidateNewCommitsStage', () => {
         expect(result.pipelineMetadata?.forceFullRerun).toBe(false);
     });
 
+    it('should skip with an explicit rate-limit reason (not "0 commits") when the commit fetch throws HTTP 429', async () => {
+        mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            null,
+        );
+        // Provider throttled the commit fetch — the error propagates instead
+        // of collapsing to an empty list (issue #1165).
+        const rateLimitError: any = new Error('Too Many Requests');
+        rateLimitError.status = 429;
+        mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockRejectedValue(
+            rateLimitError,
+        );
+
+        const result = await stage.execute(context);
+
+        expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
+
+        const expectedMessage = StageMessageHelper.skippedWithReason(
+            PipelineReasons.COMMITS.PROVIDER_RATE_LIMITED,
+            'Provider rate-limited the commit fetch (HTTP 429)',
+        );
+        expect(result.statusInfo.message).toBe(expectedMessage);
+        // Must NOT be masked as an empty PR.
+        expect(result.statusInfo.message).not.toContain('0 commits');
+    });
+
+    it('should rethrow non-429 errors from the commit fetch (preserve existing behaviour)', async () => {
+        mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            null,
+        );
+        const genericError = new Error('boom');
+        mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockRejectedValue(
+            genericError,
+        );
+
+        await expect(stage.execute(context)).rejects.toThrow('boom');
+    });
+
     it('should skip if no NEW commits are found (using PipelineReasons)', async () => {
         // Mock last execution exists
         mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
@@ -117,47 +157,6 @@ describe('ValidateNewCommitsStage', () => {
 
         expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
 
-        // logic returns "Only Merge Commits" with no tech detail in my implementation of stage,
-        // OR it might have tech detail if I passed one.
-        // Let's check my implementation:
-        // message: StageMessageHelper.skippedWithReason(PipelineReasons.COMMITS.ONLY_MERGE),
-        // No second arg. So no tech detail in parens.
-        // But `StageMessageHelper` might append tech detail if I passed it to `skippedWithReason`.
-        // I didn't pass it.
-        // HOWEVER, the `ValidateNewCommitsStage.ts` logic at the top (lines 110+) does:
-        // draft.statusInfo.message = details?.technicalReason ? `${message} (${details.technicalReason})` : message;
-        // Wait!
-        // In lines 110+, `message` is retrieved from `details.message`.
-        // If I set `details.message` using `skippedWithReason`, it already contains the formatted string.
-        // Then lines 151-153 append `(${details.technicalReason})` AGAIN?
-
-        // Let's look at lines 151-153 in `ValidateNewCommitsStage.ts`:
-        // draft.statusInfo.message = details?.technicalReason ? `${message} (${details.technicalReason})` : message;
-
-        // In my implementation of `validateCommits`:
-        // details: {
-        //    message: StageMessageHelper.skippedWithReason(PipelineReasons.COMMITS.ONLY_MERGE),
-        //    technicalReason: 'All new commits identified as merge commits',
-        // }
-
-        // So `message` = "Only Merge Commits — Merge commits are skipped to avoid noise"
-        // Then `draft.statusInfo.message` becomes:
-        // "Only Merge Commits — Merge commits are skipped to avoid noise (All new commits identified as merge commits)"
-
-        // This seems redundant or double-wrapping if `skippedWithReason` was supposed to handle it.
-        // But `skippedWithReason` was called WITHOUT tech detail.
-        // So the "outer" wrapping adds the tech detail.
-        // Ideally I should remove the outer wrapping in `executeStage` and let `validateCommits` handle full formatting using `skippedWithReason(reason, techDetail)`.
-
-        // IF I do that, I need to update `executeStage` logic.
-        // Currently `executeStage` forces the append.
-
-        // Let's fix `executeStage` to NOT double-wrap if `message` already looks formatted? No, that's hacky.
-        // Better: Update `executeStage` to just use `details.message` if available.
-        // AND ensure `validateCommits` returns the FULLY formatted message in `details.message`.
-
-        // Let's check `executeStage` again.
-
         const expectedMessage = `${PipelineReasons.COMMITS.ONLY_MERGE.message}`;
         expect(result.statusInfo.message).toContain(expectedMessage);
     });
@@ -193,8 +192,122 @@ describe('ValidateNewCommitsStage', () => {
         );
     });
 
+    it('reviews the whole PR when one custom agent is asked for (`@kody -v`)', async () => {
+        context.origin = 'command';
+        context.onlyCustomAgent = 'ledger-rules';
+
+        mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                uuid: 'exec-1',
+                dataExecution: { lastAnalyzedCommit: 'sha-1' },
+            },
+        );
+        mockAutomationExecutionService.hasStageWithStatus.mockResolvedValue(
+            false,
+        );
+        mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+            [{ sha: 'sha-1' }],
+        );
+
+        const result = await stage.execute(context);
+
+        expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
+        expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
+    });
+
+    // #1721, QA MR !68: lastExecution is the last SUCCESS, so a partial
+    // review's status note was never edited and each later review posted one.
+    describe('status note of the previous review', () => {
+        const lookup = (partial: unknown) =>
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters: any) =>
+                    Array.isArray(filters.status)
+                        ? partial
+                        : {
+                              uuid: 'exec-ok',
+                              dataExecution: {
+                                  lastAnalyzedCommit: 'sha-1',
+                                  commentId: 11,
+                                  noteId: 11,
+                              },
+                          },
+            );
+
+        beforeEach(() => {
+            mockAutomationExecutionService.hasStageWithStatus.mockResolvedValue(
+                false,
+            );
+            mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                [{ sha: 'sha-1' }, { sha: 'sha-2' }],
+            );
+        });
+
+        it('carries the note of a later partial review on GitLab', async () => {
+            context.platformType = PlatformType.GITLAB;
+            lookup({
+                uuid: 'exec-partial',
+                status: AutomationStatus.PARTIAL_ERROR,
+                dataExecution: { commentId: 22, noteId: 22 },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.previousStatusNote).toEqual({
+                commentId: 22,
+                noteId: 22,
+                threadId: undefined,
+            });
+            expect(result.lastExecution?.commentId).toBe(11);
+            expect(
+                mockAutomationExecutionService.findLatestExecutionByFilters,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    status: [
+                        AutomationStatus.SUCCESS,
+                        AutomationStatus.PARTIAL_ERROR,
+                        AutomationStatus.ERROR,
+                    ],
+                    pullRequestNumber: 1,
+                    repositoryId: 'repo-1',
+                }),
+            );
+        });
+
+        it('leaves the note to lastExecution when the lookup fails', async () => {
+            context.platformType = PlatformType.GITLAB;
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async (filters: any) => {
+                    if (Array.isArray(filters.status)) throw new Error('db');
+                    return {
+                        uuid: 'exec-ok',
+                        dataExecution: { lastAnalyzedCommit: 'sha-1' },
+                    };
+                },
+            );
+
+            const result = await stage.execute(context);
+
+            expect(result.previousStatusNote).toBeUndefined();
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+        });
+
+        it('does not look it up outside GitLab', async () => {
+            context.platformType = PlatformType.GITHUB;
+            lookup({ dataExecution: { commentId: 22, noteId: 22 } });
+
+            const result = await stage.execute(context);
+
+            expect(result.previousStatusNote).toBeUndefined();
+            expect(
+                mockAutomationExecutionService.findLatestExecutionByFilters,
+            ).toHaveBeenCalledTimes(1);
+        });
+    });
+
     describe('orphaned baseCommit detection (rebase / force-push)', () => {
-        it('should force full rerun when lastAnalyzedCommit is not in PR commits (orphan)', async () => {
+        it('should force full rerun when the diff at the orphaned commit cannot be read', async () => {
             mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
                 {
                     uuid: 'exec-prev',
@@ -267,6 +380,7 @@ describe('ValidateNewCommitsStage', () => {
                 previousSha: 'OLD_ORPHAN_SHA',
                 currentHeadSha: 'head-sha',
                 totalCommits: 2,
+                interdiff: { fallback: 'previous_diff_unavailable' },
             });
         });
 
@@ -328,6 +442,193 @@ describe('ValidateNewCommitsStage', () => {
             );
 
             warnSpy.mockRestore();
+        });
+
+        describe('reviews only what the rebase changed (#2037)', () => {
+            const orphan = () => {
+                mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                    {
+                        uuid: 'exec-prev',
+                        dataExecution: {
+                            lastAnalyzedCommit: { sha: 'OLD_ORPHAN_SHA' },
+                        },
+                    },
+                );
+                mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                    [{ sha: 'NEW_HEAD_SHA', parents: [{ sha: 'BASE_SHA' }] }],
+                );
+            };
+            const interdiff = (files: unknown[]) => ({
+                files,
+                unchangedFiles: ['src/same.ts'],
+                partialFiles: files.length ? ['src/edited.ts'] : [],
+                uncomparedFiles: files.length ? ['package-lock.json'] : [],
+                hunksKept: files.length,
+                hunksDropped: 3,
+            });
+
+            it('compares the PR diff at the orphaned commit with the current one', async () => {
+                orphan();
+
+                await stage.execute(context);
+
+                expect(
+                    mockPullRequestManagerService.getRebaseInterdiff,
+                ).toHaveBeenCalledWith(
+                    context.organizationAndTeamData,
+                    context.repository,
+                    context.pullRequest,
+                    'OLD_ORPHAN_SHA',
+                );
+            });
+
+            it('hands the changed hunks to the review instead of a full rerun', async () => {
+                orphan();
+                const files = [{ filename: 'src/edited.ts', patch: '@@' }];
+                mockPullRequestManagerService.getRebaseInterdiff.mockResolvedValue(
+                    interdiff(files),
+                );
+
+                const result = await stage.execute(context);
+
+                expect(result.statusInfo?.status).not.toBe(
+                    AutomationStatus.SKIPPED,
+                );
+                expect(result.pipelineMetadata?.forceFullRerun).toBe(false);
+                expect(result.rebaseInterdiffFiles).toEqual(files);
+                expect(
+                    result.lastExecution?.lastAnalyzedCommit,
+                ).toBeUndefined();
+                expect(result.orphanedBaseCommit).toEqual({
+                    previousSha: 'OLD_ORPHAN_SHA',
+                    currentHeadSha: 'head-sha',
+                    totalCommits: 1,
+                    interdiff: {
+                        filesToReview: 1,
+                        unchangedFiles: 1,
+                        partialFiles: 1,
+                        uncomparedFiles: 1,
+                        hunksKept: 1,
+                        hunksDropped: 3,
+                    },
+                });
+            });
+
+            it('skips like a merge-only push when the rebase changed nothing', async () => {
+                orphan();
+                mockPullRequestManagerService.getRebaseInterdiff.mockResolvedValue(
+                    interdiff([]),
+                );
+
+                const result = await stage.execute(context);
+
+                expect(result.statusInfo?.status).toBe(
+                    AutomationStatus.SKIPPED,
+                );
+                expect(result.statusInfo?.message).toBe(
+                    StageMessageHelper.skippedWithReason(
+                        PipelineReasons.COMMITS.REBASE_NO_CHANGES,
+                        'The rebase changed nothing since the last review',
+                    ),
+                );
+                expect(result.pipelineMetadata?.forceFullRerun).toBe(false);
+                expect(result.orphanedBaseCommit?.interdiff).toEqual(
+                    expect.objectContaining({ filesToReview: 0 }),
+                );
+            });
+
+            it('skips as rate-limited, not a full review, when the host throttles the earlier diff', async () => {
+                orphan();
+                mockPullRequestManagerService.getRebaseInterdiff.mockRejectedValue(
+                    Object.assign(new Error('Too Many Requests'), {
+                        status: 429,
+                    }),
+                );
+
+                const result = await stage.execute(context);
+
+                expect(result.statusInfo?.status).toBe(
+                    AutomationStatus.SKIPPED,
+                );
+                expect(result.statusInfo?.message).toBe(
+                    StageMessageHelper.skippedWithReason(
+                        PipelineReasons.COMMITS.PROVIDER_RATE_LIMITED,
+                        'Provider rate-limited the diff fetch (HTTP 429)',
+                    ),
+                );
+                expect(result.pipelineMetadata?.forceFullRerun).not.toBe(true);
+            });
+
+            it('reviews the whole PR when it was retargeted since the last review', async () => {
+                // The earlier diff would be read against the new base branch,
+                // and commits only the old base had would read as reviewed.
+                mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                    {
+                        uuid: 'exec-prev',
+                        dataExecution: {
+                            lastAnalyzedCommit: { sha: 'OLD_ORPHAN_SHA' },
+                            reviewedBaseBranch: 'develop',
+                        },
+                    },
+                );
+                mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                    [{ sha: 'NEW_HEAD_SHA', parents: [{ sha: 'BASE_SHA' }] }],
+                );
+                context.pullRequest = {
+                    ...context.pullRequest,
+                    base: { ref: 'main' },
+                } as any;
+
+                const result = await stage.execute(context);
+
+                expect(
+                    mockPullRequestManagerService.getRebaseInterdiff,
+                ).not.toHaveBeenCalled();
+                expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
+                expect(result.orphanedBaseCommit?.interdiff).toEqual({
+                    fallback: 'base_branch_changed',
+                });
+            });
+
+            it('compares as usual when the base branch is the one last reviewed', async () => {
+                mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                    {
+                        uuid: 'exec-prev',
+                        dataExecution: {
+                            lastAnalyzedCommit: { sha: 'OLD_ORPHAN_SHA' },
+                            reviewedBaseBranch: 'main',
+                        },
+                    },
+                );
+                mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                    [{ sha: 'NEW_HEAD_SHA', parents: [{ sha: 'BASE_SHA' }] }],
+                );
+                context.pullRequest = {
+                    ...context.pullRequest,
+                    base: { ref: 'main' },
+                } as any;
+
+                await stage.execute(context);
+
+                expect(
+                    mockPullRequestManagerService.getRebaseInterdiff,
+                ).toHaveBeenCalled();
+            });
+
+            it.each([
+                ['@kody review --force', { origin: 'command-force' }],
+                ['@kody -v <agent>', { onlyCustomAgent: 'agent-1' }],
+            ])('keeps the full review for %s', async (_label, extra) => {
+                orphan();
+                Object.assign(context, extra);
+
+                const result = await stage.execute(context);
+
+                expect(
+                    mockPullRequestManagerService.getRebaseInterdiff,
+                ).not.toHaveBeenCalled();
+                expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
+            });
         });
 
         it('should preserve incremental flow when lastAnalyzedCommit IS in PR commits (regression guard)', async () => {

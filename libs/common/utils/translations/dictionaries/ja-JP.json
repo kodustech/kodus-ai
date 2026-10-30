@@ -1,7 +1,8 @@
 {
     "reviewComment": {
         "talkToKody": "Kodyに話しかけるには、@kodyに言及してください",
-        "feedback": "この提案は役に立ちましたか？ 👍または👎で反応して、Kodyがこの対話から学習するのを助けてください。"
+        "feedback": "この提案は役に立ちましたか？ 👍または👎で反応して、Kodyがこの対話から学習するのを助けてください。",
+        "feedbackReply": "この提案は役に立ちましたか？ 👍または👎で返信して、Kodyがこの対話から学習するのを助けてください。"
     },
     "pullRequestFinishSummaryMarkdown": {
         "withComments": "## コードレビュー完了！ 🔥\n\n現在の設定に基づいてコードレビューが正常に完了しました。\n\n",

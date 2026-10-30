@@ -20,13 +20,13 @@ const noOverride = (level: string, value: unknown = false) => ({
 });
 
 describe("countConfigOverridesByRoute — kody-rules", () => {
-    it("does NOT count ideRulesSyncEnabled overrides", () => {
-        // REGRESSION: the auto-sync toggle is an import action, not a rule
+    it("does NOT count repoInstructionsEnabled overrides", () => {
+        // REGRESSION: the coding-agent instructions toggle is not a rule
         // policy. Including it in the override count made the Kody Rules
-        // nav badge read "1" on repos that had simply toggled IDE sync,
-        // which users interpreted as "1 custom rule".
+        // nav badge read "1" on repos that had simply toggled it, which
+        // users interpreted as "1 custom rule".
         const config: any = {
-            ideRulesSyncEnabled: overridden("repository", "default", true, false),
+            repoInstructionsEnabled: overridden("repository", "default", true, false),
             kodyRulesGeneratorEnabled: noOverride("default"),
             kodyKnowledgeApproval: { enabled: noOverride("default") },
         };
@@ -46,7 +46,7 @@ describe("countConfigOverridesByRoute — kody-rules", () => {
             kodyKnowledgeApproval: {
                 enabled: overridden("repository", "default"),
             },
-            ideRulesSyncEnabled: noOverride("default"),
+            repoInstructionsEnabled: noOverride("default"),
         };
 
         const count = countConfigOverridesByRoute(
@@ -62,7 +62,7 @@ describe("countConfigOverridesByRoute — kody-rules", () => {
         const config: any = {
             kodyRulesGeneratorEnabled: noOverride("default"),
             kodyKnowledgeApproval: { enabled: noOverride("default") },
-            ideRulesSyncEnabled: noOverride("default"),
+            repoInstructionsEnabled: noOverride("default"),
         };
 
         const count = countConfigOverridesByRoute(
@@ -96,8 +96,8 @@ describe("countConfigOverridesForRoutes — aggregate badge", () => {
         const config: any = {
             kodyRulesGeneratorEnabled: overridden("repository", "default"),
             ignorePaths: overridden("repository", "default"),
-            // ideRulesSyncEnabled override is invisible to both routes
-            ideRulesSyncEnabled: overridden("repository", "default"),
+            // repoInstructionsEnabled override is invisible to both routes
+            repoInstructionsEnabled: overridden("repository", "default"),
         };
 
         const count = countConfigOverridesForRoutes(
@@ -107,7 +107,7 @@ describe("countConfigOverridesForRoutes — aggregate badge", () => {
         );
 
         // 1 from kody-rules (kodyRulesGeneratorEnabled) + 1 from general
-        // (ignorePaths). ideRulesSyncEnabled NOT counted under kody-rules.
+        // (ignorePaths). repoInstructionsEnabled NOT counted under kody-rules.
         expect(count).toBe(2);
     });
 });

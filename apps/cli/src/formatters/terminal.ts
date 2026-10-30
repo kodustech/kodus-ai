@@ -1,9 +1,5 @@
 import chalk from 'chalk';
-import type {
-    ReviewIssue,
-    ReviewResult,
-    Severity,
-} from '../types/review.js';
+import type { ReviewIssue, ReviewResult, Severity } from '../types/review.js';
 
 function getSeverityColor(severity: Severity): (text: string) => string {
     switch (severity) {

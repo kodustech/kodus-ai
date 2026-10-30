@@ -124,6 +124,12 @@ export const useCodeReviewSettingsShell = (
         {
             ...config,
             placeholderData: config?.placeholderData ?? ((prev) => prev),
+            // The server seeds this query without the kodus-config.yml overlay
+            // (a live git-provider read that must not block the route). Under
+            // the app's default 60s staleTime that seed would count as fresh
+            // and the overlay would never be requested, so the seed is stale on
+            // arrival and the client fetches the complete config immediately.
+            staleTime: config?.staleTime ?? 0,
         },
     );
 };

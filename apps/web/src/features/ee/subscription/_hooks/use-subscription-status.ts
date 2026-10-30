@@ -28,7 +28,11 @@ type InvalidSubscriptionStatus = {
     valid: false;
     numberOfLicenses: number;
     usersWithAssignedLicense: { git_id: string }[];
-    status: "payment-failed" | "canceled" | "expired" | "inactive";
+    /** "no-license": billing answered, but has no license for the org at
+     *  all (the trial was never provisioned) — unlike "inactive", which is
+     *  the layout's stand-in when billing didn't answer. */
+    status:
+        "payment-failed" | "canceled" | "expired" | "inactive" | "no-license";
     planType?: PlanType;
     stripeCustomerId?: string | null;
 };
@@ -109,8 +113,7 @@ export const useSubscriptionStatus = (): SubscriptionStatus => {
             subscription.license.subscriptionStatus === "licensed-self-hosted"
         ) {
             const expiresAt = (subscription.license as any).expiresAt as
-                | string
-                | undefined;
+                string | undefined;
             const daysRemaining = expiresAt
                 ? differenceInDays(new Date(expiresAt), new Date())
                 : undefined;
@@ -196,7 +199,7 @@ export const useSubscriptionStatus = (): SubscriptionStatus => {
             status:
                 license.subscriptionStatus === "payment_failed"
                     ? "payment-failed"
-                    : license.subscriptionStatus,
+                    : (license.subscriptionStatus ?? "no-license"),
             usersWithAssignedLicense: subscription.usersWithAssignedLicense,
             planType: license.planType,
             stripeCustomerId: license.stripeCustomerId,

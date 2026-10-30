@@ -1,28 +1,59 @@
+import { Suspense } from "react";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { Greeting } from "@components/system/greeting";
+import { LockedFeatureOverlay } from "@components/system/locked-feature-overlay";
+import { CockpitPageSkeleton } from "@components/system/page-skeletons";
+import {
+    availabilityLine,
+    planCtaTarget,
+    unlockedByLabel,
+} from "@components/system/plan-cta-target";
 import { Page } from "@components/ui/page";
 import { TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { getCockpitMetricsVisibility } from "@services/organizationParameters/fetch";
+import { getReviewedPullRequestCount } from "@services/pull-requests/fetch";
+import { getOrganizationReleaseTrack } from "@services/organizations/release-track";
+import { FEATURE_KEYS } from "@libs/feature-gate/domain/feature-keys";
+import { isFeatureEnabled } from "src/core/feature-gate/resolver";
 import type { CookieName } from "src/core/utils/cookie";
+import { captureGateHit } from "src/core/utils/gate-hit";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
-import { greeting } from "src/core/utils/helpers";
 
 import { validateOrganizationLicense } from "../subscription/_services/billing/fetch";
+import { IssuesTabLink } from "./_components/cockpit-nav-tabs";
 import { CockpitTabs } from "./_components/cockpit-tabs";
-import { DateRangePicker } from "./_components/date-range-picker";
+import { CodeAreasTab } from "./_components/code-areas-tab";
 import { ExpandableCardsLayout } from "./_components/expandable-cards-layout";
+import { IntentTab } from "./_components/intent-tab";
+import { LockedCockpitDetails } from "./_components/locked-cockpit-details";
+import { CockpitLockedPreview } from "./_components/locked-preview";
 import { CockpitNoDataBanner } from "./_components/no-data-banner";
-import { RepositoryPicker } from "./_components/repository-picker";
 import { ShareViewButton } from "./_components/share-view-button";
+import { TabAwareDateRangePicker } from "./_components/tab-aware-date-range-picker";
+import { TabAwareRepositoryPicker } from "./_components/tab-aware-repository-picker";
 import { tabs, type TabValue } from "./_constants";
 import { extractApiData } from "./_helpers/api-data-extractor";
+import { getSelectedRepository } from "./_helpers/get-selected-repository";
 import { isCockpitTierAllowed } from "./_helpers/tier-policy";
 import { getAnalyticsStatus } from "./_services/analytics/fetch";
 
-export default async function Layout({
+/** The window the locked screen counts reviews over. */
+const LOCKED_PREVIEW_WINDOW_DAYS = 30;
+
+export default function Layout(props: Parameters<typeof CockpitLayoutBody>[0]) {
+    // The license check and the analytics status are awaited inside the
+    // boundary, so the page paints its skeleton (and a client navigation
+    // commits) at once instead of freezing until billing answers.
+    return (
+        <Suspense fallback={<CockpitPageSkeleton />}>
+            <CockpitLayoutBody {...props} />
+        </Suspense>
+    );
+}
+
+async function CockpitLayoutBody({
     bugRatioAnalytics,
     deployFrequencyAnalytics,
-    flowMetrics,
     kodusReviewTab,
     leadTimeBreakdownChart,
     prCycleTimeAnalytics,
@@ -43,7 +74,6 @@ export default async function Layout({
     prsOpenedVsClosedChart: React.ReactNode;
     prsMergedByDeveloperChart: React.ReactNode;
     teamActivityChart: React.ReactNode;
-    flowMetrics: React.ReactNode;
     kodusReviewTab: React.ReactNode;
 }) {
     // Cockpit availability is decided solely by the license tier below
@@ -54,25 +84,114 @@ export default async function Layout({
     // in-process Postgres warehouse via apps/api (JWT auth), which never reads
     // that secret. Gating the page on an empty legacy secret made self-hosted
     // Enterprise orgs see "Analytics Not Available" despite a valid license.
-    const [cookieStore, selectedTeamId] = await Promise.all([
-        cookies(),
-        getGlobalSelectedTeamId(),
-    ]);
+    const [cookieStore, selectedTeamId, selectedRepository] = await Promise.all(
+        [cookies(), getGlobalSelectedTeamId(), getSelectedRepository()],
+    );
 
-    const organizationLicense = await validateOrganizationLicense({
+    // Kick the license check and the analytics/visibility fetches off together
+    // (the license call can be slow — billing cold-start), then await the
+    // license first for the tier gate. This hides the analytics latency behind
+    // the license round-trip instead of running them in series.
+    const licensePromise = validateOrganizationLicense({
         teamId: selectedTeamId,
     }).catch(() => null);
+    const analyticsPromise = Promise.all([
+        getAnalyticsStatus().catch(() => ({ hasData: false })),
+        getCockpitMetricsVisibility(),
+    ]);
+
+    const organizationLicense = await licensePromise;
 
     // Cockpit is scoped to Teams cloud + Enterprise (cloud and
     // self-hosted). Trials count as Teams-cloud. See
     // `libs/cockpit/domain/tier-policy.ts` for the authoritative rule
-    // — keep both copies aligned.
-    if (!isCockpitTierAllowed(organizationLicense)) redirect("/settings/git");
+    // — keep both copies aligned. Below the tier, we show a blurred
+    // static preview with an upgrade CTA instead of the screen; none of
+    // the analytics fetches below run, and the parallel-route slots are
+    // not rendered (their server fetches are rejected by the backend
+    // tier policy anyway).
+    if (!isCockpitTierAllowed(organizationLicense)) {
+        // What the workspace already has, in its own numbers: the same PRs the
+        // viewer can open on /pull-requests, counted. A locked screen that
+        // argues from the org's own reviews beats one that argues from sample
+        // charts — and when the count is zero, the honest next step is a
+        // repository, not a plan (see `altCta` below).
+        //
+        // Only successful runs count as "reviewed": a skipped or failed run
+        // (no AI key, provider down) produced nothing to measure. And zero
+        // recent reviews is not "never had one": an org whose reviews are
+        // older than the window, or all failed, already has a repository.
+        const recentReviewedCount = await getReviewedPullRequestCount({
+            teamId: selectedTeamId,
+            windowDays: LOCKED_PREVIEW_WINDOW_DAYS,
+            status: "success",
+        });
+        const allTimeRunCount =
+            recentReviewedCount === 0
+                ? await getReviewedPullRequestCount({ teamId: selectedTeamId })
+                : null;
+        // 0 only when the workspace never ran a review at all; null when the
+        // count is unknown or there is nothing recent worth quoting.
+        const reviewedCount =
+            recentReviewedCount === 0 && allTimeRunCount !== 0
+                ? null
+                : recentReviewedCount;
+        const hasReviews = reviewedCount !== null && reviewedCount > 0;
+        // Self-hosted has no plan chooser — it has a license key.
+        const planCta = planCtaTarget();
 
-    const [analyticsResult, metricsVisibility] = await Promise.all([
-        getAnalyticsStatus().catch(() => ({ hasData: false })),
-        getCockpitMetricsVisibility(),
-    ]);
+        await captureGateHit({
+            feature: "cockpit",
+            surface: "locked_preview",
+            planType: organizationLicense?.planType,
+            subscriptionStatus: organizationLicense?.subscriptionStatus,
+            metadata: { reviewedCount },
+        });
+
+        return (
+            <LockedFeatureOverlay
+                title="Unlock the Cockpit"
+                description={
+                    reviewedCount === 0
+                        ? "The Cockpit measures the reviews Kody runs for you — and this workspace hasn't had one yet."
+                        : hasReviews
+                          ? availabilityLine()
+                          : `Engineering metrics and Kody review analytics for your workspace are available with ${unlockedByLabel()}.`
+                }
+                details={
+                    <LockedCockpitDetails
+                        reviewedCount={reviewedCount}
+                        windowDays={LOCKED_PREVIEW_WINDOW_DAYS}
+                    />
+                }
+                cta={{
+                    label: planCta.label,
+                    href: planCta.href,
+                    feature: "cockpit",
+                    surface: "locked_preview",
+                    planType: organizationLicense?.planType,
+                    subscriptionStatus: organizationLicense?.subscriptionStatus,
+                    metadata: { reviewedCount },
+                }}
+                altCta={
+                    reviewedCount === 0
+                        ? {
+                              label: "Connect a repository",
+                              href: "/settings/git",
+                          }
+                        : undefined
+                }>
+                <CockpitLockedPreview />
+            </LockedFeatureOverlay>
+        );
+    }
+
+    const [analyticsResult, metricsVisibility] = await analyticsPromise;
+    const codeAreasEnabled = await isFeatureEnabled({
+        feature: FEATURE_KEYS.conditionalPrApproval,
+        identifier: "organization",
+        releaseTrack: await getOrganizationReleaseTrack(),
+    });
 
     const data = extractApiData(analyticsResult);
     const hasAnalyticsData = data?.hasData;
@@ -90,9 +209,10 @@ export default async function Layout({
     const showKodusReview = metricsVisibility.tabs?.kodusReview ?? true;
     const showProductivity = metricsVisibility.tabs?.productivity ?? true;
     const tabsVisibility: Record<TabValue, boolean> = {
-        "flow-metrics": false, // not surfaced in the tab bar yet
         "kodus-review": showKodusReview,
+        "intent": metricsVisibility.tabs?.intent ?? true,
         "productivity": showProductivity || !showKodusReview,
+        "code-areas": codeAreasEnabled,
     };
     const defaultTab: TabValue = showKodusReview
         ? "kodus-review"
@@ -108,19 +228,23 @@ export default async function Layout({
         <Page.Root>
             {!hasAnalyticsData && <CockpitNoDataBanner />}
 
-            <Page.Header className="max-w-full px-6">
-                <Page.Title>{greeting()}</Page.Title>
+            <Page.Header>
+                <Page.Title>
+                    <Greeting />
+                </Page.Title>
                 <div className="ml-auto flex items-center gap-2">
-                    <RepositoryPicker
+                    <TabAwareRepositoryPicker
                         cookieValue={repositoryCookieValue}
                         teamId={selectedTeamId}
                     />
-                    <DateRangePicker cookieValue={dateRangeCookieValue} />
+                    <TabAwareDateRangePicker
+                        cookieValue={dateRangeCookieValue}
+                    />
                     <ShareViewButton />
                 </div>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
+            <Page.Content>
                 <div>
                     <CockpitTabs
                         defaultTab={defaultTab}
@@ -138,64 +262,83 @@ export default async function Layout({
                                     </TabsTrigger>
                                 );
                             })}
+                            {/* Issues is a route, not a panel: it joins the
+                                strip as a link so it reads as the third tab. */}
+                            <IssuesTabLink active={false} />
                         </TabsList>
 
-                        <TabsContent value={"flow-metrics" satisfies TabValue}>
-                            {flowMetrics}
-                        </TabsContent>
-
                         {tabsVisibility.productivity && (
-                        <TabsContent
-                            forceMount
-                            value={"productivity" satisfies TabValue}
-                            className="flex flex-col gap-2">
-                            <div className="grid grid-cols-4 gap-2 *:h-56">
-                                {metricsVisibility.summary.deployFrequency && (
-                                    <div>{deployFrequencyAnalytics}</div>
-                                )}
-                                {metricsVisibility.summary.prCycleTime && (
-                                    <div>{prCycleTimeAnalytics}</div>
-                                )}
-                                {metricsVisibility.summary.bugRatio && (
-                                    <div>{bugRatioAnalytics}</div>
-                                )}
-                                {metricsVisibility.summary.prSize && (
-                                    <div>{prSizeAnalytics}</div>
-                                )}
-                            </div>
+                            <TabsContent
+                                value={"productivity" satisfies TabValue}
+                                className="flex flex-col gap-2">
+                                <div className="grid grid-cols-4 gap-2 *:h-56">
+                                    {metricsVisibility.summary
+                                        .deployFrequency && (
+                                        <div>{deployFrequencyAnalytics}</div>
+                                    )}
+                                    {metricsVisibility.summary.prCycleTime && (
+                                        <div>{prCycleTimeAnalytics}</div>
+                                    )}
+                                    {metricsVisibility.summary.bugRatio && (
+                                        <div>{bugRatioAnalytics}</div>
+                                    )}
+                                    {metricsVisibility.summary.prSize && (
+                                        <div>{prSizeAnalytics}</div>
+                                    )}
+                                </div>
 
-                            <div className="relative grid grid-cols-2 gap-2 *:h-[500px]">
-                                <ExpandableCardsLayout>
-                                    {metricsVisibility.details
-                                        .leadTimeBreakdown &&
-                                        leadTimeBreakdownChart}
-                                    {metricsVisibility.details.prCycleTime &&
-                                        prCycleTimeChart}
-                                    {metricsVisibility.details
-                                        .prsOpenedVsClosed &&
-                                        prsOpenedVsClosedChart}
-                                    {metricsVisibility.details
-                                        .prsMergedByDeveloper &&
-                                        prsMergedByDeveloperChart}
-                                </ExpandableCardsLayout>
+                                <div className="relative grid grid-cols-2 gap-2 *:h-[500px]">
+                                    <ExpandableCardsLayout>
+                                        {metricsVisibility.details
+                                            .leadTimeBreakdown &&
+                                            leadTimeBreakdownChart}
+                                        {metricsVisibility.details
+                                            .prCycleTime && prCycleTimeChart}
+                                        {metricsVisibility.details
+                                            .prsOpenedVsClosed &&
+                                            prsOpenedVsClosedChart}
+                                        {metricsVisibility.details
+                                            .prsMergedByDeveloper &&
+                                            prsMergedByDeveloperChart}
+                                    </ExpandableCardsLayout>
 
-                                {metricsVisibility.details.teamActivity && (
-                                    <div className="col-span-2 h-auto!">
-                                        {teamActivityChart}
-                                    </div>
-                                )}
-                            </div>
-                        </TabsContent>
+                                    {metricsVisibility.details.teamActivity && (
+                                        <div className="col-span-2 h-auto!">
+                                            {teamActivityChart}
+                                        </div>
+                                    )}
+                                </div>
+                            </TabsContent>
+                        )}
+
+                        {tabsVisibility.intent && (
+                            <TabsContent
+                                value={"intent" satisfies TabValue}
+                                className="flex flex-col gap-4">
+                                <IntentTab
+                                    cookieValue={dateRangeCookieValue}
+                                    repositoryCookieValue={
+                                        repositoryCookieValue
+                                    }
+                                />
+                            </TabsContent>
                         )}
 
                         {tabsVisibility["kodus-review"] && (
-                        <TabsContent
-                            forceMount
-                            value={"kodus-review" satisfies TabValue}
-                            className="flex flex-col gap-6">
-                            {kodusReviewTab}
-                        </TabsContent>
+                            <TabsContent
+                                forceMount
+                                value={"kodus-review" satisfies TabValue}
+                                className="flex flex-col gap-6">
+                                {kodusReviewTab}
+                            </TabsContent>
                         )}
+                        <TabsContent
+                            value={"code-areas" satisfies TabValue}
+                            className="min-w-0">
+                            <CodeAreasTab
+                                selectedRepository={selectedRepository}
+                            />
+                        </TabsContent>
                     </CockpitTabs>
                 </div>
 

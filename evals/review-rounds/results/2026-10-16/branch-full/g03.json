@@ -1,0 +1,3369 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "ef8ace6e81c2ad04800d9543336439a8767fa987",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-15T22:56:31.001Z",
+  "updatedAt": "2026-10-15T23:22:30.467Z",
+  "complete": true,
+  "selectedCases": [
+    "R3p-consequence-status-pending",
+    "K1-rule-already-posted",
+    "K7-rule-repost-prod-profile",
+    "P06-rule-cli-exit-code-weak-assertion",
+    "P16-rule-no-overwrite-listed-site",
+    "P26-denylist-sanitizer-moved",
+    "P36-nonfinal-refs-all-scopes"
+  ],
+  "casesSourceDigest": "0b1d54708dad1f9a92fda10f35a606bdacc96e404c188f6128f8e92f797e2f16",
+  "summary": {
+    "measured": 35,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 25,
+        "violations": 4,
+        "rate": 0.16
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 3,
+        "violations": 2,
+        "rate": 0.667
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 35,
+        "violations": 8,
+        "rate": 0.229
+      },
+      "index-reference (#2039)": {
+        "n": 40,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R3p-consequence-status-pending · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 1,
+        "n": 5,
+        "delivered": 3
+      },
+      "K1-rule-already-posted · finishRun-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K1-rule-already-posted · finishBatch-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "K7-rule-repost-prod-profile · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "K7-rule-repost-prod-profile · dayKey-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P06-rule-cli-exit-code-weak-assertion · cli-exit-code-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P06-rule-cli-exit-code-weak-assertion · cli-exit-code-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P16-rule-no-overwrite-listed-site · snapshot-overwrite-repeat [not_deliver]": {
+        "pass": 1,
+        "n": 5,
+        "delivered": 4
+      },
+      "P16-rule-no-overwrite-listed-site · merge-overwrite-new-site [deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 4
+      },
+      "P26-denylist-sanitizer-moved · profile-denylist-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P26-denylist-sanitizer-moved · locale-without-region-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P36-nonfinal-refs-all-scopes · all-scope-nonfinal-new-site [deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 0
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.7666666666666667,
+    "floor": 0.8,
+    "baseline": 0.903
+  },
+  "runs": 5,
+  "tokens": {
+    "in": 2285177,
+    "out": 137986,
+    "cacheRead": 1901460,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 35
+  },
+  "cases": [
+    {
+      "id": "R3p-consequence-status-pending",
+      "checks": "resubmit-double-charge: posted and linked",
+      "hits": 1,
+      "total": 5,
+      "detail": [
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "K1-rule-already-posted",
+      "checks": "finishRun-repeat: not posted; finishBatch-new-site: posted",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        },
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        },
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        },
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        },
+        {
+          "what": "finishRun-repeat",
+          "ok": true
+        },
+        {
+          "what": "finishBatch-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "K7-rule-repost-prod-profile",
+      "checks": "rangeLabel-start-repeat: not posted; dayKey-new-site: posted",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        },
+        {
+          "what": "rangeLabel-start-repeat",
+          "ok": true
+        },
+        {
+          "what": "dayKey-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P06-rule-cli-exit-code-weak-assertion",
+      "checks": "Kody Rule on a CLI test file new in the PR; the developer added an assertion but it is still an output-contains check with no exit code; stored implemented; 10 earlier comments",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "cli-exit-code-repeat",
+          "ok": true
+        },
+        {
+          "what": "cli-exit-code-new-site",
+          "ok": true
+        },
+        {
+          "what": "cli-exit-code-repeat",
+          "ok": true
+        },
+        {
+          "what": "cli-exit-code-new-site",
+          "ok": true
+        },
+        {
+          "what": "cli-exit-code-repeat",
+          "ok": true
+        },
+        {
+          "what": "cli-exit-code-new-site",
+          "ok": true
+        },
+        {
+          "what": "cli-exit-code-repeat",
+          "ok": true
+        },
+        {
+          "what": "cli-exit-code-new-site",
+          "ok": true
+        },
+        {
+          "what": "cli-exit-code-repeat",
+          "ok": true
+        },
+        {
+          "what": "cli-exit-code-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P16-rule-no-overwrite-listed-site",
+      "checks": "Kody Rule \"commands never overwrite existing outputs\" on a file new in the PR; the earlier comment flagged one command and listed the others under \"Also found in\"; the judge reflags a listed one; stored not_implemented; 9 earlier comments",
+      "hits": 5,
+      "total": 10,
+      "detail": [
+        {
+          "what": "snapshot-overwrite-repeat",
+          "ok": false
+        },
+        {
+          "what": "merge-overwrite-new-site",
+          "ok": false
+        },
+        {
+          "what": "snapshot-overwrite-repeat",
+          "ok": false
+        },
+        {
+          "what": "merge-overwrite-new-site",
+          "ok": true
+        },
+        {
+          "what": "snapshot-overwrite-repeat",
+          "ok": false
+        },
+        {
+          "what": "merge-overwrite-new-site",
+          "ok": true
+        },
+        {
+          "what": "snapshot-overwrite-repeat",
+          "ok": true
+        },
+        {
+          "what": "merge-overwrite-new-site",
+          "ok": true
+        },
+        {
+          "what": "snapshot-overwrite-repeat",
+          "ok": false
+        },
+        {
+          "what": "merge-overwrite-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P26-denylist-sanitizer-moved",
+      "checks": "Bug finder; a profile sanitizer uses a denylist so unknown fields pass through to the update; the code moved down ~50 lines under new code and is unchanged; stored not_implemented, earlier label security; 21 earlier comments",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "profile-denylist-repeat",
+          "ok": true
+        },
+        {
+          "what": "locale-without-region-unrelated",
+          "ok": true
+        },
+        {
+          "what": "profile-denylist-repeat",
+          "ok": true
+        },
+        {
+          "what": "locale-without-region-unrelated",
+          "ok": true
+        },
+        {
+          "what": "profile-denylist-repeat",
+          "ok": true
+        },
+        {
+          "what": "locale-without-region-unrelated",
+          "ok": true
+        },
+        {
+          "what": "profile-denylist-repeat",
+          "ok": true
+        },
+        {
+          "what": "locale-without-region-unrelated",
+          "ok": true
+        },
+        {
+          "what": "profile-denylist-repeat",
+          "ok": true
+        },
+        {
+          "what": "locale-without-region-unrelated",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P36-nonfinal-refs-all-scopes",
+      "checks": "Finder (Go): the earlier comment flagged one branch dropping stored non-final references (implemented, fixed there); the diff adds an \"all scopes\" branch with the same drop; 20 earlier comments",
+      "hits": 0,
+      "total": 5,
+      "detail": [
+        {
+          "what": "all-scope-nonfinal-new-site",
+          "ok": false
+        },
+        {
+          "what": "all-scope-nonfinal-new-site",
+          "ok": false
+        },
+        {
+          "what": "all-scope-nonfinal-new-site",
+          "ok": false
+        },
+        {
+          "what": "all-scope-nonfinal-new-site",
+          "ok": false
+        },
+        {
+          "what": "all-scope-nonfinal-new-site",
+          "ok": false
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 38189,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58869,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: The new `if (err instanceof NotReadyError) throw err;` lets a transient \"charge not settled yet\" error propagate to poller.ts:13, which calls `gw.submit(charge.payload)` — but gateway.ts:3 documents submit() as NOT idempotent, so every tick resubmits a charge the gateway already holds and creates a duplicate charge. WHY: A charge that is merely still settling gets charged/submitted again on each poll tick, producing duplicate charges (the doc comment in errors.ts:1 says NotReadyError means \"the gateway has the charge but has not settled it yet\", which contradicts poller.ts:7's assumption that it means \"the gateway never received it\"). HOW: only resubmit when the gateway genuinely never received the charge — distinguish \"never received\" from \"not settled\" (e.g. a separate NotReceivedError / a `received` flag on NotReadyError) and for a merely-not-ready charge return a `pending`/retry-later state instead of calling gw.submit, or pass a provider-side idempotency key to submit.",
+          "keep": true,
+          "rationale": "Confirmed. errors.ts:1 defines NotReadyError as 'The gateway has the charge but has not settled it yet (transient)', and status.ts:8-10 now propagates it unchanged to poller.ts. poller.ts:7 documents the opposite assumption ('the gateway never received it: resubmit') and poller.ts:13-14 calls gw.submit on any NotReadyError. gateway.ts:3 documents submit() as NOT idempotent ('every call creates a new charge'). So a merely-still-settling charge is resubmitted on every poll tick, creating duplicate charges. The trigger is concrete and reachable, not speculative. This is also a different problem from the round-a-propagate entry (which was about misclassifying a transient error as terminal) — here the consequence is duplicate charges caused by propagating NotReadyError into the resubmit path, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|submit\\(|poller",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "Because `NotReadyError` means the gateway has the charge but has not settled it yet (`errors.ts:1`), letting it propagate to `poller.ts:13` makes every poll tick call `gw.submit(charge.payload)`, and since `gateway.ts:3` documents `submit()` as not idempotent this creates duplicate charges while contradicting `poller.ts:7`'s assumption that the error means the gateway never received the charge. Only resubmit when the gateway genuinely never received the charge—distinguish never-received from not-settled (e.g. a separate `NotReceivedError` or a `received` flag on `NotReadyError`) and for a merely-not-ready charge return a `pending`/retry-later state instead of calling `gw.submit`, or pass a provider-side idempotency key to `submit`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 62817,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Re-throwing NotReadyError unchanged makes pollCharge's previously-dead branch execute `await gw.submit(charge.payload)` for a charge the gateway already holds, and Gateway.submit is documented as NOT idempotent (gateway.ts:3) while NotReadyError is documented as \"The gateway has the charge but has not settled it yet\" (errors.ts:1). WHY: every NotReadyError on a charge the gateway actually received now triggers a fresh submit, creating a duplicate charge since there is no dedup/idempotency key anywhere in the codebase. HOW: if NotReadyError truly means the charge exists but is unsettled, pollCharge must not resubmit — poll/retry instead; only resubmit when the gateway confirms it never received the charge (e.g. a distinct UnknownChargeError). Verify the intended semantics of NotReadyError before enabling the resubmit path.",
+          "keep": true,
+          "rationale": "Evidence confirms the claim. status.ts:8-11 re-throws NotReadyError unchanged. pollCharge (poller.ts:13-15) catches NotReadyError and calls `await gw.submit(charge.payload)`, while errors.ts:1 documents NotReadyError as 'The gateway has the charge but has not settled it yet' and gateway.ts:3 documents submit as 'NOT idempotent: every call creates a new charge'. So propagating NotReadyError activates a resubmit path for a charge the gateway already holds, causing a duplicate charge with no idempotency key present. The prior review decision (round-a-propagate) asked to propagate NotReadyError so the caller can retry — this finding identifies the concrete downstream defect that propagation activates in pollCharge, which is a distinct consequence (duplicate charge) not the misclassification problem the earlier entry described. It is not a mere restatement, and the code path is real and reachable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": ".",
+                "maxDepth": 4
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|submit\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 25
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 10
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 10
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 24,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "Re-throwing `NotReadyError` unchanged makes `pollCharge`'s previously-dead branch execute `await gw.submit(charge.payload)` for a charge the gateway already holds, and because `Gateway.submit` is documented as not idempotent (gateway.ts:3) while `NotReadyError` means the gateway has the charge but has not settled it yet (errors.ts:1), every such error triggers a fresh submit and can create a duplicate charge since there is no dedup/idempotency key anywhere in the codebase. If `NotReadyError` truly means the charge exists but is unsettled, `pollCharge` must poll/retry instead of resubmitting, and only resubmit when the gateway confirms it never received the charge (e.g. a distinct `UnknownChargeError`); verify the intended semantics before enabling the resubmit path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 43392,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError out of fetchStatus now makes pollCharge (src/billing/poller.ts:13-15) call gw.submit(charge.payload) for a charge whose status merely isn't settled yet. WHY: The Gateway contract documents submit as NOT idempotent ('every call creates a new charge', src/billing/gateway.ts:3), so each not-ready tick now creates an additional charge and the customer can be charged multiple times; before this change NotReadyError was wrapped into FailedError, so the resubmit branch was unreachable for this case. HOW: Only resubmit when the gateway genuinely did not receive the charge (e.g. distinguish 'not received' from 'not settled' with a separate error/flag), or make submit idempotent via a client-side idempotency key; do not treat every NotReadyError as a lost charge.",
+          "keep": true,
+          "rationale": "The root cause and failure path are factually confirmed in the code. status.ts:8-9 rethrows NotReadyError unchanged (previously it was wrapped into FailedError), making the resubmit branch in poller.ts:13-15 reachable for a merely-unsettled charge. gateway.ts:3 documents submit as explicitly non-idempotent (\"every call creates a new charge\"), so each not-ready tick now creates an additional charge — a real double-billing outcome. This is not the same failure the earlier round-a-propagate entry described (that was misclassifying a transient not-ready as terminal); this is a distinct consequence introduced by applying that suggestion, so it is a valid non-duplicate finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "label": "bug",
+          "earlierId": "round-a-propagate",
+          "earlierOutcome": "pending",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R3p-consequence-status-pending",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 57889,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged makes pollCharge's resubmit branch reachable, and that branch calls gw.submit, which gateway.ts:3 documents as \"NOT idempotent: every call creates a new charge.\"\nWHY: errors.ts:1 defines NotReadyError as \"the gateway HAS the charge but has not settled it yet (transient)\", so a merely-unsettled charge is now resubmitted, creating a duplicate charge on the gateway (double billing) — previously this branch was dead code because fetchStatus wrapped NotReadyError into FailedError.\nHOW: Only resubmit when the gateway truly never received the charge (a distinct error/flag), and make the resubmit idempotent (e.g. reuse the original charge key); do not treat the \"not settled yet\" NotReadyError as a resubmit trigger.",
+          "keep": true,
+          "rationale": "Confirmed the code path. fetchStatus (status.ts:8-9) now propagates NotReadyError unchanged. pollCharge (poller.ts:13-15) catches NotReadyError and calls gw.submit, which gateway.ts:3 documents as NOT idempotent ('every call creates a new charge'). errors.ts:1 defines NotReadyError as 'the gateway HAS the charge but has not settled it yet (transient)', so a merely-unsettled charge now triggers a resubmit, creating a duplicate charge. Before the change fetchStatus wrapped NotReadyError into FailedError, making poller's resubmit branch unreachable for this case. Note: this is a NEW consequence introduced by applying the earlier suggestion (round-a-propagate), which only asked to propagate NotReadyError for retry; it did not address that poller's handler treats NotReadyError as 'never received'. The earlier entry flagged the misclassification of a transient as terminal; this finding flags the distinct downstream double-billing failure caused by that propagation, so it is not a repeat of the same problem.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge|NotReadyError|resubmit",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 25,
+                "path": "src/billing/poller.ts",
+                "startLine": 1
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\n`pollCharge`'s resubmit branch becomes reachable and calls `gw.submit`, which gateway.ts:3 documents as non-idempotent, so a charge that is merely unsettled gets submitted again and billed twice; previously `fetchStatus` wrapped `NotReadyError` into `FailedError`, leaving that branch dead. Only resubmit when the gateway truly never received the charge (via a distinct error or flag) and make the resubmit idempotent, for example by reusing the original charge key, rather than treating the transient `NotReadyError` from errors.ts:1 as a resubmit trigger."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28349,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "text": "In `finishBatch`, `db.results.insertMany` runs before `db.progress.update`, violating the rule that progress must be recorded before results are written, so a result can become visible for a job whose progress was never recorded. Swap the two calls so `db.progress.update(batch.id, 'done')` runs first."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 40069,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "text": "Writing results with `db.results.insertMany` before `db.progress.update` in `finishBatch` violates the rule \"Update progress before writing results\", making batch results visible for a job whose progress was not recorded. Swap the order so progress is updated first."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30610,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "text": "In `finishBatch`, writing results with `db.results.insertMany` before recording progress with `db.progress.update` violates the update-progress-before-writing-results rule, so a result can become visible for a job whose progress was not recorded. Swap the order so `db.progress.update` runs first, then `db.results.insertMany`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 52619,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 6,
+          "label": "kody_rules",
+          "earlierId": "round-a-progress-first",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "text": "Writing results before recording progress in `finishBatch` can leave `db.progress` inconsistent if the insert fails. Swap the two statements so `db.progress.update` runs before `db.results.insertMany`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K1-rule-already-posted",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45862,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/jobs/handler.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-progress-first",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-progress-first"
+          ],
+          "marked": false,
+          "file": "src/jobs/handler.ts",
+          "line": 11,
+          "text": "In `finishBatch`, writing results before recording progress violates the rule that progress must be recorded first, so a failure after `db.results.insertMany` can leave the batch marked incomplete while results already exist. Swap the order so `await db.progress.update(batch.id, 'done')` runs before `await db.results.insertMany(batch.id, batch.outputs)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "finishRun-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "finishBatch-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23808,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "For users west of UTC, `dayKey` returns the previous day because `at.toISOString().slice(0, 10)` formats the date in UTC rather than local calendar time, breaking the \"Format date-only values in local calendar time\" rule. Use `formatLocalDate(at)` from `./dates`, which is already imported in this file."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19148,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "For users west of UTC, `dayKey` using `at.toISOString().slice(0, 10)` yields the previous calendar day, violating \"Format date-only values in local calendar time\". Use `formatLocalDate` from `src/reports/dates.ts` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17136,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "West of UTC, `dayKey` reports the previous calendar day because `at.toISOString().slice(0, 10)` formats the date in UTC rather than local calendar time. Replace that expression with `formatLocalDate(at)`, which is already imported in this module."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21715,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-local-day",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 10,
+          "text": "`dayKey` derives the calendar day with `toISOString().slice(0, 10)`, which violates the rule \"Format date-only values in local calendar time\": for users west of UTC it yields the previous day. The same file already imports `formatLocalDate` for `rangeLabel`, so use it here too."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 36829,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "label": "kody_rules",
+          "earlierId": "round-a-local-day",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "text": "The new `dayKey` helper uses `toISOString().slice(0, 10)` to derive a calendar day, which returns the previous day for users west of UTC and violates the rule 'Format date-only values in local calendar time'. Return `formatLocalDate(at)` instead, since `formatLocalDate` is already imported from './dates'."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 23346,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "text": "A CLI that prints the failure message but exits 0 would still pass this duplicate-name test, so pipelines running `validate` would accept the broken manifest. Assert the exact exit code alongside the stdout check, e.g. `expect(result.exitCode).toBe(1)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28942,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P06-rule-cli-exit-code-weak-assertion",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P06-rule-cli-exit-code-weak-assertion",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "text": "A duplicate-name manifest could print the message and still exit 0, so the test would pass while the CLI silently succeeds. Assert the exact exit code (a non-zero code such as 1) in addition to the `stdout` message check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33973,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P06-rule-cli-exit-code-weak-assertion",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "text": "The duplicate-name test only checks `stdout` for `failed` instead of asserting the exit code, so a CLI that reports the failure but exits 0 would still pass and let CI treat a broken manifest as valid. Assert the exact exit code with `expect(result.exitCode).toBe(1)` alongside the message check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33746,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "file": "test/cli/validate.test.ts",
+          "line": 24,
+          "text": "Because this test only asserts that `stdout` contains `failed` instead of following the rule that CLI tests assert the exit code, a CLI that prints the message but exits 0 would let a pipeline running `validate` accept the duplicate-name manifest while this test stays green. Assert the exact exit code with `expect(result.exitCode).toBe(1)` alongside the message check."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P06-rule-cli-exit-code-weak-assertion",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39952,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "test/cli/validate.test.ts",
+          "line": 11,
+          "label": "kody_rules",
+          "earlierId": "round-a-P06-rule-cli-exit-code-weak-assertion",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-cli-tests-exit-code"
+          ],
+          "marked": false,
+          "file": "test/cli/validate.test.ts",
+          "line": 23,
+          "text": "In `test/cli/validate.test.ts`, the duplicate-name test only checks that `stdout` contains `failed`, so it can pass even when the CLI exits 0 and a duplicate-name manifest is silently accepted. Add an exact exit-code assertion such as `expect(result.exitCode).toBe(1);` alongside the message check, per the rule that CLI tests assert the exit code."
+        }
+      ],
+      "claims": [
+        {
+          "id": "cli-exit-code-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "cli-exit-code-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 32713,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P16-rule-no-overwrite-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "text": "Because `snapshot` writes the target file unconditionally, rule 1 (Commands never overwrite existing outputs) is violated and a repeated snapshot for the same dataset/version silently replaces the earlier file. Check `target.exists()` before writing and raise `SystemExit` with the file name unless `--force` was given.\n\n**Also found in:**\n- `tools/datasets/cli.py:34-34`\n- `tools/datasets/cli.py:29-29`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "alsoFoundIn": true,
+          "text": "Because `snapshot` writes the target file unconditionally, rule 1 (Commands never overwrite existing outputs) is violated and a repeated snapshot for the same dataset/version silently replaces the earlier file. Check `target.exists()` before writing and raise `SystemExit` with the file name unless `--force` was given.\n\n**Also found in:**\n- `tools/datasets/cli.py:34-34`\n- `tools/datasets/cli.py:29-29`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "alsoFoundIn": true,
+          "text": "Because `snapshot` writes the target file unconditionally, rule 1 (Commands never overwrite existing outputs) is violated and a repeated snapshot for the same dataset/version silently replaces the earlier file. Check `target.exists()` before writing and raise `SystemExit` with the file name unless `--force` was given.\n\n**Also found in:**\n- `tools/datasets/cli.py:34-34`\n- `tools/datasets/cli.py:29-29`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20461,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tools/datasets/cli.py",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P16-rule-no-overwrite-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "text": "An existing merged file is silently overwritten even without `--force`, violating the rule that commands never overwrite existing outputs. Check `Path(args.output).exists()` before writing and raise `SystemExit` with a message telling the user to pass `--force`.\n\n**Also found in:**\n- `tools/datasets/cli.py:23-23`\n- `tools/datasets/cli.py:28-29`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "alsoFoundIn": true,
+          "text": "An existing merged file is silently overwritten even without `--force`, violating the rule that commands never overwrite existing outputs. Check `Path(args.output).exists()` before writing and raise `SystemExit` with a message telling the user to pass `--force`.\n\n**Also found in:**\n- `tools/datasets/cli.py:23-23`\n- `tools/datasets/cli.py:28-29`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 28,
+          "alsoFoundIn": true,
+          "text": "An existing merged file is silently overwritten even without `--force`, violating the rule that commands never overwrite existing outputs. Check `Path(args.output).exists()` before writing and raise `SystemExit` with a message telling the user to pass `--force`.\n\n**Also found in:**\n- `tools/datasets/cli.py:23-23`\n- `tools/datasets/cli.py:28-29`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 52625,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tools/datasets/cli.py",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P16-rule-no-overwrite-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 22,
+          "text": "Re-running the command for the same `dataset`/`version` silently replaces the existing snapshot because `target.write_text` runs unconditionally and `args.force` is never consulted. Check `target.exists()` and, unless `args.force` is true, raise `SystemExit` with a message naming the file to honor 'Commands never overwrite existing outputs'.\n\n**Also found in:**\n- `tools/datasets/cli.py:28-29`\n- `tools/datasets/cli.py:33-34`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 28,
+          "alsoFoundIn": true,
+          "text": "Re-running the command for the same `dataset`/`version` silently replaces the existing snapshot because `target.write_text` runs unconditionally and `args.force` is never consulted. Check `target.exists()` and, unless `args.force` is true, raise `SystemExit` with a message naming the file to honor 'Commands never overwrite existing outputs'.\n\n**Also found in:**\n- `tools/datasets/cli.py:28-29`\n- `tools/datasets/cli.py:33-34`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 33,
+          "alsoFoundIn": true,
+          "text": "Re-running the command for the same `dataset`/`version` silently replaces the existing snapshot because `target.write_text` runs unconditionally and `args.force` is never consulted. Check `target.exists()` and, unless `args.force` is true, raise `SystemExit` with a message naming the file to honor 'Commands never overwrite existing outputs'.\n\n**Also found in:**\n- `tools/datasets/cli.py:28-29`\n- `tools/datasets/cli.py:33-34`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19083,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tools/datasets/cli.py",
+          "line": 14,
+          "label": "kody_rules",
+          "earlierId": "round-a-P16-rule-no-overwrite-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "tools/datasets/cli.py",
+          "line": 23,
+          "label": "kody_rules",
+          "earlierId": "round-a-P16-rule-no-overwrite-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 34,
+          "text": "Running `datasets merge out.json a b` twice silently overwrites the previous merged file and never consults `--force`. Check `Path(args.output)` before writing and raise `SystemExit` naming the file unless `--force` was passed.\n\n**Also found in:**\n- `tools/datasets/cli.py:29-29`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 29,
+          "alsoFoundIn": true,
+          "text": "Running `datasets merge out.json a b` twice silently overwrites the previous merged file and never consults `--force`. Check `Path(args.output)` before writing and raise `SystemExit` naming the file unless `--force` was passed.\n\n**Also found in:**\n- `tools/datasets/cli.py:29-29`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P16-rule-no-overwrite-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26273,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tools/datasets/cli.py",
+          "line": 13,
+          "label": "kody_rules",
+          "earlierId": "round-a-P16-rule-no-overwrite-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 22,
+          "text": "Because `write_text` runs without consulting `args.force`, re-running the same dataset and version silently replaces the existing snapshot. Check `target.exists()` before writing and raise `SystemExit` naming the file unless `--force` was passed.\n\n**Also found in:**\n- `tools/datasets/cli.py:33-34`\n- `tools/datasets/cli.py:28-29`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 33,
+          "alsoFoundIn": true,
+          "text": "Because `write_text` runs without consulting `args.force`, re-running the same dataset and version silently replaces the existing snapshot. Check `target.exists()` before writing and raise `SystemExit` naming the file unless `--force` was passed.\n\n**Also found in:**\n- `tools/datasets/cli.py:33-34`\n- `tools/datasets/cli.py:28-29`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-commands-no-overwrite"
+          ],
+          "marked": false,
+          "file": "tools/datasets/cli.py",
+          "line": 28,
+          "alsoFoundIn": true,
+          "text": "Because `write_text` runs without consulting `args.force`, re-running the same dataset and version silently replaces the existing snapshot. Check `target.exists()` before writing and raise `SystemExit` naming the file unless `--force` was passed.\n\n**Also found in:**\n- `tools/datasets/cli.py:33-34`\n- `tools/datasets/cli.py:28-29`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "snapshot-overwrite-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "merge-overwrite-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 93134,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale assumes the locale contains a '-' separator and dereferences parts[1].toUpperCase() (line 13) even when the input has none. WHY: updateProfile passes the raw client body to checkProfileFields, and locale is only type-checked as a string, so a request like POST { \"locale\": \"en\" } makes parts[1] undefined and throws `TypeError: Cannot read properties of undefined (reading 'toUpperCase')`, returning an unhandled 500 instead of a validation error. HOW: guard the split result and treat a missing region as unsupported, e.g.\n\nconst parts = input.replace('_', '-').split('-');\nif (parts.length !== 2 || !parts[0] || !parts[1]) {\n    throw new HttpError(400, `unsupported locale ${input}`);\n}\nreturn `${parts[0].toLowerCase()}-${parts[1].toUpperCase()}`;",
+          "keep": true,
+          "rationale": "Confirmed: normalizeLocale does input.replace('_','-').split('-') and dereferences parts[1].toUpperCase() unconditionally. checkProfileFields only checks typeof patch.locale === 'string', then calls normalizeLocale. updateProfile passes the raw client body via sanitizeProfileUpdate. A request body {\"locale\":\"en\"} (a plain string with no separator) yields parts=[\"en\"], parts[1] undefined, throwing TypeError on .toUpperCase() before any HttpError(400) — an unhandled 500. The failure path is reachable and the root cause is factually correct. This is a different problem from the existing denylist-sanitizer decision (which is about which fields pass through, not the locale normalization crash).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale|checkProfileFields"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 60,
+                "endLine": 90
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 21,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "text": "Because `normalizeLocale` assumes the input contains a `-` and dereferences `parts[1].toUpperCase()` at line 13, while `updateProfile` passes the raw client body to `checkProfileFields` with `locale` only type-checked as a string, a request like `POST { \"locale\": \"en\" }` makes `parts[1]` undefined and throws `TypeError: Cannot read properties of undefined (reading 'toUpperCase')`, returning an unhandled 500 instead of a validation error. Guard the split result in `normalizeLocale` and treat a missing region as unsupported by throwing `HttpError` with status 400 and the message `unsupported locale ${input}`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 89452,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale accesses parts[1].toUpperCase() without guarding that a separator exists, so an input with no '-' or '_' (e.g. locale = \"english\" or \"xx\") makes parts[1] undefined and throws a TypeError. WHY: checkProfileFields calls normalizeLocale before the SUPPORTED_LOCALES check, so a member sending a single-token locale crashes the handler with an uncaught TypeError (HTTP 500) instead of returning the intended 400 'unsupported locale'. HOW: guard the missing segment, e.g. const [lang = '', region = ''] = input.replace('_', '-').split('-'); return region ? `${lang.toLowerCase()}-${region.toUpperCase()}` : lang.toLowerCase();",
+          "keep": true,
+          "rationale": "Confirmed: line 12-13 does `input.replace('_', '-').split('-')` and unconditionally calls `parts[1].toUpperCase()`. For a single-token input like \"english\" or \"xx\", split('-') yields a one-element array, parts[1] is undefined, and `.toUpperCase()` throws TypeError. checkProfileFields (line 39-41) calls normalizeLocale(patch.locale) before the SUPPORTED_LOCALES check, so a single-token locale crashes with an uncaught TypeError (HTTP 500) instead of the intended 400. Root cause and failure path are accurate; no upstream guard exists. Not covered by any previous decision.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: checkProfileFields only validates displayName/bio/avatarUrl/locale when the incoming value is already a string, so a non-string value (e.g. `{avatarUrl: {}}`, `{locale: 123}`, `{displayName: ['x']}`) skips every length/format/locale check and is passed unchanged to usersRepo.update. WHY: usersRepo.update writes every key of the patch to the users row (users.repo.ts:20), so an attacker can persist arbitrary wrong-typed values (e.g. a non-string locale/avatarUrl or an array displayName) that bypass the intended validation, later breaking rendering or downstream code that assumes these columns are strings. HOW: reject non-string values instead of skipping them, e.g. `if (patch.displayName !== undefined && typeof patch.displayName !== 'string') throw new HttpError(400, 'displayName must be a string');` and likewise for bio/avatarUrl/locale.",
+          "keep": true,
+          "rationale": "Confirmed: checkProfileFields uses `typeof patch.X === 'string' && ...` guards, so non-string values for displayName/bio/avatarUrl/locale skip every length/format/locale check and are passed unchanged. users.repo.ts:20 (db.users.update with data: patch) writes every key to the users row, persisting wrong-typed values. The prior decision (denylist-sanitizer) addressed a different failure (unauthorized keys like organizationId/emailVerified/plan), not this type-bypass, so this is not a repeat. Refutation not possible.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "update",
+                "path": "src/users/users.repo.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/users.repo.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/users/profile.controller.ts",
+          "line": 12,
+          "text": "A single-token `locale` such as `english` or `xx` makes `normalizeLocale` call `parts[1].toUpperCase()` when `parts[1]` is `undefined`, and because `checkProfileFields` calls it before the `SUPPORTED_LOCALES` check, the handler throws an uncaught `TypeError` and returns HTTP 500 instead of the intended 400 `'unsupported locale'`. Guard the missing segment, for example by destructuring with defaults `const [lang = '', region = ''] = input.replace('_', '-').split('-')` and returning `lang.toLowerCase()` when `region` is absent."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/users/profile.controller.ts",
+          "line": 29,
+          "text": "`checkProfileFields` skips validation whenever `displayName`, `bio`, `avatarUrl`, or `locale` is not already a string, so values such as `{avatarUrl: {}}`, `{locale: 123}`, or `{displayName: ['x']}` are passed unchanged to `usersRepo.update`, which writes every patch key to the users row (`users.repo.ts:20`) and lets wrong-typed data bypass the intended checks. Reject non-string values instead of skipping them, throwing `new HttpError(400, 'displayName must be a string')` and likewise for `bio`, `avatarUrl`, and `locale`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 61301,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale splits on '-' and unconditionally calls parts[1].toUpperCase(), so a locale without a region separator (e.g. \"en\") makes parts[1] undefined and throws a TypeError. WHY: updateProfile passes the client-controlled req.body to checkProfileFields, so POSTing {\"locale\":\"en\"} crashes the request with a 500 instead of returning the intended 400 'unsupported locale'. HOW: guard for a missing region before dereferencing, e.g. if (parts.length < 2) throw new HttpError(400, `unsupported locale ${input}`); or check parts[1] existence before uppercasing.",
+          "keep": true,
+          "rationale": "Confirmed: normalizeLocale at line 11-14 does `input.replace('_','-').split('-')` then unconditionally dereferences `parts[1].toUpperCase()`. For input \"en\" (no region separator) parts = [\"en\"], parts[1] is undefined, and `.toUpperCase()` throws a TypeError. updateProfile (line 63-65) passes client-controlled req.body through sanitizeProfileUpdate then checkProfileFields, and locale is a string so line 40 calls normalizeLocale, producing a 500 instead of the intended 400 unsupported-locale. This is a real, reachable crash distinct from the previous denylist/allowlist decision (different failure, different cause).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale|checkProfileFields|sanitizeProfileUpdate",
+                "path": "src/users"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 60,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "text": "Because `updateProfile` passes the client-controlled `req.body` to `checkProfileFields`, a locale without a region separator such as `\"en\"` leaves `parts[1]` undefined and makes `normalizeLocale` throw a `TypeError`, returning a 500 instead of the intended 400 'unsupported locale'. Guard for a missing region before dereferencing, e.g. throw `HttpError` with status 400 and the `unsupported locale ${input}` message when `parts.length < 2` or `parts[1]` is absent."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 65191,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale assumes the input always contains a region tag and unconditionally does parts[1].toUpperCase(), so a region-less locale such as 'en' makes parts[1] undefined and throws a TypeError. WHY: checkProfileFields only verifies typeof patch.locale === 'string' before calling normalizeLocale, so an authenticated user sending {\"locale\":\"en\"} crashes the updateProfile handler with a 500 instead of a 400. HOW: guard the split result and reject inputs without a region, e.g. `const [lang, region] = input.replace(/_/g, '-').split('-'); if (!lang || !region) throw new HttpError(400, `unsupported locale ${input}`); return `${lang.toLowerCase()}-${region.toUpperCase()}`;` (using a global underscore replace so multi-underscore inputs normalize correctly).",
+          "keep": true,
+          "rationale": "Confirmed: normalizeLocale (line 12-13) splits on '-' and unconditionally accesses parts[1].toUpperCase(). For a region-less locale like 'en', split returns a single-element array, so parts[1] is undefined and .toUpperCase() throws a TypeError. checkProfileFields (line 39) only checks typeof patch.locale === 'string' before calling normalizeLocale, so an authenticated user sending {\"locale\":\"en\"} crashes the handler (500) instead of returning 400. No upstream guard prevents this. This is a distinct problem from the denylist finding (index 10), which concerns mass-assignment of unlisted fields, not the locale normalization crash.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 14,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "text": "A region-less locale such as `en` leaves `parts[1]` undefined for `parts[1].toUpperCase()` in `normalizeLocale`, and because `checkProfileFields` only verifies `typeof patch.locale === 'string'`, an authenticated request with `{\"locale\":\"en\"}` throws a `TypeError` and makes `updateProfile` return 500 instead of 400. Guard the split result and reject inputs without a region by destructuring `lang` and `region`, replacing underscores globally with `input.replace(/_/g, '-')`, and throwing `HttpError` with status 400 and an `unsupported locale ${input}` message when either is missing."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P26-denylist-sanitizer-moved",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 85960,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale indexes parts[1] and calls .toUpperCase() on it without checking the string actually contains a '-'/'_' separator, so a locale such as \"en\" or \"english\" makes parts[1] undefined and throws TypeError instead of the intended 400. WHY: the sole caller (checkProfileFields line 40) only guards typeof patch.locale === 'string', so a body like {\"locale\":\"en\"} reaches this line, the TypeError escapes the HttpError(400) path and the request fails as a 500 rather than a validation error. HOW: validate the shape before splitting, e.g. `const parts = input.replace('_', '-').split('-'); if (parts.length < 2) throw new HttpError(400, `unsupported locale ${input}`);` and then build the normalized value.",
+          "keep": true,
+          "rationale": "Confirmed. normalizeLocale (line 12-13) splits on '-' after replacing one '_'; for input like \"en\" or \"english\", parts[1] is undefined and parts[1].toUpperCase() throws a TypeError, not HttpError(400). The sole caller checkProfileFields (line 39-40) only checks typeof patch.locale === 'string', so a body {\"locale\":\"en\"} reaches the throw and surfaces as a 500 instead of a validation error. No prior review decision addresses this crash.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "normalizeLocale"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/users/profile.controller.ts",
+          "claim": "WHAT: normalizeLocale assumes the input always contains a separator and unconditionally calls parts[1].toUpperCase(); for a value like 'en' parts[1] is undefined and the call throws a TypeError. WHY: updateProfile -> checkProfileFields(40) -> normalizeLocale will surface an uncaught TypeError (500) instead of the intended 400 validation error whenever a caller sends a locale without a region tag, and inputs like 'a-b-c' silently drop the region. HOW: guard the split result, e.g. `const [lang, region] = input.replace('_','-').split('-'); return `${lang.toLowerCase()}-${(region ?? '').toUpperCase()}`;` and treat a missing/empty region as an unsupported locale (throw HttpError(400)).",
+          "keep": true,
+          "rationale": "Confirmed: normalizeLocale splits on '-'; for input 'en' the array is ['en'], so parts[1] is undefined and parts[1].toUpperCase() throws TypeError. checkProfileFields line 40 invokes normalizeLocale whenever patch.locale is a string, so a caller sending a region-less locale yields an uncaught TypeError (500) instead of the intended HttpError(400). The bug is real and reachable. Not a repeat of prior decisions (the only profile.controller decision addressed the denylist sanitizer, a different problem).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/users/profile.controller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/users/profile.controller.ts",
+          "line": 12,
+          "text": "Because `checkProfileFields` line 40 only checks `typeof patch.locale === 'string'`, a body such as `{\"locale\":\"en\"}` reaches `normalizeLocale`, where `parts[1]` is `undefined` and `.toUpperCase()` throws a `TypeError` that escapes the `HttpError(400)` path and fails as a 500 instead of a validation error. Validate the split result before indexing—throw `HttpError(400)` when `parts.length < 2`—then build the normalized value."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/users/profile.controller.ts",
+          "line": 11,
+          "text": "Through `updateProfile` -> `checkProfileFields` line 40 -> `normalizeLocale`, a locale without a region tag such as `'en'` leaves `parts[1]` `undefined`, so `.toUpperCase()` throws an uncaught `TypeError` (500) instead of the intended 400, and inputs like `'a-b-c'` silently drop the region. Guard the split result by requiring exactly two parts, and throw `HttpError(400)` for a missing or empty region before normalizing."
+        }
+      ],
+      "claims": [
+        {
+          "id": "profile-denylist-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "locale-without-region-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 57785,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new scope.All branch marks a ref's digest live only when r.Final is true, dropping non-final (still-uploading) refs, whereas the sibling per-project branch (lines 44-48) marks every ref live with the comment \"Non-final refs belong to builds still uploading: their blobs stay.\" WHY: When Sweep runs with Scope{All:true}, a blob referenced only by a non-final ref is missing from the live set and is deleted by sweep.go:26-34; when that build finalizes its ref points at a deleted blob (data loss / corrupt build). HOW: Mirror the per-project branch and mark every ref digest live: `for _, r := range refs { live[r.Digest] = true }`.",
+          "keep": false,
+          "rationale": "The technical claim is real: in the scope.All branch (lines 32-38) only r.Final refs are added to live, while the per-project branch (44-48) marks every ref live, so a blob referenced only by a non-final ref would be deleted by Sweep. However, this is exactly the problem already raised on this PR as round-a-P36-nonfinal-refs-all-scopes (liveDigests skips Final==false refs, deleting blobs of still-uploading builds). Same operation, same failure (data loss / dangling ref after finalize), just relocated from the old `if !r.Final { continue }` check to the new `if r.Final` check. Per the repeat-finding rule, an entry already on the PR resolves it regardless of outcome, and the current diff provides no evidence of a deliberate revert of an applied change — so it must be dropped as a duplicate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|Final",
+                "path": "internal/gc"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/sweep.go",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new scope.All branch filters refs with `if r.Final`, marking only final refs live, so non-final refs (builds still uploading) are treated as dead. WHY: A build that is still uploading has a non-final ref whose blob then appears unreferenced; Sweep with Scope{All:true} lists all blobs (sweep.go:18-21 sets project=\"\") and deletes that blob, so when the build finalizes its ref points at a blob that no longer exists — data loss. This contradicts the invariant the sibling ByProject loop states at live.go:45-48 (\"Non-final refs belong to builds still uploading: their blobs stay\"). HOW: drop the Final check and mark every ref digest live, matching the non-All branch:\n\tfor _, r := range refs {\n\t\tlive[r.Digest] = true\n\t}",
+          "keep": false,
+          "rationale": "The finding's technical claim is correct (the scope.All branch at live.go:33-37 filters with `if r.Final` while the ByProject branch at 45-48 marks every ref live, so non-final refs' blobs are treated as dead and deleted under Sweep Scope{All:true}). However, PreviousReviewDecisions entry round-a-P36-nonfinal-refs-all-scopes already raised this EXACT problem at internal/gc/live.go:30-35: non-final refs being skipped so Sweep deletes the blobs of builds still uploading, with the identical consequence (data loss when the build finalizes) and the identical fix (drop the Final check, mark every ref digest live). The rule states: drop when the finding raises again the problem a previous entry already raised, whatever its Outcome and even when it says the developer's fix is incomplete. This is a repeat, so it is dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|Scope\\{|Scope",
+                "path": "internal/gc"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/sweep.go",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 60543,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: In the new `scope.All` branch, liveDigests marks a digest live only when `r.Final` is true, skipping non-final refs, whereas the ByProject branch (lines 45-48) unconditionally marks every ref digest live. WHY: A non-final ref belongs to a build that is still uploading; Sweep with scope.All will delete that build's blob, and when the build finalizes its ref points at a blob that no longer exists (data loss / broken ref). HOW: Drop the `if r.Final` filter and mark every ref digest live, matching the ByProject branch: `for _, r := range refs { live[r.Digest] = true }`.",
+          "keep": false,
+          "rationale": "This finding is a repeat of PreviousDecision round-a-P36-nonfinal-refs-all-scopes, which raised the identical problem at the same location (internal/gc/live.go, the scope.All branch): liveDigests skips non-final refs, so Sweep deletes blobs of still-uploading builds, leaving a broken ref when the build finalizes. Same failure, same operation, same proposed fix (drop the `if r.Final` filter and mark every ref digest live). Per the rules, a finding that raises again the problem an existing review entry already raised must be dropped, regardless of the entry's outcome or whether the fix landed. Although the code still contains the `if r.Final` filter, that merely indicates the applied change is incomplete — exactly the case the rules say is not a new finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "Final",
+                "glob": "internal/**/*.go"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new `scope.All` branch calls `store.All(ctx)` and builds a map over every ref across every project in a single in-memory allocation. WHY: For an all-projects sweep this loads the entire ref table at once with no pagination or streaming, causing a memory blowup proportional to total refs (previously each call was bounded to one project). HOW: Have the store stream/paginate refs and mark live digests incrementally, or add an explicit bound/batch to the All query.",
+          "keep": true,
+          "rationale": "The cited code is accurate: the `scope.All` branch calls `store.All(ctx)`, which by interface returns a `[]Ref` slice materializing every ref across every project, then allocates `make(map[string]bool, len(refs))` sized to the entire table. There is no pagination/streaming in the interface (`All` returns a slice), so for an all-projects sweep the memory footprint scales with total refs, whereas the non-All branch is bounded to one project. The claim's root cause and failure path are factually correct and reachable; I found no guard or bound that refutes it. It is not a repeat of any previous decision (those concern the `Final` check and unrelated reports files), so it is a distinct concern. Cannot refute; keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "performance",
+          "marked": false,
+          "file": "internal/gc/live.go",
+          "line": 28,
+          "text": "The `scope.All` branch loads every ref across every project into a single in-memory `map` via `store.All(ctx)`, so memory use can blow up proportionally to total refs instead of being bounded to one project as before. Have the store stream or paginate refs and mark live digests incrementally, or add an explicit bound/batch to the `All` query."
+        }
+      ],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 42558,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new scope.All branch only marks refs live when `r.Final` is true (`if r.Final { live[r.Digest] = true }`), unlike the ByProject branch which marks every ref live. WHY: Non-final refs belong to builds that are still uploading, so the all-project sweep will delete their blobs; when those builds finalize, their refs point at blobs that no longer exist, causing data loss — the exact invariant the ByProject branch preserves. HOW: Drop the Final check in the All branch and mark every ref digest live: `for _, r := range refs { live[r.Digest] = true }`.",
+          "keep": false,
+          "rationale": "This is a repeat of PreviousReviewDecisions entry round-a-P36-nonfinal-refs-all-scopes (internal/gc/live.go:30-35), which already raised the exact same failure: liveDigests skipping non-final refs so Sweep deletes blobs of still-uploading builds, causing data loss. Same file, same operation, same consequence — the candidate merely restates it against the All branch rather than the (now-fixed) ByProject branch. Per the repeat rule, it must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|scope\\.|Final",
+                "path": "internal/gc"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 15,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 58496,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new scope.All branch in liveDigests marks a digest live only when r.Final is true, while the sibling ByProject branch (lines 45-48) deliberately marks every ref live with the comment \"Non-final refs belong to builds still uploading: their blobs stay.\" WHY: With scope.All set, Sweep will delete blobs that still-uploading (non-final) builds reference; when such a build finalizes its ref points at a blob that no longer exists, causing data loss / broken builds. This is the same failure the prior review flagged for the ByProject path, now re-introduced by the newly added All path. HOW: Drop the `if r.Final` filter so every stored ref keeps its blob alive, mirroring the ByProject branch.",
+          "keep": false,
+          "rationale": "The cited code (scope.All branch filtering on r.Final while ByProject does not) is factually as described, but the failure it raises is the exact problem already posted on this PR by previous decision round-a-P36-nonfinal-refs-all-scopes (internal/gc/live.go:30-35, Type bug, Outcome implemented): liveDigests skips non-final refs so Sweep deletes the blobs of still-uploading builds, causing data loss. Rules require judging \"same problem\" by the failure, not the cause: the consequence (data loss from deleting still-uploading builds' blobs in the same liveDigests/Sweep operation) is identical, and the candidate itself frames it as re-introducing that prior failure. Raising again the problem an earlier entry raised — even as an incomplete fix in a newly added branch of the same function — is a repeat, not a revision. DROP.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 13,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P36-nonfinal-refs-all-scopes",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 40752,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: the new scope.All branch of liveDigests marks a digest live only when r.Final is true, skipping non-final refs (`if r.Final { live[r.Digest] = true }`). WHY: non-final refs belong to builds still uploading, so their blobs are omitted from the live set and Sweep deletes them; when such a build finalizes its ref points at a blob that no longer exists, losing data. The per-project branch (lines 45-48) correctly keeps every ref's digest with the comment 'Non-final refs belong to builds still uploading: their blobs stay', so the all-projects path is inconsistent with the documented invariant and with the earlier fix that required every stored ref to keep its blob alive. HOW: drop the Final filter and mark every ref digest live, mirroring the per-project branch: `for _, r := range refs { live[r.Digest] = true }`.",
+          "keep": false,
+          "rationale": "The finding describes exactly the problem already raised by PreviousReviewDecisions entry round-a-P36-nonfinal-refs-all-scopes (internal/gc/live.go): liveDigests skipping non-final refs in the all-projects branch, causing Sweep to delete blobs of still-uploading builds and losing data on finalize. Same function, same code path, same failure (data loss from deleting blobs of non-final refs). The entry's outcome is \"implemented\", and the current code (lines 33-37 still contain `if r.Final`) gives no concrete evidence the applied change was reverted or that the described failure differs — it is the same problem re-raised. Per the rules, a finding that raises again the problem a prior entry already raised on this PR must be dropped, whatever its wording or proposed fix.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "liveDigests|scope\\.All|r\\.Final",
+                "path": "internal/gc"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "internal/gc/live.go",
+          "claim": "WHAT: The new `scope.All` branch in liveDigests marks a digest live only when `r.Final` is true (`if r.Final { live[r.Digest] = true }`), whereas the sibling ByProject branch marks every ref digest live. WHY: With scope.All, Sweep treats blobs referenced only by still-uploading (non-final) builds as dead and deletes them (sweep.go:26-34); when such a build finalizes its ref points at a blob that no longer exists. The invariant stated in the comment on line 46 — \"Non-final refs belong to builds still uploading: their blobs stay\" — is violated by the new branch. HOW: Drop the `if r.Final` filter in the All branch and mark every ref digest as live, matching the ByProject branch.",
+          "keep": false,
+          "rationale": "This is a repeat of PreviousDecision round-a-P36-nonfinal-refs-all-scopes (internal/gc/live.go:30-35), which raised the identical problem: liveDigests skipping non-final refs so Sweep deletes blobs of still-uploading builds, with the same failure (a finalizing build's ref pointing at a deleted blob). That entry's Outcome is 'implemented'. The current diff does not show the applied change was reverted or is newly wrong — the All branch still contains the `if r.Final` filter (live.go:34) and the sibling ByProject branch correctly marks every digest (live.go:47), matching the previous decision's suggested fix already applied there. The finding raises again the same problem the earlier entry already raised on this PR, so it must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "internal/gc/live.go",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "sweep.go",
+                "path": "internal/gc"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 50,
+                "path": "internal/gc/sweep.go",
+                "startLine": 1
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "r.Final|!r.Final|Final",
+                "path": "internal/gc"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "all-scope-nonfinal-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    }
+  ]
+}

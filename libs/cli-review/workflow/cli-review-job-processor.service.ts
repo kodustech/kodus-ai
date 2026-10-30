@@ -56,9 +56,14 @@ export class CliReviewJobProcessorService implements IJobProcessorService {
         // republishes with a delay aligned to the bucket reset instead
         // of burning the full router timeout. Non-GitHub platforms pass
         // through silently inside the gate.
+        //
+        // No GitHub default here: the CLI leaves this undefined for hosts it
+        // cannot recognize (any self-managed instance), and claiming GitHub
+        // would make the gate probe the GitHub API for organizations that have
+        // no GitHub integration at all (#1541).
         await this.rateLimitGate.check(
             payload.organizationAndTeamData,
-            payload.gitContext?.inferredPlatform ?? PlatformType.GITHUB,
+            payload.gitContext?.inferredPlatform,
         );
 
         await this.jobRepository.update(jobId, {

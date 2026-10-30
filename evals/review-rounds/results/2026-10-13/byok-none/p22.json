@@ -1,0 +1,1674 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+    "sourceDigest": "8d22cf93b7b767539c70cf6d879db8b39e0dbdde1464815e132caf5145e6d525"
+  },
+  "startedAt": "2026-10-13T21:22:45.470Z",
+  "updatedAt": "2026-10-13T21:37:37.565Z",
+  "complete": true,
+  "selectedCases": [
+    "P22-rule-forward-parsed-pingpong",
+    "P22-rule-forward-parsed-pingpong-control",
+    "P33-rule-invalidation-new-callback",
+    "P33-rule-invalidation-new-callback-control",
+    "P34-rule-loading-default-new-component",
+    "P34-rule-loading-default-new-component-control"
+  ],
+  "summary": {
+    "measured": 30,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 5,
+        "violations": 5,
+        "rate": 1
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 35,
+        "violations": 2,
+        "rate": 0.057
+      },
+      "index-reference (#2039)": {
+        "n": 42,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "P22-rule-forward-parsed-pingpong · create-order-raw-body-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 5,
+        "delivered": 5
+      },
+      "P22-rule-forward-parsed-pingpong · cancel-order-raw-body-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P22-rule-forward-parsed-pingpong-control · create-order-raw-body-control [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P22-rule-forward-parsed-pingpong-control · cancel-order-raw-body-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P33-rule-invalidation-new-callback · onError-invalidation-new-site [deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 4
+      },
+      "P33-rule-invalidation-new-callback-control · onError-invalidation-new-site [deliver]": {
+        "pass": 4,
+        "n": 5,
+        "delivered": 4
+      },
+      "P34-rule-loading-default-new-component · next-invoice-default-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P34-rule-loading-default-new-component-control · next-invoice-default-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26067,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/create-order.handler.ts:13` (2026-10-06 12:00 UTC).\n\nForwarding raw `req.body` to `orders.create` after `CreateOrderSchema` validation lets unvalidated fields such as `status` and `totalCents` reach the database, violating the rule to forward only the parsed result. Pass `parsed.data` instead, and extend the schema to declare the partner metadata if it is genuinely needed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Publishing raw `req.body` after `CancelOrderSchema` validation forwards extra client fields such as a spoofed `actorId`, `status`, or `refundCents` unvalidated to downstream consumers. Pass `result.data` instead so only schema-checked fields are published."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39742,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/create-order.handler.ts:13` (2026-10-06 12:00 UTC).\n\nBecause the handler validates with `CreateOrderSchema` but forwards the raw `req.body`, unvalidated fields such as a client-set `status` or `totalCents` reach the service and database, defeating the schema — a regression introduced by reverting the earlier change to pass the parsed result. Pass only the parsed result with `parsed.data`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "The handler validates `req.body` with `CancelOrderSchema` but publishes the raw `req.body`, so any extra fields the schema never checked go straight into the `order.cancel_requested` event payload. Publish `result.data` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 39812,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/create-order.handler.ts:13` (2026-10-06 12:00 UTC).\n\nForwarding raw `req.body` lets every undeclared field the client sends, such as a client-set `status` or `totalCents`, reach `orders.create` and the database unchecked. Pass `parsed.data` instead, and if the partner metadata is truly needed, add those fields to `CreateOrderSchema` so they are validated before being passed."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Publishing raw `req.body` sends every field the client supplied, including ones `CancelOrderSchema` never checked such as `status`, to whatever consumes `order.cancel_requested`. Pass `result.data` instead so only validated fields are published."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28326,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/create-order.handler.ts:13` (2026-10-06 12:00 UTC).\n\nBecause the handler forwards raw `req.body` after validating with `CreateOrderSchema`, undeclared fields such as a client-set `status` or `totalCents` reach the order service and database unchecked. Forward `parsed.data` and, if the service truly needs partner metadata, extend the schema to declare it so it is validated too."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/create-order.handler.ts:13` (2026-10-06 12:00 UTC).\n\nThe handler validates `req.body` with `CancelOrderSchema` but publishes the raw `req.body` to the event bus, so extra fields such as `status`, `tenantId`, or an arbitrary payload enter the published event and downstream consumers unvalidated despite the rule to forward only the parsed result. Pass `result.data` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33084,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/create-order.handler.ts:13` (2026-10-06 12:00 UTC).\n\nForwarding raw `req.body` to `orders.create` after `CreateOrderSchema` validation lets any client-supplied field the schema never checked—such as a forged `status`, `totalCents`, or tenant id—reach the service and potentially the database, even though the comment claims the service needs partner metadata the schema does not declare. Either extend `CreateOrderSchema` to declare the partner metadata fields with `.passthrough()` or explicit optional fields and pass `parsed.data`, or strip unknown keys; the earlier round-a-P22-rule-forward-parsed-pingpong fix appears reverted in the current diff."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Publishing `req.body` through `bus.publish('order.cancel_requested', ...)` after `CancelOrderSchema` validation sends every client-supplied field, including an unvalidated `reason` or extra properties, to downstream consumers. Publish `result.data` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P22-rule-forward-parsed-pingpong-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 40367,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Forwarding raw `req.body` after `CreateOrderSchema` validation means the order service receives unvalidated input, including any fields the schema would strip. Pass `parsed.data` instead of `req.body`, and if the service needs partner metadata, extend the schema to declare it so it is validated too."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Forwarding raw `req.body` after `CancelOrderSchema` validation violates the rule to validate request bodies and forward only the parsed result, so unvalidated or extra fields can reach consumers. Publish `result.data` instead, since the schema already guarantees `orderId` and `reason` are present."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P22-rule-forward-parsed-pingpong-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 78123,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Unvalidated and extra fields such as undeclared partner metadata or arbitrary keys reach `orders.create` and ultimately the database, defeating the purpose of `CreateOrderSchema.safeParse`. Pass `parsed.data` to `orders.create` so only schema-validated fields are forwarded."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Extra or unknown fields on the request body, along with unparsed or normalized values, are propagated downstream through the event bus, defeating the purpose of `CancelOrderSchema.safeParse`. Pass `result.data` to `bus.publish` so only the validated, typed payload leaves the handler."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P22-rule-forward-parsed-pingpong-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 45707,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Because the raw `req.body` is forwarded after validation with `CreateOrderSchema`, unvalidated or extra fields and uncoerced values reach the order service, so the schema provides no guarantee. Pass `parsed.data` to `orders.create`, and if the service needs partner metadata the schema does not declare, extend the schema so it is validated too."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "After validating with `CancelOrderSchema`, forwarding raw `req.body` to the event bus lets unvalidated fields and prototype-polluting keys be published downstream. Pass `result.data` to `bus.publish` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P22-rule-forward-parsed-pingpong-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 38707,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Because the handler forwards raw `req.body` to the order service instead of the parsed `CreateOrderSchema` result, fields outside the schema — including undeclared or malicious extras — reach the service unvalidated. Pass `parsed.data` so only validated fields are forwarded."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Because the handler forwards raw `req.body` to the event bus instead of the parsed `CancelOrderSchema` result, unvalidated or extra fields can leak downstream. Following the rule to forward only the parsed result, pass `result.data`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P22-rule-forward-parsed-pingpong-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 75190,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Forwarding raw `req.body` to `orders.create` bypasses validation, so unknown keys, uncoerced values, and missing defaults reach the order service as unvalidated input. Pass `parsed.data` via `await orders.create(parsed.data)`, and if partner metadata must be accepted, declare it in the zod schema and read it from `parsed.data`."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Publishing raw `req.body` to `order.cancel_requested` after validating with `CancelOrderSchema` forwards extra or unvalidated fields downstream, violating the requirement to validate request bodies and forward only the parsed result. Publish `result.data` instead so the event bus receives only the parsed result."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-control",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 45450,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 20,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because `onError` calls `queryClient.invalidateQueries` without returning or awaiting it, the mutation settles before the seats query refetches. Return the promise so the mutation stays pending until the refetch settles, as required by rule 21."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 18454,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 20,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Against the rule that mutation callbacks return the invalidation promise, calling `queryClient.invalidateQueries` without returning or awaiting it lets the mutation settle before the rollback refetch completes, so the seats query can be observed stale after a failed save. Return the promise from `queryClient.invalidateQueries` so the mutation stays pending until the refetch settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19172,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 21,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "The new `onError` callback calls `queryClient.invalidateQueries` without returning or awaiting it, violating the rule that mutation callbacks return the invalidation promise; as a result, the mutation settles before the seats query refetches, so after a failed save the settings page can show the stale optimistically updated seat count. Return the promise so the mutation stays pending until the refetch settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 17662,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 18,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "The `onSuccess` callback calls `queryClient.invalidateQueries` without returning or awaiting the promise, so the mutation resolves before the seats query refetches and the UI can show the stale seat count right after saving. Return the promise so the mutation stays pending until the refetch settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P33-rule-invalidation-new-callback",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19978,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 20,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because the new `onError` callback calls `queryClient.invalidateQueries` without returning or awaiting it (violating rule 21), the mutation settles before the seats query refetches on failure, so the settings page can briefly show the rolled-back seat count as stale. Return the promise from `queryClient.invalidateQueries` for `queryKeys.seats(change.workspaceId)`; this is a distinct violation from the earlier `onSuccess` finding and is a new callback introduced by this diff."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P33-rule-invalidation-new-callback-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 21911,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 21,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because the `onError` callback neither returns nor awaits `queryClient.invalidateQueries`, the mutation settles before the refetch completes and the rollback refetch can be missed, violating the rule \"Mutation callbacks return the invalidation promise\". Return the `invalidateQueries` promise or await it with an async callback so the mutation stays pending until the refetch settles."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P33-rule-invalidation-new-callback-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 34101,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 17,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because the `onSuccess` callback calls `queryClient.invalidateQueries` without returning or awaiting the promise, the mutation settles before the refetch completes. Return the invalidation promise."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 20,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because the new `onError` callback calls `queryClient.invalidateQueries` without returning or awaiting it, the mutation resolves before the rollback refetch settles. Return the invalidation promise."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P33-rule-invalidation-new-callback-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 61938,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 18,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Without returning or awaiting `queryClient.invalidateQueries` from the `onSuccess` callback, the mutation resolves before the seats refetch settles. Return the invalidation promise to keep the mutation pending until the refetch completes."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 22,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Without returning or awaiting `queryClient.invalidateQueries` from the `onError` callback, the rollback refetch is not tracked and the mutation settles early. Return the invalidation promise so the rollback refetch is tracked."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P33-rule-invalidation-new-callback-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 13544,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 12,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Since `cancelQueries` returns a promise that is already awaited here, there is no violation on line 12."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P33-rule-invalidation-new-callback-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 14639,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/useUpdateSeats.ts",
+          "line": 21,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-mutation-return-invalidation"
+          ],
+          "marked": false,
+          "text": "Because `onError` calls `queryClient.invalidateQueries` without returning or awaiting it, the mutation settles before the refetch does. Return the promise (or await it) so the mutation stays pending until the invalidation settles, per the rule \"Mutation callbacks return the invalidation promise\"."
+        }
+      ],
+      "claims": [
+        {
+          "id": "onError-invalidation-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16150,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the query is loading or fails, `NextInvoiceCard` displays a $0.00 invoice with an empty due date as real data, violating the rule that loading states never show defaults as data. Capture `isLoading` from the query and return a `Skeleton` component or an error state on failure instead of substituting defaults, then render `invoice.totalCents` and `invoice.dueDate` without fallbacks."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 15491,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the query is loading or has failed, `NextInvoiceCard` renders `invoice?.totalCents ?? 0` and `invoice?.dueDate ?? ''`, so the fallback reads as real data and users see a $0.00 invoice with no due date even after a failed request. Return a `<Skeleton />` while loading and an error state when the query fails instead of substituting default values for the missing data."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26043,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 30,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "Because the query has no data, `NextInvoiceCard` violates the “Loading states never show defaults as data” rule by rendering `invoice?.totalCents ?? 0` and `invoice?.dueDate ?? ''`, so it shows a `$0.00` invoice with an empty due date while loading and keeps showing it if the request fails. Destructure `isLoading`/`isError` from the `useQuery` and return a `<Skeleton />` (or an error state) until `invoice` is present, then render `invoice.totalCents` and `invoice.dueDate` directly."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 16958,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the query has no data, `NextInvoiceCard` renders `invoice?.totalCents ?? 0` and `invoice?.dueDate ?? ''`, so the user sees a $0.00 invoice with an empty due date that reads as real data and persists if the request fails. Return a `Skeleton` while loading and an error state on failure instead of substituting fallback values."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P34-rule-loading-default-new-component",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20637,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the query is loading or fails, `NextInvoiceCard` renders `invoice?.totalCents ?? 0` and `invoice?.dueDate ?? ''`, showing a $0.00 invoice with a blank due date that reads as real data and violating \"Loading states never show defaults as data\"; the earlier suggestion only covered `SeatUsageCard`, leaving this occurrence untouched. Destructure `isLoading` and `isError` from `useQuery`, render a `Skeleton` component while loading and an error state otherwise, and only render the real values once `invoice` exists."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P34-rule-loading-default-new-component-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 20239,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the invoice query is loading or has failed, `NextInvoiceCard` displays `$0.00` and an empty due date as if they were real invoice data. Destructure `isLoading` from the query and, like `SeatUsageCard` does for `isLoading || !usage`, return a `Skeleton` (or an error state) when `isLoading || !invoice` before rendering, then read `invoice.totalCents` and `invoice.dueDate` without fallbacks."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P34-rule-loading-default-new-component-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 12582,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the upcoming-invoice query is loading or has failed, the `?? 0` and `?? ''` fallbacks in `NextInvoiceCard` render a $0.00 amount and a blank due date as if they were real invoice data. Guard `isLoading`/`isError` and render a `Skeleton` (as `SeatUsageCard` does) before reading `invoice.totalCents` and `invoice.dueDate` directly."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P34-rule-loading-default-new-component-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 19130,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the invoice query is loading or has failed, `NextInvoiceCard` displays `$0.00` and an empty date as if they were real invoice data, violating rule [21]'s requirement to render a Skeleton or error state until data exists. Return the Skeleton when `isLoading || isError || !invoice`, as `SeatUsageCard` already does, and read `totalCents` and `dueDate` directly from the non-null `invoice` in the success path instead of using `formatMoney(invoice?.totalCents ?? 0)` and `invoice?.dueDate ?? ''`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P34-rule-loading-default-new-component-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 13936,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "While the invoice query is loading, `NextInvoiceCard` renders fallback values as if they were real data — a $0.00 amount and an empty due date — instead of a loading state. Destructure `isLoading` from the query and render a `<Skeleton />` (as `SeatUsageCard` does) while loading or when `invoice` is absent, then render `invoice.totalCents` and `invoice.dueDate` without fallbacks."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P34-rule-loading-default-new-component-control",
+      "family": "control",
+      "sandbox": "alive",
+      "ms": 13804,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/BillingCards.tsx",
+          "line": 32,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-loading-no-default-data"
+          ],
+          "marked": false,
+          "text": "Rendering `invoice?.totalCents ?? 0` and `invoice?.dueDate ?? ''` shows a $0.00 amount and an empty due date as real invoice data during loading or after a failed fetch, which Rule 21 forbids. Destructure `isLoading` from the `useQuery` result and return `<Skeleton className=\"h-24\" />` (or an error state) before rendering the Card, so the amount and due date only render once `invoice` is defined, as `SeatUsageCard` already does when `isLoading || !usage`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "next-invoice-default-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

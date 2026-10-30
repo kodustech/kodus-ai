@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import ora, { type Ora } from 'ora';
 import chalk from 'chalk';
 import fs from 'fs/promises';
@@ -12,7 +12,7 @@ import {
     checkTrialStatus,
 } from '../../utils/rate-limit.js';
 import { exitWithCode } from '../../utils/cli-exit.js';
-import { cliDebug, cliError, cliInfo } from '../../utils/logger.js';
+import { cliDebug, cliError, cliInfo, cliWarn } from '../../utils/logger.js';
 import { createCommandContext } from '../../utils/command-context.js';
 import {
     buildAgentErrorEnvelope,
@@ -38,7 +38,7 @@ import {
     shouldUseHunkViewer,
     shouldUseInteractiveReview,
 } from './result.js';
-import { canRenderScopeInHunk, openReviewInHunk } from './hunk-viewer.js';
+import { buildHunkViewerScope, openReviewInHunk } from './hunk-viewer.js';
 import {
     convertReviewToHunkContext,
     countHunkAnnotations,
@@ -55,6 +55,8 @@ type ReviewCommandOptions = {
     fast?: boolean;
     focus?: string;
     runtime?: boolean;
+    /** Removed; accepted and ignored with a warning. */
+    heavy?: boolean;
     interactive?: boolean;
     fix?: boolean;
     promptOnly?: boolean;
@@ -111,6 +113,9 @@ Examples:
             '--focus <text>',
             'Steer the review at a specific area, e.g. --focus "the auth and session logic"',
         )
+        // Heavy mode was removed. The flag stays, hidden, so a script that
+        // still passes it runs a normal review instead of failing.
+        .addOption(new Option('--heavy').hideHelp())
         .option(
             '--runtime',
             'Kody Runtime: boot the app on an ephemeral VM and execute the PR (repo must have the environment playbook configured)',
@@ -159,6 +164,12 @@ async function reviewAction(
 
     try {
         validateReviewOptions(options);
+
+        if (options.heavy) {
+            cliWarn(
+                '--heavy was removed and has no effect; running a normal review.',
+            );
+        }
 
         assertStructuredOutputForFields({
             fields: options.fields,
@@ -235,7 +246,9 @@ async function reviewAction(
                         runtime: options.runtime,
                         quiet: globalOpts.quiet,
                         onProgress: (status) => {
-                            if (globalOpts.quiet || ctx.isAgent) {return;}
+                            if (globalOpts.quiet || ctx.isAgent) {
+                                return;
+                            }
                             if (status === 'PENDING') {
                                 spinner.text = chalk.cyan(
                                     'Queued for review...',
@@ -369,11 +382,13 @@ async function reviewAction(
         const selectedResult = fields ? applyFieldMask(result, fields) : result;
         const ttyOut = Boolean(process.stdout.isTTY);
         const platformSupported = isHunkPlatformSupported();
-        const scopeSupported = canRenderScopeInHunk({
+        const hunkScope = buildHunkViewerScope({
             files,
             commit: options.commit,
             branch: options.branch,
+            staged: options.staged,
         });
+        const scopeSupported = hunkScope !== null;
         // The user is in an "interactive human" context where we'd otherwise
         // route to hunk; we use this to decide whether to surface a one-line
         // hint explaining why hunk was skipped.
@@ -394,7 +409,7 @@ async function reviewAction(
         } else if (interactiveHumanContext && !scopeSupported) {
             cliInfo(
                 chalk.dim(
-                    'ℹ Hunk viewer skipped: --branch / --commit / explicit files have no direct hunk scope yet. Showing the interactive list instead. Pass --no-hunk to silence this hint.',
+                    'ℹ Hunk viewer skipped: this review scope has no direct hunk equivalent. Showing the interactive list instead. Pass --no-hunk to silence this hint.',
                 ),
             );
         }
@@ -459,7 +474,7 @@ async function reviewAction(
             } else {
                 const { exitCode } = await openReviewInHunk({
                     result: reviewResult,
-                    scope: { staged: Boolean(options.staged) },
+                    scope: hunkScope!,
                     keepContextOnExit: Boolean(globalOpts.verbose),
                 });
 

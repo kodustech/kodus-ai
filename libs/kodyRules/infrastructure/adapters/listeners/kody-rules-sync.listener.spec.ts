@@ -2,10 +2,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { ParametersKey } from '@libs/core/domain/enums';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
+import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import {
+    IOrganizationParametersService,
+    ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { KodyRulesSyncService } from '../services/kodyRulesSync.service';
 import { KodyRulesSyncListener } from './kody-rules-sync.listener';
 
@@ -22,8 +27,24 @@ describe('KodyRulesSyncListener', () => {
         findByKey: jest.fn(),
     };
 
+    // Global-rules source lookup: default to "no sources configured" so the
+    // PR-merge global fan-out stays off in these centralized-config tests.
+    const organizationParametersServiceMock: jest.Mocked<
+        Pick<IOrganizationParametersService, 'findByKey'>
+    > = {
+        findByKey: jest.fn().mockResolvedValue(null),
+    };
+
+    // Default: lock acquired (sync runs); tests can override.
+    const distributedLockServiceMock = {
+        acquire: jest.fn(),
+    };
+
     beforeEach(async () => {
         jest.clearAllMocks();
+        distributedLockServiceMock.acquire.mockResolvedValue({
+            release: jest.fn().mockResolvedValue(undefined),
+        });
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -35,6 +56,14 @@ describe('KodyRulesSyncListener', () => {
                 {
                     provide: PARAMETERS_SERVICE_TOKEN,
                     useValue: parametersServiceMock,
+                },
+                {
+                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+                    useValue: organizationParametersServiceMock,
+                },
+                {
+                    provide: DistributedLockService,
+                    useValue: distributedLockServiceMock,
                 },
             ],
         }).compile();
@@ -197,5 +226,49 @@ describe('KodyRulesSyncListener', () => {
         expect(
             kodyRulesSyncServiceMock.syncFromChangedFiles,
         ).not.toHaveBeenCalled();
+    });
+
+    describe('cross-process sync via distributed lock', () => {
+        const mergedEvent = new PullRequestClosedEvent(
+            { organizationId: 'org-1', teamId: 'team-1' } as any,
+            { id: 'repo-1', name: 'repo-1' },
+            42,
+            [{ filename: '.kody/rules/x.md', status: 'added' }],
+        );
+
+        it('runs the sync and releases the lock when this process acquires it', async () => {
+            const release = jest.fn().mockResolvedValue(undefined);
+            distributedLockServiceMock.acquire.mockResolvedValue({ release });
+
+            await listener.handlePullRequestClosedEvent(mergedEvent);
+
+            expect(
+                kodyRulesSyncServiceMock.syncFromChangedFiles,
+            ).toHaveBeenCalledTimes(1);
+            expect(release).toHaveBeenCalledTimes(1);
+        });
+
+        it('skips the sync when another process holds the lock', async () => {
+            distributedLockServiceMock.acquire.mockResolvedValue(null);
+
+            await listener.handlePullRequestClosedEvent(mergedEvent);
+
+            expect(
+                kodyRulesSyncServiceMock.syncFromChangedFiles,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('releases the lock even if the sync throws', async () => {
+            const release = jest.fn().mockResolvedValue(undefined);
+            distributedLockServiceMock.acquire.mockResolvedValue({ release });
+            kodyRulesSyncServiceMock.syncFromChangedFiles.mockRejectedValueOnce(
+                new Error('sync boom'),
+            );
+
+            await expect(
+                listener.handlePullRequestClosedEvent(mergedEvent),
+            ).rejects.toThrow('sync boom');
+            expect(release).toHaveBeenCalledTimes(1);
+        });
     });
 });

@@ -2,12 +2,15 @@ import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
-import { deepMerge } from '@libs/common/utils/deep';
-import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
+import { createKodyLearningSettingsResolver } from '@libs/common/utils/kody-rules/kody-learning-settings';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { GenerateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/generate-kody-rules.use-case';
+import {
+    GenerateInitialKodyRulesUseCase,
+    INITIAL_GENERATION_LOCK_TTL_MS,
+} from '@libs/kodyRules/application/use-cases/generate-initial-kody-rules.use-case';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -30,6 +33,14 @@ import {
 
 const CRON_KODY_LEARNING = process.env.API_CRON_KODY_LEARNING;
 
+// How many per-repo backfill locks may be held at once. Each held advisory
+// lock pins one pooled connection until released, so this is a hard cap on
+// how much of the API's DB pool (DB_POOL_MAX_API, default 30) this cron can
+// occupy. The same pool serves HTTP requests, and starving it stalls every
+// request for connectionTimeoutMillis — so this stays well under the pool
+// size rather than being tunable to a value that could exhaust it.
+export const BACKFILL_LOCK_CHUNK_SIZE = 5;
+
 @Injectable()
 export class KodyLearningCronProvider {
     private readonly logger = createLogger(KodyLearningCronProvider.name);
@@ -39,6 +50,7 @@ export class KodyLearningCronProvider {
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
         private readonly generateKodyRulesUseCase: GenerateKodyRulesUseCase,
+        private readonly generateInitialKodyRulesUseCase: GenerateInitialKodyRulesUseCase,
         private readonly distributedLockService: DistributedLockService,
     ) {}
 
@@ -278,27 +290,18 @@ export class KodyLearningCronProvider {
                 return;
             }
 
-            const defaultConfig = getDefaultKodusConfigFile();
-            const resolvedGlobalConfig = deepMerge(
-                defaultConfig,
-                codeReviewConfig.configValue.configs ?? {},
+            // Repos whose resolved config has the generator enabled. Note this
+            // does NOT gate on isSelected: right after onboarding repos sit in
+            // the config with isSelected=false, and requiring it here meant the
+            // cron never generated for a fresh team.
+            const resolveSettings = createKodyLearningSettingsResolver(
+                codeReviewConfig.configValue,
+            );
+            const enabledRepos = repos.filter(
+                (repo) => resolveSettings(repo.id).kodyRulesGeneratorEnabled,
             );
 
-            const filteredRepos = repos.filter((repo) => {
-                if (!repo.isSelected) return false;
-
-                const resolvedRepoConfig = deepMerge(
-                    resolvedGlobalConfig,
-                    repo.configs ?? {},
-                );
-
-                return (
-                    (resolvedRepoConfig as any)?.kodyRulesGeneratorEnabled ===
-                    true
-                );
-            });
-
-            if (!filteredRepos || filteredRepos.length === 0) {
+            if (enabledRepos.length === 0) {
                 this.logger.log({
                     message: 'Kody rules generator is disabled',
                     context: KodyLearningCronProvider.name,
@@ -311,14 +314,152 @@ export class KodyLearningCronProvider {
                 return;
             }
 
-            await this.generateKodyRulesUseCase.execute(
-                {
-                    teamId,
-                    weeks: 1,
-                    repositoriesIds: filteredRepos.map((repo) => repo.id),
-                },
-                organizationId,
+            // A repo that has never produced past-review rules (e.g. its owner
+            // skipped onboarding) still needs the one-time 3-month backfill the
+            // onboarding flow used to do; every other repo just needs the last
+            // week's delta. Partition the repos with a single lookup and run
+            // each window once (issue #1506).
+            const repoIds = enabledRepos.map((repo) => repo.id);
+
+            let seededRepoIds: Set<string>;
+            try {
+                seededRepoIds =
+                    await this.generateInitialKodyRulesUseCase.hasPastReviewRulesForRepos(
+                        organizationId,
+                        repoIds,
+                    );
+            } catch (error) {
+                // On a lookup failure, treat every repo as already seeded so we
+                // fall back to the cheaper weekly window rather than risk an
+                // unexpected 3-month run.
+                this.logger.error({
+                    message:
+                        'Failed to check past-review rules; using weekly window for all repos',
+                    context: KodyLearningCronProvider.name,
+                    error,
+                    metadata: { organizationId, teamId },
+                });
+                seededRepoIds = new Set(repoIds);
+            }
+
+            const backfillRepoIds = repoIds.filter(
+                (id) => !seededRepoIds.has(id),
             );
+            const weeklyRepoIds = repoIds.filter((id) => seededRepoIds.has(id));
+
+            if (weeklyRepoIds.length > 0) {
+                await this.generateKodyRulesUseCase.execute(
+                    {
+                        teamId,
+                        weeks: 1,
+                        repositoriesIds: weeklyRepoIds,
+                    },
+                    organizationId,
+                );
+            }
+
+            // Hold a per-repo lock across the backfill so a concurrent
+            // config-save seed of the same repo can't run at the same time and
+            // duplicate its rules. Repos already being seeded elsewhere are
+            // skipped this run and picked up on the next.
+            //
+            // Locks are taken in bounded chunks, never for the whole repo list
+            // at once. Every held advisory lock pins one pooled connection for
+            // its entire lifetime (see DistributedLockService.acquire), so an
+            // org with more repos than the pool has slots would drain the pool
+            // this process serves HTTP traffic from — every other request then
+            // waits `connectionTimeoutMillis` and fails until the batch ends.
+            // Chunking caps the pinned connections at BACKFILL_LOCK_CHUNK_SIZE
+            // regardless of how many repos the org has.
+            for (
+                let offset = 0;
+                offset < backfillRepoIds.length;
+                offset += BACKFILL_LOCK_CHUNK_SIZE
+            ) {
+                const repoIdsChunk = backfillRepoIds.slice(
+                    offset,
+                    offset + BACKFILL_LOCK_CHUNK_SIZE,
+                );
+
+                const heldLocks: DistributedLock[] = [];
+                const lockedBackfillIds: string[] = [];
+
+                try {
+                    for (const repoId of repoIdsChunk) {
+                        let lock: DistributedLock | null = null;
+                        try {
+                            lock = await this.distributedLockService.acquire(
+                                GenerateInitialKodyRulesUseCase.initialGenerationLockKey(
+                                    organizationId,
+                                    repoId,
+                                ),
+                                { ttl: INITIAL_GENERATION_LOCK_TTL_MS },
+                            );
+                        } catch (error) {
+                            // A lock failure for one repo must not abort the
+                            // chunk or leak the locks already held — skip it
+                            // and let the finally release the rest.
+                            this.logger.error({
+                                message:
+                                    'Failed to acquire backfill lock; skipping repo',
+                                context: KodyLearningCronProvider.name,
+                                error,
+                                metadata: { organizationId, teamId, repoId },
+                            });
+                            continue;
+                        }
+
+                        if (lock) {
+                            heldLocks.push(lock);
+                            lockedBackfillIds.push(repoId);
+                        }
+                    }
+
+                    if (lockedBackfillIds.length > 0) {
+                        // Re-check under the locks: a config-save seed may have
+                        // finished between the pre-lock check and now. Skip any
+                        // repo that became seeded so we don't generate duplicate
+                        // past-review rules. If the re-check itself fails, skip
+                        // the backfill this run rather than risk duplicates.
+                        let nowSeeded: Set<string>;
+                        try {
+                            nowSeeded =
+                                await this.generateInitialKodyRulesUseCase.hasPastReviewRulesForRepos(
+                                    organizationId,
+                                    lockedBackfillIds,
+                                );
+                        } catch (error) {
+                            this.logger.error({
+                                message:
+                                    'Failed to re-check past-review rules under lock; skipping backfill',
+                                context: KodyLearningCronProvider.name,
+                                error,
+                                metadata: { organizationId, teamId },
+                            });
+                            nowSeeded = new Set(lockedBackfillIds);
+                        }
+
+                        const idsToBackfill = lockedBackfillIds.filter(
+                            (id) => !nowSeeded.has(id),
+                        );
+
+                        if (idsToBackfill.length > 0) {
+                            await this.generateKodyRulesUseCase.execute(
+                                {
+                                    teamId,
+                                    months: 3,
+                                    repositoriesIds: idsToBackfill,
+                                },
+                                organizationId,
+                            );
+                        }
+                    }
+                } finally {
+                    await Promise.allSettled(
+                        heldLocks.map((lock) => lock.release()),
+                    );
+                }
+            }
         } catch (error) {
             this.logger.error({
                 message: 'Error generating kody rules',

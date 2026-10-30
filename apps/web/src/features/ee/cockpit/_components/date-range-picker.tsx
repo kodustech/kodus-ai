@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { Calendar } from "@components/ui/calendar";
@@ -21,13 +21,20 @@ import {
 } from "date-fns";
 import { enUS } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
-import { type PropsRange } from "react-day-picker";
+import { type DateRange, type PropsRange } from "react-day-picker";
 
 import { setCockpitDateRangeCookie } from "../_actions/set-cockpit-date-range";
 import { COCKPIT_PARAM } from "../_constants";
 
 type Props = Omit<PropsRange, "mode"> & {
     cookieValue: string | undefined;
+    /**
+     * When to persist + navigate. "immediate" (default, cockpit behavior)
+     * commits on every calendar selection; "onClose" keeps the popover open
+     * while the user picks start and end and commits once, when the popover
+     * closes — picking a range costs exactly one reload.
+     */
+    commitMode?: "immediate" | "onClose";
 };
 
 type DateRangeString = { from: string; to: string };
@@ -35,54 +42,74 @@ type DateRangeString = { from: string; to: string };
 const dateToString = (date: Date) => formatDate(date, "yyyy-MM-dd");
 const stringToDate = (date: string) => new Date(parseISO(date));
 
-const today = new Date();
-const ranges = [
-    {
-        label: "Last week",
-        range: {
-            from: dateToString(subWeeks(today, 1)),
-            to: dateToString(today),
+/**
+ * Built on demand rather than once at module scope.
+ *
+ * These presets are all relative to "today", and a module-level `new Date()`
+ * freezes that at the moment the chunk loads. A dashboard left open across
+ * midnight would then offer ranges that end yesterday — hiding the current
+ * day's pull requests — and stop matching the saved range, so the trigger
+ * would fall back to raw dates instead of the preset's name.
+ */
+const buildRanges = (today = new Date()) =>
+    [
+        {
+            label: "Last week",
+            range: {
+                from: dateToString(subWeeks(today, 1)),
+                to: dateToString(today),
+            },
         },
-    },
-    {
-        label: "Last 15 days",
-        range: {
-            from: dateToString(subDays(today, 15)),
-            to: dateToString(today),
+        {
+            label: "Last 15 days",
+            range: {
+                from: dateToString(subDays(today, 15)),
+                to: dateToString(today),
+            },
         },
-    },
-    {
-        label: "Last month",
-        range: {
-            from: dateToString(subMonths(today, 1)),
-            to: dateToString(today),
+        {
+            label: "Last month",
+            range: {
+                from: dateToString(subMonths(today, 1)),
+                to: dateToString(today),
+            },
         },
-    },
-    {
-        label: "Last 3 months",
-        range: {
-            from: dateToString(subMonths(today, 3)),
-            to: dateToString(today),
+        {
+            label: "Last 3 months",
+            range: {
+                from: dateToString(subMonths(today, 3)),
+                to: dateToString(today),
+            },
         },
-    },
-] satisfies Array<{
-    label: string;
-    range: {
-        from: string | undefined;
-        to: string | undefined;
-    };
-}>;
+    ] satisfies Array<{
+        label: string;
+        range: {
+            from: string | undefined;
+            to: string | undefined;
+        };
+    }>;
 
 // "Last 15 days" is the default window across the cockpit / token-usage / BYOK
 // cost — kept in sync with getSelectedDateRange()'s server-side default.
-const defaultItem = ranges[1];
+const DEFAULT_RANGE_INDEX = 1;
 
-export const DateRangePicker = ({ cookieValue, ...props }: Props) => {
+export const DateRangePicker = ({
+    cookieValue,
+    commitMode = "immediate",
+    ...props
+}: Props) => {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const [loading, startTransition] = useTransition();
     const [open, setOpen] = useState(false);
+
+    // Recomputed whenever the popover opens, so the presets — and the upper
+    // bound on the calendar — are relative to the day the user is actually
+    // looking at them.
+    const today = useMemo(() => new Date(), [open]);
+    const ranges = useMemo(() => buildRanges(today), [today]);
+    const defaultItem = ranges[DEFAULT_RANGE_INDEX];
 
     const [selectedRange, setSelectedRange] = useState<DateRangeString>(() => {
         // URL wins: keep the trigger label in sync with a shared link.
@@ -110,10 +137,28 @@ export const DateRangePicker = ({ cookieValue, ...props }: Props) => {
         };
     });
 
+    const deferred = commitMode === "onClose";
+
+    // Deferred mode: the range being picked while the popover is open. Kept
+    // in DayPicker's own shape (`to` may be undefined mid-pick) so
+    // `resetOnSelect` can tell "picking a start" from "completing a range".
+    const [pendingRange, setPendingRange] = useState<DateRange | undefined>();
+
+    // Last range actually committed — so closing the popover without a new
+    // selection (or re-picking the same range) doesn't trigger a reload.
+    const committedRange = useRef(selectedRange);
+
     // Persist to cookie (cross-session default) and push the range onto
     // the URL (source of truth) so the view is shareable. The navigation
     // re-runs the server slots, which now read the range from the URL.
     const commitRange = (range: DateRangeString) => {
+        if (
+            range.from === committedRange.current.from &&
+            range.to === committedRange.current.to
+        ) {
+            return;
+        }
+        committedRange.current = range;
         const params = new URLSearchParams(searchParams.toString());
         params.set(COCKPIT_PARAM.start, range.from);
         params.set(COCKPIT_PARAM.end, range.to);
@@ -122,6 +167,19 @@ export const DateRangePicker = ({ cookieValue, ...props }: Props) => {
             await setCockpitDateRangeCookie(range);
             router.push(`${pathname}?${params.toString()}`);
         });
+    };
+
+    // Deferred confirmation: normalize whatever was picked (a lone `from`
+    // means a single-day range) and commit exactly once.
+    const commitPending = (d: DateRange) => {
+        if (!d.from) return;
+        const range = {
+            from: dateToString(d.from),
+            to: dateToString(d.to ?? d.from),
+        };
+        setPendingRange(undefined);
+        setSelectedRange(range);
+        commitRange(range);
     };
 
     const label = ranges.find(
@@ -156,16 +214,23 @@ export const DateRangePicker = ({ cookieValue, ...props }: Props) => {
                 </div>
             )}
 
-            <Popover open={open} onOpenChange={setOpen}>
+            <Popover
+                open={open}
+                onOpenChange={(next) => {
+                    setOpen(next);
+                    // Deferred mode: closing mid-pick confirms what's there —
+                    // a lone start date becomes a single-day range.
+                    if (!next && deferred && pendingRange?.from) {
+                        commitPending(pendingRange);
+                    }
+                }}>
                 <PopoverTrigger asChild>
                     <Button
                         size="md"
                         variant="helper"
                         leftIcon={<CalendarIcon />}
                         className="w-68 justify-start">
-                        {label ? (
-                            label
-                        ) : (
+                        {label || (
                             <span className="flex items-center gap-1 font-semibold">
                                 {selectedRange?.from ? (
                                     selectedRange.to ? (
@@ -197,16 +262,34 @@ export const DateRangePicker = ({ cookieValue, ...props }: Props) => {
                         mode="range"
                         locale={enUS}
                         disabled={{ after: today }}
-                        selected={{
-                            from: selectedRange?.from
-                                ? stringToDate(selectedRange.from)
-                                : undefined,
-                            to: selectedRange?.to
-                                ? stringToDate(selectedRange.to)
-                                : undefined,
-                        }}
+                        selected={
+                            deferred && pendingRange
+                                ? pendingRange
+                                : {
+                                    from: selectedRange?.from
+                                        ? stringToDate(selectedRange.from)
+                                        : undefined,
+                                    to: selectedRange?.to
+                                        ? stringToDate(selectedRange.to)
+                                        : undefined,
+                                }
+                        }
+                        // Deferred mode: a click on a complete range starts a
+                        // fresh pick ({from, to: undefined}) instead of moving
+                        // one endpoint — the classic start-then-end flow.
+                        resetOnSelect={deferred}
                         max={31 * 3} // 3 months max range (considering 31 days per month)
                         onSelect={(d) => {
+                            if (deferred) {
+                                setPendingRange(d);
+                                if (d?.from && d?.to) {
+                                    // End date picked — confirm, one reload.
+                                    setOpen(false);
+                                    commitPending(d);
+                                }
+                                return;
+                            }
+
                             const range = {
                                 from: d?.from
                                     ? dateToString(d?.from)
@@ -214,8 +297,8 @@ export const DateRangePicker = ({ cookieValue, ...props }: Props) => {
                                 to: d?.to
                                     ? dateToString(d?.to)
                                     : d?.from
-                                      ? dateToString(d.from)
-                                      : defaultItem.range.to,
+                                        ? dateToString(d.from)
+                                        : defaultItem.range.to,
                             };
 
                             setOpen(false);
@@ -242,6 +325,7 @@ export const DateRangePicker = ({ cookieValue, ...props }: Props) => {
                                 }
                                 onClick={() => {
                                     setOpen(false);
+                                    setPendingRange(undefined);
                                     setSelectedRange({
                                         from: r.range.from,
                                         to: r.range.to,

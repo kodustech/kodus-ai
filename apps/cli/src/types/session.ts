@@ -77,10 +77,7 @@ export interface SessionTrace {
 // ---------------------------------------------------------------------------
 
 export type DecisionCategory =
-    | 'architecture'
-    | 'business_rule'
-    | 'pattern'
-    | 'dependency';
+    'architecture' | 'business_rule' | 'pattern' | 'dependency';
 
 export type DecisionOrigin = 'user' | 'agent' | 'corrected';
 
@@ -127,11 +124,7 @@ export interface TokenUsage {
 export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
 export type LogComponent =
-    | 'hooks'
-    | 'session'
-    | 'checkpoint'
-    | 'lifecycle'
-    | 'transcript';
+    'hooks' | 'session' | 'checkpoint' | 'lifecycle' | 'transcript';
 
 export interface LogEntry {
     time: string;

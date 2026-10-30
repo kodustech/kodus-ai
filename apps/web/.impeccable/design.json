@@ -1,0 +1,445 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-21",
+  "title": "Design System: Kodus",
+  "extensions": {
+    "colorMeta": {
+      "signal-amber": {
+        "role": "primary",
+        "displayName": "Signal Amber",
+        "canonical": "#f8b76d",
+        "tonalRamp": [
+          "#2a1c0c",
+          "#4a3115",
+          "#6d4820",
+          "#91602b",
+          "#b57a3c",
+          "#d99a56",
+          "#f8b76d",
+          "#ffd9a8"
+        ]
+      },
+      "amber-deep": {
+        "role": "primary",
+        "displayName": "Amber Deep",
+        "canonical": "#443024",
+        "tonalRamp": [
+          "#150e08",
+          "#241a10",
+          "#33241a",
+          "#443024",
+          "#5f4433",
+          "#7d5b44",
+          "#a17758",
+          "#c99a76"
+        ]
+      },
+      "void": {
+        "role": "neutral",
+        "displayName": "Void",
+        "canonical": "#101019",
+        "tonalRamp": [
+          "#08080d",
+          "#101019",
+          "#181825",
+          "#202032",
+          "#30304b",
+          "#3d3d5c",
+          "#5a5a80",
+          "#9a9ac0"
+        ]
+      },
+      "card-lv1": {
+        "role": "neutral",
+        "displayName": "Panel L1",
+        "canonical": "#181825",
+        "tonalRamp": [
+          "#08080d",
+          "#101019",
+          "#181825",
+          "#202032",
+          "#30304b",
+          "#3d3d5c",
+          "#5a5a80",
+          "#9a9ac0"
+        ]
+      },
+      "card-lv2": {
+        "role": "neutral",
+        "displayName": "Panel L2",
+        "canonical": "#202032",
+        "tonalRamp": [
+          "#08080d",
+          "#101019",
+          "#181825",
+          "#202032",
+          "#30304b",
+          "#3d3d5c",
+          "#5a5a80",
+          "#9a9ac0"
+        ]
+      },
+      "card-lv3": {
+        "role": "neutral",
+        "displayName": "Panel L3",
+        "canonical": "#30304b",
+        "tonalRamp": [
+          "#08080d",
+          "#101019",
+          "#181825",
+          "#202032",
+          "#30304b",
+          "#3d3d5c",
+          "#5a5a80",
+          "#9a9ac0"
+        ]
+      },
+      "lavender": {
+        "role": "secondary",
+        "displayName": "Lavender",
+        "canonical": "#c9bbf2",
+        "tonalRamp": [
+          "#1a1526",
+          "#2a2340",
+          "#312b4b",
+          "#554873",
+          "#6f5f8f",
+          "#8f7fb4",
+          "#c9bbf2",
+          "#e5ddf8"
+        ]
+      },
+      "blush": {
+        "role": "tertiary",
+        "displayName": "Blush",
+        "canonical": "#fdbfbf",
+        "tonalRamp": [
+          "#2a1414",
+          "#451f1f",
+          "#592830",
+          "#833c3c",
+          "#a55252",
+          "#cb7c7c",
+          "#fdbfbf",
+          "#ffdede"
+        ]
+      },
+      "success": {
+        "role": "status",
+        "displayName": "Success Green",
+        "canonical": "#42be65",
+        "tonalRamp": [
+          "#0c2513",
+          "#123a1e",
+          "#17512a",
+          "#1c6a36",
+          "#229044",
+          "#2fa855",
+          "#42be65",
+          "#86d99e"
+        ]
+      },
+      "info": {
+        "role": "status",
+        "displayName": "Info Blue",
+        "canonical": "#5190ff",
+        "tonalRamp": [
+          "#0c1a33",
+          "#132a52",
+          "#1a3b74",
+          "#224f99",
+          "#2b64bf",
+          "#3a7ae0",
+          "#5190ff",
+          "#9dc0ff"
+        ]
+      },
+      "alert": {
+        "role": "status",
+        "displayName": "Alert Yellow",
+        "canonical": "#f2c631",
+        "tonalRamp": [
+          "#2c2306",
+          "#47390b",
+          "#665111",
+          "#886c18",
+          "#ac8a20",
+          "#d0a828",
+          "#f2c631",
+          "#f7dd82"
+        ]
+      },
+      "warning": {
+        "role": "status",
+        "displayName": "Warning Orange",
+        "canonical": "#ff8b40",
+        "tonalRamp": [
+          "#2e1408",
+          "#4b220d",
+          "#6b3212",
+          "#8d4418",
+          "#b25a1f",
+          "#d97128",
+          "#ff8b40",
+          "#ffb98a"
+        ]
+      },
+      "danger": {
+        "role": "status",
+        "displayName": "Danger Red",
+        "canonical": "#fa5867",
+        "tonalRamp": [
+          "#2b0c11",
+          "#46131b",
+          "#631b26",
+          "#822431",
+          "#a52d3e",
+          "#cc3c50",
+          "#fa5867",
+          "#fd9aa4"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display / h1",
+        "purpose": "Page titles. The largest type in the product; there is no hero scale."
+      },
+      "headline": {
+        "displayName": "Headline / h2",
+        "purpose": "Section titles within a page."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card titles, heavier and tighter than the headings above them."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running copy, table cells, field values."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Buttons and form labels. Same size as body, distinguished by weight alone."
+      },
+      "data": {
+        "displayName": "Data / Mono",
+        "purpose": "Machine-shaped content only: ids, shas, paths, code, aligned figures."
+      },
+      "review": {
+        "displayName": "Review",
+        "purpose": "The pull request review surface body and identity size (13px). Between dense metadata and ordinary body."
+      },
+      "micro": {
+        "displayName": "Micro",
+        "purpose": "Small labels and chips inside the review surface (11px)."
+      },
+      "meta": {
+        "displayName": "Meta",
+        "purpose": "Timestamps, counters, line numbers (10px)."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card",
+        "value": "0 1px 0 0 rgba(255,255,255,0.02) inset, 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px -8px rgba(0,0,0,0.4)",
+        "purpose": "A surface that has left the page plane. Opens with a 1px inset top highlight so it reads as lit from above."
+      },
+      {
+        "name": "elevated",
+        "value": "0 1px 0 0 rgba(255,255,255,0.03) inset, 0 4px 8px rgba(0,0,0,0.5), 0 16px 40px -12px rgba(0,0,0,0.55)",
+        "purpose": "A surface floating over unrelated content and dismissible: dialog, popover, dropdown."
+      },
+      {
+        "name": "card-resting",
+        "value": "0 1px 2px 0 rgba(0,0,0,0.05)",
+        "purpose": "The near-imperceptible shadow-sm carried by every ordinary card. Softens the edge; does not lift."
+      }
+    ],
+    "motion": [
+      {
+        "name": "fade-up",
+        "value": "0.6s cubic-bezier(0.21, 0.6, 0.35, 1)",
+        "purpose": "Signature entrance for content arriving after load: 8px rise with fade."
+      },
+      {
+        "name": "fade-in-up",
+        "value": "0.5s ease-out",
+        "purpose": "Standard entrance, 10px rise."
+      },
+      {
+        "name": "collapse",
+        "value": "0.2s ease-out",
+        "purpose": "Accordion and collapsible open/close against the Radix content-height variable."
+      },
+      {
+        "name": "skeleton-wave",
+        "value": "1.8s ease-in-out infinite",
+        "purpose": "Loading placeholder: sweeps a Panel L3 to L4 gradient across the block."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "container-inline-padding",
+        "value": "2rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single amber action on a screen. Dark type on a lit field.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Test &amp; save</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 40px; padding: 10px 20px; border: none; border-radius: 12px; font-family: \"DM Sans\", sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: filter 0.15s, box-shadow 0.15s; } .ds-btn-primary { background: var(--color-primary-light, #f8b76d); color: var(--color-primary-dark, #443024); } .ds-btn-primary:hover { filter: brightness(1.2); } .ds-btn-primary:active { filter: brightness(1.2); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-card-lv3, #30304b); }"
+    },
+    {
+      "name": "Primary Dark Button",
+      "kind": "button",
+      "refersTo": "button-primary-dark",
+      "description": "Amber text on the amber's own deep twin. Emphasis without spending the accent.",
+      "html": "<button class=\"ds-btn ds-btn-primary-dark\">View details</button>",
+      "css": ".ds-btn-primary-dark { background: var(--color-primary-dark, #443024); color: var(--color-primary-light, #f8b76d); } .ds-btn-primary-dark:hover { filter: brightness(1.2); } .ds-btn-primary-dark:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-card-lv3, #30304b); }"
+    },
+    {
+      "name": "Helper Button",
+      "kind": "button",
+      "refersTo": "button-helper",
+      "description": "Neutral action inside a card. Panel L2 ground, secondary text.",
+      "html": "<button class=\"ds-btn ds-btn-helper\">Cancel</button>",
+      "css": ".ds-btn-helper { background: var(--color-card-lv2, #202032); color: var(--color-text-secondary, #cdcddf); } .ds-btn-helper:hover { filter: brightness(1.2); } .ds-btn-helper:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-card-lv3, #30304b); }"
+    },
+    {
+      "name": "Cancel Button",
+      "kind": "button",
+      "refersTo": "button-cancel",
+      "description": "No ground at all. Tertiary text that rises to primary on hover.",
+      "html": "<button class=\"ds-btn ds-btn-cancel\">Skip for now</button>",
+      "css": ".ds-btn-cancel { background: transparent; color: var(--color-text-tertiary, rgba(243,243,247,0.5)); } .ds-btn-cancel:hover { color: var(--color-text-primary, #ffffff); } .ds-btn-cancel:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-card-lv3, #30304b); }"
+    },
+    {
+      "name": "Status Button",
+      "kind": "button",
+      "refersTo": "button-primary-dark",
+      "description": "Status hue as text on a very dark tinted ground of the same hue. Never a filled status colour.",
+      "html": "<button class=\"ds-btn ds-btn-status-error\">Review failed</button>",
+      "css": ".ds-btn-status-error { background: #271720; color: var(--color-danger, #fa5867); min-height: 32px; padding: 8px 16px; } .ds-btn-status-error:hover { filter: brightness(1.2); } .ds-btn-status-error:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-card-lv3, #30304b); }"
+    },
+    {
+      "name": "Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "A decorative xs button in a pill. Not a separate component: pass a different button variant to restyle it.",
+      "html": "<span class=\"ds-badge\">Teams Plan</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 6px 14px; border-radius: 9999px; background: var(--color-primary-dark, #443024); color: var(--color-primary-light, #f8b76d); font-family: \"DM Sans\", sans-serif; font-size: 12px; font-weight: 600; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The resting surface. Borderless; depth comes from the tonal step, not from a shadow.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-header\"><h3 class=\"ds-card-title\">Advanced settings</h3><p class=\"ds-card-desc\">Reasoning, sampling, and rate limits for this model.</p></div><div class=\"ds-card-content\">Empty uses the model default.</div></div>",
+      "css": ".ds-card { display: flex; flex-direction: column; overflow: hidden; border-radius: 12px; background: var(--color-card-lv1, #181825); box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); font-family: \"DM Sans\", sans-serif; } .ds-card-header { display: flex; flex-direction: column; gap: 6px; padding: 24px; } .ds-card-title { margin: 0; font-size: 18px; font-weight: 700; line-height: 1; color: var(--color-text-primary, #ffffff); } .ds-card-desc { margin: 0; font-size: 14px; font-weight: 400; color: var(--color-text-secondary, #cdcddf); } .ds-card-content { padding: 0 24px 24px; font-size: 14px; color: var(--color-text-secondary, #cdcddf); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Panel L2 ground outlined by a ring, not a border. Focus thickens the ring and brightens the field.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"https://api.example.com/v1\" />",
+      "css": ".ds-input { display: flex; width: 100%; align-items: center; height: 40px; padding: 0 20px; border: none; border-radius: 12px; background: var(--color-card-lv2, #202032); color: var(--color-text-primary, #ffffff); font-family: \"DM Sans\", sans-serif; font-size: 14px; box-shadow: 0 0 0 1px var(--color-card-lv3, #30304b); transition: box-shadow 0.15s, filter 0.15s; } .ds-input::placeholder { color: var(--color-text-tertiary, rgba(243,243,247,0.5)); } .ds-input:hover { filter: brightness(1.2); } .ds-input:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--color-card-lv3, #30304b); filter: brightness(1.2); } .ds-input[data-invalid] { box-shadow: 0 0 0 1px var(--color-danger, #fa5867); } .ds-input[data-invalid]:focus-visible { box-shadow: 0 0 0 3px var(--color-danger, #fa5867); }"
+    },
+    {
+      "name": "Skeleton",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Loading placeholder. A wave sweeps a Panel L3 to L4 gradient across the block.",
+      "html": "<div class=\"ds-skeleton\"></div>",
+      "css": ".ds-skeleton { height: 16px; width: 220px; border-radius: 6px; background: linear-gradient(90deg, var(--color-card-lv3, #30304b) 0%, #3d3d5c 50%, var(--color-card-lv3, #30304b) 100%); background-size: 200% 100%; animation: ds-skeleton-wave 1.8s ease-in-out infinite; } @keyframes ds-skeleton-wave { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Control Room",
+    "overview": "A dark room full of instruments. Everything is legible under low light, nothing competes for attention on its own, and a single amber lamp lights only what needs a decision. The product's own vocabulary already says this out loud — the leader's landing surface is called the Cockpit — and the visual system is built for the person watching a practice run rather than the person being reviewed.\n\nThe system is dense and efficient before it is comfortable. This is a working instrument for someone who arrives with a question, so information per pixel outranks breathing room, and spacing tightens rather than paginates when a surface carries real data. Density is never bought with noise: surfaces are borderless, flat, and quiet, and hierarchy comes from how light a panel is, not from lines drawn between things.\n\nThe most distinctive decision in the system is how it responds to touch. Hover and active states do not change colour — they raise brightness. A button lit by the amber lamp gets brighter under the cursor; it never becomes a different button. The palette stays fixed while the light moves across it, which is what keeps a dense screen calm.",
+    "keyCharacteristics": [
+      "Near-black blue-violet ground (#101019) with three tonal panel steps above it",
+      "Exactly one accent — Signal Amber — carrying every primary action",
+      "State expressed as light (brightness, focus ring), never as a colour swap",
+      "Borderless surfaces; separation by tone, not by rule",
+      "Generous 12px corners on every interactive surface, against tight interior spacing",
+      "DM Sans throughout, Overpass Mono reserved for data and code"
+    ],
+    "rules": [
+      {
+        "name": "The One Lamp Rule",
+        "body": "Signal Amber is the only accent in the system. A screen has one amber region — the thing to do next. If two elements are amber, one of them is wrong.",
+        "section": "colors"
+      },
+      {
+        "name": "The Cool Ground Rule",
+        "body": "Every neutral is tinted blue-violet, never neutral grey. A pure #1a1a1a panel dropped into this system reads as a foreign element immediately, because it removes the temperature contrast the accent depends on.",
+        "section": "colors"
+      },
+      {
+        "name": "The Status-Is-Not-Accent Rule",
+        "body": "Success, danger, warning, alert, and info are semantic and never decorative. They never stand in for the accent, and the accent never stands in for them.",
+        "section": "colors"
+      },
+      {
+        "name": "The Small-h3 Rule",
+        "body": "The third heading level is deliberately 0.875rem — the same size as body — and reads as a label, not a heading. Do not fix it upward to fit a conventional scale; a section this deep should announce itself by weight and position, not by size.",
+        "section": "typography"
+      },
+      {
+        "name": "The Weight-Over-Size Rule",
+        "body": "Below the headline level, hierarchy is carried by weight (400 to 600 to 700) at a fixed 0.875rem. Reach for weight before reaching for a new size.",
+        "section": "typography"
+      },
+      {
+        "name": "The Mono-Is-For-Data Rule",
+        "body": "Overpass Mono marks content that is machine-shaped: shas, model ids, paths, code, aligned figures. It is never used for personality, section labels, or emphasis.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tonal-First Rule",
+        "body": "To make something feel higher, move it up a panel step. Reach for a shadow only when the surface genuinely floats over unrelated content and can be dismissed.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Inset Highlight Rule",
+        "body": "Both shadows open with a 1px inset white highlight along the top edge. That highlight is what makes a floating surface read as lit from above in a dark room; a hand-written shadow that omits it will look flat and out of place.",
+        "section": "elevation"
+      },
+      {
+        "name": "The No-Literal-Size Rule",
+        "body": "Every size in the system has a name. If a surface needs a step that does not exist, add it to @theme and document it — do not write text-[13px] in a component. A literal is invisible to the design system, so nothing keeps the next one consistent with it, and half-pixel values are the reliable symptom that this rule was skipped.",
+        "section": "typography"
+      },
+      {
+        "name": "The Visible-Focus Rule",
+        "body": "A focus ring is drawn with the dedicated --color-ring token (#f59220), never with the structural card-lv3. card-lv3 on a resting card measures 1.38:1, under the 3:1 WCAG 2.1 requires of a focus indicator; --color-ring measures 5.46:1 to 8.12:1 on every surface. A thick ring in a colour nobody can see is worse than a thin one, because it looks solved.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do express interaction as light. Hover and active are brightness-120; focus is ring-3. A new component that changes colour on hover is inconsistent with everything around it.",
+      "Do reach for a tonal step before a shadow when something needs to feel higher.",
+      "Do define a new button variant as a --button-background / --button-foreground pair, and let the base class do the rest.",
+      "Do use the deep twin of a hue (amber-deep, lavender-deep, blush-deep) when you need emphasis without spending the accent.",
+      "Do keep Overpass Mono for machine-shaped content — ids, shas, paths, code, aligned figures.",
+      "Do use 12px corners on interactive surfaces, and reserve the 4 / 6 / 8px scale for small interior details.",
+      "Do tighten spacing before paginating when a surface carries a lot of data. Density is the intent."
+    ],
+    "donts": [
+      "Don't introduce a second accent. Signal Amber is the only one, and a screen has one amber region.",
+      "Don't use a status colour decoratively, or the accent to mean success or danger.",
+      "Don't put a border on a card. Separation is tonal; where an outline is required, use a ring.",
+      "Don't use a neutral grey. Every neutral in this system is tinted blue-violet, and an untinted panel reads as foreign.",
+      "Don't enlarge h3 to fit a conventional type scale — it is label-sized on purpose.",
+      "Don't build a separate badge component; a badge is a decorative xs button.",
+      "Don't let the interface drift toward a consumer product: no illustration, no emoji as section markers, no pastel palette spread across a surface, no animated tone. The user is working.",
+      "Don't imitate an IDE or code editor: syntax highlighting is content, not identity, and editor chrome, panel density, and tab metaphors belong to the tool Kodus sits beside, not inside.",
+      "Don't write a literal font size in a component. Use a named step, or add one to @theme and document it. A half-pixel value is always a mistake."
+    ]
+  }
+}

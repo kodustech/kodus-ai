@@ -15,6 +15,7 @@ import type { InferredRuleOrigin } from "./infer-origin";
 
 const ALLOWED_ORIGINS: ReadonlySet<InferredRuleOrigin> = new Set([
     "Auto-sync",
+    "Agent file",
     "Onboarding",
     "Kody-generated",
     "Library",
@@ -34,7 +35,6 @@ export const FILTER_PARAM_KEYS = {
     query: "q",
     origins: "origins",
     severities: "severities",
-    kodySync: "kodySync",
     onlyOrphans: "onlyOrphans",
     withSyncErrors: "syncErrors",
     pausedOnly: "pausedOnly",
@@ -82,7 +82,6 @@ export function parseFiltersFromParams(
         }
     }
 
-    const kodySync = params.get(FILTER_PARAM_KEYS.kodySync) === "1";
     const onlyOrphans = params.get(FILTER_PARAM_KEYS.onlyOrphans) === "1";
     const withSyncErrors =
         params.get(FILTER_PARAM_KEYS.withSyncErrors) === "1";
@@ -90,7 +89,7 @@ export function parseFiltersFromParams(
 
     return {
         query,
-        listFilters: { origins, severities, kodySync, withSyncErrors, pausedOnly },
+        listFilters: { origins, severities, withSyncErrors, pausedOnly },
         onlyOrphans,
     };
 }
@@ -125,12 +124,6 @@ export function applyFiltersToParams(
         );
     } else {
         params.delete(FILTER_PARAM_KEYS.severities);
-    }
-
-    if (filters.listFilters.kodySync) {
-        params.set(FILTER_PARAM_KEYS.kodySync, "1");
-    } else {
-        params.delete(FILTER_PARAM_KEYS.kodySync);
     }
 
     if (filters.onlyOrphans) {

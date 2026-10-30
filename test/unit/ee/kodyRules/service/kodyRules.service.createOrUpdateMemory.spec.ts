@@ -10,6 +10,14 @@ import {
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+
+// Memory resolution now runs on the LOCAL (Vercel) stack via
+// runStructuredReviewCall; mock it at that boundary (returns the LLM verdict).
+jest.mock('@libs/llm/structured-review-call', () => ({
+    runStructuredReviewCall: jest.fn(),
+}));
+const mockRun = runStructuredReviewCall as jest.Mock;
 
 describe('KodyRulesService.createOrUpdateMemory', () => {
     const organizationAndTeamData: OrganizationAndTeamData = {
@@ -90,11 +98,17 @@ describe('KodyRulesService.createOrUpdateMemory', () => {
                 .mockResolvedValue({ rules: [currentMemory] } as IKodyRules),
         };
 
+        mockRun.mockReset();
+        mockRun.mockResolvedValue(llmResult);
         const observabilityServiceMock = {
-            runLLMInSpan: jest.fn().mockResolvedValue({ result: llmResult }),
+            runLLMInSpan: jest.fn(),
+            runAiSdkLLMInSpan: jest.fn(),
         };
 
         const permissionValidationServiceMock = {
+            // v2-native: evaluateMemoryActionViaLLM resolves BYOK via
+            // resolveTaskSlot(org, codeReview). null → env/managed default.
+            resolveTaskSlot: jest.fn().mockResolvedValue(null),
             getBYOKConfig: jest.fn().mockResolvedValue(undefined),
         };
 
@@ -140,7 +154,6 @@ describe('KodyRulesService.createOrUpdateMemory', () => {
             {} as any,
             validationService,
             {} as any,
-            {} as any,
             observabilityServiceMock as any,
             permissionValidationServiceMock as any,
             moduleRefMock as any,
@@ -184,7 +197,7 @@ describe('KodyRulesService.createOrUpdateMemory', () => {
             ),
         });
         expect(createOrUpdateSpy).not.toHaveBeenCalled();
-        expect(observabilityServiceMock.runLLMInSpan).toHaveBeenCalledTimes(1);
+        expect(mockRun).toHaveBeenCalledTimes(1);
     });
 
     it('updates existing memory when LLM indicates refinement', async () => {
@@ -467,7 +480,7 @@ describe('KodyRulesService.createOrUpdateMemory', () => {
             { userId: 'user-1', userEmail: 'user@kodus.io' },
         );
 
-        expect(observabilityServiceMock.runLLMInSpan).not.toHaveBeenCalled();
+        expect(mockRun).not.toHaveBeenCalled();
         expect(createOrUpdateSpy).toHaveBeenCalledTimes(1);
         expect(result).toEqual({
             rule: persistedResult,
@@ -666,7 +679,6 @@ describe('KodyRulesService.createOrUpdateMemory', () => {
             {} as any,
             {} as any,
             validationService,
-            {} as any,
             {} as any,
             {} as any,
             {} as any,

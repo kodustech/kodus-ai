@@ -1,0 +1,185 @@
+---
+title: "Reglas del Repositorio"
+description: "Crea Kody Rules personalizadas directamente en tu repositorio usando archivos markdown con plantillas estructuradas."
+---
+
+<Info>
+Las Reglas del Repositorio siempre se mantienen sincronizadas: no hay ninguna opción que activar. Son los únicos archivos de un repositorio que se convierten en Kody Rules. Las instrucciones escritas para agentes de código (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules`) se manejan por separado, consulta <a href="/es/how_to_use/code_review/configs/rules_file_detection">Instrucciones para Agentes de Código</a>.
+</Info>
+
+## Cómo Usar
+Puedes crear Kody Rules personalizadas directamente en tu repositorio colocando archivos markdown estructurados en directorios específicos. Esto te permite versionar tus reglas junto con tu código y compartirlas con tu equipo.
+
+### Sincronización
+- **Detección Automática**: Las reglas del repositorio se detectan y sincronizan en todos los repositorios conectados; no hay nada que activar
+- **Importar ahora**: En el panel **Kody Rules → Configuration** del repositorio, **Import rule files now** lee todos los archivos de reglas de la rama por defecto
+- **Aplicación Web**: Las reglas sincronizadas aparecen en la página **Code review → Kody Rules** del repositorio, con el origen **Auto-sync** (las reglas importadas desde archivos para agentes de código antes de que dejaran de convertirse muestran **Agent file** en su lugar)
+- **Actualizaciones en Tiempo Real**: Los cambios en los archivos de reglas se sincronizan cuando se fusionan los Pull Requests en la rama por defecto
+
+## Ubicación de los Archivos
+
+Coloca tus archivos de reglas en uno de estos directorios, en la raíz del repositorio o en cualquier subdirectorio:
+- `.kody/rules/**/*.md`
+- `rules/**/*.md`
+- `.rules/**` y `docs/coding-standards/**` (solo los archivos que siguen la plantilla)
+
+## Plantilla de Regla
+
+Cada archivo de regla debe seguir exactamente esta estructura de plantilla:
+
+```markdown
+---
+title: "<nombre de la regla>"
+scope: "file"            # "file" o "pull-request"
+path: []                 # lista de globs. ejemplo: ["**/*.ts", "apps/web/**"]
+severity_min: "high"     # "low", "medium", "high", "critical"
+languages: []            # opcional. ej: ["jsts", "go", "php", "ruby", "java", "csharp", "dart", "kotlin", "rust"]
+buckets: []              # opcional. ej: ["style-conventions", "error-handling", "security"]
+uuid: ""                 # opcional. usar para ID de regla estable
+enabled: true            # opcional
+---
+
+## Instructions
+Describe qué revisar y cómo decidir. Sé directo y objetivo.
+- Enfócate en seguridad, rendimiento e impactos en el contrato público.
+- Proporciona preferencias o patrones del equipo cuando sea aplicable.
+- Si es una regla de PR, explica qué considerar en el conjunto de cambios.
+
+## Examples
+
+### Bad example
+\`\`\`lang
+// pega aquí un contraejemplo corto que viole la regla
+\`\`\`
+
+### Good example  
+\`\`\`lang
+// pega aquí un ejemplo corto que siga la regla
+\`\`\`
+```
+## Campos de la Plantilla
+
+### Campos Requeridos
+
+Solo dos cosas son estrictamente obligatorias: un `title` no vacío y un cuerpo de regla no vacío.
+Un archivo al que le falte cualquiera de los dos se omite por completo.
+
+| Campo | Descripción | Valores |
+|-------|-------------|---------|
+| `title` | Nombre de la regla mostrado en la interfaz | Cualquier cadena descriptiva |
+
+### Campos con valor por defecto
+
+Todo lo demás es opcional — si lo omites, se aplica el valor por defecto.
+
+| Campo | Descripción | Valores | Por defecto |
+|-------|-------------|---------|---------|
+| `scope` | Alcance del análisis de la regla | `"file"` o `"pull-request"` | `"file"` |
+| `path` | Rutas donde aplica la regla. La regla se dispara en archivos que coincidan con **cualquiera** de los globs | Array de patrones glob | `**/*` (todos los archivos) |
+| `severity_min` | Nivel mínimo de severidad | `"low"`, `"medium"`, `"high"`, `"critical"` | `"medium"` |
+| `enabled` | Ponlo en `false` para no importar este archivo (una regla ya importada no se elimina) | boolean | `true` |
+| `uuid` | Identificador estable de la regla — mantiene la misma regla en la plataforma aunque se renombre el archivo | string | ninguno |
+| `languages`, `buckets` | Metadatos informativos | — | — |
+
+<Note>
+  `severity` se acepta como alias de `severity_min`, ya que es fácil de escribir mal y la
+  intención es inequívoca. Cualquier valor fuera de los cuatro niveles cae a `"medium"`, y
+  cualquier `scope` distinto de `"pull-request"` se trata como `"file"`.
+</Note>
+
+## Ejemplos de Reglas
+
+### Ejemplo de Regla a Nivel de Archivo
+```markdown
+---
+title: "Avoid console.log in production code"
+scope: "file"
+path: ["src/**/*.ts", "src/**/*.tsx"]
+severity_min: "medium"
+languages: ["jsts"]
+buckets: ["style-conventions"]
+enabled: true
+---
+
+## Instructions
+Check for console.log statements in production TypeScript/JavaScript files.
+- Console logs should not appear in production code
+- Use proper logging libraries instead
+- Allow console.log only in development utilities
+
+## Examples
+
+### Bad example
+\`\`\`typescript
+function processUser(user: User) {
+  console.log('Processing user:', user.id);
+  return user.process();
+}
+\`\`\`
+
+### Good example
+\`\`\`typescript
+import { logger } from './logger';
+
+function processUser(user: User) {
+  logger.info('Processing user:', user.id);
+  return user.process();
+}
+\`\`\`
+```
+
+### Ejemplo de Regla a Nivel de Pull Request
+```markdown
+---
+title: "New API endpoints must have tests"
+scope: "pull-request"
+path: ["**/*"]
+severity_min: "high"
+buckets: ["testing"]
+enabled: true
+---
+
+## Instructions
+When new API endpoints are added, ensure corresponding tests are included in the PR.
+- Check for new route definitions in controllers
+- Verify test files exist for new endpoints
+- Ensure both positive and negative test cases
+
+## Examples
+
+### Bad example
+Added new endpoint `/api/users/profile` but no test file included in the PR.
+
+### Good example
+Added new endpoint `/api/users/profile` with corresponding test file `tests/api/users/profile.test.ts` that covers success and error cases.
+```
+
+## Requisitos de Configuración
+
+1. **Crear archivos de reglas**: Coloca archivos `.md` que sigan la plantilla en `.kody/rules/**` o `rules/**`. Los archivos de `.rules/**` y `docs/coding-standards/**` que siguen la plantilla también se importan.
+2. **Fusionarlos**: Un archivo de regla se sincroniza cuando se fusiona en la rama por defecto un Pull Request que lo agrega, modifica, renombra o elimina. Eliminar el archivo elimina su regla.
+3. **Archivos existentes**: Para importar archivos de reglas que ya están en la rama por defecto, usa **Import rule files now** en el panel **Kody Rules → Configuration** del repositorio.
+
+Las reglas nuevas quedan activas, o en **Pending review** cuando **Kody knowledge approval** está activado.
+
+<Tip>
+Agrega `@kody-ignore` en cualquier parte de un archivo de regla para mantenerlo en el repositorio sin sincronizarlo. Su regla existente se elimina en la siguiente sincronización.
+</Tip>
+
+## Verificar sincronización y evaluación de reglas (self-hosted)
+
+En despliegues self-hosted los logs de la API llevan marcadores grep-ables para depurar:
+
+- `[kody-rules-sync]` — resumen por ejecución: qué archivos se importaron, se omitieron (con el motivo) o se eliminaron.
+- `[kody-rules-eval]` — traza de evaluación por archivo durante una revisión: exactamente qué reglas (uuid + título) se seleccionaron para el prompt de cada archivo revisado.
+
+```bash
+docker logs kodus_api 2>&1 | grep "kody-rules-sync"
+docker logs kodus_api 2>&1 | grep "kody-rules-eval"
+```
+
+Si una regla aparece activa en la UI pero nunca sale en `[kody-rules-eval]` para los archivos que esperas, revisa su glob de **Path** — una regla solo se ejecuta sobre archivos que coincidan con su ruta.
+
+## Límites de reglas
+
+Las organizaciones en el plan **Free** de la nube (o cuya suscripción fue cancelada o expiró) y las instancias self-hosted que corren **sin una licencia válida** (Community Edition) evalúan como máximo **10 reglas activas** por revisión (las más antiguas primero). Las reglas que superan el límite permanecen en la lista como **Locked** y se omiten en cada PR; un banner en **Code review → Kody Rules** indica cuántas se omiten. Los planes de pago en la nube y las instancias self-hosted con licencia no tienen ese límite. Si las reglas más allá de la décima no se disparan, este límite es la razón.

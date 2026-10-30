@@ -57,7 +57,7 @@ export function CommitsList({ commits }: { commits: PrCommit[] }) {
                                     )}
                                 </div>
                             </div>
-                            <span className="font-mono text-[12px] text-[var(--text-muted)] group-hover:text-[var(--accent)] transition-colors shrink-0 px-2 py-0.5 rounded bg-[var(--bg-3)] border border-[var(--border)]">
+                            <span className="font-mono text-xs text-[var(--text-muted)] group-hover:text-[var(--accent)] transition-colors shrink-0 px-2 py-0.5 rounded bg-[var(--bg-3)] border border-[var(--border)]">
                                 {commit.sha.slice(0, 7)}
                             </span>
                         </div>

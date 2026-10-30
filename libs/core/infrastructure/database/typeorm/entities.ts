@@ -5,7 +5,6 @@ import { AutomationModel } from '../../../../automation/infrastructure/adapters/
 import { AutomationExecutionModel } from '../../../../automation/infrastructure/adapters/repositories/schemas/automationExecution.model';
 import { CodeReviewExecutionModel } from '../../../../automation/infrastructure/adapters/repositories/schemas/codeReviewExecution.model';
 import { TeamAutomationModel } from '../../../../automation/infrastructure/adapters/repositories/schemas/teamAutomation.model';
-import { DryRunModel } from '../../../../dryRun/infrastructure/adapters/repositories/schemas/dryRun.model';
 import { CodeReviewSettingsLogModel } from '../../../../ee/codeReviewSettingsLog/infrastructure/adapters/repository/schemas/codeReviewSettingsLog.model';
 import { SSOConfigModel } from '../../../../ee/sso/repositories/ssoConfig.model';
 import { AuthModel } from '../../../../identity/infrastructure/adapters/repositories/schemas/auth.model';
@@ -18,7 +17,6 @@ import { AuthIntegrationModel } from '../../../../integrations/infrastructure/ad
 import { IntegrationModel } from '../../../../integrations/infrastructure/adapters/repositories/schemas/integration.model';
 import { IntegrationConfigModel } from '../../../../integrations/infrastructure/adapters/repositories/schemas/integrationConfig.model';
 import { IssuesModel } from '../../../../issues/infrastructure/adapters/repositories/schemas/issues.model';
-import { SuggestionEmbeddedModel } from '../../../../kodyFineTuning/infrastructure/adapters/repositories/schemas/suggestionEmbedded.model';
 import { KodyRulesModel } from '../../../../kodyRules/infrastructure/adapters/repositories/schemas/kodyRules.model';
 import { GlobalParametersModel } from '../../../../organization/infrastructure/adapters/repositories/schemas/global-parameters.model';
 import { OrganizationModel } from '../../../../organization/infrastructure/adapters/repositories/schemas/organization.model';
@@ -42,12 +40,10 @@ import { UserNotificationModel } from '../../../../notifications/infrastructure/
 import { RoutingRuleModel } from '../../../../notifications/infrastructure/repositories/schemas/routing-rule.model';
 
 export const ENTITIES = [
-    DryRunModel,
     TeamModel,
     OrganizationModel,
     UserModel,
     ContextReferenceModel,
-    SuggestionEmbeddedModel,
     AuthIntegrationModel,
     PullRequestsModel,
     ParametersModel,

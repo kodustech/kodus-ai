@@ -1,5 +1,4 @@
 import { useSuspenseGetConnections } from "@services/setup/hooks";
-import { useCodeReviewRouteParams } from "src/app/(app)/settings/_hooks";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { PlatformType } from "src/core/types";
 import { safeArray } from "src/core/utils/safe-array";
@@ -17,9 +16,7 @@ function useCodeManagementPlatforms(): Set<string> {
 
     return new Set(
         safeArray(connections)
-            .filter(
-                (c) => c.category === "CODE_MANAGEMENT" && c.hasConnection,
-            )
+            .filter((c) => c.category === "CODE_MANAGEMENT" && c.hasConnection)
             .map((c) => c.platformName),
     );
 }
@@ -34,10 +31,13 @@ export function useShouldHideRequestChanges(): boolean {
     const platforms = useCodeManagementPlatforms();
 
     // All connected platforms are GitLab → feature unsupported everywhere.
-    return platforms.size > 0 && !platforms.has(PlatformType.GITHUB)
-        && !platforms.has(PlatformType.BITBUCKET)
-        && !platforms.has(PlatformType.AZURE_REPOS)
-        && !platforms.has(PlatformType.FORGEJO);
+    return (
+        platforms.size > 0 &&
+        !platforms.has(PlatformType.GITHUB) &&
+        !platforms.has(PlatformType.BITBUCKET) &&
+        !platforms.has(PlatformType.AZURE_REPOS) &&
+        !platforms.has(PlatformType.FORGEJO)
+    );
 }
 
 /**
@@ -51,18 +51,11 @@ export function useShouldHideHiddenComments(): boolean {
     return platforms.size > 0 && !platforms.has(PlatformType.GITHUB);
 }
 
-/**
- * Returns true when the "Enable LLM Prompt" toggle should be hidden.
- * Hidden when ALL connected platforms are Bitbucket (the feature is not
- * supported there).  For mixed-platform teams the setting is shown
- * because it may apply to non-Bitbucket repositories.
- */
-export function useShouldHideLLMPrompt(): boolean {
+/** These providers do not expose PR labels for conditional approval. */
+export function useApprovalLabelsUnavailable(): boolean {
     const platforms = useCodeManagementPlatforms();
-
-    // All connected platforms are Bitbucket → feature unsupported everywhere.
-    return platforms.size > 0 && !platforms.has(PlatformType.GITHUB)
-        && !platforms.has(PlatformType.GITLAB)
-        && !platforms.has(PlatformType.AZURE_REPOS)
-        && !platforms.has(PlatformType.FORGEJO);
+    return (
+        platforms.has(PlatformType.BITBUCKET) ||
+        platforms.has(PlatformType.AZURE_REPOS)
+    );
 }

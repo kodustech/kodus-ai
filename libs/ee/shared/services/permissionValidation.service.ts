@@ -1,4 +1,23 @@
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import {
+    resolveTaskSlot as resolveTaskSlotFromConfig,
+} from '@libs/llm/resolve-task-model';
+import {
+    resolveTaskInvocation as resolveTaskInvocationFromConfig,
+    type ResolveTaskInvocationOptions,
+    type TaskInvocation,
+} from '@libs/llm/resolve-task-invocation';
+import type {
+    RequestContext,
+    RoutingVerdict,
+} from '@libs/llm/routing-strategy';
+import {
+    hasNonManagedCredential,
+    isByokConfig,
+    LLM_TASK,
+    type BYOKConfig,
+    type LlmTask,
+} from '@libs/llm/byok-config';
 import { Injectable, Inject } from '@nestjs/common';
 
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
@@ -8,12 +27,14 @@ import {
     ILicenseService,
     LICENSE_SERVICE_TOKEN,
     OrganizationLicenseValidationResult,
+    UserWithLicense,
 } from '@libs/ee/license/interfaces/license.interface';
 import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { createLogger } from '@libs/core/log/logger';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
 
 export enum PlanType {
     FREE = 'free',
@@ -27,6 +48,9 @@ export enum ValidationErrorType {
     USER_NOT_LICENSED = 'USER_NOT_LICENSED',
     BYOK_REQUIRED = 'BYOK_REQUIRED',
     PLAN_LIMIT_EXCEEDED = 'PLAN_LIMIT_EXCEEDED',
+    /** The review would run on the Kodus provider and the org's prepaid
+     *  credit balance is at or below zero. */
+    CREDITS_EXHAUSTED = 'CREDITS_EXHAUSTED',
     NOT_ERROR = 'NOT_ERROR',
 }
 
@@ -43,7 +67,7 @@ export class ValidationError extends Error {
 
 export interface ValidationResult {
     allowed: boolean;
-    byokConfig?: BYOKConfig | null;
+    byokConfig?: NormalizedModel | undefined;
     errorType?: ValidationErrorType;
     metadata?: Record<string, any>;
     // Subscription status of the org (e.g. 'trial', 'active'). Exposed so
@@ -55,7 +79,22 @@ export interface ValidationResult {
 export type ExecutionPermissionValidationOptions = {
     consumeTrialReviewCredit?: boolean;
     trialReviewCreditUsageKey?: string;
+    /**
+     * Seat list the caller already fetched. Reused instead of re-fetching so a
+     * single review costs one round trip to billing, not two.
+     */
+    usersWithLicense?: UserWithLicense[];
 };
+
+/**
+ * `contextName` the code-review pipeline passes to validateExecutionPermissions
+ * (ValidatePrerequisitesStage.name). The BYOK codeReview-integrity probe runs
+ * ONLY for this context so a broken codeReview credential never blocks the chat
+ * or issues callers, which route their own task's model. Matched by literal to
+ * avoid a code-review → ee/shared import cycle; keep in sync with that stage's
+ * class name.
+ */
+const CODE_REVIEW_PERMISSION_CONTEXT = 'ValidatePrerequisitesStage';
 
 @Injectable()
 export class PermissionValidationService {
@@ -72,6 +111,51 @@ export class PermissionValidationService {
     ) {
         this.isCloud = environment.API_CLOUD_MODE;
         this.isDevelopment = environment.API_DEVELOPMENT_MODE;
+    }
+
+    /**
+     * Prepaid-credit gate for a slot routed by the Kodus provider ("Kodus as
+     * the provider"). Blocks only on a KNOWN non-positive balance: when billing
+     * did not return a number (older billing, transport hiccup) the review
+     * runs and the metering sweep bills it after the fact — a flaky read must
+     * never skip a paying customer's review. Returns null when the gate does
+     * not apply or passes.
+     */
+    private gateKodusCredits(
+        slot: NormalizedModel | undefined,
+        validation: OrganizationLicenseValidationResult,
+        organizationAndTeamData: OrganizationAndTeamData,
+        contextName?: string,
+    ): ValidationResult | null {
+        if (!slot || !isPlatformFundedProvider(slot.provider)) {
+            return null;
+        }
+        const balance = validation.creditBalanceUsd;
+        if (typeof balance !== 'number' || !Number.isFinite(balance)) {
+            return null;
+        }
+        if (balance > 0) {
+            return null;
+        }
+        this.logger.warn({
+            message: 'Kodus credits exhausted — review blocked',
+            context: contextName || PermissionValidationService.name,
+            metadata: {
+                organizationAndTeamData,
+                creditBalanceUsd: balance,
+                model: slot.model,
+            },
+        });
+        return {
+            allowed: false,
+            errorType: ValidationErrorType.CREDITS_EXHAUSTED,
+            metadata: {
+                creditBalanceUsd: balance,
+                creditsExhausted: true,
+                model: slot.model,
+            },
+            subscriptionStatus: validation.subscriptionStatus,
+        };
     }
 
     /**
@@ -126,6 +210,81 @@ export class PermissionValidationService {
         options: ExecutionPermissionValidationOptions = {},
     ): Promise<ValidationResult> {
         try {
+            // BYOK integrity — enforced UNIFORMLY (no dev/prod split): if the org
+            // configured a codeReview model but its credential is broken, the review
+            // must NEVER silently fall to the managed default — surface it (reusing
+            // BYOK_REQUIRED) and let them fix the credential. Three deliberate scopes:
+            //   • ONLY the code-review flow. validateExecutionPermissions is shared
+            //     with chat and issues, which route their OWN task's model; a broken
+            //     codeReview credential must not block those unrelated flows.
+            //   • ONLY a POSITIVELY-broken credential (a model was NAMED for
+            //     codeReview but couldn't be routed — the `verdict.modelId && !slot`
+            //     signal resolveTaskSlot itself uses). A config that simply doesn't
+            //     bind codeReview legitimately uses the managed default and passes.
+            //   • ONLY outside an active trial: Kodus foots the managed credits there
+            //     (the trial branch below owns that path), so a trial keeps running.
+            // Resolves the verdict from the ALREADY-LOADED config (no second DB read).
+            // Runs BEFORE the dev short-circuit so a broken BYOK is caught locally
+            // exactly as in production.
+            try {
+                // The code-review pipeline is the only caller that hard-requires a
+                // routable codeReview slot; keep this coupled to that stage's context
+                // by name to avoid a code-review → ee/shared import cycle.
+                const isCodeReviewFlow =
+                    contextName === CODE_REVIEW_PERMISSION_CONTEXT;
+                const storedByok = isCodeReviewFlow
+                    ? await this.getBYOKConfig(organizationAndTeamData)
+                    : undefined;
+                if (storedByok) {
+                    const { slot, verdict } = resolveTaskSlotFromConfig(
+                        storedByok,
+                        LLM_TASK.codeReview,
+                    );
+                    // A NAMED model that produced no slot = incomplete credential
+                    // (the exact "configured but broken" case). An unnamed/absent
+                    // codeReview binding leaves verdict.modelId falsy → not broken.
+                    const credentialBroken = !!verdict?.modelId && !slot;
+                    if (credentialBroken) {
+                        const status = await this.getSubscriptionStatus(
+                            organizationAndTeamData,
+                        );
+                        if (status !== 'trial') {
+                            this.logger.warn({
+                                message:
+                                    'BYOK codeReview model configured but its credential is incomplete — blocking (never falls to the managed default outside trial)',
+                                context:
+                                    contextName ||
+                                    PermissionValidationService.name,
+                                metadata: {
+                                    organizationAndTeamData,
+                                    subscriptionStatus: status,
+                                    unroutableModelId: verdict?.modelId,
+                                },
+                            });
+                            return {
+                                allowed: false,
+                                errorType: ValidationErrorType.BYOK_REQUIRED,
+                                metadata: { byokModelUnresolvable: true },
+                                subscriptionStatus: status,
+                            };
+                        }
+                    }
+                }
+            } catch (error) {
+                // A flaky BYOK read/resolve must NEVER block on its own: we only
+                // block when we POSITIVELY resolved "configured but unroutable". On
+                // an error we can't rule out a working key, so fall through to the
+                // normal flow (which fails open for a flaky read) instead of letting
+                // the outer catch turn a transient read failure into a hard block.
+                this.logger.debug({
+                    message:
+                        'BYOK integrity probe errored; skipping the block and continuing (fail open)',
+                    context: contextName || PermissionValidationService.name,
+                    error: error as Error,
+                    metadata: { organizationAndTeamData },
+                });
+            }
+
             // Development mode always allows
             if (this.isDevelopment) {
                 return { allowed: true };
@@ -140,7 +299,7 @@ export class PermissionValidationService {
                 );
             }
 
-            this.logger.log({
+            this.logger.debug({
                 message:
                     '@@VALID PERMISSION@@ - Validating execution permissions',
                 context: contextName || PermissionValidationService.name,
@@ -153,7 +312,7 @@ export class PermissionValidationService {
                     organizationAndTeamData,
                 );
 
-            this.logger.log({
+            this.logger.debug({
                 message:
                     '@@VALID PERMISSION@@ - Organization license validated',
                 context: contextName || PermissionValidationService.name,
@@ -177,12 +336,13 @@ export class PermissionValidationService {
             // 2. Trial skips user validation, but still honors BYOK and
             // billing-managed review credits when those fields are present.
             if (validation.subscriptionStatus === 'trial') {
-                let trialByokConfig: BYOKConfig | null = null;
+                let trialByokConfig: NormalizedModel | undefined;
                 let byokLookupFailed = false;
 
                 try {
-                    trialByokConfig = await this.getBYOKConfig(
+                    trialByokConfig = await this.resolveTaskSlot(
                         organizationAndTeamData,
+                        LLM_TASK.codeReview,
                     );
                 } catch (error) {
                     byokLookupFailed = true;
@@ -202,6 +362,45 @@ export class PermissionValidationService {
                 // must not be blocked by a flaky read — fail open on BYOK.
                 const noByok = !trialByokConfig && !byokLookupFailed;
 
+                // Kodus-routed slot on a trial: the review is paid from the
+                // org's prepaid credits, not from trial credits — so the
+                // credit balance is the gate, and the trial-credit gate below
+                // is skipped (the slot is real BYOK, `noByok` is false).
+                const trialCreditsGate = this.gateKodusCredits(
+                    trialByokConfig,
+                    validation,
+                    organizationAndTeamData,
+                    contextName,
+                );
+                if (trialCreditsGate) {
+                    return trialCreditsGate;
+                }
+
+                // Divergence alarm: billing still reports BYOK (its `byok` flag
+                // is plan-derived, so a `*_byok` trial keeps it set) while the
+                // local config is gone. The two sources never reconcile — the
+                // local row is the source of truth for the gate, so we don't
+                // trust billing here, but we surface the mismatch so support can
+                // find these orgs in observability_logs_ts and reconnect the key.
+                if (
+                    noByok &&
+                    (validation.byok === true ||
+                        this.identifyPlanType(validation.planType) ===
+                            PlanType.BYOK)
+                ) {
+                    this.logger.warn({
+                        message:
+                            'BYOK state divergence: billing reports BYOK but no local config found (trial)',
+                        context:
+                            contextName || PermissionValidationService.name,
+                        metadata: {
+                            organizationAndTeamData,
+                            billingByok: validation.byok,
+                            planType: validation.planType,
+                        },
+                    });
+                }
+
                 // Only trials created under the managed-credit model carry
                 // these fields. Legacy trials (started before this shipped)
                 // have no credit data — they must keep the old behaviour:
@@ -213,7 +412,15 @@ export class PermissionValidationService {
                 if (
                     usesTrialCredits &&
                     noByok &&
-                    validation.trialReviewCreditsRemaining === 0
+                    // <= 0, not === 0: consumption happens post-delivery, so a
+                    // burst of concurrent reviews can over-commit a single
+                    // credit and leave the billing counter negative. Blocking
+                    // only at exactly 0 would let a negative-balance org keep
+                    // running free reviews. `undefined <= 0` is false, so legacy
+                    // trials without a remaining value are unaffected.
+                    typeof validation.trialReviewCreditsRemaining ===
+                        'number' &&
+                    validation.trialReviewCreditsRemaining <= 0
                 ) {
                     this.logger.warn({
                         message: 'Trial managed review credits exhausted',
@@ -233,7 +440,9 @@ export class PermissionValidationService {
                     return {
                         allowed: false,
                         errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
-                        metadata: { validation },
+                        // Credits are genuinely gone — safe to tell the user
+                        // their trial reviews are used up.
+                        metadata: { validation, trialCreditsExhausted: true },
                         subscriptionStatus: validation.subscriptionStatus,
                     };
                 }
@@ -266,7 +475,19 @@ export class PermissionValidationService {
                         return {
                             allowed: false,
                             errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
-                            metadata: { validation, consumeResult },
+                            metadata: {
+                                validation,
+                                consumeResult,
+                                // Only a billing denial for actually-gone
+                                // credits is exhaustion. Match it positively:
+                                // billing has other denial reasons (TRIAL_EXPIRED,
+                                // LICENSE_NOT_FOUND) and a transport failure
+                                // (CONSUME_TRIAL_REVIEW_CREDIT_FAILED), none of
+                                // which mean "reviews used up".
+                                trialCreditsExhausted:
+                                    consumeResult.reason ===
+                                    'TRIAL_REVIEW_CREDITS_EXHAUSTED',
+                            },
                             subscriptionStatus: validation.subscriptionStatus,
                         };
                     }
@@ -310,9 +531,21 @@ export class PermissionValidationService {
                 validation.planType,
             );
 
-            const byokConfig = await this.getBYOKConfig(
+            const byokConfig = await this.resolveTaskSlot(
                 organizationAndTeamData,
+                LLM_TASK.codeReview,
             );
+
+            // 3b. Kodus-routed slot: prepaid credits must cover the review.
+            const creditsGate = this.gateKodusCredits(
+                byokConfig,
+                validation,
+                organizationAndTeamData,
+                contextName,
+            );
+            if (creditsGate) {
+                return creditsGate;
+            }
 
             // 4. Managed plans use our keys
             // if (identifiedPlanType === PlanType.MANAGED) {
@@ -329,6 +562,10 @@ export class PermissionValidationService {
                             organizationAndTeamData,
                             planType: validation.planType,
                             identifiedPlanType,
+                            // Billing keeps a plan-derived `byok` flag that can
+                            // stay true after the local key was disconnected;
+                            // flag the mismatch so support can spot it.
+                            billingByok: validation.byok,
                         },
                     });
 
@@ -362,9 +599,11 @@ export class PermissionValidationService {
 
             // 6. Validate specific user (ALWAYS validates if userGitId provided, except trial and free)
             if (this.requiresUserLicense(identifiedPlanType) && userGitId) {
-                const users = await this.licenseService.getAllUsersWithLicense(
-                    organizationAndTeamData,
-                );
+                const users =
+                    options.usersWithLicense ??
+                    (await this.licenseService.getAllUsersWithLicense(
+                        organizationAndTeamData,
+                    ));
 
                 const user = users?.find((user) => user?.git_id === userGitId);
 
@@ -499,22 +738,10 @@ export class PermissionValidationService {
                 };
             }
 
-            this.logger.log({
-                message: '@@VALID PERMISSION@@ - Validating basic license',
-                context: contextName || PermissionValidationService.name,
-                metadata: { organizationAndTeamData },
-            });
-
             const validation =
                 await this.licenseService.validateOrganizationLicense(
                     organizationAndTeamData,
                 );
-
-            this.logger.log({
-                message: '@@VALID PERMISSION@@ - Basic license validated',
-                context: contextName || PermissionValidationService.name,
-                metadata: { organizationAndTeamData, result: validation },
-            });
 
             if (!validation?.valid) {
                 this.logger.warn({
@@ -563,19 +790,19 @@ export class PermissionValidationService {
         organizationAndTeamData: OrganizationAndTeamData,
         validation: OrganizationLicenseValidationResult,
         contextName?: string,
-    ): Promise<BYOKConfig | null> {
+    ): Promise<NormalizedModel | undefined> {
         try {
             // Self-hosted sempre usa config das env vars (não usa BYOK)
             if (!this.isCloud) {
-                return null;
+                return undefined;
             }
 
             if (!validation) {
-                return null;
+                return undefined;
             }
 
             if (!validation?.valid) {
-                return null;
+                return undefined;
             }
 
             // Identificar tipo de plano de forma robusta
@@ -583,23 +810,9 @@ export class PermissionValidationService {
                 validation?.planType,
             );
 
-            // Managed plans usam nossas keys
-            // if (identifiedPlanType === PlanType.MANAGED) {
-            //     this.logger.log({
-            //         message: 'Using managed keys for operation',
-            //         context: contextName || PermissionValidationService.name,
-            //         metadata: {
-            //             organizationAndTeamData,
-            //             planType: validation?.planType,
-            //             identifiedPlanType,
-            //         },
-            //     });
-            //     return null;
-            // }
-
-            // Free ou BYOK plans precisam de BYOK config
-            const byokConfig = await this.getBYOKConfig(
+            const byokConfig = await this.resolveTaskSlot(
                 organizationAndTeamData,
+                LLM_TASK.codeReview,
             );
 
             if (!byokConfig && this.requiresBYOK(identifiedPlanType)) {
@@ -621,8 +834,8 @@ export class PermissionValidationService {
                 metadata: {
                     organizationAndTeamData,
                     planType: validation?.planType,
-                    provider: byokConfig?.main?.provider,
-                    model: byokConfig?.main?.model,
+                    provider: byokConfig?.provider,
+                    model: byokConfig?.model,
                 },
             });
 
@@ -640,7 +853,7 @@ export class PermissionValidationService {
             });
 
             // Em caso de erro, falhar seguramente sem usar BYOK
-            return null;
+            return undefined;
         }
     }
 
@@ -720,12 +933,239 @@ export class PermissionValidationService {
     }
 
     /**
-     * Retorna a configuração BYOK da organização (se existir).
+     * Resolve the org's BYOK `{main,fallback}` carrier for the `codeReview` task,
+     * native (04b-06 — the legacy stored-shape read is GONE). Sources the FULL
+     * config blob via `getBYOKConfig` and routes it through `resolveTaskSlot`
+     * (StaticTaskStrategy → routed slot + the org's routed fallback), so the
+     * credential/model comes from the v2 `models[]`/routing rather than a collapsed
+     * legacy `main`. Returns `null` for a non-v2 / absent config or a
+     * BLOCKED/unresolvable verdict — the caller then falls to the managed/env
+     * default, exactly as with a missing config. Secret hygiene: the returned slot
+     * carries ENCRYPTED apiKey ciphertext; this method never decrypts. Non-UUID org
+     * ids (CLI trial) resolve to `null` via `getBYOKConfig`.
+     */
+    /**
+     * Single entry point for "give me the routed BYOK carrier for THIS task in
+     * THIS org". Reads the org's raw config (getBYOKConfig) and routes it
+     * for `task` via the pure resolver — the one place that combines the Nest/DB
+     * read with the `@nestjs`-free `libs/llm` resolver, so consumers stop
+     * re-implementing the two-step. `null` when there is no BYOK / non-v2 /
+     * BLOCKED / non-UUID org → the caller degrades to the managed/env default.
+     */
+    async resolveTaskSlot(
+        organizationAndTeamData: OrganizationAndTeamData,
+        task: LlmTask,
+        options: { ctx?: RequestContext } = {},
+    ): Promise<NormalizedModel | undefined> {
+        const rawConfig = await this.getBYOKConfig(organizationAndTeamData);
+        const { slot, verdict } = resolveTaskSlotFromConfig(rawConfig, task, {
+            ctx: options.ctx,
+        });
+
+        this.logRoutingVerdict(organizationAndTeamData, task, verdict);
+
+        // A verdict that NAMED a model but produced no slot is a silent degrade to
+        // the managed default — the model's credential is incomplete (missing the
+        // auth material its provider needs). `logRoutingVerdict` stays quiet here
+        // (it only flags a BLOCKED verdict, i.e. no modelId), so surface it: the
+        // org configured this model and expects it to run, not the managed default.
+        if (verdict?.modelId && !slot) {
+            this.logger.warn({
+                message: `[byok-routing] "${task}" selected ${verdict.modelId} but its credential is incomplete — degraded to the managed default`,
+                context: 'resolveTaskSlot',
+                metadata: {
+                    organizationId:
+                        organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    task,
+                    resolvedModelId: verdict.modelId,
+                },
+            });
+        }
+
+        return slot;
+    }
+
+    /**
+     * Emit the routing decision so a BYOK org's model choice is TRACEABLE — the
+     * `verdict` (which tier won, which tiers were skipped and why, whether it fell
+     * to the fallback) used to be computed here and thrown away. Logged at the ONE
+     * funnel every org-aware consumer passes through, so no call-site threads it.
      *
-     * CLI trial requests carry organizationId='trial' (not a UUID) so the
-     * organization_parameters lookup would fail with Postgres' UUID syntax
-     * check. Treat non-UUID org identifiers as "no BYOK config" instead of
-     * letting the query error propagate.
+     * Deliberately quiet on the happy path: a clean primary/default resolution and
+     * a no-BYOK org (verdict null) emit nothing — only the events worth tracing do.
+     * A BLOCKED verdict on a BYOK org (its config couldn't route → silently on the
+     * managed default) is a WARN; a skipped tier / fallback is informational.
+     */
+    private logRoutingVerdict(
+        organizationAndTeamData: OrganizationAndTeamData,
+        task: LlmTask,
+        verdict: RoutingVerdict | null,
+    ): void {
+        // No config / non-v2 → nothing to route, nothing to trace.
+        if (!verdict) {
+            return;
+        }
+        const blocked = !verdict.modelId;
+        const skippedTier = verdict.reason.includes('→');
+        const usedFallback = /fallback/i.test(verdict.reason);
+        if (!blocked && !skippedTier && !usedFallback) {
+            return; // clean primary/default/override resolution — implicit, no noise.
+        }
+
+        const metadata = {
+            organizationId: organizationAndTeamData?.organizationId,
+            teamId: organizationAndTeamData?.teamId,
+            task,
+            resolvedModelId: verdict.modelId,
+            routingReason: verdict.reason, // never carries key material (by contract)
+            degradedToManagedDefault: blocked,
+            usedFallback,
+        };
+
+        if (blocked) {
+            this.logger.warn({
+                message: `[byok-routing] "${task}" BLOCKED — BYOK org fell back to the managed/env default`,
+                context: 'resolveTaskRouting',
+                metadata,
+            });
+        } else {
+            this.logger.log({
+                message: `[byok-routing] "${task}" → ${verdict.modelId}${usedFallback ? ' (via fallback)' : ''}`,
+                context: 'resolveTaskRouting',
+                metadata,
+            });
+        }
+    }
+
+    /**
+     * Porta 1 (org-aware) — the single door every consumer that RUNS a model
+     * should use: reads the org's raw config and returns the full
+     * `TaskInvocation` for `task` (built model + limiter + `callOptions` +
+     * `providerOptions` reasoning + `usageIdentity` + slot + verdict), composed
+     * once by the pure `resolveTaskInvocation`. Same degrade contract — no BYOK
+     * → the managed/env default model with empty tuning. Consumers spread
+     * `callOptions`/`providerOptions` into the SDK call and stamp usage from
+     * `usageIdentity`, instead of re-deriving (and dropping) any of them.
+     */
+    async resolveTaskInvocation(
+        organizationAndTeamData: OrganizationAndTeamData,
+        task: LlmTask,
+        options: ResolveTaskInvocationOptions,
+    ): Promise<TaskInvocation> {
+        const rawConfig = await this.getBYOKConfig(organizationAndTeamData);
+        const invocation = resolveTaskInvocationFromConfig(
+            rawConfig,
+            task,
+            options,
+        );
+        this.logRoutingVerdict(organizationAndTeamData, task, invocation.verdict);
+        return invocation;
+    }
+
+    /**
+     * "Did this org bring its own key?" — true iff its stored config carries
+     * at least one non-managed credential (a managed/env-default credential does
+     * NOT count). This is a whole-config question (not per-task), so it reads the
+     * raw config blob rather than a resolved carrier — the org-aware companion to the
+     * pure `hasNonManagedCredential` helper. Used by the trial gates.
+     */
+    async hasBYOK(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean> {
+        const rawConfig = await this.getBYOKConfig(organizationAndTeamData);
+        return hasNonManagedCredential(rawConfig);
+    }
+
+    /**
+     * Consume ONE managed trial review credit AFTER a review reaches a
+     * successful terminal state (the caller gates on SUCCESS / PARTIAL_ERROR).
+     *
+     * Split from the prerequisites gate on purpose: the gate blocks when
+     * credits are exhausted, but consumption must NOT happen up-front — a
+     * review that ends in ERROR or SKIPPED should never cost the user a free
+     * trial review. Mirrors the same eligibility the gate uses (managed-credit
+     * trial + no BYOK); everything else is a no-op. Idempotent per `usageKey`
+     * (repo:pr) so retries of the same PR never double-charge.
+     *
+     * Best-effort: never throws into the caller — a billing hiccup must not
+     * fail an already-successful review.
+     */
+    async consumeTrialReviewCreditOnSuccess(
+        organizationAndTeamData: OrganizationAndTeamData,
+        usageKey?: string,
+    ): Promise<void> {
+        try {
+            const validation =
+                await this.licenseService.validateOrganizationLicense(
+                    organizationAndTeamData,
+                );
+
+            if (
+                !validation?.valid ||
+                validation.subscriptionStatus !== 'trial'
+            ) {
+                return;
+            }
+
+            // Fail CLOSED on BYOK here (opposite of the gate, which fails open):
+            // if we can't confirm there's no BYOK, don't consume a managed
+            // credit — a BYOK org runs on its own key and owes nothing.
+            let byokConfig: BYOKConfig | null = null;
+            try {
+                byokConfig = await this.getBYOKConfig(organizationAndTeamData);
+            } catch {
+                return;
+            }
+            if (byokConfig) {
+                return;
+            }
+
+            // Only trials created under the managed-credit model carry these
+            // fields; legacy trials have none and must not consume.
+            const usesTrialCredits =
+                typeof validation.trialReviewCreditsTotal === 'number' ||
+                typeof validation.trialReviewCreditsRemaining === 'number';
+            if (!usesTrialCredits) {
+                return;
+            }
+
+            const consumeResult =
+                await this.licenseService.consumeTrialReviewCredit(
+                    organizationAndTeamData,
+                    usageKey,
+                );
+
+            if (!consumeResult.allowed) {
+                this.logger.warn({
+                    message:
+                        'Post-success trial review credit consumption denied',
+                    context: PermissionValidationService.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        usageKey,
+                        reason: consumeResult.reason,
+                    },
+                });
+            }
+        } catch (error) {
+            this.logger.error({
+                message: 'consumeTrialReviewCreditOnSuccess failed',
+                context: PermissionValidationService.name,
+                error,
+                metadata: { organizationAndTeamData, usageKey },
+            });
+        }
+    }
+
+    /**
+     * Full v2-shape accessor for the routing resolver.
+     *
+     * `resolveByokCarrier` (above) collapses the stored blob to the routed
+     * `{main,fallback}` carrier; this accessor returns the FULL config blob instead —
+     * the `models[]`/`routing` the StaticTaskStrategy needs to route PER TASK.
+     * Returns `null` for an absent / non-config blob and for a non-UUID org id (CLI
+     * trial).
      */
     async getBYOKConfig(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -741,7 +1181,8 @@ export class PermissionValidationService {
             organizationAndTeamData,
         );
 
-        return byokConfig?.configValue || null;
+        const raw = byokConfig?.configValue;
+        return isByokConfig(raw) ? raw : null;
     }
 
     /**
@@ -767,6 +1208,72 @@ export class PermissionValidationService {
             return validation?.subscriptionStatus;
         } catch {
             return undefined;
+        }
+    }
+
+    /**
+     * Access tier for the global Kody Rules import feature:
+     *   - `free`  → blocked (no valid license, or an explicit Free plan);
+     *   - `trial` → capped (see GLOBAL_RULES_TRIAL_IMPORT_LIMIT);
+     *   - `paid`  → unlimited (any other valid plan).
+     *
+     * The sync engine and the web UI both resolve access through this single
+     * method so enforcement and the on-screen state can never disagree. Cloud
+     * and self-hosted are treated identically: a valid, non-trial, non-free
+     * license (including a `licensed-self-hosted` key) is `paid`, and an
+     * unlicensed install (self-hosted CE / an expired or missing key) is `free`
+     * — matching how `shouldLimitResources` already treats unlicensed installs.
+     * Fails closed to `free` on a license lookup error.
+     */
+    async resolveGlobalRulesImportTier(
+        organizationAndTeamData: OrganizationAndTeamData,
+        contextName?: string,
+    ): Promise<'free' | 'trial' | 'paid'> {
+        // Dev-only override so the free/trial/paid UI can be exercised locally
+        // (where an install usually has no license and would resolve to free).
+        // Never honored outside development mode.
+        if (this.isDevelopment) {
+            const override = process.env.GLOBAL_RULES_IMPORT_TIER_OVERRIDE;
+            if (
+                override === 'free' ||
+                override === 'trial' ||
+                override === 'paid'
+            ) {
+                return override;
+            }
+        }
+
+        try {
+            const validation =
+                await this.licenseService.validateOrganizationLicense(
+                    organizationAndTeamData,
+                );
+
+            // No valid license (cloud Free, or self-hosted without an
+            // activation key / expired) → feature blocked.
+            if (!validation?.valid) {
+                return 'free';
+            }
+
+            if (validation.subscriptionStatus === 'trial') {
+                return 'trial';
+            }
+
+            if (this.identifyPlanType(validation.planType) === PlanType.FREE) {
+                return 'free';
+            }
+
+            // Any other valid plan, including a licensed self-hosted key.
+            return 'paid';
+        } catch (error) {
+            this.logger.error({
+                message:
+                    'Failed to resolve global rules import tier; defaulting to free',
+                context: contextName || PermissionValidationService.name,
+                error,
+                metadata: { organizationAndTeamData },
+            });
+            return 'free';
         }
     }
 }

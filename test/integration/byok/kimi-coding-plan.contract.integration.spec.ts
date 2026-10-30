@@ -24,16 +24,16 @@
  * locally with:
  *   KIMI_CODING_PLAN_KEY=sk-kimi-... yarn test --testPathPatterns=kimi-coding-plan.contract
  */
-import { getAdapter, BYOKProvider } from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
 
-// Identity crypto so byokToVercelModel can "decrypt" a raw key without needing
+// Identity crypto so buildModelFromSlot can "decrypt" a raw key without needing
 // API_CRYPTO_KEY — this test exercises the HTTP contract, not encryption.
 jest.mock('@libs/common/utils/crypto', () => ({
     encrypt: (v: string) => v,
     decrypt: (v: string) => v,
 }));
 
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
 import { TestByokConnectionUseCase } from '@libs/organization/application/use-cases/organizationParameters/test-byok-connection.use-case';
 import { generateText, tool } from 'ai';
 import { z } from 'zod';
@@ -49,39 +49,13 @@ describeLive(
     'Kimi Code Plan — anthropic_compatible live contract (needs KIMI_CODING_PLAN_KEY)',
     () => {
         it(
-            'LangChain adapter reaches the endpoint with a /v1-suffixed baseURL',
-            async () => {
-                // Worst-case input shape (user pastes the /v1 form). A routing
-                // regression to OpenAIAdapter would 403 here; a bad URL 404s.
-                const model = getAdapter(
-                    BYOKProvider.ANTHROPIC_COMPATIBLE,
-                ).build({
-                    model: MODEL,
-                    apiKey: KEY!,
-                    baseURL: `${CODING_BASE}/v1`,
-                    options: { maxTokens: 16, temperature: 1 },
-                });
-                expect(model.constructor.name).toBe('ChatAnthropic');
-
-                const res = await model.invoke('Reply with exactly: ok');
-                const text = Array.isArray(res.content)
-                    ? JSON.stringify(res.content)
-                    : String(res.content);
-                expect(text.toLowerCase()).toContain('ok');
-            },
-            NET_TIMEOUT,
-        );
-
-        it(
             'Vercel path reaches the endpoint with the root baseURL shape',
             async () => {
-                const model = byokToVercelModel({
-                    main: {
-                        provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
-                        apiKey: KEY!,
-                        model: MODEL,
-                        baseURL: CODING_BASE, // root form, no /v1
-                    },
+                const model = buildModelFromSlot({
+                    provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
+                    apiKey: KEY!,
+                    model: MODEL,
+                    baseURL: CODING_BASE, // root form, no /v1
                 } as any);
 
                 const res = await generateText({
@@ -97,13 +71,11 @@ describeLive(
         it(
             'supports tool calling through the Vercel path',
             async () => {
-                const model = byokToVercelModel({
-                    main: {
-                        provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
-                        apiKey: KEY!,
-                        model: MODEL,
-                        baseURL: CODING_BASE,
-                    },
+                const model = buildModelFromSlot({
+                    provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
+                    apiKey: KEY!,
+                    model: MODEL,
+                    baseURL: CODING_BASE,
                 } as any);
 
                 const res = await generateText({
@@ -127,13 +99,11 @@ describeLive(
         it(
             'reports prompt-cache read tokens on a repeated prefix',
             async () => {
-                const model = byokToVercelModel({
-                    main: {
-                        provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
-                        apiKey: KEY!,
-                        model: MODEL,
-                        baseURL: CODING_BASE,
-                    },
+                const model = buildModelFromSlot({
+                    provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
+                    apiKey: KEY!,
+                    model: MODEL,
+                    baseURL: CODING_BASE,
                 } as any);
 
                 // Prefix large enough for Kimi's automatic server-side cache to

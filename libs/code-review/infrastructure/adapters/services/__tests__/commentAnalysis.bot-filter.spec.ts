@@ -25,11 +25,7 @@ function makeService() {
     // processComments is a pure sync transform that never touches the
     // injected services — safe to wire with nulls and avoid mocking
     // out the whole DI graph.
-    return new CommentAnalysisService(
-        null as any,
-        null as any,
-        null as any,
-    );
+    return new CommentAnalysisService(null as any, null as any);
 }
 
 function longBody(prefix: string): string {

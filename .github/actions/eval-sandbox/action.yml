@@ -1,0 +1,44 @@
+name: 'Eval sandbox'
+description: "What production's local sandbox finds on the worker image, and the repository mirrors the evals review real PRs from"
+
+# The evals run production's review stage, which checks the PR out with
+# LocalSandboxService and runs its tools there: grep is ripgrep, and the call
+# graph is kodus-graph under bun. The worker image (docker/Dockerfile) ships
+# all three, so the runner gets the same versions, read from that Dockerfile.
+#
+# repositories: 'true' restores the mirrors of the real PRs the cases review
+# (evals/shared/repo-mirror.js, EVAL_REPO_CACHE), so a night fetches from
+# GitHub only what a new case adds. Keyed on the datasets: a change to them
+# starts a new cache from the last one.
+
+inputs:
+    repositories:
+        description: "'true' to restore and save the eval repository mirrors"
+        required: false
+        default: 'false'
+
+runs:
+    using: composite
+    steps:
+        - name: ripgrep (the sandbox's grep)
+          shell: bash
+          run: command -v rg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep)
+        - name: The worker image's bun and kodus-graph versions
+          id: versions
+          shell: bash
+          run: |
+              echo "bun=$(sed -n 's/^ARG BUN_VERSION=//p' docker/Dockerfile)" >> "$GITHUB_OUTPUT"
+              echo "graph=$(sed -n 's/^ARG KODUS_GRAPH_VERSION=//p' docker/Dockerfile)" >> "$GITHUB_OUTPUT"
+        - uses: oven-sh/setup-bun@v2
+          with:
+              bun-version: ${{ steps.versions.outputs.bun }}
+        - name: kodus-graph (the call graph the review builds)
+          shell: bash
+          run: bun install -g "@kodus/kodus-graph@${{ steps.versions.outputs.graph }}"
+        - name: Repository mirrors
+          if: inputs.repositories == 'true'
+          uses: actions/cache@v4
+          with:
+              path: ~/.cache/kodus-evals/repos
+              key: eval-repos-${{ hashFiles('evals/investigation/datasets/*.json') }}
+              restore-keys: eval-repos-

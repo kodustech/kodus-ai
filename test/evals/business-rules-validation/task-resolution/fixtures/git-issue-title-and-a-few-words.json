@@ -1,0 +1,24 @@
+{
+    "name": "git-issue-title-and-a-few-words",
+    "issue": "#1941",
+    "repository": {
+        "issues": [
+            {
+                "number": 7,
+                "title": "Improve recipes",
+                "body": "Make recipes better."
+            }
+        ]
+    },
+    "gitIssuesConnected": true,
+    "trackers": [],
+    "pullRequest": {
+        "title": "feat: scale servings",
+        "body": "Closes #7"
+    },
+    "expect": {
+        "outcome": "comment",
+        "commentContains": ["#7"],
+        "judgedTasks": []
+    }
+}

@@ -1,4 +1,8 @@
-import { redirect } from "next/navigation";
+import { LockedFeatureOverlay } from "@components/system/locked-feature-overlay";
+import { planCtaTarget } from "@components/system/plan-cta-target";
+import { LockedFeatureUnlocks } from "@components/system/locked-feature-unlocks";
+import { LockedPagePreview } from "@components/system/locked-page-preview";
+import { captureGateHit } from "src/core/utils/gate-hit";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
 import { isEnterprisePlan } from "src/features/ee/byok/_utils";
 import { validateOrganizationLicense } from "src/features/ee/subscription/_services/billing/fetch";
@@ -17,7 +21,35 @@ export default async function UserLogsPage() {
     const isTrial = license?.subscriptionStatus === "trial";
     const isEnterprise = license ? isEnterprisePlan(license) : false;
     if (!isEnterprise && !isTrial) {
-        redirect("/");
+        await captureGateHit({
+            feature: "activity_logs",
+            surface: "locked_preview",
+            planType: license?.planType,
+            subscriptionStatus: license?.subscriptionStatus,
+        });
+        return (
+            <LockedFeatureOverlay
+                title="Unlock activity logs"
+                description="Kody Rules, review settings and integrations change as your team works. Right now, nothing records who changed what."
+                details={
+                    <LockedFeatureUnlocks
+                        items={[
+                            "Every settings, rule and integration change, with who made it",
+                            "Filter by person, action and date",
+                            "The trail an audit or a bad review run asks for",
+                        ]}
+                    />
+                }
+                cta={{
+                    ...planCtaTarget(),
+                    feature: "activity_logs",
+                    surface: "locked_preview",
+                    planType: license?.planType,
+                    subscriptionStatus: license?.subscriptionStatus,
+                }}>
+                <LockedPagePreview title="Activity logs" rows={4} />
+            </LockedFeatureOverlay>
+        );
     }
 
     return <UserLogsPageClient />;

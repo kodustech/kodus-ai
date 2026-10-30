@@ -1,0 +1,74 @@
+---
+title: "Geração Automática de Regras"
+description: "Kody pode gerar automaticamente regras personalizadas analisando o histórico de code review da sua equipe. Deixe-a aprender com suas revisões anteriores para criar padrões de codificação personalizados."
+---
+
+<Warning>
+  **Requer pelo menos 3 meses de histórico de revisões de Kody no repositório.** Este recurso deriva regras das revisões passadas de Kody nos seus PRs, então repositórios que acabaram de ser integrados não produzirão sugestões úteis. Se você começou a usar Kody recentemente, volte após alguns meses de revisões reais.
+</Warning>
+
+## Visão Rápida
+
+- **Geração Automática**: Kody analisa seu histórico de revisões para criar novas regras
+- **Baseada em Dados**: Usa 3 meses de dados de revisão para insights inteligentes
+- **Sugestões Inteligentes**: Gera regras com base nos padrões reais da equipe
+- **Aprovação Opcional**: As regras geradas ficam ativas por padrão; ative **Kody knowledge approval** para revisar cada uma antes que entre em vigor
+- **Aprendizado Contínuo**: Atualizações semanais de regras conforme sua equipe evolui
+
+<Frame caption="Generate from past reviews e Kody knowledge approval no painel Configuration do Kody Rules">
+  <img src="/images/sync-rules.png" alt="Kody Rules Configuration sheet" />
+</Frame>
+
+## Como Funciona
+
+### 1. Ativando a Geração de Regras
+
+A geração de regras é configurada por repositório:
+
+1. Na barra lateral, escolha o repositório no seletor de escopo no topo do grupo **Code review** e abra **Kody Rules**
+2. Clique em **Configuration** para abrir o painel lateral
+3. Ative **Generate from past reviews**
+4. Opcionalmente, use o seletor de revisores abaixo do toggle (**Learning from all reviewers** por padrão) para excluir desenvolvedores cujos comentários de revisão o Kody não deve usar para aprender
+
+### 2. Processo de Análise
+
+Na primeira vez que você ativa **Generate from past reviews** para um repositório, Kody irá:
+
+- **Varrer o Histórico de Revisões**: Analisa os PRs fechados dos últimos 3 meses no seu repositório
+- **Identificar Padrões**: Descobre temas comuns de feedback e preferências de codificação
+- **Extrair Padrões**: Converte padrões de revisão em regras acionáveis
+- **Gerar Regras**: Cria regras personalizadas adaptadas ao estilo da sua equipe
+
+Isso pode levar alguns minutos. As regras geradas então aparecem na página **Kody Rules** do repositório.
+
+### 3. Revisando as Regras Geradas
+
+As regras geradas são listadas com a origem **Kody-generated** (use **Filters → Origin → Kody-generated** para ver só elas). Abra qualquer uma delas para editar, pausar ou excluir, como qualquer outra regra.
+
+### 4. Aprovando Regras Antes que Entrem em Vigor
+
+<Warning>
+  Por padrão, as regras geradas ficam **ativas assim que são criadas** e são
+  aplicadas no próximo code review.
+</Warning>
+
+Para revisar as regras geradas antes que entrem em vigor, ative **Kody knowledge approval** no mesmo painel **Configuration**. Com a aprovação ativada:
+
+- **Revisão Pendente**: As novas regras geradas vão para a seção **Pending review** no topo da página Kody Rules em vez de serem aplicadas
+- **Escolha Seletivamente**: Use **Approve** nas regras que correspondem às necessidades da sua equipe e **Discard** no restante
+- **Ativação**: Apenas as regras aprovadas são aplicadas durante os code reviews
+
+## Aprendizado Contínuo
+
+Após a configuração inicial, Kody mantém um ciclo de aprendizado contínuo:
+
+- **Atualizações Semanais**: Kody gera novas sugestões de regras toda semana
+- **Padrões em Evolução**: As sugestões de regras se adaptam conforme o estilo de codificação da sua equipe evolui
+- **Precisão Refinada**: As sugestões ficam mais precisas ao longo do tempo
+- **Revisões Regulares**: Novas regras aparecem semanalmente (em **Pending review** quando a aprovação está ativada)
+
+## Requisitos
+
+- **Dados Mínimos**: Pelo menos 3 meses de histórico de revisões no repositório
+- **Revisões Ativas**: Atividade regular de code review para melhor detecção de padrões
+- **Acesso ao Repositório**: Permissões adequadas para modificar as regras do repositório

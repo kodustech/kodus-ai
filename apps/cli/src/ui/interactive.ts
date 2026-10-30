@@ -9,9 +9,7 @@ import {
     getQuickFixEmptyMessage,
     groupIssuesByFile,
 } from './interactive-helpers.js';
-import {
-    formatFileChoice,
-} from './interactive-formatters.js';
+import { formatFileChoice } from './interactive-formatters.js';
 import {
     renderFileHeaderLines,
     renderFixPreviewLines,

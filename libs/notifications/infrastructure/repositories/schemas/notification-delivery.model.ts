@@ -1,4 +1,11 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
+import {
+    Column,
+    Entity,
+    Index,
+    JoinColumn,
+    ManyToOne,
+    OneToMany,
+} from 'typeorm';
 
 import { CoreModel } from '@libs/core/infrastructure/repositories/model/typeOrm';
 import { OrganizationModel } from '@libs/organization/infrastructure/adapters/repositories/schemas/organization.model';
@@ -25,7 +32,7 @@ export class NotificationDeliveryModel extends CoreModel {
     @JoinColumn({ name: 'organization_id', referencedColumnName: 'uuid' })
     organization: OrganizationModel;
 
-    @ManyToOne(() => UserModel, { nullable: true })
+    @ManyToOne(() => UserModel, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'recipient_user_id', referencedColumnName: 'uuid' })
     recipientUser?: UserModel;
 

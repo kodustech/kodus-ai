@@ -41,7 +41,7 @@ import {
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
 import { CentralizedConfigInitUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-init.use-case';
 import { CentralizedConfigSyncUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-sync.use-case';
-import { CentralizedConfigDownloadUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-download.use-case';
+import { CentralizedConfigDownloadZipUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-download-zip.use-case';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 
 import { ApiStandardResponses } from '../../docs/api-standard-responses.decorator';
@@ -62,7 +62,7 @@ export class CliCentralizedConfigController {
         private readonly createOrUpdateParametersUseCase: CreateOrUpdateParametersUseCase,
         private readonly centralizedConfigInitUseCase: CentralizedConfigInitUseCase,
         private readonly centralizedConfigSyncUseCase: CentralizedConfigSyncUseCase,
-        private readonly centralizedConfigDownloadUseCase: CentralizedConfigDownloadUseCase,
+        private readonly centralizedConfigDownloadZipUseCase: CentralizedConfigDownloadZipUseCase,
     ) {}
 
     @Get('/status')
@@ -329,14 +329,15 @@ export class CliCentralizedConfigController {
 
         const context = this.toOrganizationAndTeamData(authContext);
 
-        const entries = await this.centralizedConfigDownloadUseCase.execute(
-            this.buildCliUser(authContext),
-            context.teamId,
-            {
-                skipAuthorization: true,
-                organizationId: context.organizationId,
-            },
-        );
+        const archive =
+            await this.centralizedConfigDownloadZipUseCase.execute(
+                this.buildCliUser(authContext),
+                context.teamId,
+                {
+                    skipAuthorization: true,
+                    organizationId: context.organizationId,
+                },
+            );
 
         response.set({
             'Content-Type': 'application/zip',
@@ -344,19 +345,12 @@ export class CliCentralizedConfigController {
                 'attachment; filename=centralized-config.zip',
         });
 
-        const { default: archiver } = await import('archiver');
-        const archive = archiver('zip', { zlib: { level: 9 } });
         archive.on('error', (err) => {
             response.destroy(err);
         });
 
         archive.pipe(response);
 
-        for (const entry of entries) {
-            archive.append(entry.content, { name: entry.path });
-        }
-
-        await archive.finalize();
         if (typeof (response as any).on === 'function') {
             await finished(response as any);
         }

@@ -1,5 +1,10 @@
+import { renderToStaticMarkup } from 'react-dom/server';
+
 import { NotificationEvent } from '../../../domain/catalog/events';
-import { EMAIL_TEMPLATE_REGISTRY } from './email-template.registry';
+import {
+    EMAIL_TEMPLATE_REGISTRY,
+    normaliseRuleList,
+} from './email-template.registry';
 
 describe('EMAIL_TEMPLATE_REGISTRY', () => {
     const CTX = { webUrl: 'https://app.example.com' };
@@ -132,6 +137,41 @@ describe('EMAIL_TEMPLATE_REGISTRY', () => {
             organizationName: 'Acme',
             changedBy: 'jane@acme.com',
         },
+        [NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST]: {
+            periodStart: '2026-10-13T09:00:00Z',
+            periodEnd: '2026-10-20T09:00:00Z',
+            rules: [
+                {
+                    ruleId: 'r-1',
+                    title: 'No console.log',
+                    repositoryId: 'repo-1',
+                    repositoryName: 'acme/api',
+                    state: 'ignored',
+                    triggers: 14,
+                    implemented: 2,
+                    rate: 0.14,
+                    thumbsUp: 0,
+                    thumbsDown: 0,
+                    windowDays: 30,
+                    pausedAt: '2026-10-15T06:00:00Z',
+                    resumed: false,
+                },
+                {
+                    ruleId: 'r-2',
+                    title: 'Use logger',
+                    repositoryId: null,
+                    state: 'noisy',
+                    triggers: 20,
+                    implemented: 10,
+                    rate: 0.5,
+                    thumbsUp: 1,
+                    thumbsDown: 5,
+                    windowDays: 30,
+                    pausedAt: '2026-10-16T06:00:00Z',
+                    resumed: true,
+                },
+            ],
+        },
     };
 
     it.each(Object.keys(EMAIL_PAYLOADS) as NotificationEvent[])(
@@ -166,5 +206,83 @@ describe('EMAIL_TEMPLATE_REGISTRY', () => {
             ]!(EMAIL_PAYLOADS[NotificationEvent.ORG_MEMBER_REMOVED]!, CTX);
             expect(result.subject).toContain('Acme');
         });
+    });
+    describe('KODY_RULES_AUTO_PAUSE_DIGEST', () => {
+        const payload = () =>
+            EMAIL_PAYLOADS[NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST]!;
+
+        it('counts the rules in the subject', () => {
+            const result = EMAIL_TEMPLATE_REGISTRY[
+                NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST
+            ]!(payload(), CTX);
+            expect(result.subject).toBe(
+                '2 Kody rules were paused since the last digest',
+            );
+        });
+
+        it('links each rule, explains it, and marks the ones already resumed', () => {
+            const result = EMAIL_TEMPLATE_REGISTRY[
+                NotificationEvent.KODY_RULES_AUTO_PAUSE_DIGEST
+            ]!(payload(), CTX);
+            const html = renderToStaticMarkup(result.react);
+
+            expect(html).toContain(
+                'https://app.example.com/settings/code-review/repo-1/kody-rules?rule=r-1',
+            );
+            expect(html).toContain(
+                'https://app.example.com/settings/code-review/global/kody-rules?rule=r-2',
+            );
+            expect(html).toContain('acme/api');
+            expect(html).toContain('2 of 14 suggestions implemented');
+            expect(html).toContain('Already resumed');
+        });
+    });
+});
+
+describe('normaliseRuleList', () => {
+    // Regression: the producer sent {title, rule, severity} objects into a
+    // template typed `string[]`. React threw "Objects are not valid as a React
+    // child" at render, inside the worker, and the delivery retried 5x while
+    // the execution sat in `partial_error` — which surfaced in e2e as a review
+    // that "completed UNHEALTHY".
+    it('reduces rule objects to their title', () => {
+        expect(
+            normaliseRuleList([
+                { title: 'Avoid nested ternaries', rule: '...', severity: 'medium' },
+                { title: 'Prefer early returns', rule: '...', severity: 'low' },
+            ]),
+        ).toEqual(['Avoid nested ternaries', 'Prefer early returns']);
+    });
+
+    it('passes plain strings through', () => {
+        expect(normaliseRuleList(['already a string'])).toEqual([
+            'already a string',
+        ]);
+    });
+
+    it('drops entries it cannot render instead of crashing the email', () => {
+        expect(
+            normaliseRuleList([
+                'keep',
+                { rule: 'no title here' },
+                null,
+                42,
+                { title: 123 },
+            ]),
+        ).toEqual(['keep']);
+    });
+
+    // Deliberate, not an oversight: an empty title renders as a blank bullet
+    // and would still be counted in the "N new rules" headline. Keeping it out
+    // of the list keeps the list and the count telling the same story.
+    it('drops empty titles rather than rendering a blank bullet', () => {
+        expect(
+            normaliseRuleList([{ title: '' }, '', { title: 'Prefer early returns' }]),
+        ).toEqual(['Prefer early returns']);
+    });
+
+    it('tolerates a missing or non-array payload', () => {
+        expect(normaliseRuleList(undefined)).toEqual([]);
+        expect(normaliseRuleList('not an array')).toEqual([]);
     });
 });

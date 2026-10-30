@@ -128,7 +128,7 @@ async function startCallbackServer(): Promise<{
         // tries to run another command in the same shell.
         res.writeHead(error ? 400 : 200, {
             'Content-Type': 'text/html; charset=utf-8',
-            Connection: 'close',
+            'Connection': 'close',
         });
         res.end(CALLBACK_HTML);
 
@@ -236,7 +236,9 @@ function timeout<T>(
     return {
         promise,
         cancel: () => {
-            if (timer) {clearTimeout(timer);}
+            if (timer) {
+                clearTimeout(timer);
+            }
         },
     };
 }

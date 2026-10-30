@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import {
@@ -38,6 +38,9 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { GetOrganizationsByDomainUseCase } from '../organization/get-organizations-domain.use-case';
 
 @Injectable()
 export class JoinOrganizationUseCase implements IUseCase {
@@ -66,10 +69,33 @@ export class JoinOrganizationUseCase implements IUseCase {
         private readonly parametersService: IParametersService,
 
         private readonly notificationService: NotificationService,
+
+        private readonly telemetry: TelemetryService,
+
+        private readonly getOrganizationsByDomainUseCase: GetOrganizationsByDomainUseCase,
     ) {}
 
-    public async execute(data: JoinOrganizationDto): Promise<IUser> {
+    public async execute(
+        data: JoinOrganizationDto,
+        actor: UserRequest['user'],
+    ): Promise<IUser> {
         const { userId, organizationId } = data;
+
+        // Both ids come from the request body. A caller may only move their
+        // own account, and only into an organization that opened auto-join
+        // to their email domain — the same list the web shows on
+        // choose-workspace, which until now was the only place it was checked.
+        const domain = actor?.email?.split('@')[1];
+        const joinable =
+            userId && userId === actor?.uuid && domain
+                ? await this.getOrganizationsByDomainUseCase.execute(
+                      domain,
+                      actor.email,
+                  )
+                : [];
+        if (!joinable.some((org) => org.uuid === organizationId)) {
+            throw new ForbiddenException('Organization not available to join');
+        }
 
         try {
             const user = await this.userService.findOne({
@@ -175,6 +201,13 @@ export class JoinOrganizationUseCase implements IUseCase {
             }
 
             await this.cleanUp(originalOrgId);
+
+            void this.telemetry.organizationJoined({
+                userId: user.uuid,
+                organizationId,
+                teamId: team.uuid,
+                via: 'invite',
+            });
 
             return updatedUser.toObject();
         } catch (error) {

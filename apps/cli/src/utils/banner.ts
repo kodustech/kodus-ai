@@ -191,7 +191,9 @@ export async function showBanner() {
     const contentWidth = Math.min(Math.max(terminalWidth - 8, 64), 160);
     const compactLayout = terminalWidth < 90;
     const logoLines = renderLogoLines(terminalWidth);
-    const authMode = await getAuthModeSummary().then((summary) => summary.label);
+    const authMode = await getAuthModeSummary().then(
+        (summary) => summary.label,
+    );
     const recentActivityLines = await getRecentActivityLines(2);
 
     const leftOverviewLines: string[] = [

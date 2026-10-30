@@ -348,6 +348,54 @@ export class IntegrationConfigRepository implements IIntegrationConfigRepository
         }
     }
 
+    async findByOrganizationAndConfigKey(
+        organizationId: string,
+        configKey: IntegrationConfigKey,
+    ): Promise<IntegrationConfigEntity[]> {
+        try {
+            // Single JOIN query on integration_configs → integrations →
+            // organization. Callers that need "every config of a given key
+            // for this org" previously issued one find({ integration: {
+            // uuid } }) per integration inside a sequential loop
+            // (context-resolution.service), a textbook N+1 on the
+            // code-review hot path. Passing the nested object literal
+            // straight to TypeORM (matching the other JOIN queries in
+            // this file, e.g. findOneIntegrationConfigWithIntegrations)
+            // collapses it into one query.
+            const integrationConfigModels =
+                await this.integrationConfigRepository.find({
+                    where: {
+                        configKey,
+                        integration: {
+                            organization: { uuid: organizationId } as any,
+                            status: true,
+                        } as any,
+                    },
+                    relations: [
+                        'integration',
+                        'integration.organization',
+                        'team',
+                    ],
+                });
+
+            return mapSimpleModelsToEntities(
+                integrationConfigModels,
+                IntegrationConfigEntity,
+            );
+        } catch (error) {
+            // Deliberately NOT the `console.log(error)` + swallow used by the
+            // older methods in this file. The only caller
+            // (ContextResolutionService) turns an empty array into
+            // `throw new Error('No active integrations found for
+            // organization')`, so swallowing here would report a DB outage as
+            // a configuration problem and send the operator hunting for an
+            // integration that exists. Empty result and failed query have to
+            // stay distinguishable.
+            console.log(error);
+            throw error;
+        }
+    }
+
     async findOneIntegrationConfigWithIntegrations(
         configKey: IntegrationConfigKey,
         organizationAndTeamData: OrganizationAndTeamData,

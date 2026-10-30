@@ -17,11 +17,11 @@ const UNKNOWN_MODEL = '(unknown)';
 
 /**
  * A usage row carrying token counts and (optionally) the model that produced
- * them. When `byTier` is set, the row's totals are already split between calls
- * at or below the model's tier threshold (`le`) and calls above it (`gt`) — the
- * calculator prices each bucket at its own rate. Rows without `byTier` are
- * treated as flat (everything billed at `default`), which is correct for
- * non-tiered models.
+ * them. When `byTier` is set, the row's totals are already split by bracket:
+ * `byTier[0]` = calls at or below the first threshold (billed at `default`),
+ * `byTier[k]` = calls above the k-th threshold (billed at the k-th tier rate).
+ * The calculator prices each bracket at its own rate. Rows without `byTier`
+ * are flat (everything billed at `default`), correct for non-tiered models.
  */
 export interface CostUsageRow {
     input: number;
@@ -32,16 +32,11 @@ export interface CostUsageRow {
     /** Input tokens that created cache entries on this call (Anthropic). */
     cacheWrite?: number;
     model?: string;
-    byTier?: {
-        le: TierUsage;
-        gt: TierUsage;
-    };
+    byTier?: TierUsage[];
 }
 
-interface ModelUsageAgg {
-    le: TierUsage;
-    gt: TierUsage;
-}
+/** Per-model usage aggregated per bracket (index = bracket). */
+type ModelUsageAgg = TierUsage[];
 
 /**
  * Single source of truth for turning token usage into US$. Buckets usage by
@@ -50,10 +45,11 @@ interface ModelUsageAgg {
  * rates are applied consistently here, in cost-estimate, and on the config
  * surface — they can never disagree on what a workload costs.
  *
- * Tier handling: a row's `byTier.gt` bucket is priced at the model's `tier`
- * rate when present (Gemini Pro's >200K tariff today); `byTier.le` and any
- * flat row are priced at `default`. Selection is per-call, not per aggregate,
- * because the LLM provider applies the tier per request.
+ * Tier handling: each bracket is priced at its own rate — bracket 0 at
+ * `default`, bracket k at the model's k-th tier rate. Selection is per-call
+ * (the read bucketed each call by its input size), not per aggregate, because
+ * the provider applies the tier per request. Supports any number of tiers
+ * (Gemini's one 200K breakpoint, Doubao's 32K + 128K).
  */
 @Injectable()
 export class ModelCostCalculator {
@@ -89,25 +85,23 @@ export class ModelCostCalculator {
         const perModel = new Map<string, ModelUsageAgg>();
         for (const row of rows) {
             const key = (row.model && row.model.trim()) || UNKNOWN_MODEL;
-            const agg = perModel.get(key) ?? {
-                le: emptyTier(),
-                gt: emptyTier(),
-            };
-            if (row.byTier) {
-                addTier(agg.le, row.byTier.le);
-                addTier(agg.gt, row.byTier.gt);
-            } else {
-                // Flat row (model without tier). All of it goes to `le`, which
+            const agg = perModel.get(key) ?? [];
+            const buckets = row.byTier ?? [
+                // Flat row (model without tier). All of it is bracket 0, which
                 // gets the `default` rate — equivalent to the old behavior.
-                addTier(agg.le, {
+                {
                     input: row.input,
                     output: row.output,
                     total: row.input + row.output,
                     outputReasoning: row.outputReasoning,
                     cacheRead: row.cacheRead ?? 0,
                     cacheWrite: row.cacheWrite ?? 0,
-                });
-            }
+                },
+            ];
+            buckets.forEach((bucket, i) => {
+                agg[i] = agg[i] ?? emptyTier();
+                addTier(agg[i], bucket);
+            });
             perModel.set(key, agg);
         }
         return perModel;
@@ -122,33 +116,50 @@ export class ModelCostCalculator {
 
         const { rates } = await this.pricingResolver.resolve(model, overrides);
 
-        const leCost = ModelCostCalculator.bucketCost(agg.le, rates, 'default');
-        const gtCost = ModelCostCalculator.bucketCost(agg.gt, rates, 'tier');
-        return leCost.total + gtCost.total;
+        return agg.reduce(
+            (sum, bucket, i) =>
+                sum + ModelCostCalculator.bucketCost(bucket, rates, i).total,
+            0,
+        );
     }
 
     /**
-     * Cost of a single tier bucket, broken down per token type. Static so
+     * Per-token rate for a given bracket: bracket 0 → `default`, bracket k →
+     * the k-th tier rate (falling back to default if the model has fewer
+     * tiers than the bracket index, which can't happen for well-formed data).
+     */
+    private static rateFor(rate: TokenRate, bracket: number): number {
+        if (bracket <= 0) return rate.default;
+        return rate.tiers?.[bracket - 1]?.rate ?? rate.default;
+    }
+
+    /**
+     * Cost of a single bracket bucket, broken down per token type. Static so
      * downstream layers that need the per-component costs (e.g. the API
      * summary use-case) can share the exact formula with no risk of drift.
      */
     static bucketCost(
         bucket: TierUsage,
         rates: ModelTokenRates,
-        tier: 'default' | 'tier',
+        bracket: number,
     ): CostBreakdown {
         const pick = (rate: TokenRate) =>
-            tier === 'tier' && rate.tier ? rate.tier.rate : rate.default;
+            ModelCostCalculator.rateFor(rate, bracket);
 
         const inputRate = pick(rates.input);
         const outputRate = pick(rates.output);
         const cacheReadRate = pick(rates.cacheRead);
         const cacheWriteRate = pick(rates.cacheWrite);
 
-        // Cache reads are a subset of input tokens — subtract them from the
-        // billable-at-full-price pool so we don't charge input AND cache for
-        // the same tokens.
-        const uncachedInput = Math.max(0, bucket.input - bucket.cacheRead);
+        // Cache reads AND cache writes are both a subset of the reported input
+        // tokens (ai@7 normalizes inputTokens = noCache + cacheRead + cacheWrite),
+        // so subtract BOTH from the billable-at-full-price pool — otherwise a
+        // cache-write token is charged at the input rate here AND again at the
+        // cacheWrite rate below (double billing for anthropic/bedrock).
+        const uncachedInput = Math.max(
+            0,
+            bucket.input - bucket.cacheRead - bucket.cacheWrite,
+        );
 
         const input = uncachedInput * inputRate;
         const output = bucket.output * outputRate;

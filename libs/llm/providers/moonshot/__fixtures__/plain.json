@@ -1,0 +1,10 @@
+{
+    "_note": "Recorded generate result for a Moonshot (OpenAI-compatible) call (e.g. kimi-k2.7-code via api.moonshot.ai/v1). @ai-sdk/openai-compatible maps Moonshot's { prompt_tokens, completion_tokens } onto the high-level ai@7 LanguageModelUsage shape. This non-thinking call reports no reasoning split, so normalizeUsage.reasoning must be 0 (a number, never null).",
+    "text": "{\"decisions\":[]}",
+    "finishReason": "stop",
+    "usage": {
+        "inputTokens": 742,
+        "outputTokens": 128,
+        "totalTokens": 870
+    }
+}

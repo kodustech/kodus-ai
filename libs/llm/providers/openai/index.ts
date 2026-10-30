@@ -1,0 +1,409 @@
+/**
+ * OpenAI provider module (Phase 1, plan 01-01) — the tracer.
+ *
+ * Serves BOTH `openai` (native `@ai-sdk/openai`) and `openai_compatible`
+ * (`@ai-sdk/openai-compatible`, baseURL-driven) — they share a build that
+ * branches on the provider id. Reproduces byok-to-vercel.ts's OPENAI /
+ * OPENAI_COMPATIBLE cases exactly (same apiKey/baseURL/structured-output gate),
+ * so routing this provider through the registry is a no-behavior-change move.
+ *
+ * capabilities() is a minimal openai-faithful version for the tracer; the full
+ * capability table + the 6 extended fields are folded in 01-04. normalize/
+ * normalizeUsage are declared stubs (Phase 3 owns them).
+ */
+import type { LanguageModel } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { z } from 'zod';
+import {
+    openAiCompatibleHonorsJsonSchema,
+    isNeverDowngradeModel,
+} from '@libs/llm/structured-output-gate';
+import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
+import { registerProvider } from '../kernel/registry';
+import { isOpenAiReasoner, openaiReasoningConfig } from './reasoning';
+import { isOpenAiHost } from './endpoint';
+import { notStoredByOpenAi } from './not-stored';
+import { openAiModelListing } from './listing';
+import type {
+    ModelCapabilities,
+    ProviderBuildConfig,
+    ProviderBuildOptions,
+    ProviderModule,
+    ProviderReasoningOptions,
+    ReasoningEffort,
+} from '../kernel/types';
+import type { TemperaturePolicy } from '../kernel/model-types';
+import {
+    resolveCompatibleReasoningTraits,
+    compatibleTemperaturePolicy,
+    isCompatibleReasoner,
+    compatibleEffortValue,
+    type ModelReasoningTraits,
+    type StructuredOutputMode,
+} from '../kernel/reasoning-traits';
+import {
+    normalizeSdkResult,
+    normalizeSdkUsage,
+} from '../kernel/usage';
+import { reasoningEffortFromWire } from '../kernel/override-wire-spelling';
+
+/**
+ * Native OpenAI model families that honor strict `response_format: json_schema`
+ * out of the box (the gpt-* / o-series / chatgpt lines). Used only to keep the
+ * provider-blind capabilities() honest: everything else served over
+ * `openai_compatible` is an unknown upstream that must NOT claim json_schema.
+ */
+function isNativeOpenAiModel(model: string): boolean {
+    return isOpenAiReasoner(model) || /^(gpt|chatgpt|o[0-9])/i.test(model);
+}
+
+// The Kimi / Moonshot never-downgrade policy (`isNeverDowngradeModel`) now lives
+// in the shared structured-output-gate leaf so the moonshot module shares the
+// SAME policy — see the import above. build() still honors it as an ADDITIVE
+// override on top of `shouldEnableJsonSchema` (D-00b, Pitfall 2).
+
+export const openaiModule: ProviderModule = {
+    id: 'openai',
+    aliases: ['openai_compatible'],
+    label: 'OpenAI',
+    doc: 'https://platform.openai.com/docs/models',
+
+    settingsSchema: z.object({
+        baseURL: z.string().optional(),
+    }),
+
+    capabilities(model: string): ModelCapabilities {
+        // o-series / gpt-5 reject `temperature`; reasoning config comes from the
+        // central family resolver (single source).
+        const reasoner = isOpenAiReasoner(model);
+        const reasoningConfig = openaiReasoningConfig(model);
+        return {
+            // Native OpenAI reasoners OR a recognized compatible-family reasoner
+            // (Kimi/GLM/DeepSeek served over openai_compatible — those ids never
+            // appear on native OpenAI, so the OR is transport-safe).
+            supportsReasoning: !!reasoningConfig || isCompatibleReasoner(model),
+            reasoningConfig,
+            // Provider-level execution capabilities (01-04; per-model refinement
+            // is a follow-up — note capabilities(model) can't see openai vs
+            // openai_compatible). json_schema is claimed only by native OpenAI
+            // families and the never-downgrade Kimi/Moonshot family (D-00b);
+            // any other id served over openai_compatible is an unknown upstream
+            // that defaults to json_object so it isn't over-promised.
+            structuredOutput:
+                isNativeOpenAiModel(model) || isNeverDowngradeModel(model)
+                    ? 'json_schema'
+                    : 'json_object',
+            toolCalling: 'native',
+            usageGranularity: reasoner ? 'reasoning_split' : 'output_only',
+            streaming: true,
+            promptCaching: true,
+        };
+    },
+
+    // The WIRE answer, per id + model + baseURL — the three inputs
+    // `capabilities(model)` above cannot see (one module serves both ids, and
+    // the custom endpoint's behaviour is a property of the URL, not the id).
+    //
+    //   native `openai`        → strict json_schema, always.
+    //   `openai_compatible`    → strict only for the never-downgrade Kimi/
+    //                            Moonshot family or a baseURL we have evidence
+    //                            for (vLLM :8000, Fireworks, the ops allowlist).
+    //                            EVERY other upstream — DeepSeek, GLM, Qwen, a
+    //                            generic proxy — goes out as bare `json_object`,
+    //                            carrying neither the shape nor the keyword
+    //                            (issue #1916).
+    structuredOutputPolicy(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): StructuredOutputMode {
+        // NATIVE openai: `build()` below passes no structured-output setting at
+        // all, so the SDK sends the schema whatever the caller asked for. The
+        // policy has to say the same, or the executor writes a JSON contract
+        // into a prompt whose body already carries the schema.
+        if ((cfg.provider as string) !== 'openai_compatible') {
+            return 'json_schema';
+        }
+        // The compatible build ANDs the opt-out into its flag, so here it is
+        // part of the answer.
+        if (opts?.structuredOutputs === false) return 'json_object';
+        return isNeverDowngradeModel(cfg.model) ||
+            openAiCompatibleHonorsJsonSchema(cfg.baseURL)
+            ? 'json_schema'
+            : 'json_object';
+    },
+
+    build(cfg: ProviderBuildConfig, opts?: ProviderBuildOptions): LanguageModel {
+        // apiKey is already DECRYPTED by the caller (byok-to-vercel).
+        const apiKey = cfg.apiKey;
+        const baseURL = cfg.baseURL;
+
+        if ((cfg.provider as string) === 'openai_compatible') {
+            // openai_compatible is a custom endpoint — there is no sensible
+            // default. `@ai-sdk/openai-compatible` throws a cryptic "Invalid URL"
+            // on an empty baseURL when it builds the first request; fail loud and
+            // actionable at build time instead.
+            if (!baseURL) {
+                throw new Error(
+                    'openai_compatible provider requires a baseURL (none configured on the slot).',
+                );
+            }
+            return createOpenAICompatible({
+                name: 'openai-compatible',
+                apiKey,
+                baseURL,
+                ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+                ...(isOpenCodeGoBaseUrl(baseURL)
+                    ? {
+                          headers: {
+                              'x-opencode-session': openCodeSessionId(cfg),
+                          },
+                      }
+                    : {}),
+                // OpenAI's own API REJECTS `max_tokens` on a reasoning model:
+                //
+                //   Unsupported parameter: 'max_tokens' is not supported with
+                //   this model. Use 'max_completion_tokens' instead.
+                //
+                // @ai-sdk/openai-compatible emits `max_tokens` unconditionally
+                // — right for the generic OpenAI-protocol upstream it targets,
+                // wrong for a GPT-5 or an o-series id, which follow OpenAI's
+                // contract wherever they are served. One production slot runs
+                // `gpt-5.4` against `…openai.azure.com/openai/v1/`, which is
+                // that same strict surface, so every review on it fails on the
+                // parameter rather than on anything it asked for.
+                //
+                // Renamed rather than added: sending both is also an error.
+                // Gated on the MODEL, so a Kimi or GLM behind a compatible
+                // endpoint keeps the `max_tokens` its upstream expects.
+                ...(isOpenAiReasoner(cfg.model)
+                    ? {
+                          transformRequestBody: (body: Record<string, any>) => {
+                              if (!('max_tokens' in body)) {
+                                  return body;
+                              }
+                              const {
+                                  max_tokens: maxTokens,
+                                  ...rest
+                              } = body;
+                              return {
+                                  ...rest,
+                                  max_completion_tokens: maxTokens,
+                              };
+                          },
+                      }
+                    : {}),
+                // Never-downgrade family wins over the baseURL heuristic: a
+                // direct-Moonshot upstream (api.moonshot.ai) keeps json_schema
+                // ON even though shouldEnableJsonSchema alone would reject it
+                // (D-00b). Unknown upstreams still defer to the heuristic — the
+                // capability is additive, not a blanket force-on. Read from the
+                // policy above so the declaration and this body are ONE
+                // expression.
+                supportsStructuredOutputs:
+                    openaiModule.structuredOutputPolicy(cfg, opts) ===
+                    'json_schema',
+            })(cfg.model);
+        }
+
+        // Native OpenAI (id 'openai'). Only pass baseURL when set — the native
+        // SDK has a sensible default and an empty string throws "Invalid URL".
+        // Still gated on the SAME OpenCode Go check as the compatible branch
+        // above: 'openai' also accepts a baseURL override (e.g. Azure OpenAI
+        // proxies), so a slot pointed at opencode.ai/zen through THIS provider
+        // id needs the header too, or it 400s exactly like the compatible one
+        // did before #1880.
+        const native = createOpenAI({
+            apiKey,
+            ...(baseURL ? { baseURL } : {}),
+            ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+            ...(isOpenCodeGoBaseUrl(baseURL)
+                ? { headers: { 'x-opencode-session': openCodeSessionId(cfg) } }
+                : {}),
+        })(cfg.model);
+        // On OpenAI's own API, nothing is stored (not-stored.ts). Another host on
+        // the native id (a gateway) keeps whatever it does today.
+        return !baseURL || isOpenAiHost(baseURL)
+            ? notStoredByOpenAi(native)
+            : native;
+    },
+
+    reasoning(
+        cfg: ProviderBuildConfig,
+        effort: ReasoningEffort,
+    ): ProviderReasoningOptions {
+        if (effort === 'none') {
+            // A Kimi/GLM/DeepSeek model served over `openai_compatible` (a user
+            // can point it at api.moonshot.ai, api.z.ai or api.deepseek.com)
+            // THINKS BY DEFAULT — so "off" must be said out loud here too, or the
+            // user who picked Off still pays for thinking. The gate is the trait
+            // table's `thinksByDefault`, so we never send a `thinking` param to an
+            // unknown upstream (self-hosted Llama/vLLM) that would reject it, and
+            // never send `disabled` to an always-thinking variant (k2.7-code / k3
+            // / GLM-5.3) that rejects the field. Note this transport does
+            // structured via response_format (not forced tool_choice), so it never
+            // hit the tool_choice+thinking 400 — this is a cost/consistency fix,
+            // not a crash fix.
+            if ((cfg.provider as string) === 'openai_compatible') {
+                const traits = resolveCompatibleReasoningTraits(cfg.model);
+                // Say "off" out loud on every brand we RECOGNIZE as thinking by
+                // default (Kimi, GLM, DeepSeek) - not just Kimi. Omitting it left
+                // GLM and DeepSeek reasoning (and billing) while the user had
+                // picked Off. Still never sent to an unknown upstream, and never
+                // to an always-thinking variant that rejects the field.
+                if (traits.thinksByDefault && traits.canDisableThinking) {
+                    return {
+                        openaiCompatible: { thinking: { type: 'disabled' } },
+                    };
+                }
+            }
+            return {};
+        }
+        // Turning reasoning ON is decided per MODEL, exactly like turning it off
+        // above — the transport the user chose is honored either way, we just
+        // never invent a param for an upstream we can't confirm understands it.
+        //   - a recognized compatible reasoner (Kimi/GLM/DeepSeek) takes the
+        //     openai-compatible `thinking` toggle;
+        //   - a native-OpenAI-shaped id proxied over this transport takes the
+        //     OpenAI wire param `reasoning_effort` (sending `thinking` to it was
+        //     a no-op at best: the user picked High and got no reasoning);
+        //   - anything else (self-hosted Llama/vLLM, NVIDIA NIM, MiniMax, a
+        //     generic proxy) gets NOTHING — a strict server 400s on an unknown
+        //     body field, and a lenient one silently ignores it.
+        if ((cfg.provider as string) === 'openai_compatible') {
+            const traits = resolveCompatibleReasoningTraits(cfg.model);
+            if (traits.thinksByDefault) {
+                // An 'effort-only' brand (MiniMax) has no `thinking` object at
+                // all — it takes `reasoning_effort` and nothing else. Emitting
+                // the toggle for it would be inventing a field, which is the
+                // failure this whole branch is careful about everywhere else.
+                if (traits.reasoningControl === 'effort-only') {
+                    const value = compatibleEffortValue(effort, traits);
+                    return value
+                        ? { openaiCompatible: { reasoningEffort: value } }
+                        : {};
+                }
+                // A model that always thinks (GLM-5.3, Kimi k3 / k2.7-code) is
+                // not told to: the toggle changes nothing for it, and a strict
+                // gateway upstream rejects the field (OpenCode Go's glm-5.3-flash,
+                // 2026-09-30: `json: unknown field "thinking"`). OpenCode's own
+                // client sends no reasoning options to GLM-5.3 either.
+                const payload: Record<string, any> = traits.canDisableThinking
+                    ? { thinking: { type: 'enabled' } }
+                    : {};
+                // Only brands documented to accept the PAIR get an effort.
+                // DeepSeek REQUIRES `thinking` + `reasoning_effort` together and
+                // Z.ai accepts both, but Moonshot 400s on the pair ("cannot
+                // specify both") — so Kimi's granularity genuinely stops at the
+                // toggle. The trait table owns that difference, per model.
+                if (traits.acceptsEffortWithThinking) {
+                    const value = compatibleEffortValue(effort, traits);
+                    if (value) payload.reasoningEffort = value;
+                }
+                return Object.keys(payload).length
+                    ? { openaiCompatible: payload }
+                    : {};
+            }
+            if (isNativeOpenAiModel(cfg.model)) {
+                // `reasoningEffort` (camelCase) is the SDK's OWN option name; it
+                // renders the `reasoning_effort` body field itself. Passing the
+                // snake_case name here does NOT work: the SDK spreads unknown
+                // provider options first and then assigns `reasoning_effort`
+                // explicitly, so a snake_case key is overwritten with undefined.
+                return { openaiCompatible: { reasoningEffort: effort } };
+            }
+            return {};
+        }
+        return { openai: { reasoningEffort: effort } };
+    },
+
+    // Per-model reasoning facts. openai_compatible thinking models (Kimi/DeepSeek)
+    // come from the shared table; native OpenAI reasons on the o-series/gpt-5 line
+    // and always does structured via response_format (no forced tool_choice), so
+    // planStructuredCall is always 'as-is' for it.
+    reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits {
+        if ((cfg.provider as string) === 'openai_compatible') {
+            return resolveCompatibleReasoningTraits(cfg.model);
+        }
+        return {
+            thinksByDefault: isOpenAiReasoner(cfg.model),
+            canDisableThinking: true,
+            supportsForcedToolChoice: true,
+            forcedToolChoiceRejectsThinking: false,
+        };
+    },
+
+    // Temperature is a MODEL rule, not just a transport one: a Kimi/GLM served over
+    // openai_compatible obeys the SAME always-thinking → temperature-1 pin as it
+    // does over the Anthropic protocol (shared family helper). Native OpenAI
+    // reasoners (o-series / gpt-5) reject temperature outright; other models are
+    // free.
+    //
+    // This used to return `undefined` for native OpenAI and let the caller read a
+    // static capability flag instead — which is how the connect form and the
+    // runtime came to disagree on 26 production slots. A module that has the
+    // answer states it.
+    // The reasoner check comes FIRST, before the transport branch, because the
+    // sentence above is the rule and the old order contradicted it: a `gpt-5.6`
+    // behind a proxy kept its temperature while the same name on the native id
+    // dropped it. Of the five families the detector recognizes, four had their
+    // model rule applied over openai_compatible and the OpenAI one did not —
+    // `compatibleTemperaturePolicy` knows glm/kimi/deepseek/minimax and answers
+    // `adjustable` for everything else, so the rule was simply never consulted.
+    //
+    // No production slot is affected today (eleven OpenAI-named proxy slots
+    // exist and none sets a temperature), so this closes a latent contradiction
+    // rather than a live break. It is still worth closing: a customer who sets
+    // one tomorrow gets a 400 on every review, and because save-time validation
+    // reads this same policy, nothing would have warned them.
+    //
+    // The cost of being wrong runs the safe way. If a proxy's `gpt-5…` is really
+    // an alias for something that DOES take a temperature, the user loses a
+    // setting; if it is really a GPT-5 and we send one, every review fails.
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
+        if (isOpenAiReasoner(cfg.model)) {
+            return { kind: 'unsupported' };
+        }
+        if ((cfg.provider as string) === 'openai_compatible') {
+            return compatibleTemperaturePolicy(cfg.model, cfg.reasoningEffort);
+        }
+        return { kind: 'adjustable' };
+    },
+
+    normalizeUsage: normalizeSdkUsage,
+    normalize: normalizeSdkResult,
+
+    uiFields: [
+        {
+            key: 'apiKey',
+            label: 'API key',
+            type: 'password',
+            required: true,
+            scope: 'top',
+        },
+        {
+            key: 'baseURL',
+            label: 'Base URL',
+            type: 'url',
+            required: false,
+            scope: 'top',
+            placeholder: 'https://api.openai.com/v1',
+        },
+    ],
+    providerOptionsNamespace: (id) =>
+        id === 'openai_compatible' ? 'openaiCompatible' : 'openai',
+    // Both adapters render `reasoning_effort` from `reasoningEffort` and strip
+    // the snake_case spelling users copy from the vendor docs.
+    normalizeReasoningOverride: (_ns, options) =>
+        reasoningEffortFromWire(options),
+    // Native OpenAI takes `reasoningEffort` (+ optional serviceTier); an
+    // openai_compatible upstream takes the standard `thinking` toggle — so the
+    // Custom-override example differs per served id. Mirrors reasoning() above.
+    reasoningOverrideExample: (id) =>
+        id === 'openai_compatible'
+            ? '{\n  "thinking": { "type": "enabled" }\n}'
+            : '{\n  "reasoningEffort": "high",\n  "serviceTier": "flex"\n}',
+    modelListing: openAiModelListing,
+};
+
+registerProvider(openaiModule);

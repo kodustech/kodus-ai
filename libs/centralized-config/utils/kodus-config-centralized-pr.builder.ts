@@ -1,9 +1,8 @@
-import * as yaml from 'js-yaml';
-
 import {
     CentralizedConfigPrService,
     CentralizedMutationPullRequestRequest,
 } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
+import { dumpCentralizedYaml } from '@libs/centralized-config/utils/yaml-dump';
 import { KodusConfigFile } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
@@ -97,7 +96,7 @@ export function buildKodusConfigCentralizedMutationRequest(
                 {
                     path,
                     operation: 'upsert',
-                    content: yaml.dump(params.configFileContent),
+                    content: dumpCentralizedYaml(params.configFileContent),
                 },
             ];
         },
@@ -145,7 +144,7 @@ function buildDirectoryGroupFileOps(args: {
             ops.push({
                 path: newConfigPath,
                 operation: 'upsert',
-                content: yaml.dump(configFileContent),
+                content: dumpCentralizedYaml(configFileContent),
             });
         } else if (!folderRenamed) {
             // No content and no rename → user is clearing the override at the

@@ -1,0 +1,709 @@
+{
+  "model": "kimi-k2.7-code@openrouter",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 2,
+  "engine": {
+    "commit": "7f04ea6a6bde3993a22103d32551e45f15da8e6b",
+    "sourceDigest": "53d0ebdf770e24c6841bb578c550fdf5cfc9f5fc4a717a339b1de93e7a48047d"
+  },
+  "startedAt": "2026-10-15T16:21:24.665Z",
+  "updatedAt": "2026-10-15T16:34:20.569Z",
+  "complete": true,
+  "selectedCases": [
+    "R8-consequence-kody-rule-prior",
+    "K7-rule-repost-prod-profile",
+    "P22-rule-forward-parsed-pingpong"
+  ],
+  "casesSourceDigest": "86b7ff2e8a5db76dae3f7ed3df899f9e989d3763af9b9704b7cadc032db3d9c4",
+  "summary": {
+    "measured": 6,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 4,
+        "violations": 3,
+        "rate": 0.75
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 1,
+        "violations": 0,
+        "rate": 0
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 6,
+        "violations": 1,
+        "rate": 0.167
+      },
+      "index-reference (#2039)": {
+        "n": 10,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R8-consequence-kody-rule-prior · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 1,
+        "n": 2,
+        "delivered": 1
+      },
+      "K7-rule-repost-prod-profile · rangeLabel-start-repeat [not_deliver]": {
+        "pass": 1,
+        "n": 2,
+        "delivered": 1
+      },
+      "K7-rule-repost-prod-profile · dayKey-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      },
+      "P22-rule-forward-parsed-pingpong · create-order-raw-body-repeat [not_deliver]": {
+        "pass": 0,
+        "n": 2,
+        "delivered": 2
+      },
+      "P22-rule-forward-parsed-pingpong · cancel-order-raw-body-new-site [deliver]": {
+        "pass": 2,
+        "n": 2,
+        "delivered": 2
+      }
+    }
+  },
+  "rows": [
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 216739,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/polling/poller.ts",
+          "claim": "The NotReadyError class doc says it means 'the gateway has the charge but has not settled it yet,' while pollCharge's comment says the opposite. These descriptions should be reconciled to avoid confusion about whether the error indicates a pending or missing charge.",
+          "keep": true,
+          "rationale": "The claim is verified by the source. errors.ts:1 documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient),' while poller.ts:7 says 'NotReadyError means \"the gateway never received it\": resubmit.' These two descriptions are mutually contradictory (pending/settling vs. missing/never received) and could mislead maintainers about whether to resubmit. The previous review decision addressed error propagation behavior in status.ts, not this documentation inconsistency, so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/polling/poller.ts",
+                "startLine": 1,
+                "endLine": 80
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "path": "src",
+                "glob": "*.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 50
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/polling/poller.ts",
+          "claim": "fetchStatus now propagates NotReadyError, and the only caller, pollCharge at src/billing/polling/poller.ts:11, catches NotReadyError and calls gw.submit, which the Gateway interface documents as NOT idempotent. As a result, pollCharge will resubmit on every polling tick while the charge remains not ready, creating duplicate charges. This path was previously unreachable because fetchStatus masked NotReadyError as a terminal FailedError. The earlier suggestion to propagate NotReadyError is being revised because the caller was not updated to handle it safely.",
+          "keep": true,
+          "rationale": "Verified the code path end-to-end. `fetchStatus` (src/billing/status.ts:8-10) now propagates `NotReadyError` unchanged. Its only caller, `pollCharge` (src/billing/poller.ts:11), catches `NotReadyError` and unconditionally calls `gw.submit(charge.payload)`. The `Gateway` interface (src/billing/gateway.ts:3) documents `submit` as 'NOT idempotent: every call creates a new charge.' `pollCharge` is described as being 'called on every tick,' so while a charge remains not ready each tick will resubmit it, producing duplicate charges. This is a concrete consequence of applying the earlier 'propagate NotReadyError' suggestion without updating the caller to avoid non-idempotent resubmission, so it is a fresh finding that revises the earlier suggestion rather than a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/polling/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "fetchStatus",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "interface Gateway|Gateway interface",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge\\(",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/polling/poller.ts",
+          "claim": "The NotReadyError class doc says it means 'the gateway has the charge but has not settled it yet,' while pollCharge's comment says the opposite. These descriptions should be reconciled to avoid confusion about whether the error indicates a pending or missing charge.",
+          "keep": true,
+          "rationale": "Verified: errors.ts:1 documents NotReadyError as 'The gateway has the charge but has not settled it yet (transient),' while poller.ts:7 says 'NotReadyError means \"the gateway never received it\": resubmit.' These two descriptions are directly contradictory about whether the error means the charge exists-but-is-pending vs. missing-never-received. The previous review decision (round-a-propagate) addressed only whether fetchStatus should propagate NotReadyError vs. convert it to FailedError in status.ts; it did not raise or resolve this docstring/comment contradiction. Although the cited path is slightly off (src/billing/poller.ts, not src/billing/polling/poller.ts), the claim is accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/polling/poller.ts",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError|pollCharge"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/billing/polling/poller.ts",
+          "claim": "fetchStatus now propagates NotReadyError, and the only caller, pollCharge at src/billing/polling/poller.ts:11, catches NotReadyError and calls gw.submit, which the Gateway interface documents as NOT idempotent. As a result, pollCharge will resubmit on every polling tick while the charge remains not ready, creating duplicate charges. This path was previously unreachable because fetchStatus masked NotReadyError as a terminal FailedError. The earlier suggestion to propagate NotReadyError is being revised because the caller was not updated to handle it safely.",
+          "keep": true,
+          "rationale": "Verified the code paths in src/billing/poller.ts, src/billing/status.ts, and src/billing/gateway.ts. fetchStatus now propagates NotReadyError unchanged (lines 8-10 of status.ts), implementing the earlier suggestion. pollCharge catches NotReadyError and calls gw.submit (lines 13-14 of poller.ts). Gateway.submit is explicitly documented as NOT idempotent: 'every call creates a new charge' (gateway.ts lines 3-4). The poller.ts comment states pollCharge is 'Called on every tick', so while NotReadyError persists, gw.submit will be invoked repeatedly, risking duplicate charges. This is a distinct problem from the earlier 'retryable errors stay retryable' decision: it is a consequence of that suggestion being applied without updating the caller to handle the propagated error safely. The finding correctly revises the earlier suggestion.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/polling/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": ".",
+                "maxDepth": 3
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src",
+                "maxDepth": 4
+              },
+              "failed": false
+            },
+            {
+              "name": "listDir",
+              "args": {
+                "path": "src/billing",
+                "maxDepth": 4
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "pollCharge",
+                "path": ".",
+                "namesOnly": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "sandboxCalls": 33,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/billing/polling/poller.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "Correctness bug: duplicate charge submissions",
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nNow that `fetchStatus` propagates `NotReadyError`, `pollCharge` at `src/billing/polling/poller.ts:11` catches it and calls `gw.submit`, which the `Gateway` interface documents as non-idempotent, so every polling tick resubmits while the charge remains not ready and creates duplicate charges. Skip `gw.submit` on `NotReadyError` and wait for the next tick, only calling it when there is a genuine new charge to submit."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/billing/polling/poller.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "Documentation inconsistency",
+          "marked": false,
+          "text": "The `NotReadyError` class doc says the gateway has the charge but has not settled it yet, while `pollCharge`'s comment says the opposite, so it's unclear whether the error indicates a pending or missing charge. Align the `pollCharge` comment and the `NotReadyError` class doc so both describe the same semantics."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "R8-consequence-kody-rule-prior",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 202170,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 179591,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "In `src/reports/range.ts`, `dayKey` derives a calendar day by slicing an ISO timestamp, but for users west of UTC, `toISOString().slice(0, 10)` yields the previous calendar day, so any report key or label based on it is shifted. Use `formatLocalDate(at)` instead."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-magic-numbers"
+          ],
+          "marked": false,
+          "text": "The literal `10` in `dayKey`'s `toISOString().slice(0, 10)` is an unexplained magic number that obscures the code's intent. Replace that call with `formatLocalDate(at)`, which removes the magic number and also avoids the UTC/local-day bug."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "K7-rule-repost-prod-profile",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 55765,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/reports/range.ts",
+          "line": 5,
+          "severity": "medium",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-local-day",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/reports/range.ts:4` (2026-10-06 14:02 UTC).\n\nBecause `rangeLabel` currently derives the start day with `toISOString().slice(0, 10)`, users west of UTC see the previous calendar day and a broken label. Use `formatLocalDate(range.start)` from `./dates` instead."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/reports/range.ts",
+          "line": 11,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-local-calendar-day"
+          ],
+          "marked": false,
+          "text": "The new `dayKey` helper uses `toISOString().slice(0, 10)`, which returns the previous calendar day for users west of UTC. Use `formatLocalDate(at)` from `./dates` so the key stays in local calendar time."
+        }
+      ],
+      "claims": [
+        {
+          "id": "rangeLabel-start-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "medium",
+          "pass": false
+        },
+        {
+          "id": "dayKey-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 1,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 53839,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/create-order.handler.ts",
+          "line": 18,
+          "severity": "high",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/create-order.handler.ts:13` (2026-10-06 12:00 UTC).\n\nValidating with `CreateOrderSchema` but passing `req.body` to `orders.create` lets unchecked fields like `status` and `totalCents` bypass validation. Pass `parsed.data` instead, and extend the schema if partner metadata needs to be validated explicitly."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Publishing `req.body` on line 17 violates Rule [21] by sending unvalidated input to the event bus. Replace it with `result.data` so only validated fields are published."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "kimi-k2.7-code@openrouter",
+      "rep": 2,
+      "case": "P22-rule-forward-parsed-pingpong",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 61784,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "file": "src/orders/create-order.handler.ts",
+          "line": 19,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-P22-rule-forward-parsed-pingpong",
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "**Revises an earlier Kody suggestion** on `src/orders/create-order.handler.ts:13` (2026-10-06 12:00 UTC).\n\nThe handler validates `req.body` with `CreateOrderSchema` but still forwards the raw `req.body` to `orders.create`, so unchecked fields such as `status` and `totalCents` can reach the service and database. Pass `parsed.data` instead of `req.body` so only validated and parsed fields are used."
+        },
+        {
+          "sourceIndex": 1,
+          "file": "src/orders/cancel-order.handler.ts",
+          "line": 17,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-dto-validation"
+          ],
+          "marked": false,
+          "text": "Even though `req.body` is validated with `CancelOrderSchema`, publishing the raw body lets extra client fields propagate on the event bus, violating rule [21]. Publish `result.data` instead of `req.body` so only the parsed and validated payload is forwarded."
+        }
+      ],
+      "claims": [
+        {
+          "id": "create-order-raw-body-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        },
+        {
+          "id": "cancel-order-raw-body-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

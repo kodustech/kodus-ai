@@ -68,7 +68,7 @@ export default function GlobalError({
 
                         <Button
                             size="sm"
-                            variant="secondary"
+                            variant="primary-dark"
                             leftIcon={<RefreshCw />}
                             onClick={reset}>
                             Try again

@@ -1,11 +1,59 @@
 import {
     IDE_RULE_DIR_MARKERS,
     RULE_FILE_PATTERNS,
+    RULE_FILE_DISCOVERY_PATTERNS,
     extractRepoSubdirFromIdeSource,
     isIdeRuleSource,
     pathMatchesIdeRuleDir,
+    splitRulePathGlobs,
     validateAndScopeIdeRulePath,
 } from '../../../libs/common/utils/kody-rules/file-patterns';
+import { isFileMatchingGlobCaseInsensitive } from '../../../libs/common/utils/glob-utils';
+
+describe('splitRulePathGlobs', () => {
+    it('splits on top-level commas and trims whitespace', () => {
+        expect(splitRulePathGlobs('app/**/*.rb, lib/**/*.rb')).toEqual([
+            'app/**/*.rb',
+            'lib/**/*.rb',
+        ]);
+    });
+
+    it('keeps commas inside braces and character classes', () => {
+        expect(
+            splitRulePathGlobs('{app,lib}/**/*.rb,src/[ab,cd]/**,docs/**'),
+        ).toEqual(['{app,lib}/**/*.rb', 'src/[ab,cd]/**', 'docs/**']);
+    });
+
+    it('drops empty fragments', () => {
+        expect(splitRulePathGlobs('app/**,,lib/**,')).toEqual([
+            'app/**',
+            'lib/**',
+        ]);
+    });
+
+    it('keeps commas inside extglobs', () => {
+        expect(splitRulePathGlobs('@(app,lib)/**,docs/**')).toEqual([
+            '@(app,lib)/**',
+            'docs/**',
+        ]);
+    });
+
+    it('keeps escaped commas as literals', () => {
+        expect(splitRulePathGlobs('path\\,with\\,comma/**,docs/**')).toEqual([
+            'path\\,with\\,comma/**',
+            'docs/**',
+        ]);
+    });
+
+    it('treats delimiters inside character classes as literals', () => {
+        // "[{]" must not bump the brace depth, or every later top-level
+        // comma would be swallowed.
+        expect(splitRulePathGlobs('src/[{]/**,lib/**')).toEqual([
+            'src/[{]/**',
+            'lib/**',
+        ]);
+    });
+});
 
 describe('IDE_RULE_DIR_MARKERS', () => {
     it('is derived from RULE_FILE_PATTERNS — every pattern with a directory part contributes a marker', () => {
@@ -36,36 +84,6 @@ describe('IDE_RULE_DIR_MARKERS', () => {
         expect(IDE_RULE_DIR_MARKERS.length).toBe(
             new Set(IDE_RULE_DIR_MARKERS).size,
         );
-    });
-
-    it('covers every IDE/agent pattern shipped today', () => {
-        // Spot-check: each marker corresponds to the directory portion of
-        // a pattern's fixed prefix. Patterns whose fixed prefix has no
-        // directory part (`.cursorrules`, `CLAUDE.md`, `.windsurfrules`,
-        // ...) intentionally don't contribute markers — they live at the
-        // repo root by definition.
-        expect(IDE_RULE_DIR_MARKERS).toEqual(
-            expect.arrayContaining([
-                '.cursor/rules', // .cursor/rules/**/*.mdc
-                '.kody/rules', // .kody/rules/**
-                '.github/instructions', // .github/instructions/**/*.instructions.md
-                '.github', // .github/copilot-instructions.md
-                '.claude', // .claude/settings.json
-                '.sourcegraph', // .sourcegraph/**/*.rule.md
-                '.rules', // .rules/**/*
-                'docs/coding-standards', // docs/coding-standards/**/*
-            ]),
-        );
-    });
-
-    it('does NOT contain bare ".cursor" or ".kody" — those have no isolated pattern', () => {
-        // We only ship `.cursor/rules/**/*.mdc` and `.kody/rules/**`, not
-        // bare `.cursor/...` or `.kody/...`. If somebody later adds a
-        // pattern like `.cursor/foo.json`, the marker `.cursor` will
-        // start appearing automatically and this guard will fail — at
-        // which point the assertion just needs to be removed.
-        expect(IDE_RULE_DIR_MARKERS).not.toContain('.cursor');
-        expect(IDE_RULE_DIR_MARKERS).not.toContain('.kody');
     });
 });
 
@@ -123,6 +141,21 @@ describe('extractRepoSubdirFromIdeSource', () => {
             expected: 'applications/baz',
         },
         {
+            name: 'AGENTS.md at repo root',
+            source: 'AGENTS.md',
+            expected: null,
+        },
+        {
+            name: 'AGENTS.md under a subdir (#1484)',
+            source: 'services/x/AGENTS.md',
+            expected: 'services/x',
+        },
+        {
+            name: 'CLAUDE.md under a monorepo app',
+            source: 'apps/api/CLAUDE.md',
+            expected: 'apps/api',
+        },
+        {
             name: 'docs/coding-standards under a deep subdir',
             source: 'monorepo/web/docs/coding-standards/typescript.md',
             expected: 'monorepo/web',
@@ -157,6 +190,59 @@ describe('isIdeRuleSource — sanity check', () => {
         expect(isIdeRuleSource(undefined)).toBe(false);
         expect(isIdeRuleSource('')).toBe(false);
     });
+
+    it('recognises AGENTS.md at root and under subdirs (#1484)', () => {
+        expect(isIdeRuleSource('AGENTS.md')).toBe(true);
+        expect(isIdeRuleSource('apps/web/AGENTS.md')).toBe(true);
+    });
+
+    it('recognises non-canonical casing, consistent with discovery', () => {
+        // Discovery matches case-insensitively; a file the sync imports
+        // (e.g. lowercase claude.md) must be recognised afterwards or the
+        // toggle-off purge and origin resolution skip it.
+        expect(isIdeRuleSource('claude.md')).toBe(true);
+        expect(isIdeRuleSource('agents.md')).toBe(true);
+        expect(isIdeRuleSource('apps/web/.CursorRules')).toBe(true);
+    });
+});
+
+describe('RULE_FILE_DISCOVERY_PATTERNS (#1484/#1485)', () => {
+    // The sync service discovers rule files with these patterns matched
+    // case-insensitively (same matcher the provider services use for
+    // repo-tree listings). Pins the customer-reported gaps: root AGENTS.md
+    // was never fetched, and nested CLAUDE.md files were only discovered
+    // under directories explicitly configured in code review settings.
+    const discovers = (filePath: string) =>
+        isFileMatchingGlobCaseInsensitive(filePath, [
+            ...RULE_FILE_DISCOVERY_PATTERNS,
+        ]);
+
+    it('discovers root AGENTS.md (uppercase, no leading dot)', () => {
+        expect(discovers('AGENTS.md')).toBe(true);
+    });
+
+    it('discovers nested guidance files (monorepo convention)', () => {
+        expect(discovers('apps/api/CLAUDE.md')).toBe(true);
+        expect(discovers('services/billing/AGENTS.md')).toBe(true);
+        expect(discovers('packages/ui/.kody/rules/naming.md')).toBe(true);
+    });
+
+    it('matches case-insensitively (claude.md == CLAUDE.md)', () => {
+        expect(discovers('claude.md')).toBe(true);
+        expect(discovers('agents.md')).toBe(true);
+    });
+
+    it('still ignores unrelated files', () => {
+        expect(discovers('README.md')).toBe(false);
+        expect(discovers('src/agents/index.ts')).toBe(false);
+        expect(discovers('docs/AGENTS-guide.md')).toBe(false);
+    });
+
+    it('every base pattern has its **/ variant', () => {
+        expect(RULE_FILE_DISCOVERY_PATTERNS).toHaveLength(
+            RULE_FILE_PATTERNS.length * 2,
+        );
+    });
 });
 
 describe('pathMatchesIdeRuleDir', () => {
@@ -167,6 +253,9 @@ describe('pathMatchesIdeRuleDir', () => {
         '.github/instructions/**',
         '.sourcegraph/**/*.rule.md',
         'applications/foo/.cursor/rules/**/*',
+        // Brace alternation must not hide the IDE prefix now that
+        // splitRulePathGlobs preserves braces.
+        '.cursor/rules/{a,b}/**',
     ];
 
     for (const p of IDE_PATHS) {
@@ -192,9 +281,9 @@ describe('pathMatchesIdeRuleDir', () => {
     it('flags any glob in a comma-separated list that hits an IDE dir', () => {
         // Defensive: even if the LLM slips an IDE glob into a list of
         // otherwise legit globs, we want to catch it.
-        expect(
-            pathMatchesIdeRuleDir('src/**/*.ts,.cursor/rules/**/*'),
-        ).toBe(true);
+        expect(pathMatchesIdeRuleDir('src/**/*.ts,.cursor/rules/**/*')).toBe(
+            true,
+        );
     });
 
     it('returns false for empty / nullish input', () => {
@@ -324,18 +413,5 @@ describe('validateAndScopeIdeRulePath', () => {
         });
         expect(result.path).toBe('**/*');
         expect(result.reason).toBe('rejected-empty');
-    });
-
-    it('handles whitespace around an otherwise-valid glob', () => {
-        // The validator currently does not trim, but this guards against
-        // accidental change. If someone later decides to trim, the test
-        // tells them the call sites that depend on this behaviour.
-        const result = validateAndScopeIdeRulePath({
-            llmPath: '  src/**/*.ts  ',
-            sourceFilePath: '.cursor/rules/foo.mdc',
-            pathSource: 'declared',
-        });
-        expect(result.path).toBe('  src/**/*.ts  ');
-        expect(result.reason).toBe('accepted-as-is');
     });
 });

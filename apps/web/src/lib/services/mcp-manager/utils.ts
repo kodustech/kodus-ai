@@ -2,7 +2,6 @@ import { typedFetch } from "@services/fetch";
 import { auth } from "src/core/config/auth";
 import { createUrl } from "src/core/utils/helpers";
 import { isServerSide } from "src/core/utils/server-side";
-import { getJWTToken } from "src/core/utils/session";
 
 import { MCPServiceUnavailableError } from "./errors";
 
@@ -45,7 +44,9 @@ export const mcpManagerFetch = async <Data>(
         const port = process.env.WEB_PORT_MCP_MANAGER;
         url = createUrl(hostName, port, _url.toString(), { internal: true });
     } else {
-        authorization = await getJWTToken();
+        // Client calls route through /api/proxy/mcp, which injects the Bearer
+        // from the httpOnly session cookie server-side — so the browser never
+        // fetches /api/auth/session or attaches a token itself.
         const path = _url.toString();
         const normalized = path.startsWith("/") ? path : `/${path}`;
         url = `/api/proxy/mcp${normalized}`;
@@ -56,19 +57,40 @@ export const mcpManagerFetch = async <Data>(
             ...config,
             headers: {
                 ...config?.headers,
-                Authorization: `Bearer ${authorization}`,
+                // Only server-side direct calls need the token; the proxy
+                // injects it for client calls.
+                ...(authorization
+                    ? { Authorization: `Bearer ${authorization}` }
+                    : {}),
             },
         });
     } catch (error) {
         // Service unavailable — MCP Manager might not be running.
+        // Our own proxy could not reach the manager. The browser never sees
+        // ECONNREFUSED, because its request to /api/proxy/mcp succeeds and the
+        // failure happens upstream of it, so the string checks below only ever
+        // matched server-side direct calls.
+        //
+        // Matched on the proxy's own body marker, not on the status: a 502,
+        // 503 or 504 RELAYED from the manager (an ingress mid-rolling-restart,
+        // the manager reporting its own backend down) means "briefly
+        // unhealthy", and treating that as "not deployed" would hide the
+        // Plugins entry for the whole staleTime window — the opposite of the
+        // fail-open this probe promises.
+        const body = (error as { body?: { code?: unknown } })?.body;
+        const proxyCouldNotReachIt =
+            (error as { statusCode?: unknown })?.statusCode === 502 &&
+            body?.code === "UPSTREAM_UNREACHABLE";
+
         if (
-            error instanceof Error &&
-            (error.message.includes("ENOTFOUND") ||
-                error.message.includes("ECONNREFUSED") ||
-                error.message.includes("Failed to fetch") ||
-                error.message.includes("fetch failed"))
+            proxyCouldNotReachIt ||
+            (error instanceof Error &&
+                (error.message.includes("ENOTFOUND") ||
+                    error.message.includes("ECONNREFUSED") ||
+                    error.message.includes("Failed to fetch") ||
+                    error.message.includes("fetch failed")))
         ) {
-            console.warn("[MCP Manager] Service unavailable:", error.message);
+            console.warn("[MCP Manager] Service unavailable:", (error as Error)?.message);
             throw new MCPServiceUnavailableError();
         }
         throw error;

@@ -8,8 +8,10 @@ const FILES = [
     'src/commands/schema.ts',
     'src/commands/hook/install.ts',
     'src/commands/hook/uninstall.ts',
-    'src/commands/memory/index.ts',
-    'src/commands/memory/disable.ts',
+    'src/commands/trace/index.ts',
+    'src/commands/trace/disable.ts',
+    'src/commands/trace/recall.ts',
+    'src/commands/trace/status.ts',
     'src/formatters/json.ts',
     'src/formatters/markdown.ts',
     'src/formatters/prompt.ts',
@@ -19,7 +21,6 @@ const FILES = [
     'src/utils/credentials.ts',
     'src/utils/input-validation.ts',
     'src/utils/rate-limit.ts',
-    'src/services/api/memory.api.ts',
     'src/services/api/trial.api.ts',
 ] as const;
 
@@ -28,6 +29,6 @@ describe('Runtime and command type consumers', () => {
         const filePath = path.resolve(process.cwd(), file);
         const contents = fs.readFileSync(filePath, 'utf-8');
 
-        expect(contents).not.toContain("types/index.js");
+        expect(contents).not.toContain('types/index.js');
     });
 });

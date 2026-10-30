@@ -1,0 +1,37 @@
+---
+title: "Review Policy"
+description: "How to read Kody's feedback and how it interacts with your merge policies — what blocks a PR, what doesn't, and who decides."
+---
+
+## Purpose
+
+Clarify how to interpret Kody's feedback and how it interacts with your repository's merge policies.
+
+## Suggestions vs. Blocking
+
+- Suggestions: By default, Kody posts non-blocking comments for you to evaluate.
+- Request Changes (optional): If enabled, Kody can mark a review as "changes requested" for critical issues.
+- Auto-approve (optional): If enabled, Kody can approve a PR after a clean review. Conditional
+  approval can also restrict eligible labels and authors, require a person for selected paths,
+  and hold PRs that Kody cannot assess as low risk. See
+  [Auto-approve](/en/how_to_use/code_review/configs/auto_approve).
+
+<Note>
+  Enable blocking behaviors only when your team agrees on the thresholds and has strong CI in place.
+</Note>
+
+## When to Enable Request Changes
+
+- Security-sensitive areas where critical issues must never ship.
+- Performance hotspots where regressions are costly.
+- Repositories with clear coding standards and stable review rules.
+
+## When to Use Auto-approve
+
+- Small, low-risk changes (docs/tests). Configure conditional approval when only a subset of PRs
+  should be eligible.
+- Teams with high test coverage and reliable CI.
+
+## Human Decision Always Matters
+
+Kody accelerates feedback but does not replace human judgment. Your team decides which suggestions to adopt and when to merge.

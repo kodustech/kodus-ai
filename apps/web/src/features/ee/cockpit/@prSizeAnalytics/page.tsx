@@ -6,12 +6,12 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import { formatISO, subWeeks } from "date-fns";
 import { extractApiData } from "src/features/ee/cockpit/_helpers/api-data-extractor";
 import { getPRSizeAnalytics } from "src/features/ee/cockpit/_services/analytics/productivity/fetch";
 import { getPercentageDiff } from "src/features/ee/cockpit/_services/analytics/utils";
 
 import { InsightsBadge } from "../_components/insights-badge";
+import { getSelectedDateRange } from "../_helpers/get-selected-date-range";
 import { PercentageDiff } from "../_components/percentage-diff";
 import { PRSizeAnalyticsHeader } from "./_components/header";
 import NoData from "./_components/no-data";
@@ -42,12 +42,11 @@ const comparisonParameters = {
 >;
 
 export default async function PRSizeAnalytics() {
-    const endDate = new Date();
-    const startDate = subWeeks(endDate, 2);
+    const selectedDateRange = await getSelectedDateRange();
 
     const response = await getPRSizeAnalytics({
-        startDate: formatISO(startDate, { representation: "date" }),
-        endDate: formatISO(endDate, { representation: "date" }),
+        startDate: selectedDateRange.startDate,
+        endDate: selectedDateRange.endDate,
     });
 
     const data = extractApiData(response);

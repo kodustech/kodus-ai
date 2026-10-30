@@ -1,3 +1,4 @@
+import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
@@ -8,6 +9,7 @@ import { ORGANIZATION_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { AutoAssignLicenseUseCase } from '@libs/ee/license/use-cases/auto-assign-license.use-case';
+import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
 import {
     PermissionValidationService,
     ValidationErrorType,
@@ -19,11 +21,27 @@ import { USER_SERVICE_TOKEN } from '@libs/identity/domain/user/contracts/user.se
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { ValidatePrerequisitesStage } from './validate-prerequisites.stage';
 
+// The trial is provisioned cloud-only (the stage early-returns unless
+// environment.API_CLOUD_MODE). Force cloud mode on so the trial path runs.
+jest.mock('@libs/ee/configs/environment', () => {
+    const actual = jest.requireActual('@libs/ee/configs/environment');
+    return {
+        ...actual,
+        environment: { ...actual.environment, API_CLOUD_MODE: true },
+    };
+});
+
 describe('ValidatePrerequisitesStage', () => {
     let stage: ValidatePrerequisitesStage;
 
     let mockPermissionValidationService: {
         validateExecutionPermissions: jest.Mock;
+        getBYOKConfig: jest.Mock;
+        resolveTaskSlot: jest.Mock;
+    };
+    let mockLicenseService: {
+        startTrial: jest.Mock;
+        getAllUsersWithLicense: jest.Mock;
     };
     let mockAutoAssignLicenseUseCase: {
         execute: jest.Mock;
@@ -44,8 +62,12 @@ describe('ValidatePrerequisitesStage', () => {
         createResponseToComment: jest.Mock;
     };
 
-    const makeContext = (): CodeReviewPipelineContext =>
-        ({
+    // Frozen by DEFAULT — production hands every stage after the first
+    // produce() a deep-frozen context. See test/fixtures/frozen-pipeline-context.ts.
+    const makeContext = (
+        over: Record<string, unknown> = {},
+    ): CodeReviewPipelineContext =>
+        frozenContext({
             organizationAndTeamData: {
                 organizationId: 'org-1',
                 teamId: 'team-1',
@@ -65,7 +87,6 @@ describe('ValidatePrerequisitesStage', () => {
             teamAutomationId: 'automation-1',
             origin: 'opened',
             action: 'opened',
-            dryRun: { enabled: false },
             errors: [],
             preparedFileContexts: [],
             validSuggestions: [],
@@ -78,11 +99,21 @@ describe('ValidatePrerequisitesStage', () => {
                 message: 'started',
             },
             pipelineVersion: '1.0.0',
+            ...over,
         }) as CodeReviewPipelineContext;
 
     beforeEach(async () => {
         mockPermissionValidationService = {
             validateExecutionPermissions: jest.fn(),
+            getBYOKConfig: jest.fn().mockResolvedValue(null),
+            // native "is BYOK?" heal check resolves the codeReview carrier via
+            // the per-task API; null → env/managed default (no client BYOK).
+            resolveTaskSlot: jest.fn().mockResolvedValue(null),
+        };
+
+        mockLicenseService = {
+            startTrial: jest.fn().mockResolvedValue(false),
+            getAllUsersWithLicense: jest.fn().mockResolvedValue([]),
         };
 
         mockAutoAssignLicenseUseCase = {
@@ -152,6 +183,10 @@ describe('ValidatePrerequisitesStage', () => {
                 {
                     provide: USER_SERVICE_TOKEN,
                     useValue: { find: jest.fn().mockResolvedValue([]) },
+                },
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: mockLicenseService,
                 },
             ],
         }).compile();
@@ -228,6 +263,102 @@ describe('ValidatePrerequisitesStage', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it('auto-provisions a missing trial and re-validates for an onboarded org', async () => {
+        const context = makeContext();
+
+        mockPermissionValidationService.validateExecutionPermissions
+            .mockResolvedValueOnce({
+                allowed: false,
+                errorType: ValidationErrorType.INVALID_LICENSE,
+            })
+            .mockResolvedValueOnce({
+                allowed: true,
+                subscriptionStatus: 'trial',
+            });
+
+        mockParametersService.findByKey.mockImplementation((key: string) => {
+            if (key === ParametersKey.PLATFORM_CONFIGS) {
+                return Promise.resolve({
+                    configValue: { finishOnboard: true },
+                });
+            }
+            return Promise.resolve(undefined);
+        });
+
+        mockLicenseService.startTrial.mockResolvedValue(true);
+
+        const result = await stage.execute(context);
+
+        expect(mockLicenseService.startTrial).toHaveBeenCalledWith(
+            context.organizationAndTeamData,
+            false,
+        );
+        // Validated once (INVALID_LICENSE), then again after provisioning.
+        expect(
+            mockPermissionValidationService.validateExecutionPermissions,
+        ).toHaveBeenCalledTimes(2);
+        // Review proceeds instead of being skipped for a missing license.
+        expect(result.statusInfo?.status).not.toBe('skipped');
+        expect(
+            mockCodeManagementService.createIssueComment,
+        ).not.toHaveBeenCalled();
+    });
+
+    // Billing answers 409 for an org that already has a license, and startTrial
+    // treats 409 as success — so a canceled org re-ran the heal on every PR,
+    // logged "POST trial failed" and a false "Auto-provisioned" (204/day).
+    it('does not provision a trial for an org whose license exists but is canceled', async () => {
+        const context = makeContext();
+
+        mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+            {
+                allowed: false,
+                errorType: ValidationErrorType.INVALID_LICENSE,
+                metadata: {
+                    validation: {
+                        valid: false,
+                        subscriptionStatus: 'canceled',
+                    },
+                },
+            },
+        );
+        mockParametersService.findByKey.mockImplementation((key: string) => {
+            if (key === ParametersKey.PLATFORM_CONFIGS) {
+                return Promise.resolve({
+                    configValue: { finishOnboard: true },
+                });
+            }
+            return Promise.resolve(undefined);
+        });
+
+        const result = await stage.execute(context);
+
+        expect(mockLicenseService.startTrial).not.toHaveBeenCalled();
+        expect(result.statusInfo?.status).toBe('skipped');
+    });
+
+    it('does not provision a trial when onboarding is not finished', async () => {
+        const context = makeContext();
+
+        mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+            {
+                allowed: false,
+                errorType: ValidationErrorType.INVALID_LICENSE,
+            },
+        );
+
+        // No PLATFORM_CONFIGS / finishOnboard flag → onboarding not complete.
+        mockParametersService.findByKey.mockResolvedValue(undefined);
+
+        const result = await stage.execute(context);
+
+        expect(mockLicenseService.startTrial).not.toHaveBeenCalled();
+        expect(
+            mockPermissionValidationService.validateExecutionPermissions,
+        ).toHaveBeenCalledTimes(1);
+        expect(result.statusInfo?.status).toBe('skipped');
+    });
+
     it('should mark notification as handled for early skips when show status feedback is disabled', async () => {
         const context = makeContext();
 
@@ -253,8 +384,10 @@ describe('ValidatePrerequisitesStage', () => {
     });
 
     it('should skip review for centralized config repository when centralized config is enabled', async () => {
-        const context = makeContext();
-        context.repository.id = 'centralized-config-repo';
+        // Override at build time: the context is frozen, like production.
+        const context = makeContext({
+            repository: { id: 'centralized-config-repo', name: 'repo-1' },
+        });
 
         mockParametersService.findByKey.mockImplementation((key: string) => {
             if (key === ParametersKey.CENTRALIZED_CONFIG) {
@@ -281,8 +414,10 @@ describe('ValidatePrerequisitesStage', () => {
     });
 
     it('should not skip review for non-centralized config repository when centralized config is enabled', async () => {
-        const context = makeContext();
-        context.repository.id = 'non-centralized-config-repo';
+        // Override at build time: the context is frozen, like production.
+        const context = makeContext({
+            repository: { id: 'non-centralized-config-repo', name: 'repo-1' },
+        });
 
         mockParametersService.findByKey.mockImplementation((key: string) => {
             if (key === ParametersKey.CENTRALIZED_CONFIG) {
@@ -336,34 +471,6 @@ describe('ValidatePrerequisitesStage', () => {
             );
         });
 
-        it('marks the pipeline SKIPPED with a USER_NO_LICENSE reason when user is not licensed and auto-assign is unavailable', async () => {
-            const context = makeContext();
-
-            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
-                {
-                    allowed: false,
-                    errorType: ValidationErrorType.USER_NOT_LICENSED,
-                },
-            );
-            mockAutoAssignLicenseUseCase.execute.mockResolvedValue({
-                shouldProceed: false,
-                reason: 'NOT_ENOUGH_PRS',
-            });
-            mockParametersService.findByKey.mockResolvedValue({
-                configValue: {
-                    configs: { showStatusFeedback: true },
-                    repositories: [],
-                },
-            });
-
-            const result = await stage.execute(context);
-
-            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
-            expect(result.statusInfo?.message?.toLowerCase()).toMatch(
-                /(license|subscription|seat)/,
-            );
-        });
-
         it('marks the pipeline SKIPPED with USER_IGNORED message when the user is in the ignored list', async () => {
             const context = makeContext();
 
@@ -387,9 +494,19 @@ describe('ValidatePrerequisitesStage', () => {
             ).not.toHaveBeenCalled();
         });
 
-        it('does NOT mark SKIPPED on the happy path (license valid, user not ignored)', async () => {
+        // Bots are auto-populated into ignoredUsers when an integration is
+        // created, so an app that authors PRs starts out ignored. Paying for
+        // a seat is the clearest possible statement that this identity should
+        // be reviewed, so it has to win over the filter.
+        it('reviews an ignored identity that holds a seat instead of skipping it', async () => {
             const context = makeContext();
 
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { ignoredUsers: ['user-1'] },
+            });
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([
+                { git_id: 'user-1' },
+            ]);
             mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
                 { allowed: true, errorType: ValidationErrorType.NOT_ERROR },
             );
@@ -402,15 +519,123 @@ describe('ValidatePrerequisitesStage', () => {
 
             const result = await stage.execute(context);
 
-            // statusInfo not changed from in_progress
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+            expect(
+                mockPermissionValidationService.validateExecutionPermissions,
+            ).toHaveBeenCalled();
+        });
+
+        it('reviews an identity excluded by allowedUsers when it holds a seat', async () => {
+            const context = makeContext();
+
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { allowedUsers: ['someone-else'] },
+            });
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([
+                { git_id: 'user-1' },
+            ]);
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true, errorType: ValidationErrorType.NOT_ERROR },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
             expect(result.statusInfo?.status).not.toBe(
                 AutomationStatus.SKIPPED,
             );
         });
+
+        it('keeps skipping an ignored identity when the seat lookup fails', async () => {
+            const context = makeContext();
+
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { ignoredUsers: ['user-1'] },
+            });
+            mockLicenseService.getAllUsersWithLicense.mockRejectedValue(
+                new Error('billing unreachable'),
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+        });
+
+        // The seat list is fetched to decide whether the ignore list applies;
+        // handing it to the permission check reuses it instead of paying a
+        // second round trip to billing for the same answer.
+        it('reuses the seat list it already fetched for the permission check', async () => {
+            const context = makeContext();
+            const seats = [{ git_id: 'user-1' }];
+
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { ignoredUsers: ['user-1'] },
+            });
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue(seats);
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true, errorType: ValidationErrorType.NOT_ERROR },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            await stage.execute(context);
+
+            expect(
+                mockLicenseService.getAllUsersWithLicense,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockPermissionValidationService.validateExecutionPermissions,
+            ).toHaveBeenCalledWith(
+                expect.anything(),
+                'user-1',
+                expect.any(String),
+                expect.objectContaining({ usersWithLicense: seats }),
+            );
+        });
+
+        it('does not look up seats when the identity is not filtered out', async () => {
+            const context = makeContext();
+
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { ignoredUsers: ['somebody-else'] },
+            });
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true, errorType: ValidationErrorType.NOT_ERROR },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            await stage.execute(context);
+
+            expect(
+                mockLicenseService.getAllUsersWithLicense,
+            ).not.toHaveBeenCalled();
+        });
     });
 
     describe('trial review credit consumption', () => {
-        it('asks to consume a managed trial credit keyed by repo:pr', async () => {
+        it('gates on trial credits WITHOUT consuming (consumption is deferred to a successful review)', async () => {
             const context = makeContext();
 
             mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
@@ -423,8 +648,16 @@ describe('ValidatePrerequisitesStage', () => {
                 },
             });
 
-            await stage.execute(context);
+            const result = await stage.execute(context);
 
+            // Happy path (license valid, user not ignored): not skipped.
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+            // Prerequisites only checks whether credits remain — it must NOT
+            // consume one up-front, or a review that later ERRORs/SKIPs would
+            // still cost the user a free trial review. The consume happens in
+            // CodeReviewHandlerService once the review reaches SUCCESS/PARTIAL_ERROR.
             expect(
                 mockPermissionValidationService.validateExecutionPermissions,
             ).toHaveBeenCalledWith(
@@ -432,13 +665,12 @@ describe('ValidatePrerequisitesStage', () => {
                 'user-1',
                 ValidatePrerequisitesStage.name,
                 {
-                    consumeTrialReviewCredit: true,
-                    trialReviewCreditUsageKey: 'repo-1:42',
+                    consumeTrialReviewCredit: false,
                 },
             );
         });
 
-        it('posts a BYOK-focused comment (not "trial ended") when trial credits run out', async () => {
+        it('posts a BYOK-focused comment and a trial-specific SKIPPED status when trial credits run out', async () => {
             const context = makeContext();
 
             mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
@@ -446,6 +678,40 @@ describe('ValidatePrerequisitesStage', () => {
                     allowed: false,
                     errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
                     subscriptionStatus: 'trial',
+                    metadata: { trialCreditsExhausted: true },
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            const body =
+                mockCodeManagementService.createIssueComment.mock.calls[0][0]
+                    .body;
+            expect(body).toContain('Kodus-paid PR reviews');
+            expect(body).toContain('/byok');
+            expect(body).not.toContain('trial has ended');
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo?.message).toContain('Trial Reviews Used Up');
+            expect(result.statusInfo?.message).not.toContain(
+                'Plan Limit Exceeded',
+            );
+        });
+
+        it('posts a top-up comment (not BYOK-required, not trial-ended) when Kodus credits are exhausted', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.CREDITS_EXHAUSTED,
+                    subscriptionStatus: 'active',
+                    metadata: { creditsExhausted: true, creditBalanceUsd: 0 },
                 },
             );
             mockParametersService.findByKey.mockResolvedValue({
@@ -460,9 +726,67 @@ describe('ValidatePrerequisitesStage', () => {
             const body =
                 mockCodeManagementService.createIssueComment.mock.calls[0][0]
                     .body;
-            expect(body).toContain('Kodus-paid PR reviews');
-            expect(body).toContain('/organization/byok');
+            expect(body).toContain('Kodus credits');
+            expect(body).toContain('/byok#kodus');
+            expect(body).not.toContain('BYOK Configuration Required');
             expect(body).not.toContain('trial has ended');
+        });
+
+        it('posts a "subscription check unavailable" message (not credits, not trial-ended) on a transient billing failure', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                    subscriptionStatus: 'trial',
+                    metadata: { trialCreditsExhausted: false },
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            const body =
+                mockCodeManagementService.createIssueComment.mock.calls[0][0]
+                    .body;
+            expect(body).toContain('Subscription check unavailable');
+            expect(body).not.toContain('Kodus-paid PR reviews');
+            expect(body).not.toContain('trial has ended');
+            expect(result.statusInfo?.message).toContain(
+                'Subscription Check Unavailable',
+            );
+            expect(result.statusInfo?.message).not.toContain(
+                'Trial Reviews Used Up',
+            );
+        });
+
+        it('keeps the generic "Plan Limit Exceeded" SKIPPED status for a non-trial plan limit', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                    subscriptionStatus: 'active',
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo?.message).toContain('Plan Limit Exceeded');
         });
     });
 });

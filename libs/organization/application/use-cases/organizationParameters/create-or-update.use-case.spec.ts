@@ -1,0 +1,1162 @@
+import { BYOKProvider } from '@libs/llm/model-providers';
+import { BadRequestException } from '@nestjs/common';
+import { decrypt, encrypt } from '@libs/common/utils/crypto';
+import { OrganizationParametersKey } from '@libs/core/domain/enums';
+import type { BYOKConfig } from '@libs/llm/byok-config';
+import { CreateOrUpdateOrganizationParametersUseCase } from './create-or-update.use-case';
+
+// The `kodus` (platform-funded) credential is cloud-only; the gate reads the
+// compiled-in EE environment, mocked here so the save path can be exercised
+// in both deployment modes.
+jest.mock('@libs/ee/configs/environment', () => ({
+    environment: { API_CLOUD_MODE: true },
+}));
+import { environment } from '@libs/ee/configs/environment';
+
+const orgAndTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
+
+/**
+ * Build the use-case with a mocked parameters service. `existing` is what
+ * findByKey returns as the stored configValue (undefined → no row). The
+ * captured `persisted` holds whatever createOrUpdateConfig was asked to write.
+ */
+function buildUseCase(
+    existing?: unknown,
+    options: {
+        kodusGate?: { isEnabledFor: (org?: string) => Promise<boolean> };
+    } = {},
+) {
+    const persisted: { value?: any } = {};
+    const createOrUpdateConfig = jest.fn(async (_k, value: any) => {
+        persisted.value = value;
+        return true;
+    });
+    const organizationParametersService = {
+        findByKey: jest
+            .fn()
+            .mockResolvedValue(
+                existing === undefined ? null : { configValue: existing },
+            ),
+        createOrUpdateConfig,
+    };
+    const request = { user: { uuid: 'user-1', email: 'u@k.io' } } as any;
+    const eventEmitter = { emit: jest.fn() } as any;
+    const telemetry = {
+        byokConfigured: jest.fn(),
+        organizationSettingsUpdated: jest.fn(),
+    } as any;
+
+    // The Kodus provider is a private alpha; specs act as an allow-listed org
+    // unless they pass their own gate.
+    const kodusGate = options.kodusGate ?? {
+        isEnabledFor: jest.fn(async () => true),
+    };
+    const useCase = new CreateOrUpdateOrganizationParametersUseCase(
+        organizationParametersService as any,
+        request,
+        eventEmitter,
+        telemetry,
+        kodusGate as any,
+    );
+
+    return {
+        useCase,
+        persisted,
+        createOrUpdateConfig,
+        organizationParametersService,
+    };
+}
+
+const saveByok = (
+    useCase: CreateOrUpdateOrganizationParametersUseCase,
+    configValue: unknown,
+) =>
+    useCase.execute(
+        OrganizationParametersKey.BYOK_CONFIG,
+        configValue as any,
+        orgAndTeam,
+    );
+
+const v2 = (over: Partial<BYOKConfig> = {}): BYOKConfig => ({
+    version: 2,
+    credentials: [{ id: 'cred-openai', provider: 'openai', apiKey: '' }],
+    models: [{ id: 'model-a', credentialId: 'cred-openai', model: 'gpt-5' }],
+    ...over,
+});
+
+describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () => {
+    // ─────────────────────────────────────────────────────────────────────
+    // Task 1: v2-aware encrypt/keep
+    // ─────────────────────────────────────────────────────────────────────
+    describe('v2 encrypt/keep (absorbed 02-05 / D-07)', () => {
+        it('keeps the credential ciphertext on a BLANK apiKey resubmit (no key loss)', async () => {
+            const priorCipher = encrypt('sk-real-openai-key');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: priorCipher,
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    { id: 'cred-openai', provider: 'openai', apiKey: '' },
+                ],
+            });
+
+            const { useCase, persisted, createOrUpdateConfig } =
+                buildUseCase(existing);
+
+            await saveByok(useCase, incoming);
+
+            expect(createOrUpdateConfig).toHaveBeenCalled();
+            // exact ciphertext kept verbatim — NOT re-encrypted
+            expect(persisted.value.credentials[0].apiKey).toBe(priorCipher);
+        });
+
+        it('encrypts a real non-empty apiKey (decrypts back to the submitted key)', async () => {
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: encrypt('old'),
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: 'sk-brand-new',
+                    },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            const stored = persisted.value.credentials[0].apiKey;
+            expect(stored).not.toBe('sk-brand-new'); // stored as ciphertext
+            expect(decrypt(stored)).toBe('sk-brand-new');
+        });
+
+        it('NEVER encrypts the •••• mask — keeps the prior ciphertext instead', async () => {
+            const priorCipher = encrypt('sk-real-openai-key');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: priorCipher,
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: 'sk01••••ab89',
+                    },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            expect(persisted.value.credentials[0].apiKey).toBe(priorCipher);
+            // the mask literal never became ciphertext
+            expect(persisted.value.credentials[0].apiKey).not.toContain('•');
+        });
+
+        it('matches the prior credential by provider when the id differs', async () => {
+            const priorCipher = encrypt('sk-real-openai-key');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-old-id',
+                        provider: 'openai',
+                        apiKey: priorCipher,
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    { id: 'cred-new-id', provider: 'openai', apiKey: '' },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-new-id',
+                        model: 'gpt-5',
+                    },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            expect(persisted.value.credentials[0].apiKey).toBe(priorCipher);
+        });
+
+        it("refuses to lend the only gateway's key to a new endpoint", async () => {
+            // Fireworks is the org's only OpenAI-compatible credential; the
+            // second endpoint arrives with a fresh id and no key. The provider
+            // fallback must not hand it the Fireworks key just because it is
+            // the single credential of that provider.
+            const fireworksCipher = encrypt('sk-fireworks');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-fireworks',
+                        provider: 'openai_compatible',
+                        apiKey: fireworksCipher,
+                        settings: {
+                            baseURL: 'https://api.fireworks.ai/inference/v1',
+                        },
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-fireworks',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                        settings: {
+                            baseURL: 'https://api.fireworks.ai/inference/v1',
+                        },
+                    },
+                    {
+                        id: 'cred-together',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                        settings: { baseURL: 'https://api.together.ai/v1' },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-together',
+                        model: 'deepseek-v3',
+                    },
+                ],
+            });
+
+            const { useCase, createOrUpdateConfig } = buildUseCase(existing);
+
+            await expect(saveByok(useCase, incoming)).rejects.toThrow(
+                'apiKey is required for the openai_compatible BYOK credential',
+            );
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        describe('same credential id, endpoint repointed', () => {
+            const fireworks = 'https://api.fireworks.ai/inference/v1';
+            const stored = (baseURL?: string) =>
+                v2({
+                    credentials: [
+                        {
+                            id: 'cred-gw',
+                            provider: 'openai_compatible',
+                            apiKey: encrypt('sk-fireworks'),
+                            ...(baseURL ? { settings: { baseURL } } : {}),
+                        },
+                    ],
+                    models: [
+                        {
+                            id: 'model-a',
+                            credentialId: 'cred-gw',
+                            model: 'deepseek-v3',
+                        },
+                    ],
+                });
+            const resubmit = (apiKey: string, baseURL?: string) =>
+                v2({
+                    credentials: [
+                        {
+                            id: 'cred-gw',
+                            provider: 'openai_compatible',
+                            apiKey,
+                            ...(baseURL ? { settings: { baseURL } } : {}),
+                        },
+                    ],
+                    models: [
+                        {
+                            id: 'model-a',
+                            credentialId: 'cred-gw',
+                            model: 'deepseek-v3',
+                        },
+                    ],
+                });
+
+            it('refuses to keep the stored key for a new host', async () => {
+                const { useCase, createOrUpdateConfig } = buildUseCase(
+                    stored(fireworks),
+                );
+
+                await expect(
+                    saveByok(
+                        useCase,
+                        resubmit('', 'https://api.together.ai/v1'),
+                    ),
+                ).rejects.toThrow(
+                    'apiKey is required for the openai_compatible BYOK credential',
+                );
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('refuses to keep the stored key when the endpoint is removed', async () => {
+                const { useCase, createOrUpdateConfig } = buildUseCase(
+                    stored(fireworks),
+                );
+
+                await expect(saveByok(useCase, resubmit(''))).rejects.toThrow(
+                    'apiKey is required',
+                );
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('refuses to keep the stored key when an endpoint is added', async () => {
+                const { useCase, createOrUpdateConfig } =
+                    buildUseCase(stored());
+
+                await expect(
+                    saveByok(useCase, resubmit('', fireworks)),
+                ).rejects.toThrow('apiKey is required');
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('keeps the stored key when the endpoint is only spelled differently', async () => {
+                const existing = stored(fireworks);
+                const { useCase, persisted } = buildUseCase(existing);
+
+                await saveByok(
+                    useCase,
+                    resubmit('', 'https://API.fireworks.ai/inference/v1/'),
+                );
+
+                expect(persisted.value.credentials[0].apiKey).toBe(
+                    existing.credentials[0].apiKey,
+                );
+            });
+
+            it('treats a path that differs only in case as another endpoint', async () => {
+                // Paths are case-sensitive: a gateway that routes by tenant or
+                // account in the path serves a different upstream per casing.
+                const { useCase, createOrUpdateConfig } = buildUseCase(
+                    stored('https://api.fireworks.ai/Inference/v1'),
+                );
+
+                await expect(
+                    saveByok(useCase, resubmit('', fireworks)),
+                ).rejects.toThrow('apiKey is required');
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('logs which credential and hosts a refusal was about', async () => {
+                const { useCase } = buildUseCase(stored(fireworks));
+                (useCase as any).request.user.organization = { uuid: 'org-1' };
+
+                await expect(
+                    saveByok(
+                        useCase,
+                        resubmit('', 'https://api.together.ai/v1'),
+                    ),
+                ).rejects.toThrow('apiKey is required');
+
+                expect((useCase as any).logger.warn).toHaveBeenCalledWith({
+                    message:
+                        'BYOK save: refused to reuse a stored key across endpoints',
+                    context: 'CreateOrUpdateOrganizationParametersUseCase',
+                    metadata: {
+                        organizationId: 'org-1',
+                        provider: 'openai_compatible',
+                        credentialId: 'cred-gw',
+                        priorCredentialId: 'cred-gw',
+                        matchedBy: 'id',
+                        host: 'api.together.ai',
+                        priorHost: 'api.fireworks.ai',
+                    },
+                });
+            });
+
+            it('logs a provider match, and no host for an endpoint that is unset', async () => {
+                const { useCase } = buildUseCase(stored(fireworks));
+                const renamed = resubmit('');
+                renamed.credentials[0].id = 'cred-renamed';
+                renamed.models[0].credentialId = 'cred-renamed';
+
+                await expect(saveByok(useCase, renamed)).rejects.toThrow(
+                    'apiKey is required',
+                );
+
+                expect((useCase as any).logger.warn).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        metadata: expect.objectContaining({
+                            credentialId: 'cred-renamed',
+                            priorCredentialId: 'cred-gw',
+                            matchedBy: 'provider',
+                            host: undefined,
+                            priorHost: 'api.fireworks.ai',
+                        }),
+                    }),
+                );
+            });
+
+            it('logs nothing when the stored key is kept', async () => {
+                const { useCase } = buildUseCase(stored(fireworks));
+
+                await saveByok(useCase, resubmit('', fireworks));
+
+                expect((useCase as any).logger.warn).not.toHaveBeenCalled();
+            });
+
+            it('treats a baseURL that is not a string as no endpoint', async () => {
+                const { useCase, createOrUpdateConfig } = buildUseCase(
+                    stored(fireworks),
+                );
+                const odd = resubmit('');
+                odd.credentials[0].settings = { baseURL: 42 };
+
+                await expect(saveByok(useCase, odd)).rejects.toThrow(
+                    'apiKey is required',
+                );
+                expect(createOrUpdateConfig).not.toHaveBeenCalled();
+            });
+
+            it('keeps the key on a legacy endpoint that does not parse as a URL, left as it was', async () => {
+                const existing = stored('legacy-gateway');
+                const { useCase, persisted } = buildUseCase(existing);
+
+                await saveByok(useCase, resubmit('', 'legacy-gateway'));
+
+                expect(persisted.value.credentials[0].apiKey).toBe(
+                    existing.credentials[0].apiKey,
+                );
+            });
+
+            it('saves the repoint when a new key comes with it', async () => {
+                const { useCase, persisted } = buildUseCase(stored(fireworks));
+
+                await saveByok(
+                    useCase,
+                    resubmit('sk-together', 'https://api.together.ai/v1'),
+                );
+
+                expect(decrypt(persisted.value.credentials[0].apiKey)).toBe(
+                    'sk-together',
+                );
+            });
+        });
+
+        it('matches by provider across an id change when the endpoint is the same', async () => {
+            const priorCipher = encrypt('sk-fireworks');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-old-id',
+                        provider: 'openai_compatible',
+                        apiKey: priorCipher,
+                        settings: {
+                            baseURL: 'https://api.fireworks.ai/inference/v1',
+                        },
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-new-id',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                        // Same upstream, spelled with a trailing slash and caps.
+                        settings: {
+                            baseURL: 'https://API.fireworks.ai/inference/v1/',
+                        },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-new-id',
+                        model: 'deepseek-v3',
+                    },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            expect(persisted.value.credentials[0].apiKey).toBe(priorCipher);
+        });
+
+        it('refuses to borrow a key when the provider has two credentials', async () => {
+            // Two OpenAI-compatible gateways (Fireworks and Together) are two
+            // upstreams with two keys. Matching a blank resubmit "by provider"
+            // would hand one of them the other's key, so an ambiguous provider
+            // resolves to no prior at all — and a credential with no usable
+            // secret is refused rather than silently mis-keyed.
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-fireworks',
+                        provider: 'openai_compatible',
+                        apiKey: encrypt('sk-fireworks'),
+                        settings: {
+                            baseURL: 'https://api.fireworks.ai/inference/v1',
+                        },
+                    },
+                    {
+                        id: 'cred-together',
+                        provider: 'openai_compatible',
+                        apiKey: encrypt('sk-together'),
+                        settings: { baseURL: 'https://api.together.xyz/v1' },
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-brand-new',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                        settings: { baseURL: 'https://api.novita.ai/v3/openai' },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-brand-new',
+                        model: 'deepseek-v3',
+                    },
+                ],
+            });
+
+            const { useCase } = buildUseCase(existing);
+
+            await expect(saveByok(useCase, incoming)).rejects.toThrow();
+        });
+
+        it('keeps each gateway on its own key when both are resubmitted blank', async () => {
+            const fireworksCipher = encrypt('sk-fireworks');
+            const togetherCipher = encrypt('sk-together');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-fireworks',
+                        provider: 'openai_compatible',
+                        apiKey: fireworksCipher,
+                    },
+                    {
+                        id: 'cred-together',
+                        provider: 'openai_compatible',
+                        apiKey: togetherCipher,
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-fireworks',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                    },
+                    {
+                        id: 'cred-together',
+                        provider: 'openai_compatible',
+                        apiKey: '',
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-together',
+                        model: 'deepseek-v3',
+                    },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            // Matched by id, so each keeps what it had.
+            expect(persisted.value.credentials[0].apiKey).toBe(fireworksCipher);
+            expect(persisted.value.credentials[1].apiKey).toBe(togetherCipher);
+        });
+
+        it('keeps Bedrock aws* secrets (in settings) on a blank resubmit', async () => {
+            const bearerCipher = encrypt('ABSK-bearer-token');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-bedrock',
+                        provider: BYOKProvider.AMAZON_BEDROCK,
+                        settings: {
+                            awsBearerToken: bearerCipher,
+                            awsRegion: 'us-east-1',
+                        },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-b',
+                        credentialId: 'cred-bedrock',
+                        model: 'claude',
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-bedrock',
+                        provider: BYOKProvider.AMAZON_BEDROCK,
+                        settings: {
+                            awsBearerToken: '',
+                            awsRegion: 'us-east-1',
+                        },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-b',
+                        credentialId: 'cred-bedrock',
+                        model: 'claude',
+                    },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            const cred = persisted.value.credentials[0];
+            expect(cred.settings.awsBearerToken).toBe(bearerCipher); // kept
+            expect(cred.settings.awsRegion).toBe('us-east-1'); // non-secret verbatim
+        });
+
+        it('does NOT throw on a config blob with no top-level main/fallback', async () => {
+            const { useCase } = buildUseCase(undefined);
+            // A first-save credential must carry a usable key (auth-path guard);
+            // the point here is that the shape (no legacy main/fallback) is
+            // accepted, not keyless leniency.
+            await expect(
+                saveByok(
+                    useCase,
+                    v2({
+                        credentials: [
+                            {
+                                id: 'cred-openai',
+                                provider: 'openai',
+                                apiKey: 'sk-openai',
+                            },
+                        ],
+                    }),
+                ),
+            ).resolves.toBe(true);
+        });
+
+        it('persists models/routing/version verbatim (field-level encrypt only)', async () => {
+            const incoming = v2({
+                credentials: [
+                    { id: 'cred-openai', provider: 'openai', apiKey: 'sk-x' },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-openai',
+                        model: 'gpt-5',
+                    },
+                ],
+                routing: { mode: 'manual', defaultModelId: 'model-a' },
+            });
+            const { useCase, persisted } = buildUseCase(undefined);
+            await saveByok(useCase, incoming);
+
+            expect(persisted.value.version).toBe(2);
+            expect(persisted.value.models).toEqual(incoming.models);
+            expect(persisted.value.routing).toEqual(incoming.routing);
+        });
+    });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Task 1: legacy {main,fallback} write path dropped (04b-06 — v2-only)
+    // ─────────────────────────────────────────────────────────────────────
+    describe('legacy {main,fallback} write is rejected (v2-only)', () => {
+        it('rejects a legacy {main} blob — encrypt expects the shape', async () => {
+            const incoming = {
+                main: {
+                    provider: BYOKProvider.OPENAI,
+                    apiKey: 'sk-legacy-new',
+                    model: 'gpt-5',
+                },
+            };
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(saveByok(useCase, incoming)).rejects.toThrow();
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('still throws on an empty {} blob', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+            await expect(saveByok(useCase, {})).rejects.toThrow();
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+    });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Task 2: write-time referential integrity (RFC §13.8)
+    // ─────────────────────────────────────────────────────────────────────
+    describe('write-time referential integrity for the config blob', () => {
+        it('rejects a dangling model.credentialId BEFORE persist (400)', async () => {
+            const incoming = v2({
+                credentials: [
+                    { id: 'cred-openai', provider: 'openai', apiKey: 'sk-x' },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-ghost',
+                        model: 'gpt-5',
+                    },
+                ],
+            });
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(saveByok(useCase, incoming)).rejects.toBeInstanceOf(
+                BadRequestException,
+            );
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('rejects a dangling routing ref BEFORE persist (400)', async () => {
+            const incoming = v2({
+                routing: { defaultModelId: 'model-missing' },
+            });
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(saveByok(useCase, incoming)).rejects.toBeInstanceOf(
+                BadRequestException,
+            );
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('persists a consistent config', async () => {
+            const incoming = v2({
+                credentials: [
+                    { id: 'cred-openai', provider: 'openai', apiKey: 'sk-x' },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-openai',
+                        model: 'gpt-5',
+                    },
+                ],
+                routing: { defaultModelId: 'model-a' },
+            });
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(saveByok(useCase, incoming)).resolves.toBe(true);
+            expect(createOrUpdateConfig).toHaveBeenCalled();
+        });
+
+        it('rejects a legacy (non-v2) write outright (04b-06 — v2 is the only shape)', async () => {
+            const incoming = {
+                main: {
+                    provider: BYOKProvider.OPENAI,
+                    apiKey: 'sk-legacy',
+                    model: 'gpt-5',
+                },
+            };
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(saveByok(useCase, incoming)).rejects.toThrow();
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+    });
+
+    // SSRF: a credential's baseURL is a user-controlled outbound target the
+    // server calls at review time. The save path must reject unsafe URLs, not
+    // rely on the (client-triggered, skippable) test-connection probe.
+    describe('SSRF guard on credential baseURL (save path)', () => {
+        const withBaseURL = (baseURL: string): BYOKConfig =>
+            v2({
+                credentials: [
+                    {
+                        id: 'cred-oc',
+                        provider: 'openai_compatible',
+                        apiKey: 'sk-x',
+                        settings: { baseURL },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-oc',
+                        model: 'gpt-5',
+                    },
+                ],
+                routing: { defaultModelId: 'model-a' },
+            });
+
+        it('rejects a baseURL resolving to a private/reserved IP BEFORE persist (400)', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(
+                saveByok(useCase, withBaseURL('https://169.254.169.254/v1')),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('rejects a non-https baseURL BEFORE persist (400)', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(
+                saveByok(useCase, withBaseURL('http://api.example.com/v1')),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('lets a legacy, UNCHANGED baseURL through so the org is not locked out', async () => {
+            // A real production org still points at http://localhost:11434 — a
+            // value saved before this rule existed. Validating every stored
+            // credential on every write meant that org could no longer save ANY
+            // BYOK change, not even switching model, because an untouched field
+            // failed a rule it predates. An unchanged value is already-persisted
+            // state, not a new outbound target.
+            const legacy = withBaseURL('http://localhost:11434/v1');
+            const { useCase, createOrUpdateConfig } = buildUseCase(legacy);
+
+            await expect(saveByok(useCase, legacy)).resolves.toBe(true);
+            expect(createOrUpdateConfig).toHaveBeenCalled();
+        });
+
+        it('STILL rejects when that same org edits the unsafe baseURL', async () => {
+            // The escape hatch is "unchanged", not "was ever stored" — a write
+            // that touches the value is validated in full.
+            const { useCase, createOrUpdateConfig } = buildUseCase(
+                withBaseURL('http://localhost:11434/v1'),
+            );
+
+            await expect(
+                saveByok(useCase, withBaseURL('http://localhost:9999/v1')),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('rejects a baseURL that already contains the provider endpoint path', async () => {
+            // Stored by a live org on both slots: the OpenAI-protocol SDK appends
+            // /chat/completions itself, so the request 404s forever. The key is
+            // valid, the model is valid, the host resolves — nothing downstream
+            // can recover, and it is only visible in the request URL.
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(
+                saveByok(
+                    useCase,
+                    withBaseURL(
+                        'https://api.groq.com/openai/v1/chat/completions',
+                    ),
+                ),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('allows a credential with no baseURL (key-only connect resolves the brand default)', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+            const noBaseURL = v2({
+                credentials: [
+                    {
+                        id: 'cred-oc',
+                        provider: 'openai_compatible',
+                        apiKey: 'sk-x',
+                    },
+                ],
+                models: [
+                    { id: 'model-a', credentialId: 'cred-oc', model: 'gpt-5' },
+                ],
+                routing: { defaultModelId: 'model-a' },
+            });
+
+            await expect(saveByok(useCase, noBaseURL)).resolves.toBe(true);
+            expect(createOrUpdateConfig).toHaveBeenCalled();
+        });
+    });
+
+    describe('reasoning override must parse at SAVE time', () => {
+        const withOverride = (reasoningConfigOverride: string): BYOKConfig =>
+            v2({
+                credentials: [
+                    {
+                        id: 'cred-oc',
+                        provider: 'openai_compatible',
+                        apiKey: 'sk-x',
+                        settings: { baseURL: 'https://api.deepseek.com' },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-oc',
+                        model: 'deepseek-v4-pro',
+                        reasoningConfigOverride,
+                    },
+                ],
+                routing: { defaultModelId: 'model-a' },
+            });
+
+        it('rejects unparsable JSON instead of silently ignoring it', async () => {
+            // buildProviderOptions parses this inside a try/catch and falls back
+            // to the effort preset — the right RUNTIME posture (a typo must not
+            // break every review) but it makes the typo invisible. Two production
+            // orgs run with a trailing comma here, convinced they enabled
+            // `reasoning_effort: max`, and have never been told. Save time is
+            // where the user is looking.
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(
+                saveByok(
+                    useCase,
+                    withOverride(
+                        '{\n  "thinking": {"type": "enabled"},\n  "reasoning_effort": "max",\n}',
+                    ),
+                ),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('rejects valid JSON that is not an object (a bare string/array cannot be provider options)', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(
+                saveByok(useCase, withOverride('["high"]')),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('accepts a well-formed override', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(
+                saveByok(
+                    useCase,
+                    withOverride('{"thinking": {"type": "enabled"}}'),
+                ),
+            ).resolves.toBe(true);
+            expect(createOrUpdateConfig).toHaveBeenCalled();
+        });
+
+        it('ignores an empty override (the field is optional)', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(saveByok(useCase, withOverride('   '))).resolves.toBe(
+                true,
+            );
+            expect(createOrUpdateConfig).toHaveBeenCalled();
+        });
+    });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // S4 (LOW, defense-in-depth): the SERVER display mask is `xx...yyy` (dots),
+    // not the client `••••` bullet. isMaskedSecret only recognized the bullet,
+    // so a round-tripped server mask would be RE-ENCRYPTED as if it were a real
+    // key — silently destroying the stored credential. A server dotted mask must
+    // be treated as "unchanged → keep the prior ciphertext".
+    // ─────────────────────────────────────────────────────────────────────
+    describe('server dotted-mask round-trip (S4 — keep ciphertext, never re-encrypt)', () => {
+        it('keeps the prior ciphertext when the SERVER `xx...yyy` mask is resubmitted', async () => {
+            const priorCipher = encrypt('sk-real-openai-key-abcdef');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: priorCipher,
+                    },
+                ],
+            });
+            // Shape emitted by find-by-key maskApiKey: first2 + '...' + last3.
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: 'sk...def',
+                    },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            expect(persisted.value.credentials[0].apiKey).toBe(priorCipher);
+            // the dotted mask literal never became ciphertext
+            expect(persisted.value.credentials[0].apiKey).not.toContain('...');
+        });
+
+        it('keeps a Bedrock aws* secret when its server dotted mask is resubmitted', async () => {
+            const bearerCipher = encrypt('ABSK-real-bearer-token-xyz');
+            const existing = v2({
+                credentials: [
+                    {
+                        id: 'cred-bedrock',
+                        provider: BYOKProvider.AMAZON_BEDROCK,
+                        settings: {
+                            awsBearerToken: bearerCipher,
+                            awsRegion: 'us-east-1',
+                        },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-b',
+                        credentialId: 'cred-bedrock',
+                        model: 'claude',
+                    },
+                ],
+            });
+            const incoming = v2({
+                credentials: [
+                    {
+                        id: 'cred-bedrock',
+                        provider: BYOKProvider.AMAZON_BEDROCK,
+                        settings: {
+                            awsBearerToken: 'AB...xyz',
+                            awsRegion: 'us-east-1',
+                        },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-b',
+                        credentialId: 'cred-bedrock',
+                        model: 'claude',
+                    },
+                ],
+            });
+
+            const { useCase, persisted } = buildUseCase(existing);
+            await saveByok(useCase, incoming);
+
+            expect(persisted.value.credentials[0].settings.awsBearerToken).toBe(
+                bearerCipher,
+            );
+        });
+    });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // S1b (HIGH, defense-in-depth): the execute() error path logged the raw
+    // `configValue` (the client's credential blob) in the error metadata. Even
+    // with S1's key redaction, the raw blob must never be handed to the logger.
+    // ─────────────────────────────────────────────────────────────────────
+    describe('error logging never carries the raw configValue (S1b)', () => {
+        it('logs only the key + org/team data, NOT configValue, when persist fails', async () => {
+            const { useCase, organizationParametersService } = buildUseCase({
+                some: 'existing',
+            });
+            // Force the generic (non-BYOK) persist path to throw a plain Error.
+            organizationParametersService.createOrUpdateConfig.mockRejectedValueOnce(
+                new Error('db exploded'),
+            );
+
+            const secretBlob = { apiKey: 'sk-should-never-be-logged' };
+
+            await expect(
+                useCase.execute(
+                    OrganizationParametersKey.TIMEZONE_CONFIG,
+                    secretBlob as any,
+                    orgAndTeam,
+                ),
+            ).rejects.toThrow();
+
+            const errorSpy = (useCase as any).logger.error as jest.Mock;
+            expect(errorSpy).toHaveBeenCalled();
+            const logged = errorSpy.mock.calls[0][0];
+            // configValue must be absent from the metadata …
+            expect(logged.metadata).not.toHaveProperty('configValue');
+            // … while the safe context is still logged.
+            expect(logged.metadata.organizationParametersKey).toBe(
+                OrganizationParametersKey.TIMEZONE_CONFIG,
+            );
+            expect(logged.metadata.organizationAndTeamData).toBe(orgAndTeam);
+            // The secret never reaches the logger in any form.
+            expect(JSON.stringify(logged.metadata)).not.toContain(
+                'sk-should-never-be-logged',
+            );
+        });
+    });
+});
+
+describe('platform-funded (`kodus`) credential — keyless by design, cloud-only', () => {
+    afterEach(() => {
+        (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = true;
+    });
+
+    const kodusConfig = (): BYOKConfig => ({
+        version: 2,
+        credentials: [{ id: 'cred-kodus', provider: BYOKProvider.KODUS }],
+        models: [
+            {
+                id: 'model-k',
+                credentialId: 'cred-kodus',
+                model: 'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731',
+            },
+        ],
+        routing: { defaultModelId: 'model-k' },
+    });
+
+    it('saves without an apiKey and persists NO secret on the credential', async () => {
+        const { useCase, persisted, createOrUpdateConfig } = buildUseCase();
+        await saveByok(useCase, kodusConfig());
+
+        expect(createOrUpdateConfig).toHaveBeenCalled();
+        const cred = persisted.value.credentials[0];
+        expect(cred.provider).toBe('kodus');
+        expect(cred.apiKey).toBeUndefined();
+        expect(cred.managed).toBeUndefined();
+    });
+
+    it('is refused for an org outside the private alpha (gate off), naming the alpha', async () => {
+        const gate = { isEnabledFor: jest.fn(async () => false) };
+        const { useCase, createOrUpdateConfig } = buildUseCase(undefined, {
+            kodusGate: gate,
+        });
+        await expect(saveByok(useCase, kodusConfig())).rejects.toThrow(
+            /private alpha/,
+        );
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('keeps saving for an org that ALREADY has the credential even if the gate is off (edits stay possible)', async () => {
+        const gate = { isEnabledFor: jest.fn(async () => false) };
+        const { useCase, createOrUpdateConfig } = buildUseCase(kodusConfig(), {
+            kodusGate: gate,
+        });
+        await saveByok(useCase, kodusConfig());
+        expect(createOrUpdateConfig).toHaveBeenCalled();
+        expect(gate.isEnabledFor).not.toHaveBeenCalled();
+    });
+
+    it('is refused on a self-hosted install (no platform accounts, no ledger)', async () => {
+        (environment as { API_CLOUD_MODE: boolean }).API_CLOUD_MODE = false;
+        const { useCase, createOrUpdateConfig } = buildUseCase();
+        await expect(saveByok(useCase, kodusConfig())).rejects.toThrow(
+            /only available on Kodus Cloud/,
+        );
+        expect(createOrUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('a keyless credential on any OTHER provider is still rejected', async () => {
+        const { useCase } = buildUseCase();
+        await expect(
+            saveByok(
+                useCase,
+                v2({ credentials: [{ id: 'cred-openai', provider: 'openai' }] }),
+            ),
+        ).rejects.toThrow(BadRequestException);
+    });
+});

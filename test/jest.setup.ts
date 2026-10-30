@@ -1,3 +1,13 @@
+// jsdom (used by React component specs) doesn't polyfill TextEncoder/
+// TextDecoder — needed transitively by `jose` (imported from apps/web's
+// helpers.ts). Node's node environment already has these globally, so this
+// is a no-op there.
+if (typeof (globalThis as any).TextEncoder === 'undefined') {
+    const { TextEncoder, TextDecoder } = require('util');
+    (globalThis as any).TextEncoder = TextEncoder;
+    (globalThis as any).TextDecoder = TextDecoder;
+}
+
 if (!process.env.API_CRYPTO_KEY) {
     process.env.API_CRYPTO_KEY =
         '0000000000000000000000000000000000000000000000000000000000000000';

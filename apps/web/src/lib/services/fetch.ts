@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "src/core/config/auth";
 import { isServerSide } from "src/core/utils/server-side";
-import { getJWTToken } from "src/core/utils/session";
 import { addSearchParamsToUrl } from "src/core/utils/url";
 
 export class TypedFetchError extends Error {
@@ -36,21 +35,24 @@ export const authorizedFetch = async <Data>(
     url: Parameters<typeof typedFetch>[0],
     config?: Parameters<typeof typedFetch>[1],
 ): Promise<Data> => {
-    let accessToken;
+    // Client calls go through the same-origin /api/proxy route, which injects
+    // the Bearer token from the httpOnly session cookie server-side — so the
+    // browser never fetches /api/auth/session or attaches the token itself.
+    // Only server-side calls (which hit the backend directly, bypassing the
+    // proxy) attach the token here, read from the session at request time.
+    let headers = config?.headers;
     if (isServerSide) {
         const jwtPayload = await auth();
-        accessToken = jwtPayload?.user.accessToken;
-    } else {
-        accessToken = await getJWTToken();
+        headers = {
+            ...headers,
+            Authorization: `Bearer ${jwtPayload?.user.accessToken}`,
+        };
     }
 
     try {
         const response = await typedFetch<{ data: Data }>(url, {
             ...config,
-            headers: {
-                ...config?.headers,
-                Authorization: `Bearer ${accessToken}`,
-            },
+            headers,
         });
 
         return response.data;

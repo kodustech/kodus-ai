@@ -1,0 +1,1076 @@
+[
+  {
+    "id": "claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "source": "evals/parse/payloads/claude-sonnet-4-6/add-guest-management-functionality-to-existing-bookings-cal-com.json#0",
+    "findings": [
+      {
+        "title": "isTeamAdminOrOwner uses && instead of || so team admins are always denied",
+        "suggestionContent": "WHAT: `isTeamAdminOrOwner` uses `&&` (logical AND) instead of `||` (logical OR), so the condition requires a user to be simultaneously a team admin AND a team owner to pass the authorization check. WHY: A user who is only a team admin (not also owner) will always fail the combined check and be incorrectly denied with FORBIDDEN, even though the intent (expressed in the variable name and the PR description) is to allow either role. HOW: Replace `&&` with `||` between the two awaited checks.",
+        "existingCode": "const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "TypeScript"
+      },
+      {
+        "title": "Email notification is sent to already-existing attendees and blacklisted addresses because unfiltered guests array is used",
+        "suggestionContent": "WHAT: `sendAddGuestsEmails` is called with the original `guests` array from user input instead of the de-duplicated `uniqueGuests` array. WHY: This causes notification emails to be sent to guests who are already attendees of the booking and to email addresses that appear on the blacklist, even though neither group was added to the database. HOW: Pass `uniqueGuests` instead of `guests` to `sendAddGuestsEmails`.",
+        "existingCode": "    await sendAddGuestsEmails(evt, guests);",
+        "improvedCode": "    await sendAddGuestsEmails(evt, uniqueGuests);",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "TypeScript"
+      },
+      {
+        "title": "Blacklisted guest emails bypass the blocklist when submitted with mixed or upper case",
+        "suggestionContent": "WHAT: The blacklist comparison lowercases the environment-variable entries but compares them against the raw (potentially mixed-case) `guest` email string from user input. WHY: A caller who submits `BLACKLISTED@example.com` instead of `blacklisted@example.com` will bypass the blocklist check and have the address written to the database and emailed. HOW: Normalize `guest` to lowercase before the `includes` comparison.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest.toLowerCase() === attendee.email.toLowerCase()) &&\n      !blacklistedGuestEmails.includes(guest.toLowerCase())\n  );",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "TypeScript"
+      },
+      {
+        "title": "Null booking.userId falls back to id=0, causing an unhandled Prisma error for guest bookings",
+        "suggestionContent": "WHAT: When `booking.userId` is null (which is valid for guest/anonymous bookings), the fallback `booking.userId || 0` passes `id: 0` to `prisma.user.findFirstOrThrow`, which either matches an unintended user or throws an unhandled Prisma `NotFoundError` that is not caught and surfaces as a 500 instead of a clean TRPCError. WHY: The entire handler crashes for guest bookings rather than returning a proper error to the client. HOW: Guard against null userId explicitly before the query.",
+        "existingCode": "  const organizer = await prisma.user.findFirstOrThrow({\n    where: {\n      id: booking.userId || 0,\n    },",
+        "improvedCode": "  if (!booking.userId) {\n    throw new TRPCError({ code: \"NOT_FOUND\", message: \"booking_organizer_not_found\" });\n  }\n  const organizer = await prisma.user.findFirstOrThrow({\n    where: {\n      id: booking.userId,\n    },",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "TypeScript"
+      }
+    ]
+  },
+  {
+    "id": "claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex",
+    "source": "evals/parse/payloads/claude-sonnet-4-6/anonymous-add-configurable-device-limit-grafana-codex.json#0",
+    "findings": [
+      {
+        "title": "Device limit reached causes ErrDeviceLimitReached to block all new anonymous authentication",
+        "suggestionContent": "WHAT: When the device limit is reached, `Authenticate` returns `nil, ErrDeviceLimitReached`, which completely denies anonymous authentication for any new device. WHY: This means once the configured device limit is hit, every new anonymous user (with a fresh device ID) is rejected at the auth layer and cannot access Grafana at all — the limit was intended to stop tracking new devices, not to block access. HOW: The error from `TagDevice` due to a full device table should be swallowed (logged as a warning) rather than propagated as an auth failure; only genuine auth errors (e.g. org not found) should cause `Authenticate` to fail.",
+        "existingCode": "if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {\n\t\tif errors.Is(err, anonstore.ErrDeviceLimitReached) {\n\t\t\treturn nil, err\n\t\t}\n\n\t\ta.log.Warn(\"Failed to tag anonymous session\", \"error\", err)\n\t}",
+        "improvedCode": "if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {\n\t\tif errors.Is(err, anonstore.ErrDeviceLimitReached) {\n\t\t\ta.log.Warn(\"Anonymous device limit reached, device not tracked\", \"error\", err)\n\t\t} else {\n\t\t\ta.log.Warn(\"Failed to tag anonymous session\", \"error\", err)\n\t\t}\n\t}",
+        "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
+        "language": "go"
+      },
+      {
+        "title": "TOCTOU race between CountDevices check and INSERT allows device limit to be exceeded under concurrency",
+        "suggestionContent": "WHAT: `CreateOrUpdateDevice` reads the device count with `CountDevices` and then conditionally inserts without any lock or transaction, creating a TOCTOU race window. WHY: Two concurrent anonymous requests with new device IDs at `deviceLimit - 1` can both pass the `count >= s.deviceLimit` check before either write completes, causing both to insert and silently exceed the configured device limit. HOW: Wrap the count-check and insert in a single DB transaction, or rely solely on a DB-level constraint (e.g. a CHECK or application-level serialization) rather than a read-then-write pattern.",
+        "existingCode": "if s.deviceLimit > 0 {\n\t\tcount, err := s.CountDevices(ctx, time.Now().UTC().Add(-anonymousDeviceExpiration), time.Now().UTC().Add(time.Minute))\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\n\t\tif count >= s.deviceLimit {\n\t\t\treturn s.updateDevice(ctx, device)\n\t\t}\n\t}",
+        "improvedCode": "// Wrap count check and insert in a single serializable transaction to avoid TOCTOU race.\n// Alternatively, accept soft-limit semantics and document that the limit is approximate.",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go"
+      },
+      {
+        "title": "updateDevice conflates missing device and out-of-window device into ErrDeviceLimitReached, misclassifying known devices",
+        "suggestionContent": "WHAT: `updateDevice` returns `ErrDeviceLimitReached` when `rowsAffected == 0`, but this conflates two distinct cases: (a) the device ID genuinely does not exist in the DB yet (new device, limit exceeded — correct), and (b) the device exists but its stored `updated_at` falls outside the computed BETWEEN window due to clock skew or a device that was last seen exactly at the boundary. WHY: In case (b), a legitimate returning device gets `ErrDeviceLimitReached` even though it is already tracked, causing its authentication to be denied (given the current error propagation in `client.go`). HOW: Consider a two-step update: first attempt the update without the time constraint to distinguish 'device exists' from 'device does not exist', returning a more specific error for the latter.",
+        "existingCode": "if rowsAffected == 0 {\n\t\t\treturn ErrDeviceLimitReached\n\t\t}",
+        "improvedCode": "// Distinguish between 'device not found' and 'device found but outside time window'\n// to avoid misclassifying a known device as a new one.\nif rowsAffected == 0 {\n    // Check if device exists at all before returning ErrDeviceLimitReached\n    return ErrDeviceLimitReached\n}",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go"
+      },
+      {
+        "title": "CountDevices COUNT query runs on every anonymous auth request when device limit is configured",
+        "suggestionContent": "WHAT: `CountDevices` (a full `COUNT(*)` query) is executed on every call to `CreateOrUpdateDevice` when `deviceLimit > 0`, which is on the anonymous authentication hot path. WHY: Every first visit from a unique device within a 29-minute window triggers two DB round-trips (COUNT + UPSERT), doubling DB load on anonymous-heavy deployments; with many concurrent users the COUNT queries can pile up. HOW: Cache the device count with a short TTL (e.g. 30 seconds) at the service level to avoid hitting the DB on every request, accepting that the limit enforcement is approximate within the TTL window.",
+        "existingCode": "if s.deviceLimit > 0 {\n\t\tcount, err := s.CountDevices(ctx, time.Now().UTC().Add(-anonymousDeviceExpiration), time.Now().UTC().Add(time.Minute))\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\n\t\tif count >= s.deviceLimit {\n\t\t\treturn s.updateDevice(ctx, device)\n\t\t}\n\t}",
+        "improvedCode": "// Cache the result of CountDevices with a short TTL so the COUNT(*) query\n// is not issued on every anonymous request.\nif s.deviceLimit > 0 {\n    count, err := s.cachedCountDevices(ctx, ...)\n    ...\n}",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go"
+      }
+    ]
+  },
+  {
+    "id": "claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "source": "evals/parse/payloads/claude-sonnet-4-6/enhance-embed-url-handling-and-validation-system-discourse-cursor.json#0",
+    "findings": [
+      {
+        "title": "nil crash when a feed item has no `content` element aborts the entire feed import loop",
+        "suggestionContent": "WHAT: `i.content` is called without a nil guard before `.scrub` on line 35; many RSS and Atom feed items omit the `content` element entirely, returning nil from SimpleRSS. WHY: This raises `NoMethodError: undefined method 'scrub' for nil:NilClass`, which aborts the entire `rss.items.each` loop, preventing any feed items from being imported whenever a single item lacks a content field. HOW: Add a nil guard and fall back to `i.summary` or an empty string: `content = CGI.unescapeHTML((i.content || i.summary || '').scrub)`.",
+        "existingCode": "content = CGI.unescapeHTML(i.content.scrub)",
+        "improvedCode": "content = CGI.unescapeHTML((i.content || i.summary || '').scrub)",
+        "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Unescaped URL interpolated into raw_html post content enables stored XSS via malicious feed URLs",
+        "suggestionContent": "WHAT: The `url` value is interpolated directly into an HTML string without HTML-escaping on line 13, and the resulting string is stored as a `raw_html` post that bypasses the cooking/sanitization pipeline. WHY: A feed entry whose URL contains `'` (e.g., `http://example.com/it's-here`) breaks out of the single-quoted `href` attribute, and with `cook_method=raw_html` the injected markup is served verbatim to browsers, enabling stored XSS. HOW: Use `CGI.escapeHTML(url)` for both the href attribute value and the visible link text: `link: \"<a href='#{CGI.escapeHTML(url)}'>#{CGI.escapeHTML(url)}</a>\"`.",
+        "existingCode": "contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}\\n\"",
+        "improvedCode": "escaped_url = CGI.escapeHTML(url)\ncontents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{escaped_url}'>#{escaped_url}</a>\")}\\n\"",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      }
+    ]
+  },
+  {
+    "id": "claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "source": "evals/parse/payloads/claude-sonnet-4-6/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json#0",
+    "findings": [
+      {
+        "title": "`join()` skips `process.terminate()` for all processes when the shutdown deadline expires mid-loop",
+        "suggestionContent": "WHAT: In `join()`, when the shutdown deadline expires mid-iteration, `break` exits the entire `for` loop without calling `process.terminate()` on the current process or any subsequent processes. WHY: All processes past the deadline point are left alive as orphaned child processes after the consumer shuts down, because `process.terminate()` is positioned after the while-wait and is only reached when the loop body completes normally — the `break` skips it entirely. HOW: Separate the termination pass from the wait pass: first wait for each process up to the deadline, then unconditionally terminate all processes in a second loop.",
+        "existingCode": "        for process_index, process in self.processes.items():\n            if deadline is not None:\n                remaining_time = deadline - time.time()\n                if remaining_time <= 0:\n                    break\n\n            while process.is_alive() and (deadline is None or deadline > time.time()):\n                time.sleep(0.1)\n\n            if isinstance(process, multiprocessing.Process):\n                process.terminate()",
+        "improvedCode": "        for process_index, process in self.processes.items():\n            if deadline is not None:\n                remaining_time = deadline - time.time()\n                if remaining_time <= 0:\n                    break\n\n            while process.is_alive() and (deadline is None or deadline > time.time()):\n                time.sleep(0.1)\n\n        # Always terminate all processes, regardless of whether deadline was hit\n        for process_index, process in self.processes.items():\n            if isinstance(process, multiprocessing.Process):\n                process.terminate()",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      }
+    ]
+  },
+  {
+    "id": "claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "source": "evals/parse/payloads/claude-sonnet-5-5/add-guest-management-functionality-to-existing-bookings-cal-com.json#0",
+    "findings": [
+      {
+        "title": "Add-guests emails sent to unfiltered guests (including existing or blacklisted)",
+        "suggestionContent": "WHAT: Emails are sent to the raw `guests` input instead of the filtered `uniqueGuests`. WHY: Guests who are already attendees, or who are blacklisted, still receive the 'guests added' email, even though they were filtered out and not added. HOW: Pass `uniqueGuests` to sendAddGuestsEmails.",
+        "existingCode": "    await sendAddGuestsEmails(evt, guests);",
+        "improvedCode": "    await sendAddGuestsEmails(evt, uniqueGuests);",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Permission check uses && between team admin and owner instead of ||",
+        "suggestionContent": "WHAT: The team permission check requires the user to be both team admin AND team owner, and falls back to teamId 0 when the booking has no team. WHY: Team admins who are not owners are denied. The check is also pointless for bookings without a team. HOW: Use `||` and skip the check when teamId is missing.",
+        "existingCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "  const teamId = booking.eventType?.teamId;\n  const isTeamAdminOrOwner = teamId\n    ? (await isTeamAdmin(user.id, teamId)) || (await isTeamOwner(user.id, teamId))\n    : false;",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Calendar update uses caller's credentials instead of organizer's, and is unguarded",
+        "suggestionContent": "WHAT: The EventManager is built from the calling user's credentials (`...user` and getUsersCredentials(ctx.user)), not the booking organizer's. WHY: When an attendee or team admin adds guests, the organizer's calendar event cannot be updated with their credentials, so the guests are silently missing from the calendar. When the call does fail, the error is unhandled and surfaces after the DB write has already committed. HOW: Use the organizer's credentials (booking.user.credentials, which is already loaded) and wrap the calendar update in try/catch.",
+        "existingCode": "  const credentials = await getUsersCredentials(ctx.user);\n\n  const eventManager = new EventManager({\n    ...user,\n    credentials: [...credentials],\n  });\n\n  await eventManager.updateCalendarAttendees(evt, booking);",
+        "improvedCode": "  const eventManager = new EventManager({\n    ...booking.user!,\n    credentials: [...booking.user!.credentials],\n  });\n\n  try {\n    await eventManager.updateCalendarAttendees(evt, booking);\n  } catch (err) {\n    console.error(\"Error updating calendar attendees\", err);\n  }",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Calls EventManager.updateCalendarAttendees which has no definition in the repo",
+        "suggestionContent": "WHAT: `eventManager.updateCalendarAttendees` is called, but I searched packages/core and all *.ts files and found no definition. The only hit is this call, and the PR diff does not add one. WHY: If EventManager lacks this method, the build fails or the call throws a TypeError at runtime after the attendees were already written to the DB. HOW: Add the method to EventManager, or use an existing update API.",
+        "existingCode": "  await eventManager.updateCalendarAttendees(evt, booking);",
+        "improvedCode": "  // implement EventManager.updateCalendarAttendees or use an existing update method",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Case-sensitive guest dedupe and blacklist check allows bypass and duplicates",
+        "suggestionContent": "WHAT: Guest dedupe and blacklist comparisons are case-sensitive, and duplicates within the input list are not removed. WHY: `A@x.com` and `a@x.com` both pass, and a blacklisted address in different casing bypasses the blacklist. Duplicate entries create duplicate attendee rows. HOW: Lowercase the guests and dedupe with a Set before filtering.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "  const uniqueGuests = [...new Set(guests.map((g) => g.toLowerCase()))].filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email.toLowerCase()) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      }
+    ]
+  },
+  {
+    "id": "claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex",
+    "source": "evals/parse/payloads/claude-sonnet-5-5/anonymous-add-configurable-device-limit-grafana-codex.json#0",
+    "findings": [
+      {
+        "title": "Rejected device stays in local cache, so the limit is bypassed on retry",
+        "suggestionContent": "WHAT: `tagDeviceUI` stores the device in the local cache before `CreateOrUpdateDevice` runs, so a device rejected with ErrDeviceLimitReached (or a transient DB error) stays cached. WHY: later requests with the same device ID within the 29-minute TTL hit the cache and return nil, and `client.go` then authenticates them as anonymous, so the device limit is bypassed after the first rejection. HOW: set the cache entry only after `CreateOrUpdateDevice` succeeds, or delete it when the call returns an error.",
+        "existingCode": "\ta.localCache.SetDefault(key, struct{}{})\n\n\tif setting.Env == setting.Dev {\n\t\ta.log.Debug(\"Tagging device for UI\", \"deviceID\", device.DeviceID, \"device\", device, \"key\", key)\n\t}\n\n\tif err := a.anonStore.CreateOrUpdateDevice(ctx, device); err != nil {\n\t\treturn err\n\t}",
+        "improvedCode": "\tif setting.Env == setting.Dev {\n\t\ta.log.Debug(\"Tagging device for UI\", \"deviceID\", device.DeviceID, \"device\", device, \"key\", key)\n\t}\n\n\tif err := a.anonStore.CreateOrUpdateDevice(ctx, device); err != nil {\n\t\treturn err\n\t}\n\n\ta.localCache.SetDefault(key, struct{}{})",
+        "relevantFile": "pkg/services/anonymous/anonimpl/impl.go",
+        "language": "go"
+      },
+      {
+        "title": "Check-then-insert on device count allows exceeding the limit concurrently",
+        "suggestionContent": "WHAT: `CreateOrUpdateDevice` runs CountDevices and then the INSERT as separate statements with no transaction, lock or constraint. WHY: concurrent requests from several new devices can all read `count < deviceLimit` and all insert, so the configured limit can be exceeded under concurrency. HOW: do the count and insert atomically, for example inside a transaction with a conditional INSERT ... SELECT ... WHERE (SELECT COUNT(*) ...) < limit, or serialize with a lock.",
+        "existingCode": "\tif s.deviceLimit > 0 {\n\t\tcount, err := s.CountDevices(ctx, time.Now().UTC().Add(-anonymousDeviceExpiration), time.Now().UTC().Add(time.Minute))\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\n\t\tif count >= s.deviceLimit {\n\t\t\treturn s.updateDevice(ctx, device)\n\t\t}\n\t}",
+        "improvedCode": "",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go"
+      }
+    ]
+  },
+  {
+    "id": "claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "source": "evals/parse/payloads/claude-sonnet-5-5/enhance-embed-url-handling-and-validation-system-discourse-cursor.json#0",
+    "findings": [
+      {
+        "title": "Post#cook depends on cook_method column/option with no migration or creator support found",
+        "suggestionContent": "WHAT: Post#cook now reads `cook_method`, but I found no migration adding a posts.cook_method column, and PostCreator (not in the checkout) may not accept a cook_method option. A grep of the repo found `cook_method` only in post.rb and topic_embed.rb. WHY: if the column is missing, every Post#cook call raises NoMethodError (all post creation and editing breaks), and TopicEmbed.import passes an option PostCreator may ignore, so imported posts would be markdown-cooked. HOW: add a migration adding `cook_method` (integer, default Post.cook_methods[:regular]) to posts, and make PostCreator/PostRevisor persist and preserve it.",
+        "existingCode": "return raw if cook_method == Post.cook_methods[:raw_html]",
+        "improvedCode": "# add migration: add_column :posts, :cook_method, :integer, default: 1, null: false\nreturn raw if cook_method == Post.cook_methods[:raw_html]",
+        "relevantFile": "app/models/post.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Embed record created even when post creation failed, leaving orphan embed",
+        "suggestionContent": "WHAT: `post.present?` is true for any Post object, including an unsaved one with validation errors, and `TopicEmbed.create!` then runs with nil post_id/topic_id (it validates only embed_url and content_sha1). WHY: a failed creation leaves an orphan embed with no topic. EmbedController then sees nil topic_id and re-enqueues forever, and the next import takes the else branch with `embed.post` nil and calls PostRevisor.new(nil), which crashes. HOW: check `post.present? && post.persisted?` (or post.errors.blank?) before creating the embed, and guard against `embed.post` being nil in the update branch.",
+        "existingCode": "post = creator.create\nif post.present?\n  TopicEmbed.create!(topic_id: post.topic_id,",
+        "improvedCode": "post = creator.create\nif post.present? && post.persisted?\n  TopicEmbed.create!(topic_id: post.topic_id,",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Feed item without content crashes whole poll; remote HTML stored unsanitized",
+        "suggestionContent": "WHAT: `i.content.scrub` is called without a nil guard and with no per-item error handling. WHY: a feed item with no content (SimpleRSS returns nil) raises NoMethodError, aborting the whole poll so later items are never imported. The remote HTML is also unescaped and stored unsanitized as raw_html, so scripts in the feed are rendered to forum readers (stored XSS). HOW: use `(i.content || i.description).to_s.scrub`, rescue per item, and sanitize the HTML to a whitelist before import.",
+        "existingCode": "content = CGI.unescapeHTML(i.content.scrub)\nTopicEmbed.import(user, url, i.title, content)",
+        "improvedCode": "raw_content = (i.content || i.description).to_s\nnext if raw_content.blank?\ncontent = CGI.unescapeHTML(raw_content.scrub)\nTopicEmbed.import(user, url, i.title, content)",
+        "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Unescaped URL injected into raw HTML footer of raw_html posts",
+        "suggestionContent": "WHAT: The url is interpolated unescaped into a single-quoted href in the footer HTML, and the post is stored as raw_html, which Post#cook returns without sanitization. WHY: a URL containing `'` (e.g. an RSS id/link) injects attributes or markup into every embedded post. HOW: use ERB::Util.html_escape(url) for both the href and the link text.",
+        "existingCode": "contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{url}'>#{url}</a>\")}</small>\\n\"",
+        "improvedCode": "escaped = ERB::Util.html_escape(url)\ncontents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \"<a href='#{escaped}'>#{escaped}</a>\")}</small>\\n\"",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      }
+    ]
+  },
+  {
+    "id": "claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "source": "evals/parse/payloads/claude-sonnet-5-5/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json#0",
+    "findings": [
+      {
+        "title": "Hung flusher processes are never killed because the isinstance check never matches",
+        "suggestionContent": "WHAT: process.kill() is guarded by isinstance(process, multiprocessing.Process), but the processes are created with a spawn-context Process (multiprocessing.context.SpawnProcess), which is not a subclass of multiprocessing.Process, so the check is always False. WHY: a hung flusher is never killed. _create_process_for_shards then starts a second process for the same shards while the old one is still alive, which leaks processes and flushes the same Redis shards twice. The old code called kill() unconditionally. HOW: check `isinstance(process, multiprocessing.context.BaseProcess)` or `not isinstance(process, threading.Thread)`. Apply the same fix to the terminate() check in join().",
+        "existingCode": "            try:\n                if isinstance(process, multiprocessing.Process):\n                    process.kill()\n            except (ValueError, AttributeError):\n                pass  # Process already closed, ignore",
+        "improvedCode": "            try:\n                if not isinstance(process, threading.Thread):\n                    process.kill()\n            except (ValueError, AttributeError):\n                pass  # Process already closed, ignore",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      },
+      {
+        "title": "Memory info is fetched redundantly once per flusher buffer on every submit",
+        "suggestionContent": "WHAT: submit() calls get_memory_info() on every per-process buffer. Each call runs iter_cluster_memory_usage over the same Redis cluster. WHY: the main consumer thread issues N redundant memory-info round trips per submitted message, where N is the number of flusher processes. Each node is also counted N times. The used/available ratio is the same, so the extra calls add nothing. HOW: call get_memory_info() once, on any single buffer or on the original buffer.",
+        "existingCode": "            memory_infos: list[ServiceMemory] = []\n            for buffer in self.buffers.values():\n                memory_infos.extend(buffer.get_memory_info())",
+        "improvedCode": "            memory_infos: list[ServiceMemory] = []\n            if self.buffers:\n                memory_infos.extend(next(iter(self.buffers.values())).get_memory_info())",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      }
+    ]
+  },
+  {
+    "id": "deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "source": "evals/parse/payloads/deepseek-v4-flash@fireworks/add-guest-management-functionality-to-existing-bookings-cal-com.json#0",
+    "findings": [
+      {
+        "title": "Team admin role check uses && so admins (non-owners) are denied",
+        "suggestionContent": "WHAT: `isTeamAdminOrOwner` is computed as `isTeamAdmin(...) && isTeamOwner(...)`, requiring the caller to be BOTH admin AND owner. WHY: `isTeamAdmin` already returns true for ADMIN or OWNER and `isTeamOwner` returns true only for OWNER, so the `&&` collapses the check to owner-only and a team ADMIN (non-owner) is wrongly rejected with `you_do_not_have_permission`. HOW: use `||` so either role grants access.",
+        "existingCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Add-guests email uses raw guests instead of filtered uniqueGuests",
+        "suggestionContent": "WHAT: `sendAddGuestsEmails(evt, guests)` passes the raw input array instead of the computed `uniqueGuests`. WHY: `uniqueGuests` was filtered to exclude emails already on the booking and blacklisted emails; `sendAddGuestsEmails` matches `newGuests.includes(attendee.email)` against the booking attendees, so passing `guests` re-notifies attendees who were duplicates and were never actually added. HOW: pass `uniqueGuests`.",
+        "existingCode": "    await sendAddGuestsEmails(evt, guests);",
+        "improvedCode": "    await sendAddGuestsEmails(evt, uniqueGuests);",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Guest dedupe and blacklist checks are case-sensitive, allowing duplicates",
+        "suggestionContent": "WHAT: the dedupe/blacklist filter compares `guest === attendee.email` and `blacklistedGuestEmails.includes(guest)` case-sensitively, while the blacklist is lowercased (line 71). WHY: an existing attendee `Foo@Bar.com` re-submitted as `foo@bar.com` passes the filter and creates a duplicate attendee row / duplicate email. HOW: normalize both sides with `.toLowerCase()` before comparing.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest.toLowerCase() === attendee.email.toLowerCase()) &&\n      !blacklistedGuestEmails.includes(guest.toLowerCase())\n  );",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "updateCalendarAttendees method not found on EventManager",
+        "suggestionContent": "WHAT: `eventManager.updateCalendarAttendees(evt, booking)` calls a method I could not find defined anywhere on EventManager. WHY: a repo-wide grep for `updateCalendarAttendees` returned only this call site with no definition, so the mutation would throw a TypeError at runtime (and fail type-check) after the attendees were already persisted, leaving the DB updated but the calendar not synced. HOW: confirm the correct EventManager method name for propagating attendee changes and call that, or add the missing method. (Low confidence: I could not read packages/core to verify.)",
+        "existingCode": "  await eventManager.updateCalendarAttendees(evt, booking);",
+        "improvedCode": "",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      }
+    ]
+  },
+  {
+    "id": "deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex",
+    "source": "evals/parse/payloads/deepseek-v4-flash@fireworks/anonymous-add-configurable-device-limit-grafana-codex.json#0",
+    "findings": [
+      {
+        "title": "Device limit is bypassed on retries because the cache is set before the store write",
+        "suggestionContent": "WHAT: The new error path aborts anonymous auth on ErrDeviceLimitReached, but the device's local-cache entry is set in tagDeviceUI (impl.go:87) BEFORE CreateOrUpdateDevice runs, so the rejected device is already cached. WHY: Only the first request from a new device beyond the limit fails; every subsequent request within the 29-minute cache TTL takes the cache-hit branch (returns nil) and authenticates successfully, so the device limit is trivially bypassed and enforcement is inconsistent. HOW: Only populate the cache after the store write succeeds, e.g. move `a.localCache.SetDefault(key, struct{}{})` in tagDeviceUI to after the successful `CreateOrUpdateDevice` call so a rejected device is re-evaluated on the next request.",
+        "existingCode": "\tif err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {\n\t\tif errors.Is(err, anonstore.ErrDeviceLimitReached) {\n\t\t\treturn nil, err\n\t\t}\n\n\t\ta.log.Warn(\"Failed to tag anonymous session\", \"error\", err)\n\t}",
+        "improvedCode": "\t// tagDeviceUI must not cache the device key before the store write succeeds:\n\t//\tif err := a.anonStore.CreateOrUpdateDevice(ctx, device); err != nil {\n\t//\t\treturn err\n\t//\t}\n\t//\ta.localCache.SetDefault(key, struct{}{})\n\tif err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {\n\t\tif errors.Is(err, anonstore.ErrDeviceLimitReached) {\n\t\t\treturn nil, err\n\t\t}\n\n\t\ta.log.Warn(\"Failed to tag anonymous session\", \"error\", err)\n\t}",
+        "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
+        "language": "go"
+      },
+      {
+        "title": "Device-limit check races with insert, allowing the limit to be exceeded",
+        "suggestionContent": "WHAT: The device-limit check reads CountDevices and then inserts the new device in a separate statement, so the check-then-act is not atomic. WHY: Two concurrent requests for two different new devices can both observe `count < deviceLimit` and both insert, pushing the stored device count over the configured limit (a TOCTOU race). HOW: Perform the count and the conditional insert inside a single transaction with appropriate locking, or enforce the cap atomically in the insert (e.g. INSERT ... SELECT ... WHERE (SELECT COUNT(*) FROM anon_device WHERE updated_at BETWEEN ? AND ?) < ?).",
+        "existingCode": "\t// if device limit is reached, only update devices\n\tif s.deviceLimit > 0 {\n\t\tcount, err := s.CountDevices(ctx, time.Now().UTC().Add(-anonymousDeviceExpiration), time.Now().UTC().Add(time.Minute))\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\n\t\tif count >= s.deviceLimit {\n\t\t\treturn s.updateDevice(ctx, device)\n\t\t}\n\t}",
+        "improvedCode": "\t// if device limit is reached, only update devices\n\t// NOTE: the count below and the insert further down must be made atomic\n\t// (single transaction / insert-with-guard), otherwise concurrent requests\n\t// can both pass the check and exceed the configured limit.\n\tif s.deviceLimit > 0 {\n\t\tcount, err := s.CountDevices(ctx, time.Now().UTC().Add(-anonymousDeviceExpiration), time.Now().UTC().Add(time.Minute))\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\n\t\tif count >= s.deviceLimit {\n\t\t\treturn s.updateDevice(ctx, device)\n\t\t}\n\t}",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go"
+      }
+    ]
+  },
+  {
+    "id": "deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "source": "evals/parse/payloads/deepseek-v4-flash@fireworks/enhance-embed-url-handling-and-validation-system-discourse-cursor.json#0",
+    "findings": [
+      {
+        "title": "poll_feed crashes on nil item content, aborting the whole feed import",
+        "suggestionContent": "WHAT: `i.content.scrub` calls String#scrub on the RSS item's `content` field, which SimpleRSS returns as nil when the item has no <content> element (e.g. RSS 2.0 feeds that only carry <description>). WHY: `nil.scrub` raises NoMethodError, aborting the entire `rss.items.each` loop so no items are imported; combined with `sidekiq_options retry: false` the job dies silently and never retries. HOW: guard the field, e.g. `content = CGI.unescapeHTML((i.content || i.description || '').scrub)` and skip items with blank content.",
+        "existingCode": "content = CGI.unescapeHTML(i.content.scrub)\nTopicEmbed.import(user, url, i.title, content)",
+        "improvedCode": "content = CGI.unescapeHTML((i.content || i.description || '').scrub)\nnext if content.blank?\nTopicEmbed.import(user, url, i.title, content)",
+        "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "raw_html posts bypass sanitization, storing unsanitized feed HTML as cooked",
+        "suggestionContent": "WHAT: The new raw_html branch returns `raw` unchanged as the post's cooked value, so posts imported by TopicEmbed.import (topic_embed.rb:22 uses `cook_method: Post.cook_methods[:raw_html]`) are stored in the `cooked` column without passing through PrettyText/Sanitize. WHY: The RSS/remote content is inserted verbatim; any `<script>` or `onerror=` markup present in the feed or embedded page (feed content is not fully controlled by the forum admin — it can include third-party/user HTML) is later rendered to every forum visitor as trusted HTML, giving stored XSS. HOW: run the imported HTML through a sanitizer before storing, e.g. return `Sanitize.fragment(raw, Sanitize::Config::BASIC)` (or PrettyText.sanitize) instead of the bare `raw`.",
+        "existingCode": "    # For some posts, for example those imported via RSS, we support raw HTML. In that\n    # case we can skip the rendering pipeline.\n    return raw if cook_method == Post.cook_methods[:raw_html]",
+        "improvedCode": "    if cook_method == Post.cook_methods[:raw_html]\n      # Imported HTML must still be sanitized before it is stored as cooked\n      return Sanitize.fragment(raw, Sanitize::Config::BASIC)\n    end",
+        "relevantFile": "app/models/post.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Each unknown embed_url triggers a full synchronous feed poll, amplifying load",
+        "suggestionContent": "WHAT: `perform_retrieve` synchronously calls `Jobs::PollFeed.new.execute({})`, which fetches and parses the entire configured feed and imports every item, once per retrieve_topic job. WHY: EmbedController enqueues :retrieve_topic for every unknown embed_url (embed_controller.rb:15), and the throttle key in retrieved_recently? is per-embed_url (`retrieved:#{@embed_url}`), so N distinct embed_urls cause N full-feed fetch+parse+import cycles — an attacker with a spoofable Referer can drive worker-pool exhaustion and hammer the remote feed. HOW: gate the feed poll behind a single global lock/key (the now-unused `feed_key` was intended for this) or move the poll out of the per-request path so concurrent requests do not each re-poll.",
+        "existingCode": "      # First check RSS if that is enabled\n      if SiteSetting.feed_polling_enabled?\n        Jobs::PollFeed.new.execute({})\n        return if TopicEmbed.where(embed_url: @embed_url).exists?\n      end",
+        "improvedCode": "      # First check RSS if that is enabled (throttle globally, not per embed_url)\n      if SiteSetting.feed_polling_enabled? && $redis.setnx('feed-polling', '1')\n        $redis.expire('feed-polling', 60)\n        Jobs::PollFeed.new.execute({})\n        return if TopicEmbed.where(embed_url: @embed_url).exists?\n      end",
+        "relevantFile": "lib/topic_retriever.rb",
+        "language": "ruby"
+      }
+    ]
+  },
+  {
+    "id": "deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "source": "evals/parse/payloads/deepseek-v4-flash@fireworks/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json#0",
+    "findings": [
+      {
+        "title": "get_memory_info called once per flusher buffer duplicates cluster memory queries",
+        "suggestionContent": "WHAT: `submit` now calls `buffer.get_memory_info()` once per flusher buffer and concatenates the results (`for buffer in self.buffers.values(): memory_infos.extend(buffer.get_memory_info())`), but every `SpansBuffer` in the same consumer queries the same shared Redis cluster. WHY: `get_memory_info()` -> `iter_cluster_memory_usage(self.client)` returns the whole cluster's node memory regardless of the buffer's assigned shards, so with N flusher processes the number of Redis `INFO`/memory calls per submit is multiplied by N (e.g. 16 processes x every cluster node) even though the resulting `used`/`available` ratio is identical. HOW: query the cluster memory once (e.g. call `self.buffers[next(iter(self.buffers))].get_memory_info()` or cache/`iter_cluster_memory_usage` directly) instead of once per buffer.",
+        "existingCode": "            memory_infos: list[ServiceMemory] = []\n            for buffer in self.buffers.values():\n                memory_infos.extend(buffer.get_memory_info())\n            used = sum(x.used for x in memory_infos)\n            available = sum(x.available for x in memory_infos)",
+        "improvedCode": "            # All buffers share the same Redis cluster, so cluster-wide memory\n            # info is identical per buffer; query it once.\n            memory_infos: list[ServiceMemory] = []\n            for buffer in self.buffers.values():\n                memory_infos = list(buffer.get_memory_info())\n                break\n            used = sum(x.used for x in memory_infos)\n            available = sum(x.available for x in memory_infos)",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      }
+    ]
+  },
+  {
+    "id": "gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "source": "evals/parse/payloads/gemini-3.1-pro@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json#1",
+    "findings": [
+      {
+        "title": "isTeamAdminOrOwner check uses && instead of ||, breaking permission logic",
+        "suggestionContent": "WHAT: The `isTeamAdminOrOwner` check uses the logical AND (`&&`) operator instead of OR (`||`).\nWHY: This requires a user to be both a team admin and a team owner simultaneously to bypass the permission check, meaning mere admins or owners might be incorrectly forbidden.\nHOW: Change `&&` to `||`.",
+        "existingCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "EventManager uses caller credentials instead of organizer's to update calendar",
+        "suggestionContent": "WHAT: `EventManager` is initialized with the caller's credentials (`ctx.user`) instead of the booking organizer's credentials.\nWHY: If an attendee or team admin adds a guest, the endpoint will attempt to update the calendar event using their own credentials instead of the organizer's, failing to update the organizer's calendar.\nHOW: Initialize `EventManager` with the organizer's details and `booking.user.credentials`.",
+        "existingCode": "  const credentials = await getUsersCredentials(ctx.user);\n\n  const eventManager = new EventManager({\n    ...user,\n    credentials: [...credentials],\n  });",
+        "improvedCode": "  const eventManager = new EventManager({\n    ...(booking.user as NonNullable<typeof booking.user>),\n    credentials: booking.user?.credentials || [],\n  });",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "sendAddGuestsEmails sends emails to blacklisted or duplicate guests",
+        "suggestionContent": "WHAT: `sendAddGuestsEmails` is called with the original `guests` array instead of the filtered `uniqueGuests` array.\nWHY: Duplicate or blacklisted guests that were intentionally skipped from being added to the database will still receive an email invitation.\nHOW: Pass `uniqueGuests` instead of `guests`.",
+        "existingCode": "  try {\n    await sendAddGuestsEmails(evt, guests);\n  } catch (err) {",
+        "improvedCode": "  try {\n    await sendAddGuestsEmails(evt, uniqueGuests);\n  } catch (err) {",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Guest email filter is case-sensitive, allowing blacklist and duplicate bypasses",
+        "suggestionContent": "WHAT: The `guests` array is filtered against `blacklistedGuestEmails` and existing `attendees` without normalizing the input to lowercase.\nWHY: An attacker can bypass the blacklist or add duplicate attendees simply by changing the case of the email address (e.g., passing `Guest@example.com`).\nHOW: Normalize the guest email to lowercase during the filter checks.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest.toLowerCase() === attendee.email.toLowerCase()) &&\n      !blacklistedGuestEmails.includes(guest.toLowerCase())\n  );",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Unbounded guests array allows email spam and resource exhaustion",
+        "suggestionContent": "WHAT: The `guests` array in the input schema has no maximum length limit.\nWHY: An authenticated attacker can submit thousands of emails, leading to a denial of service (OOM during `createMany` and `Promise.all` processing) and email spam abuse via Cal.com's infrastructure.\nHOW: Add a `.max()` constraint to the `guests` array, such as `z.array(z.string().email()).max(10)`.",
+        "existingCode": "export const ZAddGuestsInputSchema = z.object({\n  bookingId: z.number(),\n  guests: z.array(z.string().email()),\n});",
+        "improvedCode": "export const ZAddGuestsInputSchema = z.object({\n  bookingId: z.number(),\n  guests: z.array(z.string().email()).max(10),\n});",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+        "language": "typescript"
+      }
+    ]
+  },
+  {
+    "id": "gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "source": "evals/parse/payloads/gemini-3.1-pro@openrouter/anonymous-add-configurable-device-limit-grafana-codex.json#0",
+    "findings": [
+      {
+        "title": "Local cache bypasses anonymous device limit on subsequent requests",
+        "suggestionContent": "WHAT: The device limit check is easily bypassed because the underlying `tagDeviceUI` method caches the device ID before checking the database.\nWHY: An attacker can bypass `AnonymousDeviceLimit` entirely by sending the same device ID twice; the first request fails and is rejected here, but it leaves the device ID in the local cache, causing the second request to silently hit the cache and authenticate without triggering the database limit check.\nHOW: Update `tagDeviceUI` in `impl.go` to only execute `a.localCache.SetDefault` after `CreateOrUpdateDevice` returns successfully, or remove it from the cache on error.",
+        "existingCode": "\tif err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {\n\t\tif errors.Is(err, anonstore.ErrDeviceLimitReached) {\n\t\t\treturn nil, err\n\t\t}\n\n\t\ta.log.Warn(\"Failed to tag anonymous session\", \"error\", err)\n\t}",
+        "improvedCode": "",
+        "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
+        "language": "go"
+      },
+      {
+        "title": "Synchronous COUNT(*) query on hot path creates a database DoS vector",
+        "suggestionContent": "WHAT: `CreateOrUpdateDevice` synchronously executes a `SELECT COUNT(*)` spanning a 30-day range on every anonymous authentication attempt that misses the cache.\nWHY: Because `TagDevice` is now called synchronously in the auth flow, an attacker sending requests with random device IDs can force continuous `COUNT(*)` queries, leading to severe database CPU exhaustion and an effective DoS.\nHOW: Avoid querying the database synchronously on the authentication hot path; instead, cache the total count periodically or maintain an in-memory counter.",
+        "existingCode": "\t// if device limit is reached, only update devices\n\tif s.deviceLimit > 0 {\n\t\tcount, err := s.CountDevices(ctx, time.Now().UTC().Add(-anonymousDeviceExpiration), time.Now().UTC().Add(time.Minute))\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\n\t\tif count >= s.deviceLimit {\n\t\t\treturn s.updateDevice(ctx, device)\n\t\t}\n\t}",
+        "improvedCode": "",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go"
+      },
+      {
+        "title": "Outer args slice is mutated inside a database closure, breaking retries",
+        "suggestionContent": "WHAT: The `args` slice captured from the outer scope is mutated by `args = append([]interface{}{query}, args...)` inside the `WithDbSession` closure.\nWHY: If `WithDbSession` retries the transaction (e.g., due to a deadlock), the closure will re-execute with an `args` slice that already has the query string prepended from the first attempt, causing a SQL execution error (`expected X arguments, got Y`).\nHOW: Use a local variable to hold the execution arguments, such as `execArgs := append([]interface{}{query}, args...)`.",
+        "existingCode": "\terr := s.sqlStore.WithDbSession(ctx, func(dbSession *sqlstore.DBSession) error {\n\t\targs = append([]interface{}{query}, args...)\n\t\tresult, err := dbSession.Exec(args...)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}",
+        "improvedCode": "\terr := s.sqlStore.WithDbSession(ctx, func(dbSession *sqlstore.DBSession) error {\n\t\texecArgs := append([]interface{}{query}, args...)\n\t\tresult, err := dbSession.Exec(execArgs...)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go"
+      },
+      {
+        "title": "Outer args slice is mutated inside a database closure, breaking retries",
+        "suggestionContent": "WHAT: The `args` slice captured from the outer scope is mutated by `args = append([]any{query}, args...)` inside the `WithDbSession` closure.\nWHY: Similar to the previous finding, if the session transaction needs to be retried, the `args` array will contain duplicate query strings from earlier attempts, failing the execution.\nHOW: Use a local variable: `execArgs := append([]any{query}, args...)`.",
+        "existingCode": "\terr := s.sqlStore.WithDbSession(ctx, func(dbSession *sqlstore.DBSession) error {\n\t\targs = append([]any{query}, args...)\n\t\t_, err := dbSession.Exec(args...)\n\t\treturn err\n\t})",
+        "improvedCode": "\terr := s.sqlStore.WithDbSession(ctx, func(dbSession *sqlstore.DBSession) error {\n\t\texecArgs := append([]any{query}, args...)\n\t\t_, err := dbSession.Exec(execArgs...)\n\t\treturn err\n\t})",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go"
+      },
+      {
+        "title": "TOCTOU race condition allows device count to exceed limit",
+        "suggestionContent": "WHAT: The device limit enforcement performs a check (`CountDevices`) and then an action (`CreateOrUpdateDevice` insert) without any lock or transaction.\nWHY: Concurrent authentication requests for new devices will all read a count below the limit and proceed to insert, causing the final number of devices to exceed `deviceLimit`.\nHOW: Enforce the count within a single transaction with appropriate locking, or handle constraint enforcement at the database level.",
+        "existingCode": "\t// if device limit is reached, only update devices\n\tif s.deviceLimit > 0 {\n\t\tcount, err := s.CountDevices(ctx, time.Now().UTC().Add(-anonymousDeviceExpiration), time.Now().UTC().Add(time.Minute))\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\n\t\tif count >= s.deviceLimit {\n\t\t\treturn s.updateDevice(ctx, device)\n\t\t}\n\t}",
+        "improvedCode": "",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go"
+      }
+    ]
+  },
+  {
+    "id": "gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "source": "evals/parse/payloads/gemini-3.1-pro@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json#1",
+    "findings": [
+      {
+        "title": "absolutize_urls breaks protocol-relative URLs by improperly stripping slashes and prepending prefix",
+        "suggestionContent": "WHAT: `href.start_with?('/')` matches protocol-relative URLs (e.g., `//example.com`) and the subsequent `.sub(/^\\/+/, '')` strips all leading slashes.\nWHY: This breaks any embedded protocol-relative links or images by incorrectly prepending the site prefix (e.g., `http://site.com/example.com`).\nHOW: Exclude protocol-relative URLs from this logic, e.g., `if href.present? && href.start_with?('/') && !href.start_with?('//')`.",
+        "existingCode": "      if href.present? && href.start_with?('/')\n        a['href'] = \"#{prefix}/#{href.sub(/^\\/+/, '')}\"\n      end",
+        "improvedCode": "      if href.present? && href.start_with?('/') && !href.start_with?('//')\n        a['href'] = \"#{prefix}/#{href.sub(/^\\/+/, '')}\"\n      end",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "fetch_http crashes with NoMethodError if embed_by_username is nil",
+        "suggestionContent": "WHAT: `SiteSetting.embed_by_username.downcase` is called without ensuring the setting is present.\nWHY: If `embed_by_username` is not configured (nil), retrieving an embed will crash the Sidekiq job with a `NoMethodError`, breaking the feature entirely.\nHOW: Add a safe navigation operator or check `.present?`, e.g., `SiteSetting.embed_by_username&.downcase`.",
+        "existingCode": "    def fetch_http\n      user = User.where(username_lower: SiteSetting.embed_by_username.downcase).first\n      return if user.blank?",
+        "improvedCode": "    def fetch_http\n      return if SiteSetting.embed_by_username.blank?\n      user = User.where(username_lower: SiteSetting.embed_by_username.downcase).first\n      return if user.blank?",
+        "relevantFile": "lib/topic_retriever.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Synchronous PollFeed execution per missing embed URL creates severe DOS risk",
+        "suggestionContent": "WHAT: `Jobs::PollFeed.new.execute({})` is executed synchronously for every requested URL not found in the database.\nWHY: An attacker can request thousands of unique bogus `embed_url`s, bypassing the per-URL throttle and forcing Sidekiq to download and parse the entire external RSS feed continuously, exhausting workers.\nHOW: Do not trigger `PollFeed` synchronously on every miss; rely solely on its scheduled background execution, or add a global throttle for feed fetching.",
+        "existingCode": "      # First check RSS if that is enabled\n      if SiteSetting.feed_polling_enabled?\n        Jobs::PollFeed.new.execute({})\n        return if TopicEmbed.where(embed_url: @embed_url).exists?\n      end",
+        "improvedCode": "",
+        "relevantFile": "lib/topic_retriever.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Missing HTML sanitization on imported RSS content allows Stored XSS via feed",
+        "suggestionContent": "WHAT: Content imported via `PollFeed` is passed to `TopicEmbed.import` without any HTML sanitization, and the `cook_method: raw_html` bypasses Discourse's built-in sanitizer.\nWHY: Any malicious HTML or script tags present in the external RSS feed will be saved as raw HTML and executed in the browsers of users viewing the embedded topic (Stored XSS).\nHOW: Sanitize the `content` string using `Sanitize` or `Readability` before passing it to `TopicEmbed.import`, similar to how `import_remote` filters tags.",
+        "existingCode": "        content = CGI.unescapeHTML(i.content.scrub)\n        TopicEmbed.import(user, url, i.title, content)",
+        "improvedCode": "",
+        "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+        "language": "ruby"
+      }
+    ]
+  },
+  {
+    "id": "gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "source": "evals/parse/payloads/gemini-3.1-pro@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json#0",
+    "findings": [
+      {
+        "title": "Deadline timeout in join() skips termination of remaining flusher processes",
+        "suggestionContent": "WHAT: The `join` method uses `break` when the deadline is reached, exiting the loop over processes entirely.\nWHY: Any subsequent background processes in `self.processes` will neither be waited for nor terminated, leaking orphaned child processes when the consumer shuts down.\nHOW: Remove the early `break` block. The `while` loop condition already checks the deadline safely and will instantly fall through to `process.terminate()` for all remaining processes once the deadline is exceeded.",
+        "existingCode": "        # Wait for all processes to finish\n        for process_index, process in self.processes.items():\n            if deadline is not None:\n                remaining_time = deadline - time.time()\n                if remaining_time <= 0:\n                    break\n\n            while process.is_alive() and (deadline is None or deadline > time.time()):\n                time.sleep(0.1)\n\n            if isinstance(process, multiprocessing.Process):\n                process.terminate()",
+        "improvedCode": "        # Wait for all processes to finish\n        for process_index, process in self.processes.items():\n            while process.is_alive() and (deadline is None or deadline > time.time()):\n                time.sleep(0.1)\n\n            if isinstance(process, multiprocessing.Process):\n                process.terminate()",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      }
+    ]
+  },
+  {
+    "id": "gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "source": "evals/parse/payloads/gemini-3.8-flash@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json#0",
+    "findings": [
+      {
+        "title": "Use of logical AND instead of OR prevents team admins or owners from adding guests",
+        "suggestionContent": "WHAT: Logical AND (`&&`) is used instead of logical OR (`||`) when checking if the user is a team admin or owner.\nWHY: Team membership roles are mutually exclusive (a user is either an ADMIN or an OWNER), so `(await isTeamAdmin(...)) && (await isTeamOwner(...))` evaluates to `false`, improperly blocking team admins and team owners from adding guests to team bookings.\nHOW: Change the `&&` operator to `||` so that either team admins or team owners are authorized.",
+        "existingCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Unfiltered guests array passed to sendAddGuestsEmails instead of uniqueGuests",
+        "suggestionContent": "WHAT: `sendAddGuestsEmails` is called with the raw input `guests` array instead of `uniqueGuests`.\nWHY: Emails are sent to blacklisted email addresses or existing attendees that were filtered out and never added to the booking attendees list.\nHOW: Pass `uniqueGuests` instead of `guests` to `sendAddGuestsEmails(evt, uniqueGuests)`.",
+        "existingCode": "  try {\n    await sendAddGuestsEmails(evt, guests);\n  } catch (err) {",
+        "improvedCode": "  try {\n    await sendAddGuestsEmails(evt, uniqueGuests);\n  } catch (err) {",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      }
+    ]
+  },
+  {
+    "id": "gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex",
+    "source": "evals/parse/payloads/gemini-3.8-flash@openrouter/anonymous-add-configurable-device-limit-grafana-codex.json#0",
+    "findings": [
+      {
+        "title": "Failed device tagging leaves device in local cache, bypassing limit",
+        "suggestionContent": "WHAT: tagDeviceUI populates localCache before calling CreateOrUpdateDevice, and the cache entry is not evicted when CreateOrUpdateDevice returns an error such as ErrDeviceLimitReached.\nWHY: Any subsequent request with the same device ID immediately hits localCache, causing tagDeviceUI to return nil and Authenticate to grant anonymous access, completely bypassing the device limit.\nHOW: Evict the device from localCache when tagDeviceUI returns an error (or only insert into localCache after CreateOrUpdateDevice succeeds).",
+        "existingCode": "\terr = a.tagDeviceUI(ctx, httpReq, taggedDevice)\n\tif err != nil {\n\t\ta.log.Debug(\"Failed to tag device for UI\", \"error\", err)\n\t\treturn err\n\t}",
+        "improvedCode": "\terr = a.tagDeviceUI(ctx, httpReq, taggedDevice)\n\tif err != nil {\n\t\ta.localCache.Delete(taggedDevice.CacheKey())\n\t\ta.log.Debug(\"Failed to tag device for UI\", \"error\", err)\n\t\treturn err\n\t}",
+        "relevantFile": "pkg/services/anonymous/anonimpl/impl.go",
+        "language": "go"
+      }
+    ]
+  },
+  {
+    "id": "gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "source": "evals/parse/payloads/gemini-3.8-flash@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json#0",
+    "findings": [
+      {
+        "title": "Unchecked i.content.scrub crashes when RSS feeds lack a content tag",
+        "suggestionContent": "WHAT: `i.content.scrub` is called without checking whether `i.content` is nil or falling back to `i.description`.\nWHY: Standard RSS 2.0 feeds use `<description>` instead of `<content>`, so `SimpleRSS` items return nil for `i.content`, causing a `NoMethodError: undefined method 'scrub' for nil:NilClass` that halts feed polling.\nHOW: Fall back to `i.description` when `i.content` is absent, and guard against nil before calling `.scrub`.",
+        "existingCode": "      rss.items.each do |i|\n        url = i.link\n        url = i.id if url.blank? || url !~ /^https?\\:\\/\\//\n\n        content = CGI.unescapeHTML(i.content.scrub)\n        TopicEmbed.import(user, url, i.title, content)\n      end",
+        "improvedCode": "      rss.items.each do |i|\n        url = i.link\n        url = i.id if url.blank? || url !~ /^https?\\:\\/\\//\n\n        raw_content = i.content || i.description\n        next if raw_content.blank?\n\n        content = CGI.unescapeHTML(raw_content.scrub)\n        TopicEmbed.import(user, url, i.title, content)\n      end",
+        "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "PostRevisor.revise! receives raw string instead of fields hash",
+        "suggestionContent": "WHAT: `revisor.revise!` is invoked with a String as the second argument instead of a fields Hash.\nWHY: `PostRevisor#revise!` expects a fields Hash (such as `{ raw: ... }`); passing a String causes a `TypeError` (no implicit conversion of Symbol into Integer) when `PostRevisor` accesses hash keys on `fields`.\nHOW: Wrap the updated body in a hash as `{ raw: absolutize_urls(url, contents) }`.",
+        "existingCode": "      if content_sha1 != embed.content_sha1\n        revisor = PostRevisor.new(post)\n        revisor.revise!(user, absolutize_urls(url, contents), skip_validations: true, bypass_rate_limiter: true)\n        embed.update_column(:content_sha1, content_sha1)\n      end",
+        "improvedCode": "      if content_sha1 != embed.content_sha1\n        revisor = PostRevisor.new(post)\n        revisor.revise!(user, { raw: absolutize_urls(url, contents) }, skip_validations: true, bypass_rate_limiter: true)\n        embed.update_column(:content_sha1, content_sha1)\n      end",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      }
+    ]
+  },
+  {
+    "id": "gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "source": "evals/parse/payloads/gemini-3.8-flash@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json#1",
+    "findings": [
+      {
+        "title": "isinstance check on SpawnProcess fails preventing kill of hung flusher processes",
+        "suggestionContent": "WHAT: `isinstance(process, multiprocessing.Process)` evaluates to `False` for `SpawnProcess` instances created via `multiprocessing.get_context(\"spawn\").Process`.\n\nWHY: When a flusher process hangs (`cause == \"hang\"`), `process.kill()` is skipped, leaving hung processes alive and running indefinitely while replacement processes are spawned.\n\nHOW: Check against `multiprocessing.process.BaseProcess` (or `(multiprocessing.Process, multiprocessing.process.BaseProcess)`) so that `SpawnProcess` instances are matched and terminated properly.",
+        "existingCode": "            try:\n                if isinstance(process, multiprocessing.Process):\n                    process.kill()\n            except (ValueError, AttributeError):\n                pass  # Process already closed, ignore",
+        "improvedCode": "            try:\n                if isinstance(process, (multiprocessing.Process, multiprocessing.process.BaseProcess)):\n                    process.kill()\n            except (ValueError, AttributeError):\n                pass  # Process already closed, ignore",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      }
+    ]
+  },
+  {
+    "id": "glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "source": "evals/parse/payloads/glm-5.3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json#0",
+    "findings": [
+      {
+        "title": "Team permission check uses && so only owners pass, locking out team admins",
+        "suggestionContent": "WHAT: `isTeamAdminOrOwner` combines the two checks with `&&`, but isTeamAdmin already returns true for ADMIN or OWNER roles while isTeamOwner returns true only for OWNER, so the combined expression is only true for team owners. WHY: A team ADMIN (who is not the owner) is incorrectly denied with FORBIDDEN when adding guests to their team's booking, breaking the feature for the entire admin role despite the variable's name. HOW: Use `||` (or call isTeamAdmin alone, since it already covers ADMIN and OWNER) — verified against packages/lib/server/queries/teams/index.ts lines 264-292.",
+        "existingCode": "const isTeamAdminOrOwner =\n  (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n  (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "const isTeamAdminOrOwner =\n  (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n  (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "updateCalendarAttendees is called but not defined on EventManager anywhere",
+        "suggestionContent": "WHAT: The handler calls `eventManager.updateCalendarAttendees(evt, booking)`, but a repo-wide search for `updateCalendarAttendees` finds only this call site and this PR's diff adds no EventManager change, so the method appears undefined on the EventManager class. WHY: This is a build/contract failure (TypeScript error, or runtime `eventManager.updateCalendarAttendees is not a function`) that makes the mutation throw — and since the attendee rows are already created at lines 92-106, the booking is left in a partially-updated state with an error returned. HOW: Define `updateCalendarAttendees` on packages/core/EventManager.ts (this PR must ship it alongside the caller) and/or wrap the call in a try/catch so calendar integration failures do not abort after the DB write; note I searched and did not find the method (packages/core is not indexable by my search tools), so verify the class actually exposes it.",
+        "existingCode": "await eventManager.updateCalendarAttendees(evt, booking);",
+        "improvedCode": "// Ensure EventManager defines this method; guard so calendar failures don't crash after the DB write:\ntry {\n  await eventManager.updateCalendarAttendees(evt, booking);\n} catch (err) {\n  logger.error(\"Error updating calendar attendees\", err);\n}",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Emails are sent to raw guests input instead of the filtered uniqueGuests list",
+        "suggestionContent": "WHAT: `sendAddGuestsEmails(evt, guests)` is passed the raw input array instead of the `uniqueGuests` list that was actually persisted. WHY: sendAddGuestsEmails (packages/emails/email-manager.ts:525-544) sends an AttendeeAddGuestsEmail to every attendee whose email is in the passed `newGuests` array, so emails that were filtered out as duplicates of existing attendees still trigger a \"guests added\" notification to people who were not newly added. HOW: Pass `uniqueGuests` (the list that was written to the DB) to match the callee's `newGuests` contract.",
+        "existingCode": "try {\n  await sendAddGuestsEmails(evt, guests);\n} catch (err) {\n  console.log(\"Error sending AddGuestsEmails\");\n}",
+        "improvedCode": "try {\n  await sendAddGuestsEmails(evt, uniqueGuests);\n} catch (err) {\n  logger.error(\"Error sending AddGuestsEmails\", err);\n}",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "EventManager is built with requester's credentials, not the booking organizer's",
+        "suggestionContent": "WHAT: The EventManager that updates the booking's calendar attendees is constructed from the requesting user (`getUsersCredentials(ctx.user)` / `{...user}`) even though the handler explicitly loads the organizer's `booking.user` with credentials (lines 35-39) and never uses them. WHY: When a non-organizer adds guests (an attendee — explicitly allowed by the permission check at lines 50-56), the calendar update is attempted with the attendee's credentials, which do not include the organizer's connected calendar, so the organizer's calendar event is never updated with the new guests. HOW: Build the EventManager from the booking's organizer user (the credentials the query already fetches at lines 35-39).",
+        "existingCode": "const credentials = await getUsersCredentials(ctx.user);\n\nconst eventManager = new EventManager({\n  ...user,\n  credentials: [...credentials],\n});",
+        "improvedCode": "const credentials = await getUsersCredentials(booking.user);\n\nconst eventManager = new EventManager({\n  ...booking.user,\n  credentials: [...credentials],\n});",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Guest email blacklist is bypassable with mixed-case email input",
+        "suggestionContent": "WHAT: BLACKLISTED_GUEST_EMAILS entries are lowercased (line 71) but the guest email being checked is not, so `blacklistedGuestEmails.includes(guest)` and `guest === attendee.email` are case-sensitive comparisons. WHY: A user bypasses an admin-configured blacklist entry (e.g. \"bad@example.com\") by submitting \"Bad@Example.com\" — the guest is added to the booking and emailed — and duplicate attendee rows are created when the submitted case differs from the stored attendee email. HOW: Lowercase the guest before both comparisons (Zod's `.email()` does not normalize case).",
+        "existingCode": "const uniqueGuests = guests.filter(\n  (guest) =>\n    !booking.attendees.some((attendee) => guest === attendee.email) &&\n    !blacklistedGuestEmails.includes(guest)\n);",
+        "improvedCode": "const uniqueGuests = [...new Set(guests.map((g) => g.toLowerCase()))].filter(\n  (guest) =>\n    !booking.attendees.some((attendee) => guest === attendee.email?.toLowerCase()) &&\n    !blacklistedGuestEmails.includes(guest)\n);",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Guests array has no size limit, allowing unbounded row creation and email fanout",
+        "suggestionContent": "WHAT: The `guests` input is `z.array(z.string().email())` with no `.max()` bound, and the handler fans it directly into a `createMany` plus a notification email per matching attendee. WHY: Any authenticated user who is an attendee of a booking (trivially obtained by booking any public slot) can submit thousands of emails in one request, creating thousands of attendee rows and sending an AttendeeAddGuestsEmail to each — an email-bombing / resource-exhaustion vector with no server-side cap. HOW: Add a `.max()` (the booking UI limits guests to 10) to the schema.",
+        "existingCode": "export const ZAddGuestsInputSchema = z.object({\n  bookingId: z.number(),\n  guests: z.array(z.string().email()),\n});",
+        "improvedCode": "export const ZAddGuestsInputSchema = z.object({\n  bookingId: z.number(),\n  guests: z.array(z.string().email()).max(10),\n});",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "findFirstOrThrow with userId || 0 throws raw Prisma error when booking has no user",
+        "suggestionContent": "WHAT: The organizer lookup uses `prisma.user.findFirstOrThrow({ where: { id: booking.userId || 0 } })`, which throws an unhandled Prisma P2025 error when booking.userId is null. WHY: Booking.userId is nullable; a booking without an organizer can still pass the permission check via the attendee path (line 52), and the mutation then fails with an uncaught Prisma error (500) instead of a controlled TRPC error. HOW: Guard for a null booking.userId before the lookup and throw a TRPCError.",
+        "existingCode": "const organizer = await prisma.user.findFirstOrThrow({\n  where: {\n    id: booking.userId || 0,\n  },",
+        "improvedCode": "if (!booking.userId) {\n  throw new TRPCError({ code: \"BAD_REQUEST\", message: \"booking_has_no_organizer\" });\n}\nconst organizer = await prisma.user.findFirstOrThrow({\n  where: {\n    id: booking.userId,\n  },",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      }
+    ]
+  },
+  {
+    "id": "gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "source": "evals/parse/payloads/gpt-6-sol/add-guest-management-functionality-to-existing-bookings-cal-com.json#0",
+    "findings": [
+      {
+        "title": "Team admins cannot add guests to team bookings",
+        "suggestionContent": "WHAT: Team admins fail authorization because isTeamAdmin and isTeamOwner must both return true. WHY: isTeamAdmin accepts ADMIN or OWNER, whereas isTeamOwner accepts only OWNER, so an ADMIN who is not the organizer or an attendee receives FORBIDDEN. HOW: Use isTeamAdmin alone to accept both roles.",
+        "existingCode": "(await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0))",
+        "improvedCode": "await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "TypeScript"
+      },
+      {
+        "title": "Existing attendees receive notifications as newly added guests",
+        "suggestionContent": "WHAT: The email helper receives the original guests array instead of the addresses actually inserted. WHY: sendAddGuestsEmails matches newGuests against the complete attendee list, so including an already-present attendee alongside a new guest sends that existing attendee an incorrect new-guest notification; blacklisted or differently cased addresses also diverge from persisted recipients. HOW: Pass uniqueGuests to sendAddGuestsEmails.",
+        "existingCode": "await sendAddGuestsEmails(evt, guests);",
+        "improvedCode": "await sendAddGuestsEmails(evt, uniqueGuests);",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "TypeScript"
+      },
+      {
+        "title": "Calendar failures leave added guests committed but the mutation failed",
+        "suggestionContent": "WHAT: New attendees are committed before calendar synchronization, and a calendar failure rejects the mutation. WHY: A transient calendar error leaves guests in the database while returning an error, so retrying the same request rejects all addresses as already present and never completes the notification flow. HOW: Separate the committed state from external-side-effect failures and provide a retryable synchronization/notification path rather than reporting the insert as failed.",
+        "existingCode": "const bookingAttendees = await prisma.booking.update({\n    where: {\n      id: bookingId,\n    },\n    include: {\n      attendees: true,\n    },\n    data: {\n      attendees: {\n        createMany: {\n          data: guestsFullDetails,\n        },\n      },\n    },\n  });",
+        "improvedCode": "",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "TypeScript"
+      },
+      {
+        "title": "Attendee-initiated additions update the wrong user's calendar",
+        "suggestionContent": "WHAT: Calendar updates use the requesting attendee's credentials instead of the booking organizer's credentials. WHY: When an attendee invokes the permitted mutation, EventManager runs against their integrations rather than the organizer's calendar, leaving the organizer's calendar event without the newly added guests. HOW: Obtain credentials for the booking organizer and instantiate EventManager for that organizer.",
+        "existingCode": "const credentials = await getUsersCredentials(ctx.user);\n\n  const eventManager = new EventManager({\n    ...user,\n    credentials: [...credentials],\n  });",
+        "improvedCode": "",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "TypeScript"
+      },
+      {
+        "title": "Repeated input addresses create duplicate booking attendees",
+        "suggestionContent": "WHAT: The guests filter does not remove repeated addresses within the incoming guests array. WHY: Two copies of a new address both pass the check against the original booking.attendees and are inserted twice, causing duplicate attendee records and invitation handling. HOW: Deduplicate the incoming array before filtering against existing attendees.",
+        "existingCode": "const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "const uniqueGuests = [...new Set(guests)].filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "TypeScript"
+      },
+      {
+        "title": "Disabled guest settings are bypassed by the new mutation",
+        "suggestionContent": "WHAT: The new endpoint inserts guests even when the event type has disableGuests enabled. WHY: Any authorized attendee can add participants to a booking whose organizer explicitly disabled guest additions. HOW: Reject guest additions when booking.eventType?.disableGuests is true.",
+        "existingCode": "if (!isTeamAdminOrOwner && !isOrganizer && !isAttendee) {\n    throw new TRPCError({ code: \"FORBIDDEN\", message: \"you_do_not_have_permission\" });\n  }",
+        "improvedCode": "if (!isTeamAdminOrOwner && !isOrganizer && !isAttendee) {\n    throw new TRPCError({ code: \"FORBIDDEN\", message: \"you_do_not_have_permission\" });\n  }\n  if (booking.eventType?.disableGuests) {\n    throw new TRPCError({ code: \"FORBIDDEN\", message: \"guests_disabled\" });\n  }",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "TypeScript"
+      },
+      {
+        "title": "Unbounded guest input amplifies database and notification work",
+        "suggestionContent": "WHAT: The schema accepts arbitrarily many guest emails per request. WHY: Each address triggers a scan of all existing attendees and the entire accepted list drives database inserts, translations, calendar updates, and notification delivery, so an authenticated caller can trigger unbounded work in one mutation. HOW: Impose an explicit maximum array length consistent with the supported guest limit.",
+        "existingCode": "guests: z.array(z.string().email()),",
+        "improvedCode": "",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+        "language": "TypeScript"
+      }
+    ]
+  },
+  {
+    "id": "gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex",
+    "source": "evals/parse/payloads/gpt-6-sol/anonymous-add-configurable-device-limit-grafana-codex.json#0",
+    "findings": [
+      {
+        "title": "Concurrent admissions can exceed the configured device limit",
+        "suggestionContent": "WHAT: The active-device count and subsequent insert are separate, non-atomic database operations. WHY: Two concurrent authentications with distinct device IDs can both read a count below the configured limit and both insert, exceeding the limit. HOW: Serialize the count-and-insert operation across instances using a database-backed lock or transaction strategy that prevents concurrent admissions.",
+        "existingCode": "if count >= s.deviceLimit {\n\treturn s.updateDevice(ctx, device)\n}",
+        "improvedCode": "",
+        "relevantFile": "pkg/services/anonymous/anonimpl/anonstore/database.go",
+        "language": "go"
+      },
+      {
+        "title": "A denied device is admitted on retry through the tagging cache",
+        "suggestionContent": "WHAT: A device rejected by the store remains in the local cache when TagDevice propagates the limit error. WHY: The first anonymous authentication is denied, but a retry with the same device ID hits tagDeviceUI's cached early return and Authenticate receives nil, admitting the device while the limit remains reached. HOW: Remove the cache entry when CreateOrUpdateDevice fails, or populate it only after a successful write.",
+        "existingCode": "if err != nil {\n\ta.log.Debug(\"Failed to tag device for UI\", \"error\", err)\n\treturn err\n}",
+        "improvedCode": "",
+        "relevantFile": "pkg/services/anonymous/anonimpl/impl.go",
+        "language": "go"
+      },
+      {
+        "title": "Requests without a device ID bypass the new admission limit",
+        "suggestionContent": "WHAT: Anonymous admission now relies on TagDevice returning a limit error, but TagDevice returns nil immediately when the request lacks X-Grafana-Device-Id. WHY: A client can omit this optional header and obtain anonymous access even when the configured device limit is full. HOW: When the limit is enabled, reject requests lacking a usable device ID before treating a successful tag call as authorization.",
+        "existingCode": "if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {\n\tif errors.Is(err, anonstore.ErrDeviceLimitReached) {\n\t\treturn nil, err\n\t}",
+        "improvedCode": "",
+        "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
+        "language": "go"
+      },
+      {
+        "title": "Default anonymous authentication now blocks on device database writes",
+        "suggestionContent": "WHAT: Anonymous authentication now waits synchronously for TagDevice's database write on each uncached device ID, including when the configured limit is zero. WHY: The previous asynchronous tagging did not put database session acquisition and write latency on the response path, so normal anonymous requests now block on a write even when admission control is disabled. HOW: Retain background tagging when device_limit is disabled and use synchronous tagging only when admission must be checked.",
+        "existingCode": "if err := a.anonDeviceService.TagDevice(ctx, httpReqCopy, anonymous.AnonDeviceUI); err != nil {",
+        "improvedCode": "",
+        "relevantFile": "pkg/services/anonymous/anonimpl/client.go",
+        "language": "go"
+      }
+    ]
+  },
+  {
+    "id": "gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "source": "evals/parse/payloads/gpt-6-sol/enhance-embed-url-handling-and-validation-system-discourse-cursor.json#0",
+    "findings": [
+      {
+        "title": "Imported HTML bypasses sanitization and enables stored XSS",
+        "suggestionContent": "WHAT: Posts imported as raw_html bypass the rendering and sanitization pipeline despite containing externally fetched RSS or webpage HTML. WHY: An article with a script tag or event-handler attribute is stored as cooked HTML and the embed view inserts `raw post.cooked`, executing attacker-controlled JavaScript on the forum origin. HOW: Sanitize imported HTML with an allowlist before saving it as raw_html, including on subsequent revisions.",
+        "existingCode": "return raw if cook_method == Post.cook_methods[:raw_html]",
+        "improvedCode": "return Sanitize.fragment(raw, elements: ALLOWED_EMBED_ELEMENTS, attributes: ALLOWED_EMBED_ATTRIBUTES) if cook_method == Post.cook_methods[:raw_html]",
+        "relevantFile": "app/models/post.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "RSS entries without a content element abort the feed poll",
+        "suggestionContent": "WHAT: `i.content.scrub` is invoked without checking whether an RSS item actually contains a content element. WHY: Ordinary RSS entries that provide `description` instead of `content` raise NoMethodError and prevent that entry and every subsequent entry from being imported; retries are disabled. HOW: Select available content or description and skip entries with neither before calling scrub.",
+        "existingCode": "content = CGI.unescapeHTML(i.content.scrub)",
+        "improvedCode": "content = i.content || i.description\nnext if content.blank?\ncontent = CGI.unescapeHTML(content.scrub)",
+        "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Redirects from the embeddable host can fetch internal resources",
+        "suggestionContent": "WHAT: `open(url)` fetches an embed URL after only its initial hostname was checked by TopicRetriever.invalid_host?, without restricting redirects to the embeddable host. WHY: A URL on the configured host that redirects to an internal HTTP endpoint makes the background job fetch that endpoint and import its response into a public topic. HOW: Enforce the configured host and permitted address range on every redirect and connection before fetching the document.",
+        "existingCode": "doc = Readability::Document.new(open(url).read,",
+        "improvedCode": "",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Missing embed username crashes asynchronous topic retrieval",
+        "suggestionContent": "WHAT: fetch_http calls `.downcase` on embed_by_username without checking that this setting is present. WHY: With an embeddable host configured but no embed user, every missing-topic embed job raises NoMethodError, even though PollFeed.execute explicitly guards the same optional setting. HOW: Return early when embed_by_username is blank before looking up the user.",
+        "existingCode": "user = User.where(username_lower: SiteSetting.embed_by_username.downcase).first",
+        "improvedCode": "return if SiteSetting.embed_by_username.blank?\nuser = User.where(username_lower: SiteSetting.embed_by_username.downcase).first",
+        "relevantFile": "lib/topic_retriever.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Protocol-relative article URLs are rewritten to the wrong host",
+        "suggestionContent": "WHAT: A protocol-relative link beginning `//` is treated as a root-relative path and prefixed with the article's origin. WHY: External image and anchor URLs such as `//cdn.example.com/image.png` become `https://article.example.com/cdn.example.com/image.png`, breaking imported media and links. HOW: Convert protocol-relative URLs using only the article's URI scheme, and apply origin prefix only to a single leading slash.",
+        "existingCode": "if src.present? && src.start_with?('/')\n  a['src'] = \"#{prefix}/#{src.sub(/^\\/+/, '')}\"\nend",
+        "improvedCode": "if src.present? && src.start_with?('//')\n  a['src'] = \"#{uri.scheme}:#{src}\"\nelsif src.present? && src.start_with?('/')\n  a['src'] = \"#{prefix}#{src}\"\nend",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Missing embed requests each trigger a full feed reimport",
+        "suggestionContent": "WHAT: Every retrieval of a missing embed URL synchronously runs the full scheduled feed poll before fetching the requested article. WHY: Each distinct requested URL bypasses the per-URL Redis throttle and rereads, reparses, and iterates the complete feed, issuing import queries for every entry; ordinary embed loads cause network and database work proportional to feed size. HOW: Leave full feed polling to the scheduled job or use a recent-feed-poll cache shared across URLs before invoking it from retrieval.",
+        "existingCode": "if SiteSetting.feed_polling_enabled?\n  Jobs::PollFeed.new.execute({})",
+        "improvedCode": "",
+        "relevantFile": "lib/topic_retriever.rb",
+        "language": "ruby"
+      }
+    ]
+  },
+  {
+    "id": "gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "source": "evals/parse/payloads/gpt-6-sol/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json#0",
+    "findings": [
+      {
+        "title": "An expired join deadline leaves flusher subprocesses running",
+        "suggestionContent": "WHAT: `join` breaks out of the process loop when its deadline expires, skipping termination of the current and every subsequent flusher. WHY: A partition rebalance or shutdown with a busy flusher leaves old subprocesses running and potentially producing from shards now owned by another consumer. HOW: After the deadline, stop waiting but still terminate and join every remaining subprocess.",
+        "existingCode": "if remaining_time <= 0:\n    break",
+        "improvedCode": "if remaining_time <= 0:\n    # Skip waiting, but still terminate every process below.\n    pass\nelse:\n    while process.is_alive() and deadline > time.time():\n        time.sleep(0.1)\nif isinstance(process, multiprocessing.Process):\n    process.terminate()\n    process.join()",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      },
+      {
+        "title": "Negative flusher process counts silently disable flushing",
+        "suggestionContent": "WHAT: A negative `max_processes` produces a negative `num_processes`, making the process mapping empty even when shards are assigned. WHY: Passing the newly exposed `--flusher-processes=-1` silently starts no flushers and leaves buffered spans unflushed while the consumer continues committing offsets. HOW: Validate that `max_processes` is positive before constructing the mapping, and reject nonpositive values in the CLI option.",
+        "existingCode": "self.num_processes = min(self.max_processes, len(buffer.assigned_shards))\nself.process_to_shards_map: dict[int, list[int]] = {\n    i: [] for i in range(self.num_processes)\n}",
+        "improvedCode": "if self.max_processes < 1:\n    raise ValueError('max_processes must be positive')\nself.num_processes = min(self.max_processes, len(buffer.assigned_shards))\nself.process_to_shards_map: dict[int, list[int]] = {\n    i: [] for i in range(self.num_processes)\n}",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      },
+      {
+        "title": "Restarted flusher children are not reaped",
+        "suggestionContent": "WHAT: The restart path kills the old subprocess and replaces its dictionary entry without joining the old process. WHY: Each crashed or hung child remains unreaped in the multiprocessing process table until parent exit, exhausting subprocess resources during repeated per-shard restarts. HOW: Join the old process after killing it and before replacing it, with a bounded wait.",
+        "existingCode": "if isinstance(process, multiprocessing.Process):\n    process.kill()\n...\nself._create_process_for_shards(process_index, shards)",
+        "improvedCode": "if isinstance(process, multiprocessing.Process):\n    if process.is_alive():\n        process.kill()\n    process.join(timeout=1)\nself._create_process_for_shards(process_index, shards)",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      },
+      {
+        "title": "Per-shard buffers repeat full-cluster memory queries on every submit",
+        "suggestionContent": "WHAT: Every buffer in `self.buffers` independently calls `get_memory_info`, which queries memory across the entire Redis cluster rather than just that buffer's shards. WHY: With one process per shard, every submitted message now sends one full-cluster INFO query per flusher, multiplying Redis network work by the number of assigned shards. HOW: Query memory through one buffer once, as before, since all buffers share the same Redis cluster.",
+        "existingCode": "memory_infos: list[ServiceMemory] = []\nfor buffer in self.buffers.values():\n    memory_infos.extend(buffer.get_memory_info())",
+        "improvedCode": "memory_infos = list(next(iter(self.buffers.values())).get_memory_info()) if self.buffers else []",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      }
+    ]
+  },
+  {
+    "id": "kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "source": "evals/parse/payloads/kimi-k2.7-code@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json#0",
+    "findings": [
+      {
+        "title": "Team permission check uses AND instead of OR, blocking valid admins/owners",
+        "suggestionContent": "WHAT: The team permission check requires the caller to be both a team admin AND a team owner. WHY: A user who is only a team admin (or only a team owner) will be denied permission to add guests to a team booking, even though the variable name and intended access model imply either role is sufficient. HOW: Change the conjunction to a disjunction: `(await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) || (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0))`.",
+        "existingCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Guest email blacklist is case-sensitive and can be bypassed",
+        "suggestionContent": "WHAT: The blacklist comparison lowercases the configured blacklist entries but compares them against the raw, case-preserved guest email. WHY: A guest email that differs only in case (e.g., 'BadActor@Example.com' vs 'badactor@example.com') will bypass the blacklist. HOW: Lowercase the guest email before comparison: `!blacklistedGuestEmails.includes(guest.toLowerCase())`.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest.toLowerCase() === attendee.email.toLowerCase()) &&\n      !blacklistedGuestEmails.includes(guest.toLowerCase())\n  );",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Calendar update runs with the current user's credentials instead of the organizer's",
+        "suggestionContent": "WHAT: The EventManager is constructed with the current caller's credentials (`ctx.user`), not the booking organizer's credentials. WHY: Calendar/video updates for the booking will be attempted with the wrong user's integrations; if the caller is an attendee or team admin who lacks the organizer's connected calendars, the update will silently fail or update the wrong calendar. The booking query already includes `booking.user.credentials` (lines 35-39) but it is unused. HOW: Build EventManager from the organizer's user record and credentials, or fetch the organizer's credentials explicitly, e.g. `const credentials = await getUsersCredentials(booking.user);` and pass `...booking.user` to EventManager.",
+        "existingCode": "  const credentials = await getUsersCredentials(ctx.user);\n\n  const eventManager = new EventManager({\n    ...user,\n    credentials: [...credentials],\n  });",
+        "improvedCode": "  const credentials = await getUsersCredentials(booking.user ?? ctx.user);\n\n  const eventManager = new EventManager({\n    ...(booking.user ?? ctx.user),\n    credentials: [...credentials],\n  });",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "No limit on the number of guests that can be added in one request",
+        "suggestionContent": "WHAT: The input schema accepts an unbounded array of guest emails with no maximum length. WHY: An authenticated user (attendee, organizer, or team admin) can add an arbitrarily large number of guests to a booking in a single mutation, causing unbounded database writes, email fan-out, and calendar API calls. HOW: Add a max length to the guests array, e.g. `guests: z.array(z.string().email()).max(50)`, and consider enforcing the same limit in the handler.",
+        "existingCode": "export const ZAddGuestsInputSchema = z.object({\n  bookingId: z.number(),\n  guests: z.array(z.string().email()),\n});",
+        "improvedCode": "export const ZAddGuestsInputSchema = z.object({\n  bookingId: z.number(),\n  guests: z.array(z.string().email()).max(50),\n});",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.schema.ts",
+        "language": "typescript"
+      }
+    ]
+  },
+  {
+    "id": "kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "source": "evals/parse/payloads/kimi-k2.7-code@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json#0",
+    "findings": [
+      {
+        "title": "Kernel#open on attacker-controlled URL enables command injection",
+        "suggestionContent": "WHAT: `open(url)` uses Kernel#open without scheme validation, allowing shell command execution if the URL begins with `|`. WHY: An attacker who controls `embed_url` (or a feed entry link) can execute arbitrary commands on the server. HOW: Add `require 'open-uri'` and use `URI(url).read` or `URI.open(url).read` after validating the scheme is `http`/`https`.",
+        "existingCode": "    doc = Readability::Document.new(open(url).read,\n                                        tags: %w[div p code pre h1 h2 h3 b em i strong a img],\n                                        attributes: %w[href src])",
+        "improvedCode": "    require 'open-uri'\n    raise Discourse::InvalidParameters.new(:url) unless url =~ /^https?\\:\\/\\//\n    doc = Readability::Document.new(URI.open(url).read,\n                                        tags: %w[div p code pre h1 h2 h3 b em i strong a img],\n                                        attributes: %w[href src])",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Feed polling uses Kernel#open on admin-controlled but injectable URL",
+        "suggestionContent": "WHAT: `open(SiteSetting.feed_polling_url)` uses Kernel#open without scheme validation. WHY: A feed URL starting with `|` executes arbitrary shell commands when the scheduled job runs. HOW: Add `require 'open-uri'` and use `URI.open(SiteSetting.feed_polling_url).read` after validating the scheme.",
+        "existingCode": "      rss = SimpleRSS.parse open(SiteSetting.feed_polling_url)",
+        "improvedCode": "      require 'open-uri'\n      rss = SimpleRSS.parse URI.open(SiteSetting.feed_polling_url).read",
+        "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Content SHA1 is computed before URL absolutization",
+        "suggestionContent": "WHAT: `content_sha1` is computed before `absolutize_urls` mutates the content. WHY: The persisted SHA1 does not match the persisted post raw (which has absolutized URLs), so content integrity checks and update detection can diverge. HOW: Compute the digest after absolutization, or absolutize into a new string and digest that string.",
+        "existingCode": "    contents << \"\\n<hr>\\n<small>...</small>\\n\"\n\n    embed = TopicEmbed.where(embed_url: url).first\n    content_sha1 = Digest::SHA1.hexdigest(contents)\n    post = nil\n\n    # If there is no embed, create a topic, post and the embed.\n    if embed.blank?\n      Topic.transaction do\n        creator = PostCreator.new(user, title: title, raw: absolutize_urls(url, contents), skip_validations: true, cook_method: Post.cook_methods[:raw_html])",
+        "improvedCode": "    contents << \"\\n<hr>\\n<small>...</small>\\n\"\n    contents = absolutize_urls(url, contents)\n    content_sha1 = Digest::SHA1.hexdigest(contents)\n    post = nil\n\n    if embed.blank?\n      Topic.transaction do\n        creator = PostCreator.new(user, title: title, raw: contents, skip_validations: true, cook_method: Post.cook_methods[:raw_html])",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "RSS item content assumed non-nil",
+        "suggestionContent": "WHAT: `content = CGI.unescapeHTML(i.content.scrub)` assumes every RSS item has a `content` element. WHY: RSS/Atom items often expose only `description` or `summary`; `nil.scrub` raises NoMethodError and crashes the job. HOW: Guard nil and fall back to description, e.g. `raw = i.content || i.description || ''` before scrubbing/unescaping.",
+        "existingCode": "        content = CGI.unescapeHTML(i.content.scrub)\n        TopicEmbed.import(user, url, i.title, content)",
+        "improvedCode": "        content = CGI.unescapeHTML((i.content || i.description || '').scrub)\n        TopicEmbed.import(user, url, i.title, content)",
+        "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Single topic retrieval triggers full feed import",
+        "suggestionContent": "WHAT: `perform_retrieve` runs the entire feed poll synchronously to find one embedded URL. WHY: A single embed request imports/updates every item in the configured RSS feed, causing unbounded work proportional to feed size. HOW: Look up the single item by URL in the feed, or remove the synchronous poll and rely on the scheduled job.",
+        "existingCode": "      # First check RSS if that is enabled\n      if SiteSetting.feed_polling_enabled?\n        Jobs::PollFeed.new.execute({})\n        return if TopicEmbed.where(embed_url: @embed_url).exists?\n      end",
+        "improvedCode": "      # First check RSS if that is enabled\n      if SiteSetting.feed_polling_enabled?\n        import_feed_item_for(@embed_url)\n        return if TopicEmbed.where(embed_url: @embed_url).exists?\n      end",
+        "relevantFile": "lib/topic_retriever.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "raw_html cook method bypasses HTML sanitization",
+        "suggestionContent": "WHAT: `cook` returns `raw` unchanged when `cook_method` is `raw_html`. WHY: Imported RSS/remote HTML bypasses Discourse's markup sanitizer, allowing stored XSS if the source site or feed is compromised. HOW: Sanitize raw HTML through a whitelist (e.g. `Sanitize.fragment`) before storage or before returning it as cooked.",
+        "existingCode": "  def cook(*args)\n    # For some posts, for example those imported via RSS, we support raw HTML. In that\n    # case we can skip the rendering pipeline.\n    return raw if cook_method == Post.cook_methods[:raw_html]\n\n    # Default is to cook posts\n    Plugin::Filter.apply(:after_post_cook, self, post_analyzer.cook(*args))\n  end",
+        "improvedCode": "  def cook(*args)\n    return raw if cook_method == Post.cook_methods[:raw_html]\n\n    Plugin::Filter.apply(:after_post_cook, self, post_analyzer.cook(*args))\n  end",
+        "relevantFile": "app/models/post.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Embed authorization relies on spoofable Referer header",
+        "suggestionContent": "WHAT: `ensure_embeddable` authorizes embedding solely by comparing `request.referer` host to `embeddable_host`. WHY: The Referer header is optional (privacy tools strip it) and easily spoofed, allowing embedding from unauthorized origins or breaking legitimate embeds. HOW: Validate the embedding origin server-side with a signed or explicit per-site token instead of trusting Referer.",
+        "existingCode": "    def ensure_embeddable\n      raise Discourse::InvalidAccess.new('embeddable host not set') if SiteSetting.embeddable_host.blank?\n      raise Discourse::InvalidAccess.new('invalid referer host') if URI(request.referer || '').host != SiteSetting.embeddable_host",
+        "improvedCode": "    def ensure_embeddable\n      raise Discourse::InvalidAccess.new('embeddable host not set') if SiteSetting.embeddable_host.blank?\n      referer_host = URI(request.referer || '').host rescue nil\n      raise Discourse::InvalidAccess.new('invalid referer host') unless referer_host == SiteSetting.embeddable_host",
+        "relevantFile": "app/controllers/embed_controller.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Import mutates caller's contents string in place",
+        "suggestionContent": "WHAT: `import` mutates the caller's `contents` string in place with `contents << ...`. WHY: Callers such as `PollFeed` that reuse the source string or log it afterwards see the appended footer, causing unexpected side effects; frozen strings raise FrozenError. HOW: Work on a local copy, e.g. `contents = contents.dup`.",
+        "existingCode": "  def self.import(user, url, title, contents)\n    return unless url =~ /^https?\\:\\/\\//\n\n    contents << \"\\n<hr>\\n<small>...</small>\\n\"",
+        "improvedCode": "  def self.import(user, url, title, contents)\n    return unless url =~ /^https?\\:\\/\\//\n\n    contents = contents.dup\n    contents << \"\\n<hr>\\n<small>...</small>\\n\"",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      }
+    ]
+  },
+  {
+    "id": "kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "source": "evals/parse/payloads/kimi-k2.7-code@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json#0",
+    "findings": [
+      {
+        "title": "isinstance guard on multiprocessing.Process prevents kill() of spawn flusher processes",
+        "suggestionContent": "WHAT: the newly added `isinstance(process, multiprocessing.Process)` guard around `process.kill()` is always False for the spawn-context processes the flusher creates, because `multiprocessing.Process` is the default context's process class (ForkProcess on Linux) while `self.mp_context.Process` is SpawnProcess — a sibling subclass of BaseProcess, not a subclass of ForkProcess. WHY: a hung or unresponsive flusher process is never killed before `_create_process_for_shards` spawns its replacement, so the old and new processes flush the same shards concurrently (duplicate segment production to the buffered-segments topic) and hung processes leak on every restart cycle until MAX_PROCESS_RESTARTS forces a consumer restart; the old code called `self.process.kill()` unconditionally. HOW: drop the isinstance guard and call kill() only when the object supports it (e.g. `if not isinstance(process, threading.Thread): process.kill()`), or use `multiprocessing.process.BaseProcess` for the isinstance check so SpawnProcess instances match.",
+        "existingCode": "            try:\n                if isinstance(process, multiprocessing.Process):\n                    process.kill()\n            except (ValueError, AttributeError):\n                pass  # Process already closed, ignore",
+        "improvedCode": "            try:\n                if not isinstance(process, threading.Thread):\n                    process.kill()\n            except (ValueError, AttributeError):\n                pass  # Process already closed, ignore",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      }
+    ]
+  },
+  {
+    "id": "minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com",
+    "source": "evals/parse/payloads/minimax-m3@openrouter/add-guest-management-functionality-to-existing-bookings-cal-com.json#0",
+    "findings": [
+      {
+        "title": "EventManager.updateCalendarAttendees is called but not defined anywhere",
+        "suggestionContent": "WHAT: `eventManager.updateCalendarAttendees(evt, booking)` calls a method that does not exist on `EventManager` anywhere in the codebase (grep returns only the call site, no definition). WHY: This throws `TypeError: eventManager.updateCalendarAttendees is not a function` at runtime, failing the entire `addGuests` mutation (the DB write already happened in `prisma.booking.update` two steps earlier, leaving the booking with new attendees but the calendar/video provider not synced). HOW: Either add the `updateCalendarAttendees` method to `EventManager` (implementing the per-video/calendar provider attendee-update logic) or replace this call with the existing calendar-update primitive — for example, `eventManager.update(calEvent, booking.references)` or `eventManager.reschedule(...)` — depending on the intended semantic.",
+        "existingCode": "  const eventManager = new EventManager({\n    ...user,\n    credentials: [...credentials],\n  });\n\n  await eventManager.updateCalendarAttendees(evt, booking);",
+        "improvedCode": "  const eventManager = new EventManager({\n    ...user,\n    credentials: [...credentials],\n  });\n\n  // Implement or call the correct EventManager method that updates\n  // existing calendar/video references to reflect the new attendee list.\n  // E.g. await eventManager.updateCalendarAttendees(evt, booking);\n  //      or await eventManager.update(evt, booking.references);\n  await eventManager.updateCalendarAttendees(evt, booking); // replace with the real method once implemented",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "isTeamAdminOrOwner uses && but should be || to match its name and intent",
+        "suggestionContent": "WHAT: The predicate is named `isTeamAdminOrOwner` but uses `&&`, so it only returns true when the user is BOTH a team admin AND a team owner. WHY: Team admins who are not owners (the common case) get a FORBIDDEN error even though the variable name and intent clearly indicate they should be allowed. HOW: Change `&&` to `||`.",
+        "existingCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) &&\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "improvedCode": "  const isTeamAdminOrOwner =\n    (await isTeamAdmin(user.id, booking.eventType?.teamId ?? 0)) ||\n    (await isTeamOwner(user.id, booking.eventType?.teamId ?? 0));",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Duplicate-attendee check is case-sensitive, allowing same email with different case",
+        "suggestionContent": "WHAT: The duplicate-attendee check compares `guest === attendee.email` without case normalization, but the blacklist check on the next line lowercases env values, confirming this codebase treats emails as case-insensitive. WHY: An existing attendee `John@Example.com` is treated as different from a new guest `john@example.com`, so a duplicate attendee row is created (and the calendar provider receives the same person twice). HOW: Lowercase both sides — e.g. `guest.toLowerCase() === attendee.email.toLowerCase()`.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some(\n        (attendee) => guest.toLowerCase() === attendee.email.toLowerCase()\n      ) &&\n      !blacklistedGuestEmails.includes(guest.toLowerCase())\n  );",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "Blacklist check is case-sensitive so guests bypass it by changing case",
+        "suggestionContent": "WHAT: The blacklist check `!blacklistedGuestEmails.includes(guest)` compares lowercased env entries against the raw `guest` string (which is not lowercased). WHY: A guest like `Blocked@Example.com` bypasses a blacklist entry `blocked@example.com`, so the blacklist can be trivially evaded by changing case. HOW: Lowercase the guest before comparison: `!blacklistedGuestEmails.includes(guest.toLowerCase())`.",
+        "existingCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some((attendee) => guest === attendee.email) &&\n      !blacklistedGuestEmails.includes(guest)\n  );",
+        "improvedCode": "  const uniqueGuests = guests.filter(\n    (guest) =>\n      !booking.attendees.some(\n        (attendee) => guest.toLowerCase() === attendee.email.toLowerCase()\n      ) &&\n      !blacklistedGuestEmails.includes(guest.toLowerCase())\n  );",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      },
+      {
+        "title": "booking.userId || 0 + findFirstOrThrow throws cryptic Prisma error if userId is null",
+        "suggestionContent": "WHAT: `booking.userId || 0` followed by `findFirstOrThrow` will throw a Prisma \"No User found\" error if `booking.userId` is null (e.g., bookings without an assigned organizer). WHY: There is no graceful handling for this case — the user gets a generic 500 from the thrown Prisma error instead of a meaningful \"booking has no organizer\" message, and the request fails before sending any notification to the organizer. HOW: Add an explicit guard after the booking fetch and throw a proper TRPCError if `booking.userId == null`.",
+        "existingCode": "  const organizer = await prisma.user.findFirstOrThrow({\n    where: {\n      id: booking.userId || 0,\n    },\n    select: {\n      name: true,\n      email: true,\n      timeZone: true,\n      locale: true,\n    },\n  });",
+        "improvedCode": "  if (!booking.userId) {\n    throw new TRPCError({ code: \"BAD_REQUEST\", message: \"booking_has_no_organizer\" });\n  }\n\n  const organizer = await prisma.user.findFirstOrThrow({\n    where: {\n      id: booking.userId,\n    },\n    select: {\n      name: true,\n      email: true,\n      timeZone: true,\n      locale: true,\n    },\n  });",
+        "relevantFile": "packages/trpc/server/routers/viewer/bookings/addGuests.handler.ts",
+        "language": "typescript"
+      }
+    ]
+  },
+  {
+    "id": "minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor",
+    "source": "evals/parse/payloads/minimax-m3@openrouter/enhance-embed-url-handling-and-validation-system-discourse-cursor.json#0",
+    "findings": [
+      {
+        "title": "X-Frame-Options is set to invalid value ALLOWALL which browsers ignore",
+        "suggestionContent": "WHAT: `response.headers['X-Frame-Options'] = \"ALLOWALL\"` sets an invalid X-Frame-Options directive. WHY: The standard X-Frame-Options values are DENY, SAMEORIGIN, and ALLOW-FROM <uri>; browsers ignore the unknown value `ALLOWALL`, so the developer's intent (allow this page to be framed from anywhere) is not achieved. HOW: Remove the assignment entirely so framing is unrestricted, or set a CSP header with `frame-ancestors *`.",
+        "existingCode": "      response.headers['X-Frame-Options'] = \"ALLOWALL\"",
+        "improvedCode": "      # Don't set X-Frame-Options at all to allow framing from anywhere",
+        "relevantFile": "app/controllers/embed_controller.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "PollFeed job is executed synchronously inside TopicRetriever, blocking the worker",
+        "suggestionContent": "WHAT: `Jobs::PollFeed.new.execute({})` runs the entire feed polling job synchronously inline inside the retrieve_topic job. WHY: The poll_feed method performs a network fetch and processes all items; if the feed endpoint is slow or unreachable, this blocks the Sidekiq worker that is supposed to be retrieving a single embed, with no timeout and `retry: false` set on PollFeed. HOW: Don't synchronously invoke PollFeed; instead either enqueue it as a job or rely on the hourly schedule, and skip the RSS check.",
+        "existingCode": "      # First check RSS if that is enabled\n      if SiteSetting.feed_polling_enabled?\n        Jobs::PollFeed.new.execute({})\n        return if TopicEmbed.where(embed_url: @embed_url).exists?\n      end",
+        "improvedCode": "      # First check RSS if that is enabled (enqueued async, not run inline)\n      if SiteSetting.feed_polling_enabled?\n        Jobs.enqueue(:poll_feed)\n        return if TopicEmbed.where(embed_url: @embed_url).exists?\n      end",
+        "relevantFile": "lib/topic_retriever.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "import_remote lets open() network errors crash the retrieve_topic job",
+        "suggestionContent": "WHAT: `open(url).read` in `import_remote` has no rescue around network/IO errors. WHY: Any failure in the fetch (DNS error, HTTP timeout, 5xx response, redirect loop, invalid SSL) propagates out of import_remote, fails the retrieve_topic job, and the user is left with a permanently 'loading' embed page. HOW: Wrap the fetch in a rescue that logs and returns nil/false so the controller can surface a usable error.",
+        "existingCode": "    doc = Readability::Document.new(open(url).read,\n                                        tags: %w[div p code pre h1 h2 h3 b em i strong a img],\n                                        attributes: %w[href src])\n\n    TopicEmbed.import(user, url, opts[:title] || doc.title, doc.content)",
+        "improvedCode": "    begin\n      body = open(url).read\n    rescue => e\n      Rails.logger.warn(\"TopicRetriever failed to fetch #{url}: #{e.class} #{e.message}\")\n      return\n    end\n    doc = Readability::Document.new(body, tags: %w[div p code pre h1 h2 h3 b em i strong a img], attributes: %w[href src])",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "i.content.scrub crashes when feed uses description instead of content:encoded",
+        "suggestionContent": "WHAT: `i.content.scrub` assumes `i.content` is non-nil; SimpleRSS populates `content` only from `<content:encoded>` and returns nil for feeds that use `<description>`. WHY: Any feed without content:encoded causes the hourly job to raise NoMethodError on the first nil item and abort the entire poll; retry: false means the failure is permanent. HOW: Use SimpleRSS's `content_encoded` (which auto-falls back to description in current versions) or guard the scrub call: `raw = (i.content_encoded || i.description || '').to_s; content = CGI.unescapeHTML(raw.scrub)`.",
+        "existingCode": "        content = CGI.unescapeHTML(i.content.scrub)\n        TopicEmbed.import(user, url, i.title, content)",
+        "improvedCode": "        content = CGI.unescapeHTML((i.content_encoded || i.description || '').to_s.scrub)\n        TopicEmbed.import(user, url, i.title, content)",
+        "relevantFile": "app/jobs/scheduled/poll_feed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "Embed URL is interpolated into HTML href without escaping, allowing attribute breakout",
+        "suggestionContent": "WHAT: The footer string interpolates `url` directly into a single-quoted HTML attribute without HTML-escaping, and the only URL validation is the loose regex `^https?://`. WHY: A URL containing a single quote (e.g. `https://x.com/' onclick='alert(1)`) passes validation, breaks out of the href attribute, and is then stored and rendered as raw HTML because Post#cook returns raw when cook_method == raw_html — producing stored XSS that fires in every viewer's browser when the imported post is displayed. HOW: Escape the URL with `CGI.escapeHTML(url)` (or switch to double-quoted attributes) and switch to a stricter URL parser.",
+        "existingCode": "    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \\\"<a href='#{url}'>#{url}</a>\\\")}</small>\\n\"",
+        "improvedCode": "    safe_url = CGI.escapeHTML(url)\n    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \\\"<a href=\\\"#{safe_url}\\\">#{safe_url}</a>\\\")}</small>\\n\"",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      },
+      {
+        "title": "TopicEmbed.import mutates caller's contents string via << as a hidden side effect",
+        "suggestionContent": "WHAT: `contents << \"\\n<hr>...\"` mutates the caller's string as a side effect, before the existence lookup and the content_sha1 computation. WHY: Callers passing a string they intend to reuse see surprising in-place modification; for any caller (or future caller) that passes a memoized String (e.g. a library returning the same object each call), repeated invocations accumulate the footer repeatedly. In the current callers the mutation happens to be harmless, but the contract is silently destructive. HOW: Build the footer into a new string or use `String#+` instead of `<<`.",
+        "existingCode": "    contents << \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \\\"<a href='#{url}'>#{url}</a>\\\")}</small>\\n\"",
+        "improvedCode": "    footer = \"\\n<hr>\\n<small>#{I18n.t('embed.imported_from', link: \\\"<a href='#{url}'>#{url}</a>\\\")}</small>\\n\"\n    contents = contents + footer",
+        "relevantFile": "app/models/topic_embed.rb",
+        "language": "ruby"
+      }
+    ]
+  },
+  {
+    "id": "minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry",
+    "source": "evals/parse/payloads/minimax-m3@openrouter/span-buffer-multiprocess-enhancement-with-health-monitoring-sentry.json#0",
+    "findings": [
+      {
+        "title": "_create_process_for_shard is dead code from incomplete refactor, never invoked",
+        "suggestionContent": "WHAT: `_create_process_for_shard` (lines 127-132) is dead code — defined but never invoked. `_ensure_processes_alive` calls `_create_process_for_shards(process_index, shards)` directly to restart, never `_create_process_for_shard`. WHY: This indicates an incomplete refactor where the per-shard helper was left behind. It also creates a confusing API surface (looks callable but isn't). HOW: Either delete the dead helper, or wire it up to a meaningful per-shard recovery path if that was the original intent.",
+        "existingCode": "    def _create_process_for_shard(self, shard: int):\n        # Find which process this shard belongs to and restart that process\n        for process_index, shards in self.process_to_shards_map.items():\n            if shard in shards:\n                self._create_process_for_shards(process_index, shards)\n                break",
+        "improvedCode": "    # Either remove this dead helper entirely, or document why it is kept.\n    # If kept for future per-shard recovery, rename it and ensure callers exist.",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      },
+      {
+        "title": "Dead defensive `if not process` branch at line 222 is unreachable",
+        "suggestionContent": "WHAT: `if not process: continue` (line 222) is unreachable — `process` is always a `SpawnProcess` or `threading.Thread`, both always truthy after assignment. WHY: Dead defensive branch suggests the author was unsure of the type; misleads readers. HOW: Remove the check.",
+        "existingCode": "        for process_index, process in self.processes.items():\n            if not process:\n                continue\n\n            shards = self.process_to_shards_map[process_index]",
+        "improvedCode": "        for process_index, process in self.processes.items():\n            shards = self.process_to_shards_map[process_index]",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      },
+      {
+        "title": "Killed Process handle is never join()d/close()d during restart, may accumulate handles",
+        "suggestionContent": "WHAT: In `_ensure_processes_alive`, the killed `Process` object is replaced in `self.processes[process_index]` but never `join()`d or `close()`d. WHY: Repeated restarts (up to MAX_PROCESS_RESTARTS=10) accumulate Process handles that are never explicitly cleaned up; the old Process object is dropped from the dict but its OS resources rely on GC. HOW: After `self._create_process_for_shards(...)` replaces the Process, ensure the old one is reaped: `if old_process.is_alive(): old_process.join(timeout=0)` then drop the reference.",
+        "existingCode": "            try:\n                if isinstance(process, multiprocessing.Process):\n                    process.kill()\n            except (ValueError, AttributeError):\n                pass  # Process already closed, ignore\n\n            self._create_process_for_shards(process_index, shards)",
+        "improvedCode": "            old_process = process\n            try:\n                if isinstance(old_process, multiprocessing.Process):\n                    old_process.kill()\n                    old_process.join(timeout=0.1)\n            except (ValueError, AttributeError):\n                pass  # Process already closed, ignore\n\n            self._create_process_for_shards(process_index, shards)",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      },
+      {
+        "title": "submit() runs expensive per-process liveness check + Redis fanout on every message",
+        "suggestionContent": "WHAT: `submit()` now iterates over `self.buffers.values()` and calls `record_stored_segments()` on each — and `_ensure_processes_alive()` iterates all processes — for every Kafka message processed by the parent. WHY: `record_stored_segments` issues Redis LLEN pipelines for every shard in each buffer; with multiple flusher processes (the new feature), this multiplies Redis traffic per submit. Submit is called per batch but the parent now does N-process `is_alive()` syscalls plus per-buffer Redis fanout on every call. HOW: Cache or skip the `_ensure_processes_alive` and `record_stored_segments` work when called more frequently than every X seconds (e.g., throttle via timestamp), since process liveness rarely changes between successive submits.",
+        "existingCode": "    def submit(self, message: Message[FilteredPayload | int]) -> None:\n        # Note that submit is not actually a hot path. Their message payloads\n        # are mapped from *batches* of spans, and there are a handful of spans\n        # per second at most. If anything, self.poll() might even be called\n        # more often than submit()\n\n        self._ensure_processes_alive()\n\n        for buffer in self.buffers.values():\n            buffer.record_stored_segments()",
+        "improvedCode": "    def submit(self, message: Message[FilteredPayload | int]) -> None:\n        # Throttle expensive health-check + Redis LLEN fanout to avoid\n        # multiplying Redis traffic with multiple flusher processes.\n        now = time.time()\n        if now - self._last_submit_maintenance > 1.0:\n            self._last_submit_maintenance = now\n            self._ensure_processes_alive()\n            for buffer in self.buffers.values():\n                buffer.record_stored_segments()",
+        "relevantFile": "src/sentry/spans/consumers/process/flusher.py",
+        "language": "python"
+      }
+    ]
+  }
+]

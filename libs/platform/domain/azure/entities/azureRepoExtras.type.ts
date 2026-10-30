@@ -152,6 +152,9 @@ export interface AzureRepoIteration {
     id?: number | string;
     createdDate?: string;
     lastUpdatedDate?: string;
+    sourceRefCommit?: { commitId: string };
+    targetRefCommit?: { commitId: string };
+    commonRefCommit?: { commitId: string };
 }
 
 /**
@@ -274,4 +277,24 @@ export enum GitObjectType {
     ext2 = 'ext2',
     ofsDelta = 'ofsDelta',
     refDelta = 'refDelta',
+}
+
+/**
+ * Build/quality status posted against a pull request. Distinct from
+ * `AzurePRStatus`, which is the PR's own lifecycle state.
+ */
+export interface AzureRepoPRBuildStatus {
+    id: number;
+    state:
+        | 'notSet'
+        | 'pending'
+        | 'succeeded'
+        | 'failed'
+        | 'error'
+        | 'notApplicable';
+    description?: string;
+    context?: { name?: string; genre?: string };
+    targetUrl?: string;
+    creationDate?: string;
+    updatedDate?: string;
 }

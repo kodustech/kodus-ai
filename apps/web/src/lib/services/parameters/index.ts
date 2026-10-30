@@ -36,9 +36,9 @@ export const PARAMETERS_PATHS = {
     GET_CODE_REVIEW_PARAMETER: pathToApiUrl(
         "/parameters/code-review-parameter",
     ),
-    APPLY_CODE_REVIEW_PRESET: pathToApiUrl(
-        "/parameters/apply-code-review-preset",
-    ),
+    // Repositories and directories as ids and names only, for scope
+    // pickers: no configuration, no kodus-config.yml read.
+    CODE_REVIEW_SCOPES: pathToApiUrl("/parameters/code-review-scopes"),
     CENTRALIZED_CONFIG_SYNC: pathToApiUrl(
         "/parameters/centralized-config-sync",
     ),

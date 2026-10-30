@@ -8,6 +8,7 @@ import {
     isKodyMentionNonReview,
     isReviewCommand,
     parseReviewDirective,
+    parseCustomAgentCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
@@ -525,7 +526,13 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                 return;
             }
 
-            const isStartCommand = isReviewCommand(comment.body);
+            // `@kody -v <agent>` reviews the PR again with that custom agent only.
+
+            const customAgentSlug = parseCustomAgentCommand(comment.body);
+
+            const isStartCommand =
+
+                isReviewCommand(comment.body) || !!customAgentSlug;
             const isForceCommand = isForceReviewCommand(comment.body);
             const hasMarker = hasReviewMarker(comment.body);
 
@@ -640,6 +647,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                             triggerCommentId: comment?.id,
                             reviewDirective: parseReviewDirective(comment.body),
                             runtimeRequested: isRuntimeCommand(comment.body),
+                            onlyCustomAgent: customAgentSlug,
                             pull_request:
                                 pullRequestData ||
                                 pullRequest ||

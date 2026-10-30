@@ -1,0 +1,1171 @@
+{
+ "model": "deepseek-v4-flash@fireworks",
+ "byokReasoning": "none",
+ "judge": "gemini-3-flash-preview",
+ "judgeReasoningEffort": null,
+ "reps": 5,
+ "engine": {
+  "commit": "3a8f276de614a742dd928151d877f3cf12aff4d7",
+  "sourceDigest": "8d22cf93b7b767539c70cf6d879db8b39e0dbdde1464815e132caf5145e6d525"
+ },
+ "startedAt": "2026-10-13T21:22:45.571Z",
+ "updatedAt": "2026-10-13T21:33:31.528Z",
+ "complete": true,
+ "selectedCases": [
+  "P13-rule-log-operation-still-missing",
+  "P13-rule-log-operation-still-missing-control",
+  "P14-rule-mock-undefined-moved",
+  "P14-rule-mock-undefined-moved-control",
+  "P15-rule-nth-called-listed-site",
+  "P15-rule-nth-called-listed-site-control"
+ ],
+ "summary": {
+  "measured": 30,
+  "infra": 0,
+  "problems": {
+   "unverified-shipped (#2040)": {
+    "n": 0,
+    "violations": 0,
+    "rate": null
+   },
+   "repeat-of-sent": {
+    "n": 15,
+    "violations": 7,
+    "rate": 0.467
+   },
+   "revision-unlinked (#2039/#2020)": {
+    "n": 0,
+    "violations": 0,
+    "rate": null
+   },
+   "refuted-shipped (control)": {
+    "n": 0,
+    "violations": 0,
+    "rate": null
+   },
+   "true-bug-missed (guard)": {
+    "n": 35,
+    "violations": 5,
+    "rate": 0.143
+   },
+   "index-reference (#2039)": {
+    "n": 37,
+    "violations": 0,
+    "rate": 0
+   }
+  },
+  "byCase": {
+   "P13-rule-log-operation-still-missing · log-operation-repeat [not_deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 0
+   },
+   "P13-rule-log-operation-still-missing · success-log-operation-new-site [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P13-rule-log-operation-still-missing-control · log-operation-control [deliver]": {
+    "pass": 1,
+    "n": 5,
+    "delivered": 1
+   },
+   "P13-rule-log-operation-still-missing-control · success-log-operation-new-site [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P14-rule-mock-undefined-moved · mock-undefined-repeat [not_deliver]": {
+    "pass": 0,
+    "n": 5,
+    "delivered": 5
+   },
+   "P14-rule-mock-undefined-moved-control · mock-undefined-control [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P15-rule-nth-called-listed-site · audit-nth-called-repeat [not_deliver]": {
+    "pass": 3,
+    "n": 5,
+    "delivered": 2
+   },
+   "P15-rule-nth-called-listed-site · opt-out-nth-called-new-site [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   },
+   "P15-rule-nth-called-listed-site-control · audit-nth-called-control [deliver]": {
+    "pass": 4,
+    "n": 5,
+    "delivered": 4
+   },
+   "P15-rule-nth-called-listed-site-control · opt-out-nth-called-new-site [deliver]": {
+    "pass": 5,
+    "n": 5,
+    "delivered": 5
+   }
+  }
+ },
+ "rows": [
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 1,
+   "case": "P14-rule-mock-undefined-moved",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 41067,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "`pendingOrder` sets `dispatchedAt` to `undefined`, while the orders API serializes an absent value as `null`, so tests against this mock never exercise the `null` that the real API sends and `=== undefined` checks pass here but fail in production. Set `dispatchedAt` to `null` so the mock matches the API."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": false
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 2,
+   "case": "P14-rule-mock-undefined-moved",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 18631,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Because `pendingOrder` sets `dispatchedAt` to `undefined` while the orders API serializes an absent value as `null`, code tested against this mock never meets the `null` it gets in production, so `=== undefined` checks pass here and fail there. Set `dispatchedAt: null` in the mock."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": false
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 3,
+   "case": "P14-rule-mock-undefined-moved",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 26754,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Using `undefined` for `dispatchedAt` diverges from the real orders API, which serializes a not-yet-shipped order as `null`, so code tested against this mock never encounters the null production value and `=== undefined` checks pass here but fail there. Set `dispatchedAt` to `null`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": false
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 4,
+   "case": "P14-rule-mock-undefined-moved",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 22147,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "high",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Because the orders API serializes an absent dispatch as `null`, the mock's `dispatchedAt` and `trackingNumber` must mirror that shape; with `undefined`, JSON serialization drops the keys and code tested here never meets the `null` the real API sends, so `=== null` checks pass in tests and fail in production. Set both fields to `null`; the previous review round raised this same problem and the diff still contains `undefined`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "high",
+     "pass": false
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 5,
+   "case": "P14-rule-mock-undefined-moved",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 29467,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Because `pendingOrder` sets `dispatchedAt` to `undefined`, the mock violates the rule that mock responses use `null` for absent values, while the orders API serializes a not-yet-dispatched order with `\"dispatchedAt\": null`, so `=== undefined` checks pass here but fail in production. Change it to `dispatchedAt: null`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": false
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 1,
+   "case": "P14-rule-mock-undefined-moved-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 16643,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "`dispatchedAt: undefined` disappears from JSON, so code tested against this mock never meets the `null` the real API sends for an absent value. Set it to `null` to match how the API serializes that value."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 2,
+   "case": "P14-rule-mock-undefined-moved-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 27079,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Because JSON has no `undefined`, the real API serializes an absent `dispatchedAt` as `null`, so code tested against this mock never encounters the `null` it will actually receive, violating the rule that mock responses use `null` for absent values. Set `dispatchedAt` to `null`, matching `cartOrder` and the API's serialization."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 3,
+   "case": "P14-rule-mock-undefined-moved-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 15488,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "medium",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Because `pendingOrder.dispatchedAt` is `undefined`, JSON drops the property entirely, so code tested against this mock never meets the `null` the real API sends, contrary to rule 21. Set it to `null` so the mock serializes absent values as the API does."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "medium",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 4,
+   "case": "P14-rule-mock-undefined-moved-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 13834,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Because `dispatchedAt` is `undefined`, JSON cannot express the field, so code tested against this mock never meets the `null` the real API sends (rule 21). Set it to `null` as `cartOrder` already does."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 5,
+   "case": "P14-rule-mock-undefined-moved-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 18476,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/mocks/orders.mock.ts",
+     "line": 20,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-mock-null-not-undefined"
+     ],
+     "marked": false,
+     "text": "Because JSON has no `undefined`, tests using this mock never see the `null` that the real API sends for `dispatchedAt`. Set `dispatchedAt` to `null` to match `cartOrder` and the serialized API shape."
+    }
+   ],
+   "claims": [
+    {
+     "id": "mock-undefined-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 1,
+   "case": "P15-rule-nth-called-listed-site",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 16487,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/notifications/digest.test.ts",
+     "line": 42,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "`toHaveBeenCalledWith` passes when any call matches, so the test stays green even if `cai` is mailed before `ben`, contradicting the claim that remaining users are mailed in order. Since `mailer.send` is called more than once, use `toHaveBeenNthCalledWith(n, ...)` for each call to pin the order."
+    }
+   ],
+   "claims": [
+    {
+     "id": "audit-nth-called-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    },
+    {
+     "id": "opt-out-nth-called-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 2,
+   "case": "P15-rule-nth-called-listed-site",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 28687,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/notifications/digest.test.ts",
+     "line": 26,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "Because `audit.record` is called three times (u1, u2, then the batch summary) and `toHaveBeenCalledWith` passes when any call matches, these assertions stay green if the per-user entries are swapped or the batch summary is emitted in a different position. Pin each call with `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)` so the order is asserted."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "src/notifications/digest.test.ts",
+     "line": 42,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "Since `mailer.send` is asserted with `toHaveBeenCalledWith` after `toHaveBeenCalledTimes(2)`, the test still passes if `ben` and `cai` are mailed in the wrong order, which is exactly what 'mails the rest in order' promises to check. Use `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)` to pin each call to its position."
+    }
+   ],
+   "claims": [
+    {
+     "id": "audit-nth-called-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": false
+    },
+    {
+     "id": "opt-out-nth-called-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 3,
+   "case": "P15-rule-nth-called-listed-site",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 23741,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/notifications/digest.test.ts",
+     "line": 42,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "Because `toHaveBeenCalledWith` passes when any call matches, this test stays green even if `cai` is mailed before `ben`, and `toHaveBeenCalledTimes(2)` only counts calls without pinning order. Pin each call to its position with `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "audit-nth-called-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    },
+    {
+     "id": "opt-out-nth-called-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 4,
+   "case": "P15-rule-nth-called-listed-site",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 16681,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/notifications/digest.test.ts",
+     "line": 42,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "`toHaveBeenCalledWith` passes when any call matches, so this test still passes if `cai` is mailed before `ben`, and `toHaveBeenCalledTimes(2)` only counts calls without pinning the order. Replace both `mailer.send` assertions with `toHaveBeenNthCalledWith` to pin each call to its position."
+    }
+   ],
+   "claims": [
+    {
+     "id": "audit-nth-called-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": true
+    },
+    {
+     "id": "opt-out-nth-called-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 5,
+   "case": "P15-rule-nth-called-listed-site",
+   "family": "rounds",
+   "sandbox": "alive",
+   "ms": 53534,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/notifications/digest.test.ts",
+     "line": 26,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "Because `toHaveBeenCalledWith` passes when any call matched, the test stays green if the `audit.record` calls for `digest.delivered` are made for the same user twice or in the wrong order, leaving the two distinct users unverified. Replace the two `toHaveBeenCalledWith` assertions with `toHaveBeenNthCalledWith` to pin each call to its position for `'u1'` then `'u2'`."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "src/notifications/digest.test.ts",
+     "line": 42,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "Because `toHaveBeenCalledWith` passes when any call matched, the ordering claim is unverified and the test would still pass if `mailer.send` mailed `cai@example.test` before `ben@example.test`. Replace the two `toHaveBeenCalledWith` assertions with `toHaveBeenNthCalledWith` to pin each `mailer.send` call to its position."
+    }
+   ],
+   "claims": [
+    {
+     "id": "audit-nth-called-repeat",
+     "expect": "not_deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": false
+    },
+    {
+     "id": "opt-out-nth-called-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 1,
+   "case": "P15-rule-nth-called-listed-site-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 16920,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/notifications/digest.test.ts",
+     "line": 41,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "`toHaveBeenCalledWith` passes when any call matches, so this test still passes if the two users' mails are sent in the wrong order — exactly the ordering it claims to verify. Pin each call with `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)` instead."
+    }
+   ],
+   "claims": [
+    {
+     "id": "audit-nth-called-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": false,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": null,
+     "pass": false
+    },
+    {
+     "id": "opt-out-nth-called-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 2,
+   "case": "P15-rule-nth-called-listed-site-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 32069,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/notifications/digest.test.ts",
+     "line": 26,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "Because `toHaveBeenCalledWith` on `audit.record` passes when any call matches, the test would still pass if the u1 and u2 deliveries were swapped, or if one user were delivered twice and the other not at all. Use `toHaveBeenNthCalledWith(n, ...)` for each call to pin the order."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "src/notifications/digest.test.ts",
+     "line": 42,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "Because `toHaveBeenCalledWith` on `mailer.send` matches any call, the test still passes if the mails go out in the wrong order, which is exactly the behavior the test name claims to check. Use `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)` to pin the order."
+    }
+   ],
+   "claims": [
+    {
+     "id": "audit-nth-called-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    },
+    {
+     "id": "opt-out-nth-called-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 3,
+   "case": "P15-rule-nth-called-listed-site-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 34699,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/notifications/digest.test.ts",
+     "line": 26,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "In `src/notifications/digest.test.ts`, `audit.record` is called more than once here (twice in these assertions plus the batch summary), so each `toHaveBeenCalledWith` assertion passes if any call matches, and swapping the `userId`s between the two assertions would still pass, leaving the order of the per-user audit entries unpinned. Use `toHaveBeenNthCalledWith(n, ...)` for each call, per the rule \"Pin mock call arguments\"."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "src/notifications/digest.test.ts",
+     "line": 42,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "Because the test is meant to verify that the opted-out user is skipped and the remaining users are mailed in order, asserting `mailer.send` with `toHaveBeenCalledWith` matches any call regardless of position, so if `sendDigest` mailed `cai@example.test` before `ben@example.test` the test would still pass. Use `toHaveBeenNthCalledWith(n, ...)` to pin the order of those `mailer.send` calls, per the rule \"Pin mock call arguments\"."
+    }
+   ],
+   "claims": [
+    {
+     "id": "audit-nth-called-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    },
+    {
+     "id": "opt-out-nth-called-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 4,
+   "case": "P15-rule-nth-called-listed-site-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 27319,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/notifications/digest.test.ts",
+     "line": 26,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "Both `audit.record` assertions use `toHaveBeenCalledWith`, so any matching call satisfies each one and the test passes even if the per-user entries are emitted out of order, violating 'Pin mock call arguments'. Replace them with `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)` so the call order is pinned."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "src/notifications/digest.test.ts",
+     "line": 42,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "Both `mailer.send` assertions use `toHaveBeenCalledWith`, so both pass regardless of order and the test does not actually verify the remaining users are mailed in order as its title claims, violating 'Pin mock call arguments'. Replace them with `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)`."
+    }
+   ],
+   "claims": [
+    {
+     "id": "audit-nth-called-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    },
+    {
+     "id": "opt-out-nth-called-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  },
+  {
+   "model": "deepseek-v4-flash@fireworks",
+   "rep": 5,
+   "case": "P15-rule-nth-called-listed-site-control",
+   "family": "control",
+   "sandbox": "alive",
+   "ms": 30496,
+   "indexRefs": 0,
+   "verificationEvidence": [],
+   "alreadyPosted": [],
+   "sandboxCalls": 1,
+   "sandboxFailed": 0,
+   "warnings": 0,
+   "delivered": [
+    {
+     "sourceIndex": 0,
+     "file": "src/notifications/digest.test.ts",
+     "line": 26,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "Because `audit.record` is called once per user plus the batch summary, the current `toHaveBeenCalledWith` assertions pass if any call matches, so swapping `u1` and `u2` would still pass. Replace them with `toHaveBeenNthCalledWith` for each call to pin the per-user argument order, per the Pin mock call arguments rule."
+    },
+    {
+     "sourceIndex": 1,
+     "file": "src/notifications/digest.test.ts",
+     "line": 42,
+     "severity": "low",
+     "linkedById": false,
+     "label": "kody_rules",
+     "brokenKodyRulesIds": [
+      "rule-nth-called"
+     ],
+     "marked": false,
+     "text": "The test title claims the remaining recipients are mailed in order, but the two `toHaveBeenCalledWith` assertions on `mailer.send` only check that some call matched, leaving the sequence unpinned. Replace them with `toHaveBeenNthCalledWith` so the order of `mailer.send` calls is verified, per the Pin mock call arguments rule."
+    }
+   ],
+   "claims": [
+    {
+     "id": "audit-nth-called-control",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    },
+    {
+     "id": "opt-out-nth-called-new-site",
+     "expect": "deliver",
+     "proposed": false,
+     "truth": "true",
+     "delivered": true,
+     "linked": false,
+     "linkedById": false,
+     "marked": false,
+     "severity": "low",
+     "pass": true
+    }
+   ]
+  }
+ ],
+ "note": "superseded rows for /^P13-/ dropped: re-run after the spec fix in none_fix-*.json"
+}

@@ -5,6 +5,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { KodusIssuesTools } from '../tools/kodusIssues.tools';
+import { McpToolAuthorizer } from '../auth/mcp-tool-authorizer.service';
 import { toShape } from '../types/mcp-tool.interface';
 import { executeLoggedTool } from '../utils/mcp-protocol.utils';
 import type { StatelessMcpRequestHandler } from './mcp-server.factory';
@@ -16,6 +17,7 @@ type RegisteredToolDefinition = {
         inputSchema: ReturnType<typeof toShape>;
         outputSchema: ReturnType<typeof toShape>;
         annotations: Record<string, unknown> | undefined;
+        _meta: Record<string, unknown> | undefined;
     };
     execute: (
         args: Record<string, unknown>,
@@ -28,7 +30,10 @@ export class KodusIssuesMcpServerFactory {
     private readonly logger = createLogger(KodusIssuesMcpServerFactory.name);
     private registeredToolsCache?: RegisteredToolDefinition[];
 
-    constructor(private readonly kodusIssuesTools: KodusIssuesTools) {}
+    constructor(
+        private readonly kodusIssuesTools: KodusIssuesTools,
+        private readonly authorizer: McpToolAuthorizer,
+    ) {}
 
     async create(): Promise<StatelessMcpRequestHandler> {
         const server = new McpServer(
@@ -85,6 +90,7 @@ export class KodusIssuesMcpServerFactory {
                         inputSchema,
                         outputSchema: toShape(tool.outputSchema),
                         annotations: tool?.annotations,
+                        _meta: tool?._meta,
                     },
                     execute: async (
                         args: Record<string, unknown>,
@@ -96,7 +102,11 @@ export class KodusIssuesMcpServerFactory {
                                 toolArgs: Record<string, unknown>,
                                 toolExtra: unknown,
                             ) => Promise<CallToolResult>,
-                            args,
+                            await this.authorizer.authorize(
+                                tool.name,
+                                args,
+                                extra,
+                            ),
                             extra,
                             this.logger,
                         ),

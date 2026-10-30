@@ -107,6 +107,46 @@ describe('lifecycle event builders', () => {
         });
     });
 
+    it('redacts nested tool input, tool output, and shell commands', () => {
+        const secret = ['sk-', 'Q'.repeat(32)].join('');
+        const toolCalls: ToolCall[] = [
+            {
+                toolName: 'NestedTool',
+                toolUseId: 'tool-secret',
+                timestamp,
+                input: {
+                    levels: [{ deeper: { credential: secret } }],
+                },
+                output: `tool returned ${secret}`,
+                isMcp: false,
+            },
+        ];
+
+        const event = buildTurnEndEvent({
+            sessionId: 'sess-secret',
+            branch: 'main',
+            turnId: 'turn-secret',
+            response: `response ${secret}`,
+            toolCalls,
+            filesModified: [],
+            filesRead: [],
+            commands: [`curl -H 'Authorization: Bearer ${secret}'`],
+            tokenUsage: {
+                inputTokens: 0,
+                outputTokens: 0,
+                cacheCreationTokens: 0,
+                cacheReadTokens: 0,
+                apiCallCount: 0,
+            },
+            commitAfter: 'abc123',
+            timestamp,
+        });
+
+        const serialized = JSON.stringify(event);
+        expect(serialized).not.toContain(secret);
+        expect(serialized).toContain('[REDACTED]');
+    });
+
     it('builds session_end payload', () => {
         const event = buildSessionEndEvent({
             sessionId: 'sess-1',
@@ -148,6 +188,25 @@ describe('lifecycle event builders', () => {
             taskDescription: 'Inspect auth flow',
             timestamp,
         });
+    });
+
+    it('redacts a secret in subagent task text', () => {
+        const secret = ['gh', 'p_', 'A'.repeat(32)].join('');
+        const event = buildSubagentStartEvent({
+            event: {
+                type: 'SubagentStart',
+                sessionId: 'sess-secret',
+                sessionRef: '/tmp/transcript.jsonl',
+                timestamp,
+                toolUseId: 'tool-secret',
+                taskDescription: `inspect with ${secret}`,
+            },
+            branch: 'main',
+            timestamp,
+        });
+
+        expect(JSON.stringify(event)).not.toContain(secret);
+        expect(event.taskDescription).toContain('[REDACTED]');
     });
 
     it('builds subagent_start payload using toolInput fallbacks', () => {

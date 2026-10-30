@@ -1,4 +1,6 @@
 import type { TeamAutomation } from "@services/automations/types";
+import type { BusinessLogicSettingsValue } from "@services/business-logic/types";
+import type { CustomAgent, KnowledgeItem } from "@services/custom-agents/types";
 import type { LanguageValue } from "@services/parameters/types";
 import type { LiteralUnion } from "react-hook-form";
 import type { SeverityLevel } from "src/core/types";
@@ -50,6 +52,16 @@ export type CodeReviewFormType = FormattedCodeReviewConfig & {
 
 export type CodeReviewOptions = Record<string, boolean>;
 
+/** Mirrors ANALYZER_TOOL_IDS on the backend. */
+export type DeterministicToolId = "secrets" | "dependencies";
+
+/**
+ * `auto` defers to the repository's own CI — the tool runs only when no
+ * equivalent check ran there — while `on` runs it regardless.
+ */
+/** On or off. An enabled tool still stands down when the repo's CI covers it. */
+export type DeterministicToolMode = boolean;
+
 type SuggestionControlConfig = {
     groupingMode: GroupingModeSuggestions;
     limitationType: LimitationType;
@@ -87,19 +99,39 @@ export type CodeReviewGlobalConfig = {
     summary: CodeReviewSummary;
     suggestionControl?: SuggestionControlConfig;
     pullRequestApprovalActive: boolean;
+    approvalLabels?: string[];
+    approvalAuthors?: string[];
+    approvalRiskActive?: boolean;
+    approvalRiskInstructions?: string;
+    approvalSensitivePaths?: string[];
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive: boolean;
     kodyRulesGeneratorEnabled?: boolean;
+    kodyRulesAutoPauseEnabled?: boolean;
+    kodyLearningExcludedReviewers?: string[];
     kodyKnowledgeApproval?: {
         enabled: boolean;
     };
     runOnDraft: boolean;
+    /**
+     * Scanners Kody can run itself, and whether to read the checks the
+     * repository's own CI already ran. Each tool is off unless set: this is
+     * opted into, never inherited.
+     */
+    deterministicEvidence?: {
+        ciChecks?: boolean;
+        tools?: Partial<Record<DeterministicToolId, DeterministicToolMode>>;
+    };
+    /** How each PR is checked against the task it references. */
+    businessLogic?: BusinessLogicSettingsValue;
     codeReviewVersion?: "legacy" | "v2" | "v3-agent";
-    ideRulesSyncEnabled: boolean;
-    /** Only consulted on a true→false transition of `ideRulesSyncEnabled`.
-     *  Picks what happens to the rules previously imported from IDE files.
-     *  Default on the backend is `keep` (least destructive) when omitted. */
-    ideSyncDisableAction?: "keep" | "pause" | "delete";
+    /** Reviews read the repo's coding-agent instructions (CLAUDE.md,
+     *  AGENTS.md, .cursor/rules). Never imports them as Kody Rules. */
+    repoInstructionsEnabled: boolean;
+    /** Team-defined review agents (beta, behind `custom-agents`). */
+    customAgents?: CustomAgent[];
+    /** Skills and docs in the repository, linked to the main review or agents. */
+    knowledge?: KnowledgeItem[];
     v2PromptOverrides?: {
         categories?: {
             descriptions?: {
@@ -126,18 +158,35 @@ export type CodeReviewGlobalConfig = {
         };
     };
     enableCommittableSuggestions: boolean;
-    /** BYOK main-model override for code reviews. '' = inherit
-     *  (directory -> repository -> the main model set in BYOK settings). */
+    /** BYOK model-slot override for code reviews, addressed by the stable v2
+     *  model id. '' = inherit (directory -> repository -> the main model set in
+     *  BYOK settings). Preferred over the legacy `byokModel` name. */
+    byokModelId?: string;
+    /** Legacy BYOK main-model override addressed by model NAME. Retained for the
+     *  read compat window: reads prefer `byokModelId` and fall back to this name
+     *  when the id is absent (a repo still on the old override keeps resolving
+     *  until it re-saves). New writes target `byokModelId`. */
     byokModel?: string;
     /** Preview-environment (alpha): the playbook that boots the client's app on
      *  an ephemeral VM so Kody can EXECUTE the PR. Secrets are NOT stored here —
      *  they live in the encrypted vault (see the environment-secrets endpoint). */
     environment?: EnvironmentConfig;
+    /**
+     * Cross-repo context (#1576): sibling repos the agent may grep/read
+     * during review. Soft cap of 3 at review time. Empty = feature off.
+     */
+    linkedRepositories?: LinkedRepositoryConfig[];
 };
 
-/** Preview-environment playbook — each phase is a list of shell commands run in
- *  order on the VM. `requiredEnv` names the secrets the app needs (matched
- *  against the encrypted vault at run time). */
+export type LinkedRepositoryConfig = {
+    /** Full name of the linked repo (`owner/repo`). */
+    repository: string;
+    /** Free-text hint for the agent (what the link is for). */
+    instructions?: string;
+    /** Optional ref pin. When omitted, cascade: PR head branch → default branch. */
+    ref?: string;
+};
+
 export type EnvironmentConfig = {
     enabled: boolean;
     /** 'command' (default) = on-demand only (@kody runtime / CLI --runtime);
@@ -209,15 +258,44 @@ export type FormattedCodeReviewBaseConfig = Omit<
     configs: FormattedCodeReviewConfig;
 };
 
-export interface FormattedGlobalCodeReviewConfig extends Omit<
-    AutomationCodeReviewConfigType,
-    "configs" | "repositories"
-> {
+export interface FormattedGlobalCodeReviewConfig
+    extends
+        Omit<AutomationCodeReviewConfigType, "configs" | "repositories">,
+        CustomAgentsRevisions {
     configs: FormattedCodeReviewConfig & {
         showToggleCodeReviewVersion: boolean;
     }; // TODO: remove this flag when we launch v2
     repositories: FormattedRepositoryCodeReviewConfig[];
 }
+
+/**
+ * The revision of the custom agents and knowledge a level resolves to, as
+ * the server read them. Sent back with a save of either list, which the
+ * server refuses if the list changed since.
+ */
+export type CustomAgentsRevisions = {
+    customAgentsRevision?: string;
+    knowledgeRevision?: string;
+};
+
+/**
+ * Health of the kodus-config.yml overlay for one scope. The file is read live
+ * from the git provider, so it can be missing from a response whose stored
+ * configuration is perfectly fine — the UI has to say so rather than present
+ * partial configuration as complete.
+ */
+export enum KodusConfigFileOverlayStatus {
+    LOADED = "loaded",
+    NOT_FOUND = "not_found",
+    DISABLED = "disabled",
+    UNAVAILABLE = "unavailable",
+    SKIPPED = "skipped",
+}
+
+export type KodusConfigFileOverlay = {
+    status: KodusConfigFileOverlayStatus;
+    error?: string;
+};
 
 export type FormattedRepositoryCodeReviewConfig = Omit<
     CodeReviewRepositoryConfig,
@@ -225,14 +303,16 @@ export type FormattedRepositoryCodeReviewConfig = Omit<
 > & {
     configs: FormattedCodeReviewConfig;
     directories: FormattedDirectoryCodeReviewConfig[];
-};
+    kodusConfigFile?: KodusConfigFileOverlay;
+} & CustomAgentsRevisions;
 
 export type FormattedDirectoryCodeReviewConfig = Omit<
     CodeReviewDirectoryConfig,
     "configs"
 > & {
     configs: FormattedCodeReviewConfig;
-};
+    kodusConfigFile?: KodusConfigFileOverlay;
+} & CustomAgentsRevisions;
 
 export enum BehaviourForNewCommits {
     NONE = "none",

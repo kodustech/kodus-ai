@@ -1,4 +1,5 @@
 import { ensureLicenseSeat } from "../lib/onboarding.js";
+import { assertHealthyExecution } from "../lib/execution-health.js";
 import { http } from "../lib/http.js";
 import type { KodusSession, RunContext, Scenario } from "../lib/types.js";
 
@@ -151,6 +152,16 @@ export const codeReviewVertexByok: Scenario = {
                 `Claude-on-Vertex review produced 0 findings on PR #${pr.number} within ${reviewLatencySec}s (model=${model}, region=${region}). The fixture branch '${FIXTURE.head}' has deliberate bugs — expect ≥1 finding. Suspect: Vertex routing regression, the model not enabled in Model Garden, or an LLM quality regression.`,
             );
 
+            // Execution HEALTH, not just output: the BYOK/Vertex path can post
+            // findings from surviving agents while another crashed
+            // (partial_error) — exactly the silent degradation a BYOK customer
+            // would hit. Assert the execution settled `success`.
+            const executionStatus = await assertHealthyExecution(
+                ctx,
+                session,
+                pr.number,
+            );
+
             return {
                 prNumber: pr.number,
                 prUrl: pr.url,
@@ -160,6 +171,7 @@ export const codeReviewVertexByok: Scenario = {
                 pipelineStartedAt,
                 sinceIso,
                 review,
+                executionStatus,
             };
         } finally {
             try {

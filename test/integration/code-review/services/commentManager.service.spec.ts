@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
+import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { MessageTemplateProcessor } from '@libs/code-review/infrastructure/adapters/services/messageTemplateProcessor.service';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -66,16 +66,13 @@ describe('CommentManagerService - createLineComments retry logic', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 {
                     provide: PARAMETERS_SERVICE_TOKEN,
                     useValue: {},
                 },
                 {
                     provide: MessageTemplateProcessor,
-                    useValue: {},
-                },
-                {
-                    provide: PromptRunnerService,
                     useValue: {},
                 },
                 {
@@ -115,7 +112,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -157,7 +153,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -203,7 +198,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -245,7 +239,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -275,29 +268,35 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 .mockRejectedValueOnce(transientError)
                 .mockResolvedValueOnce(mockCreatedComment);
 
-            const startTime = Date.now();
+            jest.useFakeTimers();
+            try {
+                const pending = service.createLineComments(
+                    mockOrganizationAndTeamData as any,
+                    1,
+                    mockRepository,
+                    [mockComment],
+                    'en-US',
+                );
 
-            const result = await service.createLineComments(
-                mockOrganizationAndTeamData as any,
-                1,
-                mockRepository,
-                [mockComment],
-                'en-US',
-                { enabled: false },
-            );
+                // The retry waits the full 500ms before calling again.
+                await jest.advanceTimersByTimeAsync(499);
+                expect(
+                    mockCodeManagementService.createReviewComment,
+                ).toHaveBeenCalledTimes(1);
+                await jest.advanceTimersByTimeAsync(1);
 
-            const elapsedTime = Date.now() - startTime;
+                const result = await pending;
 
-            expect(result.commentResults).toHaveLength(1);
-            expect(result.commentResults[0].deliveryStatus).toBe(
-                DeliveryStatus.SENT,
-            );
-            expect(
-                mockCodeManagementService.createReviewComment,
-            ).toHaveBeenCalledTimes(2);
-
-            // Verify delay was respected (at least 450ms to account for execution time variance)
-            expect(elapsedTime).toBeGreaterThanOrEqual(450);
+                expect(result.commentResults).toHaveLength(1);
+                expect(result.commentResults[0].deliveryStatus).toBe(
+                    DeliveryStatus.SENT,
+                );
+                expect(
+                    mockCodeManagementService.createReviewComment,
+                ).toHaveBeenCalledTimes(2);
+            } finally {
+                jest.useRealTimers();
+            }
         });
     });
 
@@ -324,7 +323,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -356,7 +354,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -386,7 +383,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -416,7 +412,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -501,16 +496,13 @@ describe('CommentManagerService - fallback suggestion logic', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 {
                     provide: PARAMETERS_SERVICE_TOKEN,
                     useValue: {},
                 },
                 {
                     provide: MessageTemplateProcessor,
-                    useValue: {},
-                },
-                {
-                    provide: PromptRunnerService,
                     useValue: {},
                 },
                 {
@@ -568,7 +560,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
                 undefined,
                 fallbackSuggestionsBySeverity,
             );
@@ -640,7 +631,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
                 undefined,
                 fallbackSuggestionsBySeverity,
             );
@@ -697,7 +687,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
                 undefined,
                 fallbackSuggestionsBySeverity,
             );
@@ -747,7 +736,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
                 undefined,
                 fallbackSuggestionsBySeverity,
             );
@@ -810,7 +798,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
                 undefined,
                 fallbackSuggestionsBySeverity,
             );
@@ -899,7 +886,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 mockRepository,
                 [successComment, failComment],
                 'en-US',
-                { enabled: false },
                 undefined,
                 fallbackSuggestionsBySeverity,
             );
@@ -944,10 +930,10 @@ describe('CommentManagerService - agent prompt wiring', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 // Real processor so the @agentPrompt handler actually runs.
                 MessageTemplateProcessor,
-                { provide: PromptRunnerService, useValue: {} },
                 { provide: ObservabilityService, useValue: {} },
                 { provide: PermissionValidationService, useValue: {} },
                 { provide: CodeManagementService, useValue: {} },

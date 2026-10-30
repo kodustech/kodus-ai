@@ -4,6 +4,8 @@ import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { DataTable } from "@components/ui/data-table";
+import { magicModal } from "@components/ui/magic-modal";
+import { Skeleton } from "@components/ui/skeleton";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { createOrUpdateOrganizationParameter } from "@services/organizationParameters/fetch";
@@ -13,21 +15,33 @@ import {
 } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { RefreshCwIcon } from "lucide-react";
+import {
+    AlertTriangleIcon,
+    RefreshCwIcon,
+    UserMinusIcon,
+    UserPlusIcon,
+} from "lucide-react";
+import { AsyncBoundary } from "src/core/components/async-boundary";
 import { Switch } from "src/core/components/ui/switch";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { TableFilterContext } from "../../_providers/table-filter-context";
 import { refreshOrganizationMembers } from "../../_services/billing/fetch";
+import { AssignByGitIdButton } from "./assign-by-git-id-modal";
 import { columns, type LicenseTableRow } from "./columns";
+import { PruneSeatsModal } from "./prune-seats-modal";
+
+const DEFAULT_REVOKE_GRACE_DAYS = 7;
 
 export const LicensesPageClient = ({
     data,
     autoLicenseAssignmentConfig,
+    membersUnavailable = false,
 }: {
     data: LicenseTableRow[];
     autoLicenseAssignmentConfig?: OrganizationParametersAutoAssignConfig;
+    membersUnavailable?: boolean;
 }) => {
     const { query, setQuery } = use(TableFilterContext);
     const router = useRouter();
@@ -55,19 +69,25 @@ export const LicensesPageClient = ({
         autoLicenseAssignmentConfig?.ignoredUsers ?? [],
     );
 
+    // Always merge into the stored config: it also carries the auto-revoke
+    // settings and the pending-revocation timers written by the cron.
+    const saveAutoAssignConfig = (
+        patch: Partial<OrganizationParametersAutoAssignConfig>,
+    ) =>
+        createOrUpdateOrganizationParameter(
+            OrganizationParametersConfigKey.AUTO_LICENSE_ASSIGNMENT,
+            {
+                enabled: false,
+                ignoredUsers: [],
+                ...autoLicenseAssignmentConfig,
+                ...patch,
+            },
+        );
+
     const [handleToggle, { loading: isToggling }] = useAsyncAction(
         async (checked: boolean) => {
             try {
-                await createOrUpdateOrganizationParameter(
-                    OrganizationParametersConfigKey.AUTO_LICENSE_ASSIGNMENT,
-                    {
-                        enabled: checked,
-                        ignoredUsers:
-                            autoLicenseAssignmentConfig?.ignoredUsers || [],
-                        allowedUsers:
-                            autoLicenseAssignmentConfig?.allowedUsers || [],
-                    },
-                );
+                await saveAutoAssignConfig({ enabled: checked });
 
                 toast({
                     variant: "success",
@@ -84,16 +104,33 @@ export const LicensesPageClient = ({
         },
     );
 
+    const [handleAutoRevokeToggle, { loading: isTogglingAutoRevoke }] =
+        useAsyncAction(async (checked: boolean) => {
+            try {
+                await saveAutoAssignConfig({ autoRevokeRemovedUsers: checked });
+
+                toast({
+                    variant: "success",
+                    title: checked
+                        ? "Seats will be released automatically"
+                        : "Automatic seat release turned off",
+                });
+
+                router.refresh();
+            } catch {
+                toast({
+                    variant: "danger",
+                    title: "Failed to update automatic seat release",
+                });
+            }
+        });
+
     const [handleIgnoredUsersChange, { loading: isSavingIgnoredUsers }] =
         useAsyncAction(async () => {
             try {
-                await createOrUpdateOrganizationParameter(
-                    OrganizationParametersConfigKey.AUTO_LICENSE_ASSIGNMENT,
-                    {
-                        enabled: autoLicenseAssignmentConfig?.enabled || false,
-                        ignoredUsers: pendingIgnoredUsers,
-                    },
-                );
+                await saveAutoAssignConfig({
+                    ignoredUsers: pendingIgnoredUsers,
+                });
 
                 toast({
                     variant: "success",
@@ -109,6 +146,26 @@ export const LicensesPageClient = ({
                 });
             }
         });
+
+    const reclaimableSeats = data.filter(
+        (row) => row.removedFromGit && row.licenseStatus === "active",
+    );
+
+    const canAssignSeats =
+        subscription.status === "active" ||
+        subscription.status === "licensed-self-hosted";
+
+    const openPruneModal = () =>
+        magicModal.show(() => (
+            <PruneSeatsModal
+                teamId={teamId}
+                candidates={reclaimableSeats.map((row) => ({
+                    id: String(row.id),
+                    name: row.name,
+                }))}
+                onPruned={() => router.refresh()}
+            />
+        ));
 
     const toggleUser = (userId: string) => {
         setPendingIgnoredUsers((current) =>
@@ -144,27 +201,104 @@ export const LicensesPageClient = ({
                                 disabled={isToggling}
                             />
                         </div>
+
+                        <div className="border-card-lv2 flex items-center justify-between border-t pt-4">
+                            <div className="space-y-0.5">
+                                <div className="text-base font-medium">
+                                    Release seats automatically
+                                </div>
+                                <div className="text-muted-foreground text-sm">
+                                    Free up a license{" "}
+                                    {autoLicenseAssignmentConfig?.revokeGraceDays ??
+                                        DEFAULT_REVOKE_GRACE_DAYS}{" "}
+                                    days after a member leaves your git
+                                    organization.
+                                </div>
+                            </div>
+                            <Switch
+                                checked={
+                                    autoLicenseAssignmentConfig?.autoRevokeRemovedUsers ??
+                                    false
+                                }
+                                onCheckedChange={handleAutoRevokeToggle}
+                                loading={isTogglingAutoRevoke}
+                                disabled={isTogglingAutoRevoke}
+                            />
+                        </div>
                     </div>
                 )}
-            <div className="flex justify-end">
-                <Button
-                    size="sm"
-                    variant="helper"
-                    leftIcon={
-                        <RefreshCwIcon
-                            className={isRefreshing ? "animate-spin" : ""}
-                        />
-                    }
-                    disabled={isRefreshing}
-                    onClick={handleRefreshMembers}>
-                    Refresh members
-                </Button>
+            {/* One row: what the list can't be trusted for, beside what to
+                do about it. The note only points at "Assign by git ID" when
+                that button is actually here. */}
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                {membersUnavailable ? (
+                    <p className="text-text-secondary flex items-start gap-2 text-sm text-pretty md:max-w-2xl">
+                        <AlertTriangleIcon className="text-warning mt-0.5 size-4 shrink-0" />
+                        <span>
+                            Your code platform didn&apos;t answer, so this list
+                            may be missing people and automatic seat cleanup is
+                            paused.
+                            {canEdit && canAssignSeats && (
+                                <>
+                                    {" "}
+                                    Use <b>Assign by git ID</b> to seat someone
+                                    who isn&apos;t listed.
+                                </>
+                            )}
+                        </span>
+                    </p>
+                ) : (
+                    <span aria-hidden />
+                )}
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                    {canEdit && canAssignSeats && (
+                        <AsyncBoundary
+                            errorVariant="silent"
+                            skeleton={<Skeleton className="h-8 w-36" />}>
+                            <AssignByGitIdButton
+                                onAssigned={() => router.refresh()}
+                                autoLicenseAssignmentConfig={
+                                    autoLicenseAssignmentConfig
+                                }
+                            />
+                        </AsyncBoundary>
+                    )}
+                    {canEdit && reclaimableSeats.length > 0 && (
+                        <Button
+                            size="sm"
+                            variant="helper"
+                            leftIcon={<UserMinusIcon />}
+                            onClick={openPruneModal}>
+                            Release {reclaimableSeats.length} unused{" "}
+                            {reclaimableSeats.length === 1 ? "seat" : "seats"}
+                        </Button>
+                    )}
+                    <Button
+                        size="sm"
+                        variant="helper"
+                        leftIcon={
+                            <RefreshCwIcon
+                                className={isRefreshing ? "animate-spin" : ""}
+                            />
+                        }
+                        disabled={isRefreshing}
+                        onClick={handleRefreshMembers}>
+                        Refresh members
+                    </Button>
+                </div>
             </div>
             <DataTable
                 data={data}
                 columns={columns}
                 state={{ globalFilter: query }}
                 onGlobalFilterChange={setQuery}
+                EmptyComponent={
+                    query
+                        ? `No one matches “${query}”.`
+                        : membersUnavailable
+                          ? "No one to list until your code platform answers."
+                          : "No members found in your git organization."
+                }
             />
         </div>
     );

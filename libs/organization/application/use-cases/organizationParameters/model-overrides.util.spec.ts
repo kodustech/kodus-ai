@@ -1,0 +1,228 @@
+import {
+    collectCustomAgentModelOverrides,
+    collectModelOverrides,
+    clearModelOverrides,
+} from './model-overrides.util';
+
+const config = () => ({
+    configs: { byokModel: 'global-model', other: 'keep' },
+    repositories: [
+        {
+            id: 'repo-1',
+            name: 'acme/api',
+            configs: { byokModel: 'repo-model' },
+            directories: [
+                {
+                    id: 'dir-1',
+                    name: 'src/pkg',
+                    configs: { byokModel: 'dir-model' },
+                },
+                { id: 'dir-2', name: 'src/empty', configs: { byokModel: '' } },
+            ],
+        },
+        {
+            id: 'repo-2',
+            name: 'acme/web',
+            configs: { byokModel: '  ' }, // whitespace = inherit
+            directories: [],
+        },
+    ],
+});
+
+describe('collectModelOverrides', () => {
+    it('collects non-empty overrides at every scope with location, skipping inherit', () => {
+        const out = collectModelOverrides(config());
+        expect(out).toEqual([
+            { scope: 'global', model: 'global-model' },
+            {
+                scope: 'repository',
+                repositoryId: 'repo-1',
+                repositoryName: 'acme/api',
+                model: 'repo-model',
+            },
+            {
+                scope: 'directory',
+                repositoryId: 'repo-1',
+                repositoryName: 'acme/api',
+                directoryId: 'dir-1',
+                directoryName: 'src/pkg',
+                model: 'dir-model',
+            },
+        ]);
+    });
+
+    it('returns [] for empty/missing config', () => {
+        expect(collectModelOverrides(null)).toEqual([]);
+        expect(collectModelOverrides({})).toEqual([]);
+    });
+
+    it('collects id-based (byokModelId) overrides and prefers them over the legacy name', () => {
+        const out = collectModelOverrides({
+            configs: { byokModelId: 'global-id', byokModel: 'global-name' },
+            repositories: [
+                {
+                    id: 'repo-1',
+                    name: 'acme/api',
+                    // id-based only — the model selector writes THIS now.
+                    configs: { byokModelId: 'repo-id' },
+                    directories: [
+                        // legacy name-only still works (compat window).
+                        {
+                            id: 'dir-1',
+                            name: 'src/pkg',
+                            configs: { byokModel: 'dir-name' },
+                        },
+                        // empty id must not shadow into an override.
+                        {
+                            id: 'dir-2',
+                            name: 'src/empty',
+                            configs: { byokModelId: '' },
+                        },
+                    ],
+                },
+            ],
+        });
+        expect(out).toEqual([
+            { scope: 'global', model: 'global-id' },
+            {
+                scope: 'repository',
+                repositoryId: 'repo-1',
+                repositoryName: 'acme/api',
+                model: 'repo-id',
+            },
+            {
+                scope: 'directory',
+                repositoryId: 'repo-1',
+                repositoryName: 'acme/api',
+                directoryId: 'dir-1',
+                directoryName: 'src/pkg',
+                model: 'dir-name',
+            },
+        ]);
+    });
+});
+
+describe('clearModelOverrides', () => {
+    it('clears only the targeted scopes and preserves other fields', () => {
+        const { configValue, clearedCount } = clearModelOverrides(config(), [
+            { repositoryId: 'repo-1' },
+            { repositoryId: 'repo-1', directoryId: 'dir-1' },
+        ]);
+        const c = configValue as any;
+        expect(clearedCount).toBe(2);
+        expect(c.repositories[0].configs.byokModel).toBe('');
+        expect(c.repositories[0].directories[0].configs.byokModel).toBe('');
+        // untouched:
+        expect(c.configs.byokModel).toBe('global-model');
+        expect(c.configs.other).toBe('keep');
+    });
+
+    it('clears the global override when target has no repositoryId', () => {
+        const { configValue, clearedCount } = clearModelOverrides(config(), [
+            {},
+        ]);
+        expect(clearedCount).toBe(1);
+        expect((configValue as any).configs.byokModel).toBe('');
+    });
+
+    it('does not count targets that had no override / do not exist', () => {
+        const { clearedCount } = clearModelOverrides(config(), [
+            { repositoryId: 'repo-2' }, // inherit (whitespace) — nothing to clear
+            { repositoryId: 'nope' }, // missing
+        ]);
+        expect(clearedCount).toBe(0);
+    });
+
+    it('does not mutate the input config', () => {
+        const input = config();
+        clearModelOverrides(input, [{ repositoryId: 'repo-1' }]);
+        expect(input.repositories[0].configs.byokModel).toBe('repo-model');
+    });
+
+    it('clears BOTH leaves so an id-based override truly inherits', () => {
+        const { configValue, clearedCount } = clearModelOverrides(
+            {
+                repositories: [
+                    {
+                        id: 'repo-1',
+                        name: 'acme/api',
+                        configs: { byokModelId: 'repo-id', byokModel: 'stale' },
+                        directories: [],
+                    },
+                ],
+            },
+            [{ repositoryId: 'repo-1' }],
+        );
+        const c = configValue as any;
+        expect(clearedCount).toBe(1);
+        // Leaving byokModelId behind would keep the override alive (id wins).
+        expect(c.repositories[0].configs.byokModelId).toBe('');
+        expect(c.repositories[0].configs.byokModel).toBe('');
+    });
+});
+
+describe('collectCustomAgentModelOverrides (#2172)', () => {
+    const agent = (
+        id: string,
+        models?: { run?: string; check?: string },
+    ) => ({ id, name: `Agent ${id}`, models });
+
+    const cfg = {
+        configs: {
+            customAgents: [agent('g1', { run: 'model-global' })],
+        },
+        repositories: [
+            {
+                id: 'repo-1',
+                name: 'acme/api',
+                configs: {
+                    customAgents: [
+                        agent('a1', { run: 'model-a', check: ' model-b ' }),
+                        agent('a2'),
+                        agent('a3', { run: '', check: '   ' }),
+                    ],
+                },
+                directories: [
+                    {
+                        id: 'dir-1',
+                        name: 'payments',
+                        configs: {
+                            customAgents: [agent('d1', { check: 'model-c' })],
+                        },
+                    },
+                ],
+            },
+            { id: 'repo-2', name: 'acme/web', configs: {} },
+        ],
+    };
+
+    it('lists every agent that pins a model, with where it lives; a retired check pin is ignored', () => {
+        expect(collectCustomAgentModelOverrides(cfg)).toEqual([
+            {
+                scope: 'global',
+                agentId: 'g1',
+                agentName: 'Agent g1',
+                step: 'run',
+                model: 'model-global',
+            },
+            {
+                scope: 'repository',
+                repositoryId: 'repo-1',
+                repositoryName: 'acme/api',
+                agentId: 'a1',
+                agentName: 'Agent a1',
+                step: 'run',
+                model: 'model-a',
+            },
+        ]);
+    });
+
+    it('returns nothing for a config without agents', () => {
+        expect(collectCustomAgentModelOverrides(undefined)).toEqual([]);
+        expect(
+            collectCustomAgentModelOverrides({
+                configs: { customAgents: 'not-an-array' },
+            }),
+        ).toEqual([]);
+    });
+});

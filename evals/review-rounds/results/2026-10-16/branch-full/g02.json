@@ -1,0 +1,3697 @@
+{
+  "model": "deepseek-v4-flash@fireworks",
+  "byokReasoning": "none",
+  "judge": "gemini-3-flash-preview",
+  "judgeReasoningEffort": null,
+  "reps": 5,
+  "engine": {
+    "commit": "ef8ace6e81c2ad04800d9543336439a8767fa987",
+    "sourceDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "startedAt": "2026-10-15T22:56:31.000Z",
+  "updatedAt": "2026-10-15T23:32:15.855Z",
+  "complete": true,
+  "selectedCases": [
+    "R3-consequence-status-stale",
+    "R11-kodus1902-reversal",
+    "R16-fixed-then-reintroduced",
+    "P05-rule-local-path-fixture-touched",
+    "P15-rule-nth-called-listed-site",
+    "P25-casefold-offsets-on-original",
+    "P35-hardcoded-term-new-messages"
+  ],
+  "casesSourceDigest": "7223f8a207713be7ce331250b25c1405b4a8f83ef1c4ca00272e52bb74d74b61",
+  "summary": {
+    "measured": 35,
+    "infra": 0,
+    "problems": {
+      "unverified-shipped (#2040)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "repeat-of-sent": {
+        "n": 20,
+        "violations": 2,
+        "rate": 0.1
+      },
+      "revision-unlinked (#2039/#2020)": {
+        "n": 6,
+        "violations": 3,
+        "rate": 0.5
+      },
+      "refuted-shipped (control)": {
+        "n": 0,
+        "violations": 0,
+        "rate": null
+      },
+      "true-bug-missed (guard)": {
+        "n": 25,
+        "violations": 5,
+        "rate": 0.2
+      },
+      "index-reference (#2039)": {
+        "n": 34,
+        "violations": 0,
+        "rate": 0
+      }
+    },
+    "byCase": {
+      "R3-consequence-status-stale · resubmit-double-charge [deliver_linked, proposed]": {
+        "pass": 3,
+        "n": 5,
+        "delivered": 3
+      },
+      "R11-kodus1902-reversal · unclaimed-path-unfenced [if_delivered_linked, proposed]": {
+        "pass": 2,
+        "n": 5,
+        "delivered": 3
+      },
+      "R16-fixed-then-reintroduced · qty-default-reintroduced-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P05-rule-local-path-fixture-touched · local-path-fixture-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P15-rule-nth-called-listed-site · audit-nth-called-repeat [not_deliver]": {
+        "pass": 3,
+        "n": 5,
+        "delivered": 2
+      },
+      "P15-rule-nth-called-listed-site · opt-out-nth-called-new-site [deliver]": {
+        "pass": 2,
+        "n": 5,
+        "delivered": 2
+      },
+      "P25-casefold-offsets-on-original · highlight-offsets-repeat [not_deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 0
+      },
+      "P25-casefold-offsets-on-original · page-off-by-one-unrelated [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      },
+      "P35-hardcoded-term-new-messages · invite-messages-term-new-site [deliver]": {
+        "pass": 5,
+        "n": 5,
+        "delivered": 5
+      }
+    }
+  },
+  "eval": "review-rounds",
+  "question": "When the sandbox dies mid-review, or a round follows earlier Kody suggestions on the same PR, does what reaches the PR match what a correct review delivers — nothing unread, revisions linked, nothing already sent posted again?",
+  "metric": {
+    "name": "of claims handled right",
+    "value": 0.8,
+    "floor": 0.8,
+    "baseline": 0.903
+  },
+  "runs": 5,
+  "tokens": {
+    "in": 5322601,
+    "out": 176280,
+    "cacheRead": 4545248,
+    "cacheWrite": 0
+  },
+  "infra": {
+    "errored": 0,
+    "total": 35
+  },
+  "cases": [
+    {
+      "id": "R3-consequence-status-stale",
+      "checks": "resubmit-double-charge: posted and linked",
+      "hits": 3,
+      "total": 5,
+      "detail": [
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": true
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": true
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": false
+        },
+        {
+          "what": "resubmit-double-charge",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R11-kodus1902-reversal",
+      "checks": "unclaimed-path-unfenced: linked if posted",
+      "hits": 2,
+      "total": 5,
+      "detail": [
+        {
+          "what": "unclaimed-path-unfenced",
+          "ok": true
+        },
+        {
+          "what": "unclaimed-path-unfenced",
+          "ok": false
+        },
+        {
+          "what": "unclaimed-path-unfenced",
+          "ok": false
+        },
+        {
+          "what": "unclaimed-path-unfenced",
+          "ok": false
+        },
+        {
+          "what": "unclaimed-path-unfenced",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "R16-fixed-then-reintroduced",
+      "checks": "qty-default-reintroduced-repeat: not posted",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "qty-default-reintroduced-repeat",
+          "ok": true
+        },
+        {
+          "what": "qty-default-reintroduced-repeat",
+          "ok": true
+        },
+        {
+          "what": "qty-default-reintroduced-repeat",
+          "ok": true
+        },
+        {
+          "what": "qty-default-reintroduced-repeat",
+          "ok": true
+        },
+        {
+          "what": "qty-default-reintroduced-repeat",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P05-rule-local-path-fixture-touched",
+      "checks": "Kody Rule against local absolute paths, on a test fixture constant; the developer touched the line and the path is still there; stored implemented; 34 earlier comments",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "local-path-fixture-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-new-site",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-new-site",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-new-site",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-new-site",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-repeat",
+          "ok": true
+        },
+        {
+          "what": "local-path-fixture-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P15-rule-nth-called-listed-site",
+      "checks": "Kody Rule \"pin mock call arguments\"; the earlier comment flagged one site and listed the others under \"Also found in\"; this round re-touched a listed site, still with toHaveBeenCalledWith; stored not_implemented; 40 earlier comments",
+      "hits": 5,
+      "total": 10,
+      "detail": [
+        {
+          "what": "audit-nth-called-repeat",
+          "ok": true
+        },
+        {
+          "what": "opt-out-nth-called-new-site",
+          "ok": true
+        },
+        {
+          "what": "audit-nth-called-repeat",
+          "ok": true
+        },
+        {
+          "what": "opt-out-nth-called-new-site",
+          "ok": false
+        },
+        {
+          "what": "audit-nth-called-repeat",
+          "ok": false
+        },
+        {
+          "what": "opt-out-nth-called-new-site",
+          "ok": false
+        },
+        {
+          "what": "audit-nth-called-repeat",
+          "ok": false
+        },
+        {
+          "what": "opt-out-nth-called-new-site",
+          "ok": false
+        },
+        {
+          "what": "audit-nth-called-repeat",
+          "ok": true
+        },
+        {
+          "what": "opt-out-nth-called-new-site",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P25-casefold-offsets-on-original",
+      "checks": "Bug finder (Python); substring offsets computed on a case-folded copy are applied to the original string; the developer applied part of the earlier fix and the length mismatch remains; stored implemented; 2 earlier comments",
+      "hits": 10,
+      "total": 10,
+      "detail": [
+        {
+          "what": "highlight-offsets-repeat",
+          "ok": true
+        },
+        {
+          "what": "page-off-by-one-unrelated",
+          "ok": true
+        },
+        {
+          "what": "highlight-offsets-repeat",
+          "ok": true
+        },
+        {
+          "what": "page-off-by-one-unrelated",
+          "ok": true
+        },
+        {
+          "what": "highlight-offsets-repeat",
+          "ok": true
+        },
+        {
+          "what": "page-off-by-one-unrelated",
+          "ok": true
+        },
+        {
+          "what": "highlight-offsets-repeat",
+          "ok": true
+        },
+        {
+          "what": "page-off-by-one-unrelated",
+          "ok": true
+        },
+        {
+          "what": "highlight-offsets-repeat",
+          "ok": true
+        },
+        {
+          "what": "page-off-by-one-unrelated",
+          "ok": true
+        }
+      ]
+    },
+    {
+      "id": "P35-hardcoded-term-new-messages",
+      "checks": "Finder: the earlier comment flagged one message hardcoding a renamable product noun (implemented); the diff adds sibling error messages that hardcode it again; 8 earlier comments",
+      "hits": 5,
+      "total": 5,
+      "detail": [
+        {
+          "what": "invite-messages-term-new-site",
+          "ok": true
+        },
+        {
+          "what": "invite-messages-term-new-site",
+          "ok": true
+        },
+        {
+          "what": "invite-messages-term-new-site",
+          "ok": true
+        },
+        {
+          "what": "invite-messages-term-new-site",
+          "ok": true
+        },
+        {
+          "what": "invite-messages-term-new-site",
+          "ok": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56594,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": null,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 56872,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged (line 8-9) makes pollCharge's NotReadyError handler call gw.submit(charge.payload), but the Gateway interface documents submit as 'NOT idempotent: every call creates a new charge' (src/billing/gateway.ts:3-4), while errors.ts documents NotReadyError as 'the gateway has the charge but has not settled it yet (transient)' — the charge already exists. WHY: A charge that is simply not yet settled now triggers a resubmit on every poll tick, creating duplicate charges and double-billing the customer; this is a new failure introduced by applying the earlier propagate suggestion (revising round-a-propagate), not the original misclassification. HOW: Either keep NotReadyError classified as transient inside fetchStatus (don't route it to the resubmit path), or make the resubmit path idempotent (e.g. add an idempotency key to submit, or gate the resubmit on a distinct 'never received' signal rather than the 'not settled' NotReadyError).",
+          "keep": true,
+          "rationale": "Confirmed by reading the code. src/billing/status.ts:8-9 propagates NotReadyError unchanged; src/billing/poller.ts:13-14 catches NotReadyError and calls gw.submit(charge.payload), and gateway.ts:3 documents submit as \"NOT idempotent: every call creates a new charge.\" Meanwhile errors.ts:1 documents NotReadyError as \"has the charge but has not settled it yet,\" so the charge already exists and resubmitting duplicates it. The failure path is concrete and reachable on every poll tick for a not-yet-settled charge. This is a consequence of applying the earlier round-a-propagate suggestion (propagate NotReadyError unchanged), i.e. a new failure in poller.ts distinct from the original \"misclassified as terminal\" problem, so it is not a repeat of that entry. Not refutable.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "path": "src"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `errors.ts` defines `NotReadyError` as the gateway already having the charge but not settled it, propagating it unchanged at lines 8-9 lets `pollCharge`'s `NotReadyError` handler call `gw.submit(charge.payload)` even though `Gateway.submit` is documented in `src/billing/gateway.ts:3-4` as not idempotent and creates a new charge per call, so every poll tick resubmits an existing charge and can duplicate charges and double-bill the customer (a new failure from the earlier propagate suggestion, not the original misclassification). Keep `NotReadyError` classified as transient inside `fetchStatus` so it never reaches the resubmit path, or make that path idempotent with an idempotency key on `submit` or by gating resubmit on a distinct “never received” signal instead of the “not settled” `NotReadyError`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 50990,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError unchanged from fetchStatus now reaches pollCharge, which interprets NotReadyError as \"the gateway never received it\" and calls gw.submit(charge.payload). WHY: errors.ts documents NotReadyError as \"the gateway has the charge but has not settled it yet (transient)\" and gateway.ts documents submit as \"NOT idempotent: every call creates a new charge\", so a charge that is merely still settling now triggers a resubmit that creates a duplicate charge. HOW: introduce a distinct error type/signal for the two cases (e.g. throw NotSettledError here for the transient state, and reserve NotReadyError for the \"never received\" case that pollCharge resubmits), or make pollCharge retry without resubmitting on NotReadyError.",
+          "keep": true,
+          "rationale": "Confirmed the exact flow: status.ts:8-10 now rethrows NotReadyError unchanged, pollCharge (poller.ts:13-15) catches NotReadyError and calls gw.submit(charge.payload). errors.ts documents NotReadyError as the transient 'has the charge but not settled' state, and gateway.ts:3 documents submit as NOT idempotent (creates a new charge). So a merely-unsettled charge now triggers a resubmit, producing a duplicate charge. Note this is a DIFFERENT problem from PreviousDecision round-a-propagate (which asked to propagate NotReadyError); this finding is the new duplicate-charge consequence caused by applying that propagation, so it is not a repeat of the earlier suggestion. Claim is technically accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "pollCharge*"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "NotReadyError",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 23,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nPropagating `NotReadyError` unchanged from `fetchStatus` makes `pollCharge` treat a charge that is merely still settling as one the gateway never received and call `gw.submit(charge.payload)`, creating a duplicate charge because `submit` is not idempotent. Throw a distinct `NotSettledError` for the transient state while reserving `NotReadyError` for the never-received case, or make `pollCharge` retry without resubmitting on `NotReadyError`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 54918,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: Propagating NotReadyError from fetchStatus (lines 8-9) newly activates pollCharge's resubmit branch (poller.ts:13-14), which calls the non-idempotent gw.submit. WHY: NotReadyError is documented in errors.ts:1 as 'the gateway HAS the charge but has not settled it yet' (retry the status check), while poller.ts:7 treats it as 'the gateway NEVER received it: resubmit'; because gateway.ts:4 notes submit is NOT idempotent ('every call creates a new charge'), a merely-unsettled charge will now be resubmitted, creating a duplicate charge. HOW: align the semantics — either resubmit only on a distinct 'never received' signal, or make the resubmit path idempotent (e.g. dedupe by chargeId / use an idempotency key) before propagating NotReadyError into it.",
+          "keep": true,
+          "rationale": "The claim is factually confirmed by the code. errors.ts:1 documents NotReadyError as \"The gateway has the charge but has not settled it yet (transient)\" — i.e. retry the status check. status.ts:8-9 propagates NotReadyError unchanged. poller.ts:7 documents the opposite semantics (\"the gateway never received it: resubmit\"), and poller.ts:13-14 on catching NotReadyError calls gw.submit. gateway.ts:3 explicitly documents submit as NOT idempotent (\"every call creates a new charge\"). Therefore propagating NotReadyError newly activates the resubmit branch for a merely-unsettled charge, producing a duplicate charge. The root cause is factually accurate, the failure path is reachable, and it is a real data/duplicate-charge bug, not a style or generic \"missing X\" suggestion. Note: this is a distinct problem from the earlier review decision — that entry asked to propagate NotReadyError so the caller can RETRY; this finding identifies that doing so (the applied/desired change) newly triggers a non-idempotent resubmit in poller, which is the consequence of applying that suggestion, not a re-raise of it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts",
+                "startLine": 1,
+                "endLine": 30
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "label": "bug",
+          "earlierId": "round-a-propagate",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 19,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R3-consequence-status-stale",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 51379,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/billing/status.ts",
+          "claim": "WHAT: fetchStatus now rethrows NotReadyError raw (status.ts:8-10), and the only caller pollCharge (poller.ts:13-15) interprets NotReadyError as 'the gateway never received it' and calls gw.submit — which gateway.ts:3 documents as NOT idempotent ('every call creates a new charge'). WHY: errors.ts:1-2 defines NotReadyError as 'the gateway has the charge but has not settled it yet (transient)', so a charge that is merely pending is now resubmitted, creating a duplicate charge and returning {state:'resubmitted'} for a charge that was never lost. Previously this transient case was wrapped into FailedError, so pollCharge's NotReadyError branch was not entered and no duplicate was created — the applied fix makes this path newly reachable. HOW: reconcile the two meanings of NotReadyError, e.g. throw a distinct terminal/transient error that pollCharge maps to a no-op/retry instead of resubmitting, or make gw.submit idempotent via a charge/payload idempotency key so a resubmit of an already-received charge cannot create a second charge.",
+          "keep": true,
+          "rationale": "Verified: status.ts:8-10 rethrows NotReadyError raw; poller.ts:13-15 maps NotReadyError to gw.submit, which gateway.ts:3 documents as non-idempotent. errors.ts:1-2 defines NotReadyError as a transient \"already received, not settled\" condition. Thus a pending charge is resubmitted, creating a duplicate charge. The failure (duplicate charge / wrong {state:'resubmitted'}) is a new consequence of applying the earlier suggestion (which only asked to propagate NotReadyError instead of wrapping in FailedError), not a repeat of that misclassification finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/status.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/poller.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/errors.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/billing/gateway.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": true,
+          "revisesSuggestionId": "round-a-propagate",
+          "label": "bug",
+          "marked": false,
+          "file": "src/billing/status.ts",
+          "line": 8,
+          "text": "**Revises an earlier Kody suggestion** on `src/billing/status.ts:8` (2026-09-30 00:46 UTC).\n\nBecause `fetchStatus` now rethrows `NotReadyError` raw (status.ts:8-10) and `pollCharge` (poller.ts:13-15) treats that error as 'the gateway never received it' by calling `gw.submit`—which gateway.ts:3 documents as NOT idempotent ('every call creates a new charge')—a merely pending charge (errors.ts:1-2: 'the gateway has the charge but has not settled it yet (transient)') is resubmitted, creating a duplicate charge and returning `{state:'resubmitted'}` for a charge that was never lost; previously this case was wrapped into `FailedError`, so `pollCharge`'s `NotReadyError` branch was not entered and the path is newly reachable after the fix. Reconcile the two meanings of `NotReadyError`, e.g. throw a distinct terminal/transient error that `pollCharge` maps to a no-op/retry instead of resubmitting, or make `gw.submit` idempotent via a charge/payload idempotency key so a resubmit of an already-received charge cannot create a second charge."
+        }
+      ],
+      "claims": [
+        {
+          "id": "resubmit-double-charge",
+          "expect": "deliver_linked",
+          "proposed": true,
+          "truth": "true",
+          "delivered": true,
+          "linked": true,
+          "linkedById": true,
+          "marked": false,
+          "severity": "critical",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 110015,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: In handleFailure the `requireNoLiveOwner` branch is evaluated before the `ownedBy` branch, so a caller that passes both options has its `ownedBy` silently ignored and the write is fenced on `noLiveOwner` instead of on the lease it actually holds. WHY: if a lease-holding caller ever adds `requireNoLiveOwner` (or the two options are combined by mistake), the write would be blocked whenever the caller's own live lease makes the row PROCESSING, returning false and suppressing the failure record/notice for a job the caller legitimately owns. HOW: reject the ambiguous combination explicitly, e.g. `if (options?.requireNoLiveOwner && options?.ownedBy) throw new Error('requireNoLiveOwner and ownedBy are mutually exclusive');` before the branches.",
+          "keep": false,
+          "rationale": "REFUTED: All three call sites of handleFailure pass exactly one option — line 190 (requireNoLiveOwner only, no ownedBy), line 474 (ownedBy only when leaseClaimed, no requireNoLiveOwner), line 559 (ownedBy only). The combination the finding requires never occurs. Moreover the semantics are inherently exclusive: requireNoLiveOwner is documented for a caller that holds NO lease (line 613-618), while ownedBy is for a caller that holds one (line 682-685); a lease-holding caller would never legitimately add requireNoLiveOwner, and no such code path exists. The scenario is speculative and the suggested throw would be dead defensive code.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 610,
+                "endLine": 700
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "requireNoLiveOwner|ownedBy",
+                "path": "libs/code-review/workflow"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 175,
+                "endLine": 200
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 470,
+                "endLine": 495
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "pattern": "handleFailure\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 555,
+                "endLine": 565
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 45,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 185550,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: In the BYOK-exhausted branch, the FAILED write is now fenced with `requireNoLiveOwner`, but the notification-marker write that immediately follows (the `jobRepository.update(jobId, { metadata: {...previousMetadata, byokSlotExhausted} })` at lines 217-226) is still issued unguarded. WHY: the guarded write only proves no live worker owned the row at that instant; between it and this metadata write the reaper can requeue the row and another worker can claim it PROCESSING (line 259-268 removes byokConcurrencyGate metadata from its own `job` snapshot), and this unguarded write then overwrites that live worker's `metadata`, corrupting the row of the worker actually running the review — the exact stale-owner stomp the fence was added to prevent. HOW: fence this write on the same ownership contract, e.g. pass `{ noLiveOwner: true }` to the update and skip the metadata stamp when it does not land (mirroring the `recorded` check just above).",
+          "keep": true,
+          "rationale": "The claim is technically grounded. The guarded write at line 190 (`handleFailure(..., { requireNoLiveOwner: true })`) lands only when no worker is live at that instant; the subsequent notification-marker metadata write at lines 217-226 uses `this.jobRepository.update(jobId, { metadata: {...} })` with NO guard (no `noLiveOwner`, no `leaseOwner`), and the repository's `update` without a guard keeps the old unconditional contract (workflow-job.repository.ts:174-180). Between the two writes the reaper can requeue the row and another worker can claim it PROCESSING (lines 259-268 write its own `metadata` from its `job` snapshot), and this unguarded write would then stomp that live worker's metadata — exactly the stale-owner corruption the fence was added to prevent. This is a distinct write/operation from the earlier review decision (which concerned `handleFailure`'s `!owned` early-return), so it is not a repeat. The finding is not refuted.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 150,
+                "endLine": 290
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "requireNoLiveOwner|noLiveOwner",
+                "path": "libs/code-review"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 600,
+                "endLine": 700
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner",
+                "path": "libs"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 260,
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 160
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: The new `noLiveOwner` guard uses `(status <> :processing OR leaseExpiresAt IS NULL OR leaseExpiresAt < :now)`, so the write lands whenever the row is not PROCESSING even if a worker still holds an unexpired lease (`leaseExpiresAt` in the future). WHY: a redelivery consumed while another worker has claimed the job and already flipped its status (or a row left with a live lease after a status change) matches the first disjunct and gets stamped FAILED over the live worker, killing its completion and dropping its review — the exact #1830 symptom this guard exists to prevent. The `leaseExpiresAt` clauses are dead for the case they were added to cover, because the first disjunct is already true. HOW: make the ownership check the conjunctive condition — land only when no unexpired lease is held: `(leaseExpiresAt IS NULL OR leaseExpiresAt < :now)` (dropping the `status <> :processing` disjunct), or AND the status test with the lease test if a non-PROCESSING row must also be required.",
+          "keep": true,
+          "rationale": "The SQL boolean-logic claim is factually accurate: the guard is a disjunction `(status <> :processing OR leaseExpiresAt IS NULL OR leaseExpiresAt < :now)`, so whenever the row is non-PROCESSING the first disjunct is true and the write lands regardless of an unexpired `leaseExpiresAt`. The `leaseExpiresAt` clauses therefore cannot block a write for a non-PROCESSING row, which is exactly what the finding asserts. I could not find evidence in the code that a non-PROCESSING row is guaranteed to have no live lease (status transitions away from PROCESSING do not provably clear `leaseExpiresAt`), so the described failure path — a live worker whose row is non-PROCESSING being stamped FAILED by a concurrent redelivery — is not refuted. This is a different operation/file from the PreviousDecision entry (which concerned a swallowed failure in the processor's `!owned` early return), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 200,
+                "endLine": 290
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner|leaseExpiresAt|markFailed|handleFailure",
+                "path": "libs/core/workflow"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 440,
+                "endLine": 680
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 58,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 217,
+          "text": "The unguarded notification-marker write (`jobRepository.update(jobId, { metadata: {...previousMetadata, byokSlotExhausted} })` at lines 217-226) can overwrite the `metadata` of a live worker that claimed the row after the reaper requeued it and another worker claimed it PROCESSING (line 259-268 removes `byokConcurrencyGate` metadata from its own `job` snapshot), corrupting the running review — the exact stale-owner stomp the `requireNoLiveOwner` fence was added to prevent. Fence this write on the same ownership contract, e.g. pass `{ noLiveOwner: true }` to the update and skip the metadata stamp when it does not land, mirroring the `recorded` check just above."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 248,
+          "text": "Because `(status <> :processing OR leaseExpiresAt IS NULL OR leaseExpiresAt < :now)` matches any non-PROCESSING row, the `leaseExpiresAt` clauses are dead, so a redelivery can stamp FAILED over a live worker that still holds an unexpired lease, killing its completion and dropping its review — the exact #1830 symptom this guard exists to prevent. Make the ownership check conjunctive so the write lands only when no unexpired lease is held, using `(leaseExpiresAt IS NULL OR leaseExpiresAt < :now)` and dropping the `status <> :processing` disjunct (or AND the status test with the lease test if a non-PROCESSING row must also be required)."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 181954,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: the new `noLiveOwner` guard references the camelCase column `leaseExpiresAt` unquoted inside the raw `andWhere` string, while the reaper query against the same column explicitly quotes it as `job.\"leaseExpiresAt\"`. WHY: Postgres folds unquoted identifiers to lowercase, so the condition does not resolve to the intended `leaseExpiresAt` column (it either fails to match the real column or errors), which breaks the lease-expiry half of the fence and lets the no-lease failure write land FAILED over a row a live worker is still PROCESSING — the exact #1830 symptom this guard was added to prevent. HOW: quote the column the same way the reaper does, e.g. `.andWhere('(status <> :processing OR \"leaseExpiresAt\" IS NULL OR \"leaseExpiresAt\" < :now)', { processing: JobStatus.PROCESSING, now: new Date() })`.",
+          "keep": true,
+          "rationale": "The finding is confirmed. The same file at lines 424-446 explicitly documents that columns are mixed-case camelCase and MUST be quoted (\"unquoted mixed-case identifiers are folded to lowercase by Postgres, so a bare `workflowType` selects `workflowtype` and errors out\"), and the reaper quotes `job.\"leaseExpiresAt\"`. The guard at line 249 uses bare `leaseExpiresAt`, which Postgres folds to `leaseexpiresat` — a nonexistent column, causing an error/non-match that breaks the lease-expiry half of the fence. The model file (schemas/workflow-job.model.ts) could not be located, but the repo's own comments and the reaper's quoting are direct, in-repo evidence that the physical column is camelCase. This is a distinct defect from the PreviousReviewDecisions entry (which concerns the `if (!owned) return;` swallow in a different file/operation), so it is not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 200,
+                "endLine": 300
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseExpiresAt|lease_expires_at|leaseExpiresAt",
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "leaseExpiresAt|lease_expires_at|@Column|WorkflowJobModel",
+                "glob": "**/workflow-job*.model.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "class WorkflowJobModel"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/schemas/workflow-job.model.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 360,
+                "endLine": 460
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: The `requireNoLiveOwner` write (line 190) only fences the FAILED status write, but the subsequent `notifyReviewFailed` (line 215) and metadata write (line 217) are not fenced against a worker that claims the row after `recorded` returns true. WHY: a redelivery can pass the `noLiveOwner` guard while the row is PENDING, then another worker claims the row (PROCESSING + leaseOwner) in the window before line 215 runs, so the author still receives a failure notice for a review that is actually running — the exact symptom this change claims to prevent; only the narrower window (claim before the write) is now covered. HOW: re-check the row's ownership immediately before notifying (or fold the notification into a guarded path that re-verifies `noLiveOwner`) so a claim that lands after the status write suppresses the notice, mirroring the `if (!recorded) return;` fence already used here.",
+          "keep": true,
+          "rationale": "Verified in code: `handleFailure` with `requireNoLiveOwner: true` (line 190) guards ONLY the FAILED status write via `noLiveOwner: true` on the repository update (lines 642-671). Once `recorded` returns true, the code proceeds unconditionally to `notifyReviewFailed` (line 215) and the metadata write (line 217) with no ownership re-check. A worker can claim the row (PROCESSING + leaseOwner, lines 259-268) in the window after the guarded status write lands but before line 215 runs, producing a failure notice for a review that is actually running — the exact symptom the change aims to prevent. The claim is factually accurate about the code path. Not a repeat of PreviousDecision kodus-1902-round-a, which concerned a different location (457-497) and the opposite failure (a failure being swallowed when this run never held the lease); this finding is a distinct TOCTOU gap producing a spurious notification.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 140,
+                "endLine": 270
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "requireNoLiveOwner|handleFailure|noLiveOwner",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 607,
+                "endLine": 720
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 190,
+          "label": "bug",
+          "earlierId": "kodus-1902-round-a",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 53,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 249,
+          "text": "Postgres folds unquoted identifiers to lowercase, so the raw `andWhere` condition never resolves to the real `leaseExpiresAt` column and the lease-expiry half of the fence fails, letting the no-lease failure write land FAILED over a row a live worker is still PROCESSING — the exact #1830 symptom this guard was added to prevent. Quote the column in that string as `\"leaseExpiresAt\"`, matching how the reaper query against the same column does it."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 131489,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "claim": "WHAT: `abandonBusyReview` now sends the refusal notice only when the preceding guarded `handleFailure` returns true, but that guard (`{ ownedBy: this.instanceId }`, `requireProcessing` defaults to true) matches only a row that is still `PROCESSING`, so any non-PROCESSING row (e.g. already FAILED by a prior attempt's consumer catch, or already completed) makes the write return false and the notice is silently skipped.\nWHY: The user who explicitly asked for the review is never told their request was dropped — the exact silence #1700/#1830 exist to eliminate — whereas the pre-reorder code sent the notice unconditionally and wrote the failure afterward.\nHOW: Distinguish \"another worker owns it\" from \"the row is not PROCESSING\": only skip the notice when the write failed because a live owner holds the row (or notify unconditionally as before, since the guarded write still prevents clobbering another worker's row).",
+          "keep": true,
+          "rationale": "no parseable verdict — kept by default",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 500,
+                "endLine": 600
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "abandonBusyReview"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "private async handleFailure",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "handleFailure",
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 607,
+                "endLine": 700
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 730,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 700
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "pattern": "requireProcessing|leaseOwner|noLiveOwner"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: The `noLiveOwner` guard's `leaseExpiresAt < :now` term lets the write land on a PROCESSING row whose worker is still running but whose 30s renewal has merely lapsed, even though the doc comment above claims it lands only when \"no worker is running the job\". WHY: the failure path is meant to stop stamping FAILED over a live worker; a renewal blip (the exact connection-pool/statement-timeout case called out in the processor at lines 82-85 and 314-324) leaves status=PROCESSING with an expired lease, so a redelivery of the same jobId reaches the BYOK-exhausted branch and writes FAILED over that worker's row — the worker's guarded markCompleted then matches no row, its review is dropped, and the author gets a failure notice for a review that is still running. HOW: drop the expired-lease escape hatch from the condition and gate on status only (`.andWhere('status <> :processing', { processing: JobStatus.PROCESSING })`), which is the actual \"no live owner\" signal here since a live worker keeps status=PROCESSING; if expired-lease rows must also be writable, use the same `leaseOwner`-based guard the rest of the file uses instead of inferring liveness from the lease timestamp.",
+          "keep": true,
+          "rationale": "The finding accurately describes the code at lines 248-254: the noLiveOwner guard permits a write when `leaseExpiresAt < :now` even if status is still PROCESSING. The doc comment at 168-172 explicitly claims it only lands when 'no worker is running the job', but a PROCESSING row with an expired (merely lapsed) lease is exactly a live worker whose renewal has slipped. This is reachable: the caller at code-review-job-processor.service.ts:649-655 passes `{ noLiveOwner: true }` on redelivery, and the surrounding comments confirm concurrent delivery of the same jobId. The concrete failure — FAILED stamped over a live PROCESSING row, worker's guarded markCompleted matching no row, review dropped — is a real data-loss path, not merely style. It does not repeat the previous decision (which concerned `!owned` early-return on pre-lease errors); this is a different bug in the guard condition itself. No evidence refutes it.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 200,
+                "endLine": 290
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner|leaseExpiresAt|leaseOwner|JobStatus.PROCESSING",
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 155,
+                "endLine": 185
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 620,
+                "endLine": 680
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "libs/code-review/workflow/code-review-job-processor.service.ts",
+          "line": 559,
+          "label": "bug",
+          "earlierId": "kodus-1902-round-a",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 46,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "critical",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 248,
+          "text": "A renewal blip (the connection-pool/statement-timeout case called out at lines 82-85 and 314-324) leaves `status=PROCESSING` with an expired lease, so a redelivery of the same jobId reaches the BYOK-exhausted branch and writes `FAILED` over a live worker's row; that worker's guarded `markCompleted` then matches no row, its review is dropped, and the author gets a failure notice for a review that is still running. Drop the expired-lease escape hatch and gate on status only with `.andWhere('status <> :processing', { processing: JobStatus.PROCESSING })`, or if expired-lease rows must also be writable, use the same `leaseOwner`-based guard the rest of the file uses instead of inferring liveness from the lease timestamp."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "critical",
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R11-kodus1902-reversal",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 117605,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "claim": "WHAT: the new `{ noLiveOwner: true }` guard classifies a PROCESSING row with an expired `leaseExpiresAt` as \"no live owner\" (`status <> :processing OR leaseExpiresAt IS NULL OR leaseExpiresAt < :now`), so the FAILED write lands over a worker that is still alive. WHY: a worker whose renewal momentarily stalled past the TTL (the transient the `leaseLost` comment at processor line 394 exists for) is still running the review; a concurrent redelivery hitting the exhausted-BYOK branch (processor line 190) stamps FAILED over it and then early-returns at line 202, so that worker's guarded `markCompleted` matches no row, its review result is dropped, and the author is told the review failed while it is still running — the #1830 symptom this fence was added to prevent. HOW: fence the no-lease write on identity/status only (a row that is genuinely unowned), e.g. require `status <> :processing`, or also require that the row has no `leaseOwner` still set (`leaseOwner IS NULL`), instead of accepting any expired lease as proof of death — the expiry signal is the reaper's to act on, and the reaper requeues rather than terminally failing.",
+          "keep": true,
+          "rationale": "The guard's SQL condition `(status <> :processing OR leaseExpiresAt IS NULL OR leaseExpiresAt < :now)` factually accepts any PROCESSING row with an expired lease as 'no live owner'. The processor's exhausted-BYOK branch (line 190) uses this guard, and a live-but-stalled worker (the transient the leaseLost comment at line 394 acknowledges) would have its review result dropped: the FAILED stamp lands, then the worker's guarded markCompleted (leaseOwner + status=PROCESSING) matches no row. This is a coherent, code-consistent failure path matching the #1830 symptom the fence was added to prevent. The reaper requeues expired-lease rows rather than terminally failing them, so treating expiry as death diverges from reaper semantics. PreviousDecision kodus-1902-round-a addresses a different failure (failures swallowed when no lease was ever held, from the rate-limit/validation path), not this expired-lease-over-live-worker case.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+                "startLine": 200,
+                "endLine": 290
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "noLiveOwner",
+                "path": "libs"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 680,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 620
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "pattern": "leaseLost|markCompleted|markFailed|handleFailure"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 210,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 150
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 430,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 300
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "endLine": 760,
+                "path": "libs/code-review/workflow/code-review-job-processor.service.ts",
+                "startLine": 680
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 53,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "libs/core/workflow/infrastructure/repositories/workflow-job.repository.ts",
+          "line": 248,
+          "text": "A worker whose renewal momentarily stalled past the TTL (the transient the `leaseLost` comment at processor line 394 covers) is still running the review, yet the new `{ noLiveOwner: true }` guard treats its `PROCESSING` row with an expired `leaseExpiresAt` as unowned, so a concurrent redelivery hitting the exhausted-BYOK branch (processor line 190) stamps `FAILED` over it and early-returns at line 202, leaving that worker's guarded `markCompleted` to match no row, dropping its review result and telling the author the review failed — the #1830 symptom this fence was added to prevent. Fence the no-lease write on identity/status only, e.g. require `status <> :processing` or `leaseOwner IS NULL`, instead of accepting any expired lease as proof of death; the expiry signal belongs to the reaper, which requeues rather than terminally failing."
+        }
+      ],
+      "claims": [
+        {
+          "id": "unclaimed-path-unfenced",
+          "expect": "if_delivered_linked",
+          "proposed": true,
+          "truth": "contested",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33591,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: The loop multiplies by `item.qty` directly, but `qty` is optional in `Item`, so an item without `qty` yields `price * undefined` = NaN and poisons the whole sum. WHY: Any item lacking `qty` makes `total()` return NaN, breaking the cart total for all consumers. HOW: Restore the default so the fallback used before this change is preserved: `for (const item of items) sum += item.price * (item.qty ?? 1);`",
+          "keep": false,
+          "rationale": "This is a verbatim repeat of PreviousReviewDecisions entry 'round-a-default-qty' (src/cart/total.ts:4-4): same optional `qty`, same `price * undefined` NaN, same operation `total()`, same proposed fix `item.qty ?? 1`. The rules mandate dropping a finding that re-raises the problem a previous decision already raised on this PR, regardless of that entry's Outcome and even when it asserts the fix is incomplete. No commit evidence shows the area was deliberately reworked since; the diff is unchanged from the earlier state.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "qty",
+                "path": "src/cart"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 8,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 33197,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: The rewritten loop multiplies by item.qty directly, but qty is optional in Item, so an item without qty produces price * undefined = NaN and the entire total becomes NaN. WHY: A single item lacking qty poisons the whole sum, returning NaN for the cart total instead of the correct amount — a regression that the previously applied `item.qty ?? 1` default had fixed. HOW: Restore the fallback: `for (const item of items) sum += item.price * (item.qty ?? 1);`.",
+          "keep": false,
+          "rationale": "The technical claim is accurate (qty?: number is optional; line 5 multiplies without fallback, producing NaN). However, this is exactly the problem PreviousDecision entry round-a-default-qty already raised on this PR: the same NaN-total failure from a missing qty in the same operation, with the same proposed fix (item.qty ?? 1). Its Outcome is \"implemented\", and the finding merely re-raises that same failure (arguing the applied fix was reverted). Per the repeat rule, a finding whose consequence is the failure a prior entry already described is that entry again, even when it blames the developer's attempted fix. DROP.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "findFile",
+              "args": {
+                "pattern": "Item",
+                "path": "src/cart"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 11,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 26943,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: the loop multiplies by `item.qty` without a default, but `qty` is optional in `Item` (`qty?: number`), so an item without qty yields `price * undefined` = NaN and `sum += NaN` makes the entire total NaN. WHY: any cart containing an item that omits qty silently returns NaN instead of a valid total — a wrong-result regression, and the earlier `?? 1` default that prevented it has been removed in this hunk. HOW: restore the default: `for (const item of items) sum += item.price * (item.qty ?? 1);`.",
+          "keep": false,
+          "rationale": "This finding is an exact repeat of PreviousReviewDecisions entry 'round-a-default-qty' (src/cart/total.ts:4-4): identical root cause (qty is optional in Item), identical failure (NaN total), identical fix (item.qty ?? 1). The entry's Outcome is 'implemented', and the current diff shows no concrete evidence that the applied change was reverted or reworked — the failure described is the same one already raised on this PR, so it must be dropped.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "qty",
+                "path": "src/cart"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 30574,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: The new accumulation `sum += item.price * item.qty` dropped the `?? 1` fallback that the previous `reduce` applied, while `Item.qty` is still optional (src/cart/types.ts:1 `{ price: number; qty?: number }`). WHY: any item with `qty` undefined makes `item.price * undefined` evaluate to NaN, and `sum += NaN` makes the entire function return NaN for the whole cart instead of the sum of the priced items. HOW: restore the default per item, e.g. `for (const item of items) sum += item.price * (item.qty ?? 1);` (or `?? 0` if a missing qty is meant to contribute nothing — pick the semantics the previous `?? 1` encoded).",
+          "keep": true,
+          "rationale": "The finding correctly identifies the exact failure raised by PreviousDecision round-a-default-qty (optional `item.qty` → NaN total). Normally that would be a repeat and dropped, BUT the previous decision's Outcome is \"implemented\" and the current diff shows the applied `?? 1` fallback is absent — the code now reads `sum += item.price * item.qty` with no default. Since the current diff gives concrete evidence the applied change is wrong/reverted (types.ts still declares `qty?: number`), this is a legitimate revision, not a mere repeat. Claim confirmed against source.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/types.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [
+        {
+          "file": "src/cart/total.ts",
+          "line": 5,
+          "label": "bug",
+          "earlierId": "round-a-default-qty",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "R16-fixed-then-reintroduced",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 27480,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/cart/total.ts",
+          "claim": "WHAT: the loop multiplies by item.qty without a default, but qty is optional in Item, so an item with no qty yields undefined and makes the whole total NaN. WHY: total() returns NaN for any cart containing an item without an explicit qty, corrupting order totals downstream. HOW: restore the default that the previous implementation had: `for (const item of items) sum += item.price * (item.qty ?? 1);`",
+          "keep": false,
+          "rationale": "The candidate raises precisely the problem already posted in the prior review round (round-a-default-qty): same file/lines, same failure (optional `item.qty` multiplying to undefined → NaN total), same suggested fix (`item.qty ?? 1`). Per the rules, a finding that re-raises the problem a PreviousReviewDecisions entry already raised on this exact PR must be dropped, regardless of that entry's outcome. Refuted as a duplicate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/cart/total.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "qty",
+                "glob": "*.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "not-needed"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 0
+      },
+      "delivered": [],
+      "claims": [
+        {
+          "id": "qty-default-reintroduced-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 28133,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 2,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "text": "`archive_dir` points at `/Users/dev/billing-archive`, so any test relying on the archive writes to a directory that only exists on one laptop and violates the no local machine paths rule. Change `archive_dir` to a repository-relative path or a pytest temporary directory (`tmp_path`) so the fixture works everywhere."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25565,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "text": "The `settings` fixture hardcodes `archive_dir=\"/Users/dev/billing-archive\"`, violating the no-local-machine-paths rule and breaking CI or other machines by failing or writing into an unrelated user's directory. Use a temporary directory such as pytest's `tmp_path` or a repository-relative path, for example `archive_dir=str(tmp_path / \"billing-archive\")`, and add `tmp_path` to the fixture parameters."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22273,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "text": "`archive_dir` hardcodes the absolute developer-machine path `/Users/dev/billing-archive`, which violates the \"No local machine paths in committed files\" rule and will not exist on CI or another developer's machine. Use a repository-relative path or a temporary directory such as pytest's `tmp_path` instead."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 19379,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "text": "Hard-coding `/Users/dev/billing-archive` in the `settings` fixture for `archive_dir` violates \"No local machine paths in committed files\", and because that directory does not exist in CI, any test that archives an invoice fails or writes to an unrelated location on the developer's machine. Replace it with a temporary directory such as pytest's `tmp_path` fixture or a repository-relative path instead of an absolute `/Users/<name>/...` path."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P05-rule-local-path-fixture-touched",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 25773,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "tests/conftest.py",
+          "line": 10,
+          "label": "kody_rules",
+          "earlierId": "round-a-P05-rule-local-path-fixture-touched",
+          "earlierOutcome": "implemented",
+          "revisesSuggestionId": "round-a-P05-rule-local-path-fixture-touched",
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-no-local-machine-paths"
+          ],
+          "marked": false,
+          "file": "tests/conftest.py",
+          "line": 18,
+          "text": "Hardcoding `archive_dir` to `/Users/dev/billing-archive` makes the fixture fail in CI and on other machines and violates the rule against local machine paths in committed files. Use a pytest `tmp_path` fixture or a repository-relative/settings-provided directory so it works anywhere."
+        }
+      ],
+      "claims": [
+        {
+          "id": "local-path-fixture-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "local-path-fixture-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P15-rule-nth-called-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 20292,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "file": "src/notifications/digest.test.ts",
+          "line": 42,
+          "text": "Because `toHaveBeenCalledWith` passes when any call matches and `toHaveBeenCalledTimes(2)` only counts calls, the new test in `src/notifications/digest.test.ts` stays green even if `ben` and `cai` are mailed out of order, violating the Pin mock call arguments rule. Pin each `mailer.send` call to its position with `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "audit-nth-called-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P15-rule-nth-called-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 7340,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [
+        {
+          "file": "src/notifications/digest.test.ts",
+          "line": 26,
+          "label": "kody_rules",
+          "earlierId": "round-a-P15-rule-nth-called-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        },
+        {
+          "file": "src/notifications/digest.test.ts",
+          "line": 41,
+          "label": "kody_rules",
+          "earlierId": "round-a-P15-rule-nth-called-listed-site",
+          "earlierOutcome": "not_implemented",
+          "revisesSuggestionId": null,
+          "by": "model"
+        }
+      ],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [],
+      "claims": [
+        {
+          "id": "audit-nth-called-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P15-rule-nth-called-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 29430,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "file": "src/notifications/digest.test.ts",
+          "line": 26,
+          "text": "The test asserts `audit.record` multiple times (two per-user entries plus the batch summary) with `toHaveBeenCalledWith`, which passes when any call matches and does not pin the order, violating the Pin mock call arguments rule. Pin each call to its position with `toHaveBeenNthCalledWith` so the test fails if the per-user entries are recorded in the wrong order or swapped.\n\n**Also found in:**\n- `src/notifications/digest.test.ts:41-43`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "file": "src/notifications/digest.test.ts",
+          "line": 41,
+          "alsoFoundIn": true,
+          "text": "The test asserts `audit.record` multiple times (two per-user entries plus the batch summary) with `toHaveBeenCalledWith`, which passes when any call matches and does not pin the order, violating the Pin mock call arguments rule. Pin each call to its position with `toHaveBeenNthCalledWith` so the test fails if the per-user entries are recorded in the wrong order or swapped.\n\n**Also found in:**\n- `src/notifications/digest.test.ts:41-43`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "audit-nth-called-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P15-rule-nth-called-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 21389,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "file": "src/notifications/digest.test.ts",
+          "line": 26,
+          "text": "Since `toHaveBeenCalledWith` passes when any `audit.record` call matches, swapping `u1` and `u2` or recording them in the wrong order would still pass even though the test title says the entries are recorded per user then the summary. Use `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)` to pin each call's position.\n\n**Also found in:**\n- `src/notifications/digest.test.ts:41-43`"
+        },
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "file": "src/notifications/digest.test.ts",
+          "line": 41,
+          "alsoFoundIn": true,
+          "text": "Since `toHaveBeenCalledWith` passes when any `audit.record` call matches, swapping `u1` and `u2` or recording them in the wrong order would still pass even though the test title says the entries are recorded per user then the summary. Use `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)` to pin each call's position.\n\n**Also found in:**\n- `src/notifications/digest.test.ts:41-43`"
+        }
+      ],
+      "claims": [
+        {
+          "id": "audit-nth-called-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": false
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": false
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P15-rule-nth-called-listed-site",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 22099,
+      "indexRefs": 0,
+      "verificationEvidence": [],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 1,
+      "sandboxFailed": 0,
+      "warnings": 0,
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "kody_rules",
+          "brokenKodyRulesIds": [
+            "rule-nth-called"
+          ],
+          "marked": false,
+          "file": "src/notifications/digest.test.ts",
+          "line": 42,
+          "text": "Because `toHaveBeenCalledWith` passes when any call matches, this violates the \"Pin mock call arguments\" rule: swapping the opted-out user's mail ordering (cai before ben) still passes, so the test does not pin the \"in order\" behavior its title promises. Use `toHaveBeenNthCalledWith(1, ...)` and `toHaveBeenNthCalledWith(2, ...)` to pin each call to its position."
+        }
+      ],
+      "claims": [
+        {
+          "id": "audit-nth-called-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "opt-out-nth-called-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 186560,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page while its docstring states page starts at 1, so the first page is skipped (page=1 returns results[20:40]). WHY: a caller passing the documented 1-based page from ?page= receives the wrong page of results — page 1 returns the second page of hits and the first 20 results are never shown. HOW: use 1-based arithmetic, e.g. start = (page - 1) * per_page, and clamp negatives (max(0, page - 1)).",
+          "keep": true,
+          "rationale": "Confirmed. page_of docstring states page starts at 1, but start = page * per_page yields results[20:40] for page=1, skipping the first 20 results. Callers passing the documented 1-based ?page= get the wrong page. The arithmetic should be (page-1)*per_page. Not a repeat of any PreviousDecision (those cover casefold offsets and CSV escaping).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of\\("
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 17,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "text": "Because the docstring documents a 1-based `page` but `page_of` computes `start = page * per_page`, a caller passing `?page=1` receives `results[20:40]`, so the first 20 hits are never shown. Compute the offset with 1-based arithmetic, e.g. `start = max(0, page - 1) * per_page`, to return the correct page and clamp negative values."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 55229,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page, so a 1-based page (as the docstring states, 'page comes from ?page= and starts at 1') returns the wrong slice — page=1 yields results[20:40] instead of results[0:20], and the final page returns an empty list. WHY: every page is shifted by one and the first page is never shown, so users see skipped/duplicated results and an empty last page. HOW: subtract 1 for 1-based pages: start = (page - 1) * per_page.",
+          "keep": true,
+          "rationale": "The docstring at line 38 explicitly states 'page comes from ?page= and starts at 1', yet line 39 computes start = page * per_page with no off-by-one adjustment. For page=1, per_page=20, start=20, so results[20:40] is returned instead of results[0:20]; the final page returns an empty slice. This is a concrete wrong-result bug matching the claim, and the cause is directly visible in the cited lines. No PreviousReviewDecisions entry addresses this paging bug (the only relevant one concerns casefold offsets in highlight), so this is a distinct, non-repeat finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 70
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of|page",
+                "path": "catalog",
+                "excludeTests": true
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "catalog/search/highlight.py",
+          "line": 39,
+          "text": "Because `page_of` treats the 1-based `page` from `?page=` as 0-based, every page is shifted by one: `page=1` yields `results[20:40]` instead of `results[0:20]`, the first page is never shown, and the final page returns an empty list, so users see skipped or duplicated results. Subtract 1 for 1-based pages with `start = (page - 1) * per_page`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 82948,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes `start = page * per_page`, but the docstring states `page` is 1-based (`?page=` starts at 1), so page 1 returns results[20:40] instead of results[0:20]. WHY: the first page of results is unreachable and every page is shifted by one, and a page value of 0 or negative (or non-integer) silently returns the wrong window without validation. HOW: subtract 1 from the page before multiplying, e.g. `start = max(0, (page - 1)) * per_page`, and validate that `page` is a positive integer before use.",
+          "keep": true,
+          "rationale": "The docstring explicitly states `page` is 1-based (`?page=` starts at 1), but `start = page * per_page` means page=1 returns results[20:40], skipping results[0:20]. This is a concrete off-by-one wrong-result bug: the first page is unreachable and every page is shifted. No previous review decision covers pagination (the earlier entries concern casefold offsets in highlight and CSV escaping), so this is not a repeat. The root cause is factually correct and directly verifiable in the cited lines.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of\\("
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of",
+                "glob": "*.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 16,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "text": "Because `page_of` computes `start = page * per_page` while its docstring and `?page=` define `page` as 1-based, page 1 returns `results[20:40]` instead of `results[0:20]`, making the first page unreachable, shifting every page by one, and causing page values of 0, negative, or non-integer to silently return the wrong window. Subtract 1 before multiplying (for example, `start = max(0, (page - 1)) * per_page`) and validate that `page` is a positive integer before use."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 55123,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page, but the docstring says page starts at 1, so page=1 skips the first per_page results. WHY: the first page of search results is never returned (page=1 yields results[20:40]), and a negative page silently returns tail items via Python negative indexing instead of empty/error. HOW: use start = (page - 1) * per_page and clamp to a minimum of 0, e.g. page = max(1, page); start = (page - 1) * per_page.",
+          "keep": true,
+          "rationale": "Confirmed by reading catalog/search/highlight.py:37-40. The docstring says \"page ... starts at 1\" but the code computes `start = page * per_page`, so page=1 returns results[20:40] and the first per_page results are never returned. Negative page yields tail items via Python negative indexing. The root cause and failure path described are factually correct, not refuted by any guard or previous decision (the earlier decisions concern casefold offsets and CSV escaping, unrelated).",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of\\("
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: highlight computes end = start + len(term.casefold()) but slices the ORIGINAL text (text[start:end]), mixing a length measured on the casefolded string with indices into the original string. WHY: casefold is not length-preserving for characters such as 'ẞ' -> 'ss' (or ligature forms), so whenever the matched term contains a fold-expanding character the <mark> span ends one or more characters early/late and wraps the wrong characters in the returned HTML. HOW: search the original text and slice with the match object, e.g. m = re.search(re.escape(term), text, re.IGNORECASE); if m is None: return html.escape(text); then html.escape(text[:m.start()]) + '<mark>' + html.escape(text[m.start():m.end()]) + '</mark>' + html.escape(text[m.end():]).",
+          "keep": false,
+          "rationale": "This finding raises the identical problem already raised by PreviousDecision round-a-P25-casefold-offsets-on-original on this exact PR: highlight() computes an offset in the case-folded/lowercased string and slices the original text with it, which is wrong because folding/lowercasing is not length-preserving, causing the <mark> span to wrap the wrong characters. Same function, same lines (catalog/search/highlight.py:10-14), same failure (wrong highlight span), and the same fix (search original with re.IGNORECASE and slice via match.start()/match.end()). The only novelty is naming 'ẞ'->'ss' instead of 'İ'.lower(), but the rule instructs judging by the failure, not the cause named — a new example character does not make it a different bug. Its Outcome is 'implemented', and the current diff shows the casefold version (text.casefold()/term.casefold()), meaning the applied change landed and this is a re-raise of that same issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 9,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "catalog/search/highlight.py",
+          "line": 37,
+          "text": "With the docstring saying `page` starts at 1, `page_of` uses `start = page * per_page`, so `page=1` returns `results[20:40]` and never the first `per_page` results, while a negative `page` silently returns tail items via Python negative indexing. Clamp with `page = max(1, page)` and compute `start = (page - 1) * per_page`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P25-casefold-offsets-on-original",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 76371,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: page_of computes start = page * per_page while its docstring states the page number starts at 1. WHY: for page=1 this returns start=20, so the first page of results is silently skipped and the caller must pass page=0 to see it, breaking the documented contract. HOW: use start = (page - 1) * per_page.",
+          "keep": true,
+          "rationale": "The cited code exactly matches the claim: line 39 computes `start = page * per_page`, while the docstring on line 38 states \"page comes from ?page= and starts at 1.\" With page=1 the function returns results[20:40], skipping the first page. This is a real off-by-one that breaks the documented contract. Not a repeat of either previous decision (casefold offsets and CSV escaping are unrelated). Keep.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py",
+                "startLine": 1,
+                "endLine": 60
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "page_of"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "catalog/search/highlight.py",
+          "claim": "WHAT: highlight() finds the match offset in `folded = text.casefold()` and then slices the ORIGINAL `text` with that offset (lines 11-15), but casefold() is not length-preserving — 'ß'.casefold() == 'ss', 'İ'.casefold() == 'i̇', 'ẞ' → 'ss', ligatures like 'ﬃ' → 'fff'. WHY: for any text containing such a character before the match (e.g. text='İzmir Straße Set', term='Set') the casefold offset is larger than the real index in `text`, so html.escape(text[:start]) cuts at the wrong position, the <mark> wraps the wrong characters, and text[end:] re-emits already-emitted characters — wrong, duplicated highlight output. HOW: derive the offset from the original string instead of the casefolded copy, e.g. `m = re.search(re.escape(term), text, re.IGNORECASE); if m is None: return html.escape(text); start, end = m.start(), m.end()`, or locate the match by comparing `text[i:i+len(term)].casefold() == term.casefold()` and slice at the original index.",
+          "keep": false,
+          "rationale": "This is a repeat of PreviousDecision index 1 (round-a-P25-casefold-offsets-on-original). That entry already raised the identical failure: highlight finds the match offset in the lowercased/casefolded copy and slices the ORIGINAL text, so for text like 'İzmir Straße Set' the offset shifts and the <mark> wraps wrong characters. The candidate blames casefold() instead of lower(), but the failure (wrong/duplicated highlight output in the same highlight() operation) is exactly what the earlier decision described, and it even proposes the same re.search fix. Per the review rules, raising again the problem a previous decision already posted on this PR mandates a drop, whatever its Outcome and however it is worded.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "catalog/search/highlight.py"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "high",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "catalog/search/highlight.py",
+          "line": 39,
+          "text": "Because `page_of` computes `start = page * per_page` while its docstring says page numbering starts at 1, calling it with `page=1` returns `start=20` and silently skips the first page of results, forcing callers to pass `page=0` and breaking the documented contract. Change the calculation to `start = (page - 1) * per_page`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "highlight-offsets-repeat",
+          "expect": "not_deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": false,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": null,
+          "pass": true
+        },
+        {
+          "id": "page-off-by-one-unrelated",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "high",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 1,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 60476,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage accept an Account parameter but never call term(), hardcoding the literal nouns 'workspace'/'member'/'admin' instead. WHY: accounts can rename these nouns (src/lib/terminology.ts:1-4 states user-facing text must ask term() for the account's word), so an account that calls its workspaces 'classes' is shown 'This workspace invite has expired. Ask a workspace admin...' and 'already a member of this workspace' — wrong, unlocalized copy. HOW: build the strings with term(account, 'workspace') and term(account, 'admin')/term(account, 'member'), mirroring seatLimitMessage on line 4.",
+          "keep": true,
+          "rationale": "Confirmed: inviteExpiredMessage (line 8) and alreadyMemberMessage (line 12) hardcode 'workspace'/'member'/'admin' while both accept an Account and term() supports those exact nouns. seatLimitMessage (line 4) already uses term(), and terminology.ts:1-3 states user-facing text never hardcodes these nouns. The previous decision (round-a-P35-hardcoded-term-new-messages) targeted seatLimitMessage at lines 3-5, which was fixed; the current finding is the same rule applied to a different function/operation, not a repeat of the resolved issue.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 12,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "text": "Accounts that rename nouns like workspace, admin, or member see hardcoded, unlocalized copy from `inviteExpiredMessage` and `alreadyMemberMessage`, which accept an `Account` but never call `term()` despite `src/lib/terminology.ts:1-4`. Replace those literals with `term(account, 'workspace')`, `term(account, 'admin')`, and `term(account, 'member')`, mirroring `seatLimitMessage` on line 4."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 2,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 44756,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage and alreadyMemberMessage hardcode the literal nouns \"workspace\", \"workspace admin\", and \"member\" instead of using term(account, ...), unlike the sibling seatLimitMessage which calls term(). WHY: accounts can rename these nouns (src/lib/terminology.ts:1-11), so an account that calls its workspaces \"classes\" is shown a message referring to a \"workspace\" — the exact failure the term() convention exists to prevent, and the same mistake previously fixed in seatLimitMessage. HOW: build the strings with term(account, 'workspace'), term(account, 'admin'), and term(account, 'member').",
+          "keep": true,
+          "rationale": "Confirmed. src/invites/messages.ts:7-13 hardcode the nouns \"workspace\", \"workspace admin\", and \"member\" while `term` is already imported and src/lib/terminology.ts:1-11 documents that accounts can rename these nouns. The sibling seatLimitMessage (lines 3-5) correctly uses term(), so the omission is a real behavior bug. The earlier decision (round-a-P35) covered only seatLimitMessage lines 3-5; these are different functions at different lines, so this is not a repeat of that entry.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 7,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 1,
+        "after": 1
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "text": "Because `inviteExpiredMessage` and `alreadyMemberMessage` hardcode the literal nouns \"workspace\", \"workspace admin\", and \"member\" instead of calling `term(account, ...)`, an account that renames these nouns (src/lib/terminology.ts:1-11), such as calling workspaces \"classes\", sees wording that contradicts its terminology—the exact failure `term()` exists to prevent and that was already fixed in `seatLimitMessage`. Build both strings with `term(account, 'workspace')`, `term(account, 'admin')`, and `term(account, 'member')`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 3,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 69665,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: alreadyMemberMessage hardcodes \"workspace\" and ignores its account argument, unlike the already-fixed seatLimitMessage in the same file. WHY: accounts that rename the workspace noun (src/lib/terminology.ts) are told the email \"is already a member of this workspace\", using a noun their users never see. HOW: use term(account, 'workspace') in the template, e.g. `${email} is already a member of this ${term(account, 'workspace')}.`",
+          "keep": true,
+          "rationale": "Confirmed: alreadyMemberMessage hardcodes \"workspace\" and never uses its account parameter, while the sibling seatLimitMessage (line 4) uses term(account, 'workspace'), and term() exists in src/lib/terminology.ts. The earlier decision fixed only seatLimitMessage, so this is the same kind of bug in a separate function — a different problem, not a repeat. The failure (users of accounts that rename the noun see the wrong word) is real.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "alreadyMemberMessage|seatLimitMessage",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "alreadyMemberMessage|inviteExpiredMessage",
+                "excludeTests": true
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "export function term|workspace:",
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage hardcodes the nouns \"workspace\" and \"workspace admin\" even though it receives the account and the codebase allows accounts to rename those nouns (src/lib/terminology.ts). WHY: an account that calls its workspaces \"classes\" (and its admins something else) gets an invite-expiry message naming a \"workspace\" that does not exist in its terminology, and the account argument is silently ignored. HOW: build the string with term(account, 'workspace') and term(account, 'admin'), e.g. `This ${term(account, 'workspace')} invite has expired. Ask a ${term(account, 'admin')} to send you a new one.`",
+          "keep": true,
+          "rationale": "Confirmed: src/invites/messages.ts:7-9 receives an Account but returns a hardcoded string with literal \"workspace\" and \"workspace admin\". src/lib/terminology.ts explicitly documents that accounts can rename these nouns and exposes term(account, 'workspace') and term(account, 'admin'). So an account that renames its workspace (e.g. \"class\") gets a message naming a nonexistent \"workspace\", and the account argument is ignored. This is a distinct function from the previously-flagged seatLimitMessage (index 4), so it is a new occurrence, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "export function term|export const term|function term",
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 20,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "text": "Because `inviteExpiredMessage` hardcodes the nouns `workspace` and `workspace admin` while ignoring its `account` argument, accounts that rename those nouns in `src/lib/terminology.ts` receive an invite-expiry message naming a `workspace` that does not exist in their terminology. Build the string with `term(account, 'workspace')` and `term(account, 'admin')` so the message reflects the account's terminology."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/invites/messages.ts",
+          "line": 11,
+          "text": "Unlike the already-fixed `seatLimitMessage` in the same file, `alreadyMemberMessage` hardcodes `workspace` and ignores its `account` argument, so accounts that rename the workspace noun in `src/lib/terminology.ts` are told the email is already a member of a `workspace` their users never see. Use `term(account, 'workspace')` in the template so the message respects the account's terminology."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 4,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 79446,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage accepts `account` but returns a fully literal string that hardcodes 'workspace' (twice) and 'admin', so the account parameter is unused. WHY: src/lib/terminology.ts states user-facing text must never hardcode these nouns; an account that calls its workspaces 'classes' is told 'This workspace invite has expired. Ask a workspace admin to send you a new one.', showing the wrong noun and ignoring its 'admin' rename. HOW: build the string with term(account, 'workspace') and term(account, 'admin').",
+          "keep": true,
+          "rationale": "Confirmed: src/invites/messages.ts:7-9 returns a literal string hardcoding 'workspace' (twice) and 'admin', ignoring the `account` parameter. src/lib/terminology.ts defines Noun including 'admin' and states user-facing text must never hardcode these nouns, with term() as the accessor (already used correctly in the adjacent seatLimitMessage). PreviousDecision #4 covered the separate seatLimitMessage function (lines 3-5), not inviteExpiredMessage — this is a distinct instance, not a repeat of that entry.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage accepts `account` but returns a fully literal string that hardcodes 'workspace' (twice), ignoring the account's configured noun. WHY: accounts that rename the noun (e.g. 'class' per src/lib/terminology.ts) are shown a message about a 'workspace', contradicting the documented contract that user-facing text never hardcodes these nouns. HOW: build the message with term(account, 'workspace') and term(account, 'admin').",
+          "keep": true,
+          "rationale": "Confirmed. src/invites/messages.ts:7-9 returns a literal string hardcoding 'workspace' (twice) while accepting an `account` param. src/lib/terminology.ts exports term() with nouns 'workspace' and 'admin', and the sibling seatLimitMessage already uses term(). The prior decision targeted seatLimitMessage specifically; this is a different function with the same class of failure, so it is not a repeat. Root cause and failure path are factually accurate.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts",
+                "startLine": 1,
+                "endLine": 40
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "export function term|workspace|admin",
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: alreadyMemberMessage accepts `account` but hardcodes 'workspace' and 'member' in its literal, leaving the account's configured nouns unused. WHY: accounts that rename these nouns (e.g. 'class'/'collaborator' per src/lib/terminology.ts) receive terminology-incorrect text, the exact failure mode seatLimitMessage was fixed to avoid. HOW: interpolate term(account, 'workspace') and term(account, 'member').",
+          "keep": true,
+          "rationale": "Confirmed: alreadyMemberMessage accepts an `account` parameter but hardcodes 'member' and 'workspace' in its literal (line 12), while the sibling seatLimitMessage (line 4) correctly interpolates term(account, 'workspace') and term(account, 'member'). terminology.ts documents that user-facing text must never hardcode these nouns, so accounts renaming them get terminology-incorrect text. This is a distinct function/operation from the previous decision on seatLimitMessage (lines 3-5), not a repeat of that same failure.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: alreadyMemberMessage accepts `account` but hardcodes 'workspace' and 'member' in the literal, leaving the account parameter unused. WHY: violates the terminology contract in src/lib/terminology.ts — an account that renames members to 'collaborators' is told the email 'is already a member of this workspace.', showing the wrong nouns for that tenant. HOW: interpolate term(account, 'member') and term(account, 'workspace').",
+          "keep": true,
+          "rationale": "Confirmed factually: alreadyMemberMessage takes `account` but hardcodes \"member\" and \"workspace\", while terminology.ts documents that user-facing text must use term(). Sibling seatLimitMessage already uses term(), proving the intended pattern. PreviousDecision index 4 addressed the same class of issue in seatLimitMessage specifically — a different function/operation — so this is a distinct occurrence, not a repeat.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "alreadyMemberMessage"
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 18,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 4,
+        "after": 4
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "text": "`inviteExpiredMessage` ignores its `account` parameter and hardcodes `workspace` twice and `admin`, so an account that calls workspaces `classes` is shown the wrong nouns and its `admin` rename is ignored, violating `src/lib/terminology.ts`. Build the string with `term(account, 'workspace')` and `term(account, 'admin')`."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/invites/messages.ts",
+          "line": 11,
+          "text": "`alreadyMemberMessage` ignores its `account` parameter and hardcodes `workspace` and `member`, so an account that renames members to `collaborators` receives terminology-incorrect text, violating the contract in `src/lib/terminology.ts`. Interpolate `term(account, 'member')` and `term(account, 'workspace')`."
+        },
+        {
+          "sourceIndex": 2,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "text": "`inviteExpiredMessage` ignores its `account` parameter and hardcodes `workspace` twice, so accounts that rename the noun (e.g. `class` per `src/lib/terminology.ts`) see a message about a `workspace`, contradicting the documented contract. Build the message with `term(account, 'workspace')` and `term(account, 'admin')`."
+        },
+        {
+          "sourceIndex": 3,
+          "severity": "medium",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/invites/messages.ts",
+          "line": 11,
+          "text": "`alreadyMemberMessage` leaves the account's configured nouns unused and hardcodes `workspace` and `member`, so accounts that rename these (e.g. `class`/`collaborator` per `src/lib/terminology.ts`) receive terminology-incorrect text, the same failure mode `seatLimitMessage` was fixed to avoid. Interpolate `term(account, 'workspace')` and `term(account, 'member')`."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "medium",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-v4-flash@fireworks",
+      "rep": 5,
+      "case": "P35-hardcoded-term-new-messages",
+      "family": "rounds",
+      "sandbox": "alive",
+      "ms": 47061,
+      "indexRefs": 0,
+      "verificationEvidence": [
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: alreadyMemberMessage hardcodes the literal noun 'workspace' despite receiving `account: Account` and having term() imported. WHY: an account that renames its workspaces (e.g. 'class') is told the email 'is already a member of this workspace', producing incorrect user-facing text and violating the module's terminology contract. HOW: interpolate term(account, 'workspace') instead of the literal word.",
+          "keep": true,
+          "rationale": "Verified: src/invites/messages.ts:11-13 hardcodes the literal noun \"workspace\" while accepting an `Account` and while `term()` is already imported and used by the sibling `seatLimitMessage` (line 4). terminology.ts documents that user-facing text must never hardcode these nouns (accounts rename \"workspace\" to e.g. \"class\"), so the message is genuinely wrong for renamed accounts. This is a different function/operation than the previous entry that fixed `seatLimitMessage`, so it is not a repeat; it is the same class of bug in a separate location.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "alreadyMemberMessage",
+                "namesOnly": true
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            }
+          ]
+        },
+        {
+          "file": "src/invites/messages.ts",
+          "claim": "WHAT: inviteExpiredMessage hardcodes the literal noun 'workspace' (twice) even though it receives `account: Account` and the module already imports term() for exactly this purpose. WHY: accounts that rename their nouns (e.g. a school calling workspaces 'classes', per src/lib/terminology.ts) are shown the wrong word — 'This workspace invite has expired' — breaking the terminology contract the sibling seatLimitMessage was fixed to honor. HOW: build the message with term(account, 'workspace'); note the `account` parameter is currently unused, which confirms the term() call was dropped.",
+          "keep": true,
+          "rationale": "Confirmed by reading src/invites/messages.ts:7-9: inviteExpiredMessage hardcodes 'workspace' twice, receives `account: Account` (unused), and the module already imports term() from ../lib/terminology, whose contract explicitly says user-facing text never hardcodes these nouns. The bug is real and reachable for accounts that rename nouns. This is NOT a repeat of the earlier seatLimitMessage decision — that entry addressed a different function (lines 3-5); this is the same kind of problem in a separate operation, which the rules treat as a distinct finding.",
+          "tools": [
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/invites/messages.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "grep",
+              "args": {
+                "pattern": "export function term|'workspace'|'member'",
+                "path": "src/lib/terminology.ts"
+              },
+              "failed": false
+            },
+            {
+              "name": "readFile",
+              "args": {
+                "path": "src/lib/terminology.ts",
+                "startLine": 1,
+                "endLine": 20
+              },
+              "failed": false
+            }
+          ]
+        }
+      ],
+      "alreadyPosted": [],
+      "repeatCheck": {
+        "model": "ok"
+      },
+      "sandboxCalls": 10,
+      "sandboxFailed": 0,
+      "anomalies": {
+        "stepsLe2": false,
+        "zeroToolCalls": false,
+        "zeroStrongEvidenceFiles": false,
+        "zeroCoverage": false,
+        "lowCoverage": false,
+        "lowStrongEvidenceFiles": false
+      },
+      "warnings": 0,
+      "verification": {
+        "before": 2,
+        "after": 2
+      },
+      "delivered": [
+        {
+          "sourceIndex": 0,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/invites/messages.ts",
+          "line": 7,
+          "text": "Accounts that rename their nouns — for example a school calling workspaces 'classes' per src/lib/terminology.ts — are shown 'This workspace invite has expired', breaking the terminology contract that the sibling `seatLimitMessage` was fixed to honor. Build the message with `term(account, 'workspace')` (and `term(account, 'admin')` for the admin noun); the currently unused `account` parameter confirms the `term()` call was dropped."
+        },
+        {
+          "sourceIndex": 1,
+          "severity": "low",
+          "linkedById": false,
+          "label": "bug",
+          "marked": false,
+          "file": "src/invites/messages.ts",
+          "line": 11,
+          "text": "An account that renames its workspaces (e.g. 'class') is told the email 'is already a member of this workspace', producing incorrect user-facing text and violating the module's terminology contract. Interpolate `term(account, 'workspace')` instead of the literal word."
+        }
+      ],
+      "claims": [
+        {
+          "id": "invite-messages-term-new-site",
+          "expect": "deliver",
+          "proposed": false,
+          "truth": "true",
+          "delivered": true,
+          "linked": false,
+          "linkedById": false,
+          "marked": false,
+          "severity": "low",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}

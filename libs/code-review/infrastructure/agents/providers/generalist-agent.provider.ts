@@ -1,5 +1,4 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
@@ -9,13 +8,16 @@ import { BaseCodeReviewAgentProvider } from '@libs/code-review/infrastructure/ag
 import {
     ReviewAgentIdentity,
     ReviewAgentInput,
+    ReviewFindingLabel,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { buildGeneralistReviewPrompt } from '@libs/code-review/infrastructure/agents/prompts/review-prompt-blocks';
+
+const hasRepoInstructions = (input: ReviewAgentInput): boolean =>
+    (input.repoInstructions?.files?.length ?? 0) > 0;
 
 @Injectable()
 export class GeneralistAgentProvider extends BaseCodeReviewAgentProvider {
     constructor(
-        promptRunnerService: PromptRunnerService,
         permissionValidationService: PermissionValidationService,
         observabilityService: ObservabilityService,
         @Optional()
@@ -24,7 +26,6 @@ export class GeneralistAgentProvider extends BaseCodeReviewAgentProvider {
         byokErrorCounter?: ByokErrorCounter,
     ) {
         super(
-            promptRunnerService,
             permissionValidationService,
             observabilityService,
             documentationSearchService,
@@ -58,15 +59,22 @@ export class GeneralistAgentProvider extends BaseCodeReviewAgentProvider {
 
     protected getAllowedSuggestionLabels(
         input: ReviewAgentInput,
-    ): Array<'bug' | 'security' | 'performance'> {
-        if (input.requestedCategories?.length) {
-            return input.requestedCategories;
-        }
+    ): ReviewFindingLabel[] {
+        const categories: ReviewFindingLabel[] = input.requestedCategories
+            ?.length
+            ? [...input.requestedCategories]
+            : ['bug', 'security', 'performance'];
 
-        return ['bug', 'security', 'performance'];
+        // Only a run that was given the repository's coding-agent
+        // instructions may report against them.
+        return hasRepoInstructions(input)
+            ? [...categories, 'repo_instruction']
+            : categories;
     }
 
-    protected getCategoryPrompt(): string {
-        return buildGeneralistReviewPrompt();
+    protected getCategoryPrompt(input: ReviewAgentInput): string {
+        return buildGeneralistReviewPrompt({
+            repoInstructions: hasRepoInstructions(input),
+        });
     }
 }

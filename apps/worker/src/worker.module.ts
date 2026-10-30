@@ -1,7 +1,6 @@
 import { DynamicModule, Module, Provider } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
-
-import { LLMModule } from '@kodus/kodus-common/llm';
 
 import { AnalyticsWarehouseModule } from '@libs/ee/analytics-warehouse';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
@@ -28,14 +27,24 @@ import { SharedObservabilityModule } from '@libs/shared/infrastructure/shared-ob
 import { SelfHostedBeaconModule } from '@libs/telemetry/modules/self-hosted-beacon.module';
 import { TelemetryModule } from '@libs/telemetry/modules/telemetry.module';
 import { FeatureGateModule } from '@libs/feature-gate/modules/feature-gate.module';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
+import { LicenseModule } from '@libs/ee/license/license.module';
+import { ParametersModule } from '@libs/organization/modules/parameters.module';
+import { TeamModule } from '@libs/organization/modules/team.module';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
 import { NotificationModule } from '@libs/notifications/modules/notification.module';
 
 import { AnalyticsClassifierCron } from './cron/analytics-classifier.cron';
 import { AnalyticsIngestionCron } from './cron/analytics-ingestion.cron';
+import { KodyRulesAutoPauseCron } from './cron/kody-rules-auto-pause.cron';
+import { KodyRulesAutoPauseDigestCron } from './cron/kody-rules-auto-pause-digest.cron';
 import { SelfHostedBeaconCron } from './cron/self-hosted-beacon.cron';
+import { BusinessLogicRecheckCron } from './cron/business-logic-recheck.cron';
 import { OrgReportCron } from './cron/org-report.cron';
 import { RepoReportCron } from './cron/repo-report.cron';
+import { RefreshCodeAreaRiskMapCron } from './cron/refresh-code-area-risk-map.cron';
 import { resolveWorkerRole, type WorkerRole } from './worker-role';
 import { WorkerDrainService } from './worker-drain.service';
 import { WorkerHealthGuardService } from './worker-health-guard.service';
@@ -53,6 +62,11 @@ export class WorkerModule {
 
         const baseImports = [
             ScheduleModule.forRoot(),
+            // Same rationale as apps/api/src/api.module.ts: the worker used
+            // to inherit EventEmitter2 from CodebaseModule's DryRun import.
+            // One root registration keeps @OnEvent handlers — including the
+            // CrossProcessEventsBridge — bound exactly once.
+            EventEmitterModule.forRoot(),
             SharedConfigModule,
             SharedLogModule,
             SharedObservabilityModule,
@@ -72,12 +86,16 @@ export class WorkerModule {
                     ...baseImports,
                     SharedPostgresModule.forRoot({ poolSize: 12 }),
                     RabbitMQWrapperModule.register({ enableConsumers: true }),
-                    LLMModule.forRoot({ logger: LoggerWrapperService }),
                     WorkflowModule.register({ type: 'worker' }),
                     CodebaseModule,
                     CodeReviewFeedbackModule,
                     AutomationModule,
                     PlatformModule,
+                    PlatformDataModule,
+                    ParametersModule,
+                    TeamModule,
+                    OrganizationModule,
+                    LicenseModule,
                     SandboxModule, // provides SANDBOX_LEASE_MANAGER_TOKEN for OutboxRelayService
                     NotificationModule,
                     SelfHostedBeaconModule,
@@ -90,6 +108,12 @@ export class WorkerModule {
                     ReviewResponseMonitorService,
                     WebhookFailureMonitorService,
                     SelfHostedBeaconCron,
+                    {
+                        provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+                        useClass: ConditionalApprovalAccessService,
+                    },
+                    RefreshCodeAreaRiskMapCron,
+                    BusinessLogicRecheckCron,
                     LangfuseShutdownProvider,
                 ] satisfies Provider[],
             };
@@ -102,7 +126,6 @@ export class WorkerModule {
                 ...baseImports,
                 // LLM is needed by the PR-type classifier; the ingestion
                 // hot path itself doesn't call any model.
-                LLMModule.forRoot({ logger: LoggerWrapperService }),
                 AnalyticsWarehouseModule.forRoot(),
                 // Postgres for cockpit warehouse queries used by the
                 // repo/org report crons.
@@ -134,6 +157,8 @@ export class WorkerModule {
                 AnalyticsClassifierCron,
                 OrgReportCron,
                 RepoReportCron,
+                KodyRulesAutoPauseCron,
+                KodyRulesAutoPauseDigestCron,
                 LangfuseShutdownProvider,
             ] satisfies Provider[],
         };
