@@ -42,10 +42,14 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
     let distributedLockService: { acquire: jest.Mock };
     let incidentManager: { failHeartbeat: jest.Mock };
     let messageBroker: { publishMessage: jest.Mock };
+    let outboxRepository: { create: jest.Mock };
 
     const build = () => {
         messageBroker = {
             publishMessage: jest.fn().mockResolvedValue(undefined),
+        };
+        outboxRepository = {
+            create: jest.fn().mockResolvedValue(undefined),
         };
         jobRepository = {
             findStaleProcessing: jest.fn().mockResolvedValue([]),
@@ -63,7 +67,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         const configService = { get: jest.fn() };
 
         return new OutboxRelayService(
-            {} as any, // outboxRepository
+            outboxRepository as any, // outboxRepository
             {} as any, // inboxRepository
             jobRepository as any, // jobRepository
             messageBroker as any, // messageBroker
@@ -126,6 +130,75 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         const arg = jobRepository.failStaleJobs.mock.calls[0][0];
         expect(arg.uuids).toEqual(['job-dead']);
         expect(arg.errorClassification).toBe(ErrorClassification.PERMANENT);
+    });
+
+    it('gives a lease-less PROCESSING row its own reason, not a lease that never existed', async () => {
+        const service = build();
+        jobRepository.findStaleProcessing.mockResolvedValue([
+            {
+                // A workflow type that never took a lease: failing it is the
+                // legacy path, but the incident text must not claim the lease
+                // expired, which is the guess that made #1830 hard to read.
+                uuid: 'job-never-leased',
+                workflowType: 'CHECK_IMPLEMENTATION',
+                organizationId: 'org-1',
+                startedAt: new Date(Date.now() - 4 * 60 * 60 * 1000),
+                leaseExpiresAt: null,
+                retryCount: 0,
+                maxRetries: 3,
+            },
+        ]);
+        jobRepository.failStaleJobs.mockResolvedValue(1);
+
+        await service.reapStaleProcessingJobs();
+
+        expect(jobRepository.requeueStaleJobs).not.toHaveBeenCalled();
+        expect(jobRepository.failStaleJobs).toHaveBeenCalledTimes(1);
+        const arg = jobRepository.failStaleJobs.mock.calls[0][0];
+        expect(arg.uuids).toEqual(['job-never-leased']);
+        expect(arg.lastError).not.toContain('lease expired');
+        expect(arg.lastError).toContain('without a lease');
+    });
+
+    it('keeps the two dead rows apart in one reap: budget spent, and never leased', async () => {
+        const service = build();
+        jobRepository.findStaleProcessing.mockResolvedValue([
+            {
+                uuid: 'job-budget-spent',
+                workflowType: 'CODE_REVIEW',
+                organizationId: 'org-1',
+                startedAt: new Date(),
+                leaseExpiresAt: new Date(Date.now() - 1000),
+                retryCount: 1,
+                maxRetries: 1,
+            },
+            {
+                uuid: 'job-never-leased',
+                workflowType: 'WEBHOOK',
+                organizationId: 'org-2',
+                startedAt: new Date(),
+                leaseExpiresAt: null,
+                retryCount: 0,
+                maxRetries: 3,
+            },
+        ]);
+        jobRepository.failStaleJobs.mockResolvedValue(1);
+
+        await service.reapStaleProcessingJobs();
+
+        expect(jobRepository.failStaleJobs).toHaveBeenCalledTimes(2);
+        const byUuid = new Map(
+            jobRepository.failStaleJobs.mock.calls.map((call: any[]) => [
+                call[0].uuids[0],
+                call[0].lastError,
+            ]),
+        );
+        expect(byUuid.get('job-budget-spent')).toContain('lease expired');
+        expect(byUuid.get('job-budget-spent')).toContain(
+            'Retry budget exhausted',
+        );
+        expect(byUuid.get('job-never-leased')).toContain('without a lease');
+        expect(byUuid.get('job-never-leased')).not.toContain('lease expired');
     });
 
     it('passes an age cutoff ~ now - 180min for legacy rows', async () => {
@@ -324,7 +397,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         ]);
     });
 
-    it('republishes a workflow.jobs.resumed message for each job actually requeued', async () => {
+    it('queues one outbox resume message per requeued job, so the relay can retry the publish', async () => {
         const service = build();
         jobRepository.findStaleProcessing.mockResolvedValue([
             {
@@ -353,24 +426,27 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
 
         await service.reapStaleProcessingJobs();
 
-        expect(messageBroker.publishMessage).toHaveBeenCalledTimes(2);
-        const keys = messageBroker.publishMessage.mock.calls.map(
-            (c: any[]) => c[0].routingKey,
+        // A row in the outbox, not a publish: the broker failing here used to
+        // leave the job PENDING with no message and nothing to re-drive it.
+        expect(outboxRepository.create).toHaveBeenCalledTimes(2);
+        expect(messageBroker.publishMessage).not.toHaveBeenCalled();
+        const rows = outboxRepository.create.mock.calls.map(
+            (call: any[]) => call[0],
         );
-        expect(keys).toEqual([
+        expect(rows.map((row) => row.routingKey)).toEqual([
             'workflow.jobs.resumed.CODE_REVIEW',
             'workflow.jobs.resumed.CHECK_IMPLEMENTATION',
         ]);
-        // Each message envelopes the mutated jobId and re-drives via a fresh
-        // messageId so the inbox claim is not a no-op.
-        for (const [, msg, opts] of messageBroker.publishMessage.mock
-            .calls as any) {
-            expect(msg.payload.jobId).toBeDefined();
-            expect(msg.messageId).toMatch(/^reclaim-/);
-            expect(opts.persistent).toBe(true);
-            expect(opts.headers['x-resume-reason']).toBe(
-                'stale-job.lease-reclaimed',
-            );
+        // Each row envelopes the mutated jobId and a fresh messageId, so the
+        // inbox claim is not a no-op, and names the job and its type in the
+        // nested payload the relay reads for the AMQP headers.
+        expect(rows.map((row) => row.jobId)).toEqual(['job-code', 'job-impl']);
+        for (const row of rows) {
+            expect(row.payload.event_name).toBe('workflow.jobs.resumed');
+            expect(row.payload.payload.jobId).toBe(row.jobId);
+            expect(row.payload.payload.workflowType).toBeDefined();
+            expect(row.payload.messageId).toMatch(/^reclaim-/);
+            expect(row.nextAttemptAt).toBeInstanceOf(Date);
         }
     });
 
@@ -444,7 +520,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         );
     });
 
-    it('keeps re-publishing when one publish rejects — the reap report still runs', async () => {
+    it('keeps queueing when one outbox write rejects — the reap report still runs', async () => {
         const service = build();
         const jobs = Array.from({ length: 6 }, (_, i) => ({
             uuid: `job-${i}`,
@@ -459,24 +535,24 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         jobRepository.requeueStaleJobs.mockResolvedValue(
             jobs.map((j) => j.uuid),
         );
-        // One broker rejection must not abort the batch nor the cycle: with
+        // One write rejection must not abort the batch nor the cycle: with
         // Promise.all the rejection propagated to the outer catch, so the
-        // remaining messages were never attempted and the high-reap incident
-        // report was skipped entirely.
-        messageBroker.publishMessage
-            .mockRejectedValueOnce(new Error('RabbitMQ is not connected'))
+        // remaining rows were never written and the high-reap incident report
+        // was skipped entirely.
+        outboxRepository.create
+            .mockRejectedValueOnce(new Error('outbox is down'))
             .mockResolvedValue(undefined);
 
         await expect(
             service.reapStaleProcessingJobs(),
         ).resolves.toBeUndefined();
 
-        expect(messageBroker.publishMessage).toHaveBeenCalledTimes(6);
+        expect(outboxRepository.create).toHaveBeenCalledTimes(6);
         // 6 reclaimed > high-reap threshold (5): the cycle reached its report.
         expect(incidentManager.failHeartbeat).toHaveBeenCalledTimes(1);
     });
 
-    it('isolates a synchronous broker throw to its own job', async () => {
+    it('isolates a synchronous outbox throw to its own job', async () => {
         const service = build();
         const jobs = Array.from({ length: 3 }, (_, i) => ({
             uuid: `job-sync-${i}`,
@@ -491,11 +567,11 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         jobRepository.requeueStaleJobs.mockResolvedValue(
             jobs.map((j) => j.uuid),
         );
-        // A broker client that throws synchronously used to break out of the
-        // .map() that built the publish list, so no later job was attempted.
-        messageBroker.publishMessage
+        // A client that throws synchronously used to break out of the .map()
+        // that built the write list, so no later job was attempted.
+        outboxRepository.create
             .mockImplementationOnce(() => {
-                throw new Error('broker channel closed');
+                throw new Error('outbox connection closed');
             })
             .mockResolvedValue(undefined);
 
@@ -503,6 +579,6 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
             service.reapStaleProcessingJobs(),
         ).resolves.toBeUndefined();
 
-        expect(messageBroker.publishMessage).toHaveBeenCalledTimes(3);
+        expect(outboxRepository.create).toHaveBeenCalledTimes(3);
     });
 });

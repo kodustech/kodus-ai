@@ -9,14 +9,6 @@ import type { SimpleLogger } from '@libs/core/log/logger';
 // policy.
 export const JOB_LEASE_TTL_MS = 90_000;
 export const JOB_LEASE_RENEW_INTERVAL_MS = 30_000;
-/**
- * Consecutive renewal failures tolerated before the lease is treated as lost.
- * A single blip is forgiven (the next tick re-renews well within the 90s TTL);
- * a DB outage that spans more than one renewal interval is not, because by then
- * the reaper may reclaim a job whose worker is still alive — a double
- * execution. Two failures is one full interval of confirmed un-renewability.
- */
-export const JOB_LEASE_MAX_CONSECUTIVE_FAILURES = 2;
 
 export interface JobLeaseRenewalOptions {
     /** Abort signal that stops the renewal (parent worker cancellation). */
@@ -47,18 +39,16 @@ export interface JobLeaseRenewalOptions {
      * without `tsc` saying a word (#1902 review).
      */
     organizationId: string;
-    /** Surface a renewal write failure (e.g. transient DB error). */
+    /**
+     * Surface a renewal write failure (e.g. transient DB error). Errors are
+     * reported here and logged, never treated as a lost lease: a throw means
+     * the write did not happen, not that another worker owns the job.
+     */
     onRenewError?: (error: unknown) => void;
     /**
-     * Consecutive failures tolerated before the lease is considered lost
-     * (defaults to `JOB_LEASE_MAX_CONSECUTIVE_FAILURES`).
-     */
-    maxConsecutiveFailures?: number;
-    /**
-     * Invoked ONCE, when `maxConsecutiveFailures` consecutive renewals have
-     * failed. At that point the worker can no longer guarantee it owns the job
-     * — the reaper is free to reclaim it — so the caller must stop running
-     * (abort the use-case) to avoid a double execution.
+     * Invoked ONCE, when a renewal write matched no owned PROCESSING row, i.e.
+     * `renew` resolved `false`. That is the only proof the lease is gone, so it
+     * is the only thing that fires this.
      */
     onLeaseLost?: (error: unknown) => void;
 }
@@ -73,20 +63,19 @@ export interface JobLeaseRenewal {
  * signal aborts.
  *
  * Failures are never silent: each one is logged (when a `logger` is supplied)
- * and surfaced via `onRenewError`. A single transient failure does not crash the
- * running job — the lease merely expires and the reaper reclaims it if the
- * worker truly died. But `maxConsecutiveFailures` failures in a row mean the
- * worker can no longer renew its lease while it is (apparently) alive, which is
- * exactly the window where the reaper would reclaim a live job: at that point
- * renewal stops and `onLeaseLost` fires so the caller can abort the run instead
- * of racing the reaper toward a double execution (#1830 review).
+ * and surfaced via `onRenewError`. A failed renewal never means the lease was
+ * taken: the write did not happen, so ownership is unchanged and the next tick
+ * re-renews well within the TTL. Only a renewal that ANSWERS `false` has
+ * matched no owned row, and only that stops the renewal and fires
+ * `onLeaseLost`, so the caller can abort instead of racing the reaper toward a
+ * second execution (#1830 review). Aborting on errors as well would have
+ * turned every Postgres blip longer than one interval into a mass abort of
+ * every review in flight, on every worker, at once (#1902 review).
  */
 export function startJobLeaseRenewal(
     options: JobLeaseRenewalOptions,
 ): JobLeaseRenewal {
     const intervalMs = options.intervalMs ?? JOB_LEASE_RENEW_INTERVAL_MS;
-    const maxConsecutiveFailures =
-        options.maxConsecutiveFailures ?? JOB_LEASE_MAX_CONSECUTIVE_FAILURES;
 
     let timer: ReturnType<typeof setInterval> | undefined;
     let stopped = false;
@@ -111,7 +100,6 @@ export function startJobLeaseRenewal(
         const metadata: Record<string, unknown> = {
             intervalMs,
             consecutiveFailures,
-            maxConsecutiveFailures,
         };
         if (options.jobId) {
             metadata.jobId = options.jobId;
@@ -128,10 +116,6 @@ export function startJobLeaseRenewal(
         });
 
         options.onRenewError?.(error);
-
-        if (consecutiveFailures >= maxConsecutiveFailures) {
-            loseLease(error);
-        }
     };
 
     /**
@@ -173,7 +157,6 @@ export function startJobLeaseRenewal(
                         const metadata: Record<string, unknown> = {
                             intervalMs,
                             consecutiveFailures,
-                            maxConsecutiveFailures,
                         };
                         if (options.jobId) {
                             metadata.jobId = options.jobId;

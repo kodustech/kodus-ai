@@ -103,8 +103,10 @@ describe('startJobLeaseRenewal (#1830)', () => {
         controller.abort();
     });
 
-    it('treats the lease as lost after N consecutive failures and fires onLeaseLost once, then stops', async () => {
+    it('never treats a failed write as a lost lease, and keeps renewing', async () => {
         const onLeaseLost = jest.fn();
+        const onRenewError = jest.fn();
+        // Four ticks of a Postgres outage: every write throws.
         const renew = jest.fn().mockRejectedValue(new Error('db down'));
         const controller = new AbortController();
 
@@ -112,22 +114,43 @@ describe('startJobLeaseRenewal (#1830)', () => {
             organizationId: 'org-1',
             signal: controller.signal,
             renew,
-            maxConsecutiveFailures: 2,
+            onRenewError,
             onLeaseLost,
         });
 
-        jest.advanceTimersByTime(JOB_LEASE_RENEW_INTERVAL_MS); // 1st failure
-        await Promise.resolve();
+        for (let tick = 1; tick <= 4; tick += 1) {
+            jest.advanceTimersByTime(JOB_LEASE_RENEW_INTERVAL_MS);
+            await Promise.resolve();
+            await Promise.resolve();
+        }
+
+        // A throw means the write never happened, so ownership is unchanged.
+        // Aborting here would take down every review in flight on every worker
+        // for a blip longer than one renewal interval (#1902 review).
         expect(onLeaseLost).not.toHaveBeenCalled();
+        expect(onRenewError).toHaveBeenCalledTimes(4);
+        expect(renew).toHaveBeenCalledTimes(4);
 
-        jest.advanceTimersByTime(JOB_LEASE_RENEW_INTERVAL_MS); // 2nd failure → lost
-        await Promise.resolve();
-        expect(onLeaseLost).toHaveBeenCalledTimes(1);
+        controller.abort();
+    });
 
-        // Renewal stops: a lost lease is terminal for the caller.
-        jest.advanceTimersByTime(JOB_LEASE_RENEW_INTERVAL_MS * 3);
+    it('still loses the lease on the first renewal that answers false', async () => {
+        // The only proof of loss is the guarded write matching no row.
+        const onLeaseLost = jest.fn();
+        const renew = jest.fn().mockResolvedValue(false);
+        const controller = new AbortController();
+
+        startJobLeaseRenewal({
+            organizationId: 'org-1',
+            signal: controller.signal,
+            renew,
+            onLeaseLost,
+        });
+
+        jest.advanceTimersByTime(JOB_LEASE_RENEW_INTERVAL_MS);
         await Promise.resolve();
-        expect(renew).toHaveBeenCalledTimes(2);
+        await Promise.resolve();
+
         expect(onLeaseLost).toHaveBeenCalledTimes(1);
 
         controller.abort();
@@ -146,7 +169,6 @@ describe('startJobLeaseRenewal (#1830)', () => {
             organizationId: 'org-1',
             signal: controller.signal,
             renew,
-            maxConsecutiveFailures: 2,
             onLeaseLost,
         });
 

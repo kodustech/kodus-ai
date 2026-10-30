@@ -3,6 +3,7 @@ import { PrReviewInProgressError } from '@libs/code-review/domain/errors/pr-revi
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import { JobAbortedError } from '@libs/core/workflow/infrastructure/abort-signal-race';
+import { JOB_LEASE_RENEW_INTERVAL_MS } from '@libs/core/workflow/infrastructure/job-lease.renewer';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 
 const TARGET = {
@@ -44,7 +45,9 @@ describe('CodeReviewJobProcessorService', () => {
     beforeEach(() => {
         jobRepository = {
             findOne: jest.fn().mockResolvedValue(makeJob()),
-            update: jest.fn().mockResolvedValue(undefined),
+            // The guarded writes answer whether they matched a row: `true`
+            // here so a run that owns nothing still records and reports.
+            update: jest.fn().mockResolvedValue(true),
         };
         runCodeReviewAutomationUseCase = {
             execute: jest.fn().mockResolvedValue(undefined),
@@ -98,10 +101,12 @@ describe('CodeReviewJobProcessorService', () => {
             expect(jobRepository.update).not.toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.FAILED }),
+                { leaseOwner: expect.any(String) },
             );
             expect(jobRepository.update).not.toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.COMPLETED }),
+                { leaseOwner: expect.any(String) },
             );
             expect(
                 codeReviewHandlerService.notifyCommandReviewRefused,
@@ -125,6 +130,7 @@ describe('CodeReviewJobProcessorService', () => {
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.FAILED }),
+                { leaseOwner: expect.any(String) },
             );
             expect(prReviewDeferralService.defer).not.toHaveBeenCalled();
         });
@@ -150,6 +156,7 @@ describe('CodeReviewJobProcessorService', () => {
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.FAILED }),
+                { leaseOwner: expect.any(String) },
             );
             expect(prReviewDeferralService.defer).not.toHaveBeenCalled();
         });
@@ -167,6 +174,7 @@ describe('CodeReviewJobProcessorService', () => {
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.COMPLETED }),
+                { leaseOwner: expect.any(String) },
             );
         });
     });
@@ -248,6 +256,7 @@ describe('CodeReviewJobProcessorService', () => {
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
                 expect.objectContaining({ status: JobStatus.FAILED }),
+                { noLiveOwner: true },
             );
             expect(notificationService.emit).toHaveBeenCalledTimes(1);
 
@@ -629,16 +638,79 @@ describe('CodeReviewJobProcessorService', () => {
         });
     });
 
-    describe('when the job lease is lost (repeated renewal failures)', () => {
-        it('aborts the run so the reaper cannot reclaim a live job twice', async () => {
+    describe('completion ownership (#1902 review)', () => {
+        it('completes under the lease of its own attempt, not the one that took the job over', async () => {
+            // A row that only accepts a write from the owner it currently
+            // holds: the reaper handed it to a second attempt on this same
+            // worker, which is the case a per-job map got wrong.
+            let rowOwner: string | null = null;
+            const claimOwners: string[] = [];
+            const completionOwners: string[] = [];
+            jobRepository.update.mockImplementation(
+                (_id: string, data: any, opts: any) => {
+                    if (opts?.noLiveOwner) {
+                        rowOwner = data.leaseOwner;
+                        claimOwners.push(rowOwner as string);
+                        return Promise.resolve(true);
+                    }
+                    if (data?.status === JobStatus.COMPLETED) {
+                        completionOwners.push(opts?.leaseOwner);
+                        return Promise.resolve(opts?.leaseOwner === rowOwner);
+                    }
+                    // The renewal: owned only while the row still names us.
+                    if (data?.leaseOwner && data?.status === undefined) {
+                        return Promise.resolve(opts?.leaseOwner === rowOwner);
+                    }
+                    return Promise.resolve(true);
+                },
+            );
+
+            let releaseFirst: () => void = () => undefined;
+            const firstRun = new Promise<void>((resolve) => {
+                releaseFirst = resolve;
+            });
+            runCodeReviewAutomationUseCase.execute
+                .mockImplementationOnce(() => firstRun) // attempt 1 runs
+                .mockImplementationOnce(() => new Promise(() => {})); // attempt 2 stays
+
+            // Flush the claim path, which awaits the read, the gate and the
+            // admission before it writes.
+            const flush = async (): Promise<void> => {
+                for (let i = 0; i < 12; i += 1) {
+                    await Promise.resolve();
+                }
+                await new Promise((resolve) => setImmediate(resolve));
+            };
+
+            const attemptOne = service.process('job-1');
+            await flush();
+            const attemptTwo = service.process('job-1');
+            await flush();
+
+            expect(claimOwners).toHaveLength(2);
+            expect(claimOwners[0]).not.toBe(claimOwners[1]);
+
+            releaseFirst();
+            await attemptOne;
+
+            // The completion names attempt 1's owner: reading a per-job entry
+            // here would have picked attempt 2's, marking COMPLETED under a
+            // lease this run does not hold.
+            expect(completionOwners).toEqual([claimOwners[0]]);
+        });
+    });
+
+    describe('when the job lease is lost', () => {
+        it('aborts the run when a renewal answers that the row is no longer ours', async () => {
             jest.useFakeTimers();
             try {
-                // State writes (PROCESSING / FAILED / COMPLETED carry a
-                // `status`) succeed; only the lease-renewal writes fail.
+                // State writes succeed. The renewal write matches no row, which
+                // is the only proof the lease is gone: the reaper requeued the
+                // job and another worker may already own it.
                 jobRepository.update.mockImplementation(
                     (_id: string, data: any) =>
                         data && data.status === undefined
-                            ? Promise.reject(new Error('db down'))
+                            ? Promise.resolve(false)
                             : Promise.resolve(undefined),
                 );
                 runCodeReviewAutomationUseCase.execute.mockImplementation(
@@ -650,9 +722,8 @@ describe('CodeReviewJobProcessorService', () => {
                 // lease-lost unblock is never momentarily unhandled.
                 const assertion = expect(run).resolves.toBeUndefined();
 
-                // Two consecutive renewal failures (30s cadence) → lease lost.
                 await jest.advanceTimersByTimeAsync(
-                    JOB_LEASE_RENEW_INTERVAL_MS * 3,
+                    JOB_LEASE_RENEW_INTERVAL_MS,
                 );
 
                 // The run must unblock instead of executing a job the reaper
@@ -664,8 +735,8 @@ describe('CodeReviewJobProcessorService', () => {
                 // A lease-lost abort is a reclaimable, not a terminal,
                 // outcome: the reaper requeues the job once the lease
                 // expires, so we must NOT write FAILED/PERMANENT nor tell
-                // the author — otherwise a transient renewal blip becomes
-                // the permanent failure #1830 removes (#1830 review).
+                // the author — otherwise a lost lease becomes the permanent
+                // failure #1830 removes (#1830 review).
                 const statusUpdates = jobRepository.update.mock.calls.filter(
                     ([, data]: [string, any]) => data?.status !== undefined,
                 );

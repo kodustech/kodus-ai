@@ -45,11 +45,6 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
     // host, but it is never the owner itself - see `ownerForAttempt`.
     private readonly instanceId = os.hostname();
 
-    // The lease owner of the attempt that is processing a job. `process` writes
-    // it, `markCompleted` reads it: the router calls that one from outside
-    // `process`, so the owner cannot travel as a parameter.
-    private readonly attemptOwnerByJob = new Map<string, string>();
-
     /**
      * One owner per attempt, not per worker (#1902): if a lease lapses without
      * this process dying - a renewal that hangs, a freeze like the 106s one in
@@ -61,13 +56,6 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
      */
     private ownerForAttempt(): string {
         return `${this.instanceId}:${randomUUID()}`;
-    }
-
-    /** Forget an attempt's owner, unless a later attempt owns the job now. */
-    private forgetAttemptOwner(jobId: string, owner: string): void {
-        if (this.attemptOwnerByJob.get(jobId) === owner) {
-            this.attemptOwnerByJob.delete(jobId);
-        }
     }
 
     constructor(
@@ -89,7 +77,6 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
         // The owner of THIS attempt, written into every guarded statement
         // below (#1902).
         const leaseOwner = this.ownerForAttempt();
-        this.attemptOwnerByJob.set(jobId, leaseOwner);
 
         const job = await this.jobRepository.findOne(jobId);
 
@@ -384,7 +371,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                     leaseLost = true;
                     this.logger.error({
                         message:
-                            'Job lease lost after repeated renewal failures — aborting the run so the reaper can reclaim it without a double execution',
+                            'Job lease lost — the renewal matched no owned row, aborting the run so the reaper can reclaim it without a double execution',
                         context: CodeReviewJobProcessorService.name,
                         error:
                             error instanceof Error
@@ -432,7 +419,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 }
             }
 
-            await this.markCompleted(jobId);
+            await this.completeJob(jobId, leaseOwner);
 
             const durationMs = Date.now() - startTime;
             this.metricsCollector?.recordHistogram(
@@ -779,18 +766,35 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
         return true;
     }
 
+    /**
+     * Terminal transition for a caller that finishes a job outside `process`.
+     *
+     * The contract exposes it, but nothing in the codebase calls it today: the
+     * only completion is the one `process` performs, where the attempt's lease
+     * owner is in scope. A caller here holds no lease, so the write is fenced
+     * with a freshly minted owner that can only match a row this process just
+     * claimed, and otherwise leaves the row alone (#1902 review).
+     */
     async markCompleted(jobId: string, result?: unknown): Promise<void> {
-        // Terminal transition, guarded the same way: a worker that lost its
-        // lease mid-run must not mark COMPLETED a job the reaper already handed
-        // to someone else, or that retry would be swallowed and the row would
-        // look finished while the other worker is still reviewing (#1830
-        // review).
-        // The router calls this from outside `process`, so the owner comes
-        // from the attempt that claimed the job. With none recorded, this call
-        // never held the lease: a fresh owner is used, which cannot match the
-        // row and leaves it to whoever holds it (#1902).
-        const leaseOwner =
-            this.attemptOwnerByJob.get(jobId) ?? this.ownerForAttempt();
+        await this.completeJob(jobId, this.ownerForAttempt(), result);
+    }
+
+    /**
+     * Mark the job COMPLETED under the lease of the attempt that ran it.
+     *
+     * A worker that lost its lease mid-run must not mark COMPLETED a job the
+     * reaper already handed to someone else: that retry would be swallowed and
+     * the row would look finished while the other worker is still reviewing
+     * (#1830 review). The owner travels as an argument, from `process` where the
+     * claim was made: keying it by job id in a map reopened the very race the
+     * per-attempt owner closes, because a second attempt on the same worker
+     * would overwrite the first one's entry (#1902 review).
+     */
+    private async completeJob(
+        jobId: string,
+        leaseOwner: string,
+        result?: unknown,
+    ): Promise<void> {
         const stillOwned = await this.jobRepository.update(
             jobId,
             {
@@ -811,13 +815,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                     instanceId: leaseOwner,
                 },
             });
-            return;
         }
-
-        // Compare-and-delete: the entry is dropped by the completion that used
-        // it, so a second completion for the same attempt resolves nothing and
-        // gets a fresh owner minted, which cannot match the row (#1902 review).
-        this.forgetAttemptOwner(jobId, leaseOwner);
     }
 
     private removeByokConcurrencyGateMetadata(
