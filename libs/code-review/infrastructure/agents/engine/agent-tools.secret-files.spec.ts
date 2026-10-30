@@ -213,6 +213,15 @@ describe('agent tools — secret files of the repository', () => {
         );
     });
 
+    it('keeps a match whose text names a secret file', () => {
+        const lines = [
+            'docs/setup.md:3:Put the certificate in server.pem',
+            'docs/setup.md-4-and the private key in tls.key',
+        ].join('\n');
+
+        expect(withoutSecretFileLines(lines)).toBe(lines);
+    });
+
     it('does not let secret file matches use up the grep result limit', async () => {
         const repo = fs.mkdtempSync(
             path.join(os.tmpdir(), 'kodus-secret-limit-'),

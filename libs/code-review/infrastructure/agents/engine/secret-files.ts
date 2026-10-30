@@ -62,11 +62,14 @@ const REPOSITORY_TAG = /^\[[^\]\s]+\] /;
 
 function lineFromSecretFile(tagged: string): boolean {
     const line = tagged.replace(REPOSITORY_TAG, '');
-    if (isSecretFilePath(line.trim())) return true;
     const boundary = /[:-]\d+[:-]/g;
     let match: RegExpExecArray | null;
+    let prefixed = false;
     while ((match = boundary.exec(line))) {
+        prefixed = true;
         if (isSecretFilePath(line.slice(0, match.index))) return true;
     }
-    return false;
+    // A bare path (namesOnly). A match line is judged by its path alone:
+    // its text can end in `.pem` too.
+    return !prefixed && isSecretFilePath(line.trim());
 }
