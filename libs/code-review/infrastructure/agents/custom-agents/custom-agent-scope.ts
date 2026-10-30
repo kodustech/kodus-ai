@@ -6,6 +6,7 @@ import {
     customAgentSlug,
     type CustomAgentConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { SECRET_FILE_GLOBS } from '@libs/code-review/infrastructure/agents/engine/secret-files';
 
 export { customAgentSlug };
 
@@ -60,23 +61,6 @@ export function ignoredFilesInAgentScope<T extends { filename: string }>(
             ),
     );
 }
-
-// Ignored files no glob hands to an agent: their diff would carry credentials
-// to the model provider. The secret files of the default ignore list, plus
-// the private keys and keystores it does not name.
-const SECRET_FILE_GLOBS = [
-    '**/.env*',
-    '**/*.pem',
-    '**/*.key',
-    '**/*.p12',
-    '**/*.pfx',
-    '**/*.jks',
-    '**/*.keystore',
-    '**/id_rsa*',
-    '**/id_dsa*',
-    '**/id_ecdsa*',
-    '**/id_ed25519*',
-];
 
 /**
  * The ignored files a review hands to its custom agents: those at least one

@@ -6,6 +6,11 @@ import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { createSubmoduleProbe } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
 import {
+    isSecretFilePath,
+    secretFileRefusal,
+    withoutSecretFileLines,
+} from '@libs/code-review/infrastructure/agents/engine/secret-files';
+import {
     findProjectLevelTypeScriptErrors,
     hasLocatedTypeScriptDiagnostic,
     isProjectLevelTypeScriptLine,
@@ -399,10 +404,12 @@ export function buildAgentTools(
                         if (exitCode >= 2) {
                             return `Error searching linked repo ${linked.repository} for "${pattern}"`;
                         }
-                        if (exitCode === 1 || !stdout.trim()) {
+                        // Secret files leave before the cap, so their matches
+                        // never use up the result limit.
+                        const raw = withoutSecretFileLines(stdout).trim();
+                        if (exitCode === 1 || !raw) {
                             return `No matches found in linked repo ${linked.repository}.`;
                         }
-                        const raw = stdout.trim();
                         // Tag paths so the agent knows which repo they came from.
                         const tagged = raw
                             .split('\n')
@@ -475,15 +482,17 @@ export function buildAgentTools(
                         if (exitCode >= 2) {
                             throw new Error('rg error');
                         }
+                        // Secret files leave before the cap, so their matches
+                        // never use up the result limit.
+                        const raw = withoutSecretFileLines(stdout).trim();
                         // exit code 1 = no matches (not an error)
-                        if (exitCode === 1 || !stdout.trim()) {
+                        if (exitCode === 1 || !raw) {
                             return withSubmoduleNote(
                                 'No matches found.',
                                 searchPath,
                             );
                         }
                         if (exitCode === 0) {
-                            const raw = stdout.trim();
                             if (namesOnly) {
                                 return raw
                                     .split('\n')
@@ -526,6 +535,7 @@ export function buildAgentTools(
                         searchPath,
                     );
                 }
+                result = withoutSecretFileLines(result);
                 if (namesOnly) {
                     // The note has to come BEFORE the file-name mapping, and
                     // on the SAME predicate the note itself uses. An empty
@@ -622,6 +632,18 @@ export function buildAgentTools(
                     const target = safeLinkedPath(linked.rootPath, filePath);
                     if (!target.ok) return `Error: ${target.error}`;
                     try {
+                        // A symlink is not read, as the local sandbox's own
+                        // read refuses one: the secret-file guard checks the
+                        // name the agent asked for, not the file it points to.
+                        const link = await remoteCommands.exec(
+                            `find ${shSingleQuote(target.abs)} -maxdepth 0 -type l`,
+                        );
+                        if (
+                            link.exitCode === 0 &&
+                            link.stdout.trim() === target.abs
+                        ) {
+                            return `Error: ${filePath} in linked repo ${linked.repository} is a symlink; read the file it points to instead.`;
+                        }
                         const cmd =
                             startLine === 0 && endLine === 0
                                 ? `cat ${shSingleQuote(target.abs)}`
@@ -1712,10 +1734,52 @@ fi
         );
     }
 
+    guardSecretFiles(tools);
+
     logger.log({
         message: `[AGENT-TOOLS] registered=${Object.keys(tools).join(',')} gitHubToken=${gitHubToken ? 'yes' : 'no'}`,
         context: 'agent-tools.factory',
     });
 
     return tools;
+}
+
+/**
+ * No tool returns the content of a secret file the repository committed
+ * (secret-files.ts): it would reach the model provider and the trace. The
+ * readers refuse the path, and search output drops the file's lines, on
+ * every route a tool takes (linked repositories, sandbox rg, the provider's
+ * grep).
+ */
+function guardSecretFiles(tools: Record<string, any>): void {
+    for (const name of ['readFile', 'readReference']) {
+        const tool = tools[name];
+        if (!tool) continue;
+        const execute = tool.execute;
+        tool.execute = async (args: any) => {
+            const filePath = String(
+                args?.path || args?.filePath || args?.file || '',
+            );
+            return isSecretFilePath(filePath)
+                ? secretFileRefusal(filePath)
+                : execute(args);
+        };
+    }
+    for (const name of ['grep', 'getCallers']) {
+        const tool = tools[name];
+        if (!tool) continue;
+        const execute = tool.execute;
+        tool.execute = async (args: any) => {
+            // Every alias grep reads its path from: a search scoped to one
+            // file prints its lines without the file name.
+            const searchPath = String(
+                args?.path || args?.directory || args?.dir || '',
+            );
+            if (isSecretFilePath(searchPath)) {
+                return secretFileRefusal(searchPath);
+            }
+            const out = await execute(args);
+            return typeof out === 'string' ? withoutSecretFileLines(out) : out;
+        };
+    }
 }

@@ -1,0 +1,75 @@
+import { posix } from 'node:path';
+
+import { isFileMatchingGlobCaseInsensitive } from '@libs/common/utils/glob-utils';
+
+/**
+ * Files that hold credentials when a repository commits them: env files,
+ * private keys and keystores. Their content would reach the model provider
+ * and the review's trace, so no agent tool returns it.
+ */
+export const SECRET_FILE_GLOBS = [
+    '**/.env*',
+    '**/*.pem',
+    '**/*.key',
+    '**/*.p12',
+    '**/*.pfx',
+    '**/*.jks',
+    '**/*.keystore',
+    '**/id_rsa*',
+    '**/id_dsa*',
+    '**/id_ecdsa*',
+    '**/id_ed25519*',
+];
+
+/** Env file templates: variable names, not values. */
+const ENV_TEMPLATE = /(^|\/)\.env\.(example|sample|template|dist)$/i;
+
+export function isSecretFilePath(filePath: string): boolean {
+    // The sandbox resolves `a/./b` and `a/../b`: every spelling is one file.
+    const normalized = posix.normalize(filePath).replace(/^\.?\/+/, '');
+    if (!normalized || ENV_TEMPLATE.test(normalized)) return false;
+    return isFileMatchingGlobCaseInsensitive(normalized, SECRET_FILE_GLOBS);
+}
+
+export function secretFileRefusal(filePath: string): string {
+    return `${filePath} is a secret file (credentials or keys); its content is not shown.`;
+}
+
+/**
+ * Drops the lines of grep output that come from a secret file. rg prints
+ * `path:line:text` for a match and `path-line-text` for a context line;
+ * with namesOnly, the bare path; a linked repository's lines carry its tag. A path can hold ":" or "-" itself, so every
+ * candidate prefix ending before a line number is tested.
+ */
+export function withoutSecretFileLines(output: string): string {
+    const lines = output.split('\n');
+    const kept = lines.filter((line) => !lineFromSecretFile(line));
+    if (kept.length === lines.length) return output;
+    // A `--` group separator is kept only between two groups that remain.
+    const out: string[] = [];
+    for (const line of kept) {
+        if (line === '--' && (!out.length || out[out.length - 1] === '--')) {
+            continue;
+        }
+        out.push(line);
+    }
+    if (out[out.length - 1] === '--') out.pop();
+    return out.join('\n');
+}
+
+/** Linked-repository grep tags each line with `[owner/repo] `. */
+const REPOSITORY_TAG = /^\[[^\]\s]+\] /;
+
+function lineFromSecretFile(tagged: string): boolean {
+    const line = tagged.replace(REPOSITORY_TAG, '');
+    const boundary = /[:-]\d+[:-]/g;
+    let match: RegExpExecArray | null;
+    let prefixed = false;
+    while ((match = boundary.exec(line))) {
+        prefixed = true;
+        if (isSecretFilePath(line.slice(0, match.index))) return true;
+    }
+    // A bare path (namesOnly). A match line is judged by its path alone:
+    // its text can end in `.pem` too.
+    return !prefixed && isSecretFilePath(line.trim());
+}
