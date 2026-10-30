@@ -3,7 +3,15 @@ import { Injectable } from '@nestjs/common';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { shSingleQuote } from '../shell-quote';
 
-export const KODUS_GRAPH_VERSION = '0.3.0';
+export const KODUS_GRAPH_VERSION = '0.3.3';
+
+// How much of the call graph reaches the finder's prompt: changed functions
+// listed (highest risk first) and direct callees per function. Each one adds
+// prompt tokens on every review that has a graph.
+export const KODUS_GRAPH_CONTEXT_BUDGET = {
+    maxFunctions: 15,
+    maxCallees: 5,
+};
 
 export const KODUS_GRAPH_TIMEOUTS = {
     install: 120_000,
@@ -169,7 +177,8 @@ export class KodusGraphCli {
             ? ` --graph ${shSingleQuote(graphPath)}`
             : '';
         const diffArg = diffPath ? ` --diff ${shSingleQuote(diffPath)}` : '';
-        const cmd = `kodus-graph context --files ${filesArg}${graphArg}${diffArg} --repo-dir . --format xml --out ${shSingleQuote(outPath)}`;
+        const budgetArg = ` --max-functions ${KODUS_GRAPH_CONTEXT_BUDGET.maxFunctions} --max-callees ${KODUS_GRAPH_CONTEXT_BUDGET.maxCallees}`;
+        const cmd = `kodus-graph context --files ${filesArg}${graphArg}${diffArg} --repo-dir . --format xml${budgetArg} --out ${shSingleQuote(outPath)}`;
 
         const result = await sandbox.run(
             [

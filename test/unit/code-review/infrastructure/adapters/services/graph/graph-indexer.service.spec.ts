@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { GraphIndexerService } from '@libs/code-review/infrastructure/adapters/services/graph/graph-indexer.service';
-import { KodusGraphCli } from '@libs/code-review/infrastructure/adapters/services/graph/kodus-graph-cli';
+import {
+    KODUS_GRAPH_VERSION,
+    KodusGraphCli,
+} from '@libs/code-review/infrastructure/adapters/services/graph/kodus-graph-cli';
 import { AstGraphRepository } from '@libs/code-review/infrastructure/adapters/repositories/astGraph.repository';
 import {
     IRepositoryService,
@@ -141,7 +144,7 @@ describe('GraphIndexerService', () => {
         it('should find preinstalled kodus-graph through the Bun global bin path', async () => {
             mockSandbox.run
                 .mockResolvedValueOnce({
-                    stdout: '/home/node/.bun/bin/kodus-graph\n0.3.0',
+                    stdout: `/home/node/.bun/bin/kodus-graph\n${KODUS_GRAPH_VERSION}`,
                     stderr: '',
                     exitCode: 0,
                 })
