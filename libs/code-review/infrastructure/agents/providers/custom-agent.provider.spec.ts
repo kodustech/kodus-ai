@@ -675,6 +675,20 @@ describe('buildCustomAgentPrompt', () => {
     });
 });
 
+describe('buildCustomAgentPrompt — no sandbox', () => {
+    it('does not ask an agent without the repository to investigate it', () => {
+        expect(buildCustomAgentPrompt(config())).toContain(
+            'Investigate the codebase before reporting',
+        );
+        const prompt = buildCustomAgentPrompt(config(), undefined, {
+            readsRepository: false,
+        });
+        expect(prompt).not.toContain('Investigate the codebase');
+        expect(prompt).toContain('evidence visible in the diff');
+        expect(prompt).toContain('returned by the tools you are given');
+    });
+});
+
 describe('buildCustomAgentPrompt — scope', () => {
     it('names the files the agent reviews and limits findings to them', () => {
         const prompt = buildCustomAgentPrompt(config(), [

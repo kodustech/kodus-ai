@@ -57,6 +57,8 @@ export function buildCustomAgentPrompt(
             previous_filename?: string;
         }
     >,
+    /** False when the review has no sandbox: the agent sees only the diff. */
+    options: { readsRepository?: boolean } = {},
 ): string {
     const instructions = (agent.instructions || '')
         .replace(/<\/?TeamInstructions>/gi, '')
@@ -95,8 +97,12 @@ ${files
     Read any other file for context, but report findings only on these files. A renamed file with no diff still counts: check what the move breaks, such as its relative imports.
   </Scope>`
         : '';
+    const evidence =
+        options.readsRepository === false
+            ? 'Back each finding with evidence visible in the diff and the file contents shown, or returned by the tools you are given; this review cannot read the rest of the repository.'
+            : 'Investigate the codebase before reporting, and back each finding with evidence from the code.';
     return `  <Mission>
-    You are the team's "${agent.name}" reviewer. Find the problems the team's instructions below ask you to look for, in the code this pull request changes. Investigate the codebase before reporting, and back each finding with evidence from the code.
+    You are the team's "${agent.name}" reviewer. Find the problems the team's instructions below ask you to look for, in the code this pull request changes. ${evidence}
   </Mission>
 
   <TeamInstructions>
@@ -369,7 +375,9 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
     }
 
     protected getCategoryPrompt(input?: ReviewAgentInput): string {
-        return buildCustomAgentPrompt(this.agent, input?.changedFiles);
+        return buildCustomAgentPrompt(this.agent, input?.changedFiles, {
+            readsRepository: !input || !!input.remoteCommands,
+        });
     }
 
     protected getUsageRunName(): string {
