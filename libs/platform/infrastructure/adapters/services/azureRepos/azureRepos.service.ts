@@ -118,7 +118,10 @@ import {
     EMPTY_REPO_SEED_CONTENT,
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
-import { AzureReposRequestHelper } from './azure-repos-request-helper';
+import {
+    AzureReposRequestHelper,
+    getAzureDevOpsBaseURL,
+} from './azure-repos-request-helper';
 import { listingFailed } from '../repository-listing';
 
 // Sequence for the webhook-pass id in the instrumentation logs, so
@@ -2478,7 +2481,7 @@ export class AzureReposService implements Omit<
             const { orgName, token } = authDetails;
 
             const instance = axios.create({
-                baseURL: `https://vssps.dev.azure.com/${orgName}`,
+                baseURL: getAzureDevOpsBaseURL(orgName, true),
                 headers: {
                     'Authorization': `Basic ${Buffer.from(`:${decrypt(token)}`).toString('base64')}`,
                     'Content-Type': 'application/json',
