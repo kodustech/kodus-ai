@@ -15,6 +15,12 @@ import { FileChange } from '@libs/core/infrastructure/config/types/general/codeR
  * What is left reads like a normal push: an already reviewed `+` line stays
  * as context, an already reviewed `-` line is left out, and a hunk with
  * nothing new is dropped.
+ *
+ * #2319: a change line of the previous diff that the current diff no longer
+ * carries cannot be represented here. It is either a revert (the push took an
+ * added line away) or a change the base branch absorbed, and the two diffs
+ * look the same. The result names those files in `revertedFiles` so the caller
+ * can review the whole current PR instead of skipping the push.
  */
 export interface RebaseInterdiffResult {
     /** What is left to review: changed files, each with only its new lines. */
@@ -25,6 +31,9 @@ export interface RebaseInterdiffResult {
     partialFiles: string[];
     /** Files too rewritten to compare within the bound; reviewed whole. */
     uncomparedFiles: string[];
+    /** Files carrying a reviewed change the current diff no longer has. Their
+     *  removals cannot be read from an interdiff, so the PR is reviewed whole. */
+    revertedFiles: string[];
     hunksKept: number;
     hunksDropped: number;
 }
@@ -163,6 +172,28 @@ function reviewedFlags(
     return flags;
 }
 
+function changeLineCounts(hunks: Hunk[]): Map<string, number> {
+    const counts = new Map<string, number>();
+    for (const hunk of hunks) {
+        for (const line of hunk.lines) {
+            if (!isChange(line)) continue;
+            counts.set(line, (counts.get(line) ?? 0) + 1);
+        }
+    }
+    return counts;
+}
+
+/** How many change lines of `previous` the current diff lost. A moved change
+ *  keeps its line and does not count: only a removal does (#2319). */
+function missingChangeLines(previous: Hunk[], current: Hunk[]): number {
+    const now = changeLineCounts(current);
+    let missing = 0;
+    for (const [line, count] of changeLineCounts(previous)) {
+        missing += Math.max(0, count - (now.get(line) ?? 0));
+    }
+    return missing;
+}
+
 /** The hunk with reviewed lines turned to context (`+`) or left out (`-`);
  *  null when nothing in it is new. */
 function narrow(hunk: Hunk, reviewed: () => boolean): Hunk | null {
@@ -211,10 +242,12 @@ export function rebaseInterdiff(
         unchangedFiles: [],
         partialFiles: [],
         uncomparedFiles: [],
+        revertedFiles: [],
         hunksKept: 0,
         hunksDropped: 0,
     };
     const previousByName = new Map(previous.map((f) => [f.filename, f]));
+    const compared = new Set<string>();
 
     for (const file of current) {
         const before =
@@ -222,20 +255,26 @@ export function rebaseInterdiff(
             (file.previous_filename
                 ? previousByName.get(file.previous_filename)
                 : undefined);
+        if (before) compared.add(before.filename);
         const hunks = file.patch ? splitHunks(file.patch) : [];
         if (!before?.patch || !hunks.length) {
             result.files.push(file);
             continue;
         }
 
-        const flags = reviewedFlags(
-            changesOf(hunks),
-            changesOf(splitHunks(before.patch)),
-        );
+        const previousHunks = splitHunks(before.patch);
+        const flags = reviewedFlags(changesOf(hunks), changesOf(previousHunks));
         if (!flags) {
             result.uncomparedFiles.push(file.filename);
             result.files.push(file);
             continue;
+        }
+        // #2319: a reviewed change line the current diff no longer carries is
+        // either reverted by the push or absorbed by the base branch, and the
+        // two diffs look alike. An interdiff cannot show the removal, so the
+        // caller has to review the whole current PR instead.
+        if (missingChangeLines(previousHunks, hunks) > 0) {
+            result.revertedFiles.push(file.filename);
         }
         let next = 0;
         const reviewed = () => flags[next++];
@@ -261,6 +300,15 @@ export function rebaseInterdiff(
                 changes: additions + deletions,
             });
         }
+    }
+
+    // A file the current diff does not list at all: every change it carried is
+    // gone from the PR. Same signal as above, and the same reason it cannot be
+    // read as an interdiff (#2319).
+    for (const before of previous) {
+        if (compared.has(before.filename) || !before.patch) continue;
+        if (!changesOf(splitHunks(before.patch)).length) continue;
+        result.revertedFiles.push(before.filename);
     }
     return result;
 }

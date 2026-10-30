@@ -506,4 +506,83 @@ describe('rebaseInterdiff', () => {
 
         expect(result.files).toEqual([]);
     });
+
+    it('names the file when the push drops a line the review had added (#2319)', () => {
+        const before = hunk(
+            '@@ -1,3 +1,4 @@ function pay()',
+            ' const order = find(id);',
+            '+if (!order) return;',
+            '+log(order.id);',
+            ' }',
+        );
+        const after = hunk(
+            '@@ -1,3 +1,4 @@ function pay()',
+            ' const order = find(id);',
+            '+log(order.id);',
+            ' }',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/pay.ts', after)],
+            [file('src/pay.ts', before)],
+        );
+
+        // What is left to review is unchanged, and that was the bug: the run
+        // skipped with "No changed files". The removal itself has to be
+        // reviewed, so the file is named for a full review instead.
+        expect(result.files).toEqual([]);
+        expect(result.unchangedFiles).toEqual(['src/pay.ts']);
+        expect(result.revertedFiles).toEqual(['src/pay.ts']);
+    });
+
+    it('names a file whose changes the push took out of the PR diff entirely', () => {
+        const before = hunk(
+            '@@ -1,3 +1,4 @@ function pay()',
+            ' const order = find(id);',
+            '+if (!order) return;',
+            ' }',
+        );
+
+        const result = rebaseInterdiff([], [file('src/pay.ts', before)]);
+
+        expect(result.files).toEqual([]);
+        expect(result.revertedFiles).toEqual(['src/pay.ts']);
+    });
+
+    it('names a file when a removed base line comes back', () => {
+        const before = hunk('@@ -1,3 +1,2 @@', ' a', '-old', ' c');
+        const after = hunk('@@ -1,3 +1,2 @@', ' a', ' c');
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        expect(result.revertedFiles).toEqual(['src/a.ts']);
+    });
+
+    it('does not name a file when the change only moved', () => {
+        const before = hunk(
+            '@@ -10,3 +10,4 @@ function a()',
+            ' const x = 1;',
+            '+newCall();',
+            ' return x;',
+        );
+        const after = hunk(
+            '@@ -40,3 +40,4 @@ function b()',
+            ' const z = 1;',
+            '+newCall();',
+            ' return z;',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        // The line is still in the diff, so nothing was removed: the moved
+        // change is reviewed again in its new place, as before.
+        expect(result.revertedFiles).toEqual([]);
+        expect(result.files).toHaveLength(1);
+    });
 });
