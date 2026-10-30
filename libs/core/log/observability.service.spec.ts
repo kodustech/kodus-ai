@@ -163,3 +163,27 @@ describe('ObservabilityService.runAiSdkLLMInSpan', () => {
         expect(usageAttrs()).toHaveLength(0);
     });
 });
+
+describe('ObservabilityService.beforeApplicationShutdown', () => {
+    it('waits for every observability instance to finish shutting down', async () => {
+        const service = new ObservabilityService({ get: jest.fn() } as any);
+        let finish!: () => void;
+        const shutdown = jest.fn(
+            () => new Promise<void>((resolve) => (finish = resolve)),
+        );
+        (service as any).instances.set('k', { shutdown });
+
+        let done = false;
+        const hook = service.beforeApplicationShutdown().then(() => {
+            done = true;
+        });
+        await Promise.resolve();
+
+        expect(shutdown).toHaveBeenCalledTimes(1);
+        expect(done).toBe(false);
+
+        finish();
+        await hook;
+        expect(done).toBe(true);
+    });
+});
