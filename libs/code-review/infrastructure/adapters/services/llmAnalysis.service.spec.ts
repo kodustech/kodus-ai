@@ -44,6 +44,7 @@ import { setLlmObservability } from '@libs/llm/llm-observability';
 import { LLM } from '@libs/llm/llm';
 import { ReviewModeResponse } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { prompt_severity_analysis_user } from '@libs/common/utils/prompts/severityAnalysis';
+import { estimateTokens } from './utils/token-estimator';
 import { prompt_validateImplementedSuggestions } from '@libs/common/utils/prompts';
 
 // runAiSdkLLMInSpan just runs the exec and returns its result — one span path.
@@ -192,6 +193,78 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             // 2026-09-16, root cause of the implementation_rate_pct drop) —
             // LLM.run must see it unset to omit the field.
             expect(arg.system).toBeUndefined();
+        });
+
+        it('splits an oversized diff into batches that each fit the BYOK slot', async () => {
+            const bigPatch = (name: string) =>
+                `File: ${name}\n${'+ const x = 1;\n'.repeat(1500)}`;
+            const codePatch = [
+                bigPatch('a.ts'),
+                bigPatch('b.ts'),
+                bigPatch('c.ts'),
+                bigPatch('unrelated.ts'),
+            ].join('\n\n');
+            const sugg = [
+                { id: 'a', relevantFile: 'a.ts' },
+                { id: 'b', relevantFile: 'b.ts' },
+                { id: 'c', relevantFile: 'c.ts' },
+            ] as any[];
+            const slot = { ...byokConfig, maxInputTokens: 12000 };
+            runSpy.mockImplementation(async (arg: any) => ({
+                codeSuggestions: [...sugg]
+                    .filter((x) => arg.user.includes(`"${x.id}"`))
+                    .map((x) => ({
+                        id: x.id,
+                        relevantFile: x.relevantFile,
+                        implementationStatus: 'implemented',
+                    })),
+            }));
+            const service = buildService();
+            jest.spyOn(
+                (service as any).llmResponseProcessor,
+                'processResponse',
+            ).mockImplementation((_o: any, _n: any, raw: string) =>
+                JSON.parse(raw),
+            );
+
+            const out = await service.validateImplementedSuggestions(
+                org,
+                77,
+                slot,
+                codePatch,
+                sugg,
+            );
+
+            expect(runSpy.mock.calls.length).toBeGreaterThan(1);
+            for (const [arg] of runSpy.mock.calls) {
+                expect(estimateTokens(arg.user)).toBeLessThanOrEqual(12000);
+                expect(arg.user).not.toContain('unrelated.ts');
+            }
+            expect(out.map((x) => x.id).sort()).toEqual(['a', 'b', 'c']);
+        });
+
+        it('cuts a single patch that alone exceeds the slot budget', async () => {
+            const codePatch = `File: a.ts\n${'+ const x = 1;\n'.repeat(20000)}`;
+            const sugg = [{ id: 'a', relevantFile: 'a.ts' }] as any[];
+            runSpy.mockResolvedValue({ codeSuggestions: [] });
+            const service = buildService();
+            jest.spyOn(
+                (service as any).llmResponseProcessor,
+                'processResponse',
+            ).mockReturnValue({ codeSuggestions: [] });
+
+            await service.validateImplementedSuggestions(
+                org,
+                77,
+                { ...byokConfig, maxInputTokens: 12000 },
+                codePatch,
+                sugg,
+            );
+
+            expect(runSpy).toHaveBeenCalledTimes(1);
+            expect(
+                estimateTokens(runSpy.mock.calls[0][0].user),
+            ).toBeLessThanOrEqual(12000);
         });
 
         it('returns the parsed implemented-status suggestions on success', async () => {
