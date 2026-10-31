@@ -91,6 +91,9 @@ export class ConvertPendingUpdatesToNewUseCase {
                     resolvedAt: undefined,
                     resolvedBy: undefined,
                     centralizedConfig: undefined,
+                    // The new rule has no detector yet; a stale compileAttempt would make
+                    // the compile gate skip it. contextNeed is left in place on purpose.
+                    compileAttempt: undefined,
                 },
                 organizationId,
                 userInfo,
