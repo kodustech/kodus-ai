@@ -21,6 +21,7 @@ import {
     type FixStatus,
 } from './enrich-content';
 import { enrichDeterministic } from './enrich-deterministic';
+import { convertToUnifiedDiffWithLineNumbers } from '@libs/common/utils/patch';
 import { createLogger } from '@libs/core/log/logger';
 
 const logger = createLogger('EnrichSuggestions');
@@ -31,7 +32,12 @@ export const ENRICH_WINDOW_LINES = 60;
 /** Enrichment calls in flight per review. */
 export const ENRICH_CONCURRENCY = 5;
 
-type EnrichableFile = { filename: string; fileContent?: string; patch?: string };
+type EnrichableFile = {
+    filename: string;
+    fileContent?: string;
+    patch?: string;
+    patchWithLinesStr?: string;
+};
 
 export type EnrichCounts = {
     enriched: number;
@@ -58,6 +64,42 @@ export function numberedWindow(
         .join('\n');
 }
 
+const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+
+/** The new-side lines of a unified diff (added and context), by line number
+ *  in the file at the head. */
+export function newSideLines(patch: string): Map<number, string> {
+    const out = new Map<number, string>();
+    let line = 0;
+    for (const raw of (patch || '').split('\n')) {
+        const header = HUNK_HEADER.exec(raw);
+        if (header) {
+            line = Number(header[1]);
+            continue;
+        }
+        if (!line || raw.startsWith('-') || raw.startsWith('\\')) continue;
+        out.set(line, raw.startsWith('+') || raw.startsWith(' ') ? raw.slice(1) : raw);
+        line++;
+    }
+    return out;
+}
+
+/** The cited lines, when every one of them is on the new side of the diff. */
+function citedFromPatch(
+    patch: string,
+    start: number,
+    end: number,
+): string {
+    const lines = newSideLines(patch);
+    const cited: string[] = [];
+    for (let n = start; n <= end; n++) {
+        const l = lines.get(n);
+        if (l === undefined) return '';
+        cited.push(l);
+    }
+    return cited.join('\n');
+}
+
 /** What the enrichment call receives for one suggestion, built as production does. */
 export function buildEnrichmentInput(
     suggestion: Partial<CodeSuggestion>,
@@ -67,6 +109,26 @@ export function buildEnrichmentInput(
     const deterministic = enrichDeterministic(suggestion, content);
     const start = suggestion.relevantLinesStart ?? 1;
     const end = suggestion.relevantLinesEnd ?? start;
+    // A review sent as a diff (the CLI's) has no file content: the cited code
+    // comes from the diff's new side and the window is the diff numbered by
+    // head line, what the finder saw on main.
+    if (content == null && file?.patch) {
+        return {
+            finding: {
+                label: suggestion.label,
+                relevantFile: suggestion.relevantFile,
+                relevantLinesStart: suggestion.relevantLinesStart,
+                relevantLinesEnd: suggestion.relevantLinesEnd,
+                suggestionContent: suggestion.suggestionContent,
+            },
+            existingCode: citedFromPatch(file.patch, start, end),
+            language: deterministic.language,
+            fileWindow:
+                file.patchWithLinesStr ||
+                convertToUnifiedDiffWithLineNumbers(file.patch, file),
+            filePatch: file.patch,
+        };
+    }
     return {
         finding: {
             label: suggestion.label,

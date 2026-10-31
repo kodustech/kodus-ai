@@ -45,6 +45,27 @@ describe('buildEnrichmentInput', () => {
         });
     });
 
+    it('takes the cited code and a numbered window from the diff when the review has no file content (CLI)', () => {
+        const patch = '@@ -10,3 +10,4 @@\n ctx a\n-old b\n+new b\n+new c\n ctx d';
+        const input = buildEnrichmentInput(
+            finding({ relevantLinesStart: 11, relevantLinesEnd: 12 }),
+            { filename: 'src/orders.ts', patch },
+        );
+        expect(input.existingCode).toBe('new b\nnew c');
+        expect(input.fileWindow).toContain('    11 +new b');
+        expect(input.fileWindow).toContain('    12 +new c');
+        expect(input.filePatch).toBe(patch);
+    });
+
+    it('leaves the cited code empty when the cited lines are not all on the diff', () => {
+        const patch = '@@ -10,2 +10,2 @@\n ctx a\n+new b';
+        const input = buildEnrichmentInput(
+            finding({ relevantLinesStart: 11, relevantLinesEnd: 14 }),
+            { filename: 'src/orders.ts', patch },
+        );
+        expect(input.existingCode).toBe('');
+    });
+
     it('sends no code and no window when the file is not at the head', () => {
         const input = buildEnrichmentInput(finding(), undefined);
         expect(input.existingCode).toBe('');
