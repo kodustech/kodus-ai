@@ -598,15 +598,14 @@ describe('ValidateConfigStage — manual cadence with a review already running',
     const matches = (value: string, filter: any) => {
         if (filter === undefined) return true;
         if (Array.isArray(filter)) return filter.includes(value);
-        if (filter?._type === 'in') return filter._value.includes(value);
-        if (filter?._type === 'not') return value !== filter._value;
         return value === filter;
     };
-    const filterRows = (filter: any) =>
+    const filterRows = (filter: any, excludeUuid?: string) =>
         executions.filter(
             (e) =>
                 matches(e.status, filter.status) &&
-                matches(e.uuid, filter.uuid),
+                matches(e.uuid, filter.uuid) &&
+                e.uuid !== excludeUuid,
         );
 
     const buildContext = (cadence: string): CodeReviewPipelineContext =>
@@ -645,9 +644,9 @@ describe('ValidateConfigStage — manual cadence with a review already running',
                     provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
                     useValue: {
                         findLatestExecutionByFilters: jest.fn(
-                            async (filter) => filterRows(filter)[0] ?? null,
+                            async (filter, excludeUuid) =>
+                                filterRows(filter, excludeUuid)[0] ?? null,
                         ),
-                        find: jest.fn(async (filter) => filterRows(filter)),
                     },
                 },
                 {
