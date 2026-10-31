@@ -42,7 +42,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
     let distributedLockService: { acquire: jest.Mock };
     let incidentManager: { failHeartbeat: jest.Mock };
     let messageBroker: { publishMessage: jest.Mock };
-    let outboxRepository: { create: jest.Mock };
+    let outboxRepository: { create: jest.Mock; createMany: jest.Mock };
     let dataSource: { transaction: jest.Mock };
     let transactionManager: { marker: string };
     let transactionOutcomes: string[];
@@ -53,6 +53,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         };
         outboxRepository = {
             create: jest.fn().mockResolvedValue(undefined),
+            createMany: jest.fn().mockResolvedValue([]),
         };
         jobRepository = {
             findStaleProcessing: jest.fn().mockResolvedValue([]),
@@ -522,24 +523,27 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
 
         // A row in the outbox, not a publish: the broker failing here used to
         // leave the job PENDING with no message and nothing to re-drive it.
-        expect(outboxRepository.create).toHaveBeenCalledTimes(2);
+        // One row per job, written as a single batch.
+        expect(outboxRepository.createMany).toHaveBeenCalledTimes(1);
+        expect(outboxRepository.create).not.toHaveBeenCalled();
         expect(messageBroker.publishMessage).not.toHaveBeenCalled();
-        const rows = outboxRepository.create.mock.calls.map(
-            (call: any[]) => call[0],
-        );
-        expect(rows.map((row) => row.routingKey)).toEqual([
+        const rows = outboxRepository.createMany.mock.calls[0][0];
+        expect(rows.map((row: any) => row.routingKey)).toEqual([
             'workflow.jobs.resumed.CODE_REVIEW',
             'workflow.jobs.resumed.CHECK_IMPLEMENTATION',
         ]);
-        // Each row envelopes the mutated jobId and a fresh messageId, so the
-        // inbox claim is not a no-op, and names the job and its type in the
-        // nested payload the relay reads for the AMQP headers.
-        expect(rows.map((row) => row.jobId)).toEqual(['job-code', 'job-impl']);
+        // Each row envelopes the mutated jobId and names the job and its type
+        // in the nested payload the relay reads for the AMQP headers. The
+        // messageId is assigned by the repository at insert time, since it is
+        // the row uuid.
+        expect(rows.map((row: any) => row.jobId)).toEqual([
+            'job-code',
+            'job-impl',
+        ]);
         for (const row of rows) {
             expect(row.payload.event_name).toBe('workflow.jobs.resumed');
             expect(row.payload.payload.jobId).toBe(row.jobId);
             expect(row.payload.payload.workflowType).toBeDefined();
-            expect(row.payload.messageId).toMatch(/^reclaim-/);
             expect(row.nextAttemptAt).toBeInstanceOf(Date);
         }
     });
@@ -563,6 +567,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         await service.reapStaleProcessingJobs();
 
         expect(messageBroker.publishMessage).not.toHaveBeenCalled();
+        expect(outboxRepository.createMany).not.toHaveBeenCalled();
     });
 
     it('passes the batch organization ids to the requeue write (tenant traceability)', async () => {
@@ -641,10 +646,13 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
             expect.objectContaining({ uuids: jobs.map((j) => j.uuid) }),
             transactionManager,
         );
-        expect(outboxRepository.create).toHaveBeenCalledTimes(3);
-        for (const call of outboxRepository.create.mock.calls) {
-            expect(call[1]).toBe(transactionManager);
-        }
+        // One batch for the whole backlog, on that same manager: a per-job
+        // write pair held the transaction open for 2 round trips per item.
+        expect(outboxRepository.createMany).toHaveBeenCalledTimes(1);
+        expect(outboxRepository.createMany.mock.calls[0][0]).toHaveLength(3);
+        expect(outboxRepository.createMany.mock.calls[0][1]).toBe(
+            transactionManager,
+        );
     });
 
     it('refuses to requeue a job with no workflow type instead of committing it without a message', async () => {
@@ -669,7 +677,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         // No message is written, so the transaction throws and the requeue is
         // never committed: the row stays PROCESSING with its expired lease
         // rather than going PENDING with nothing to re-drive it.
-        expect(outboxRepository.create).not.toHaveBeenCalled();
+        expect(outboxRepository.createMany).not.toHaveBeenCalled();
         expect(transactionOutcomes).toEqual(['rejected']);
         expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
     });
@@ -689,7 +697,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         jobRepository.requeueStaleJobs.mockResolvedValue(
             jobs.map((j) => j.uuid),
         );
-        outboxRepository.create.mockRejectedValueOnce(
+        outboxRepository.createMany.mockRejectedValueOnce(
             new Error('outbox is down'),
         );
 
@@ -697,9 +705,9 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
             service.reapStaleProcessingJobs(),
         ).resolves.toBeUndefined();
 
-        // The transaction aborted on the first message, so the reconciliation
-        // is reported as nothing reaped rather than as a half-written batch.
-        expect(outboxRepository.create).toHaveBeenCalledTimes(1);
+        // The transaction aborted on the batch, so the reconciliation is
+        // reported as nothing reaped rather than as a half-written batch.
+        expect(outboxRepository.createMany).toHaveBeenCalledTimes(1);
         expect(transactionOutcomes).toEqual(['rejected']);
         expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
 
@@ -708,7 +716,7 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         await service.reapStaleProcessingJobs();
 
         expect(jobRepository.requeueStaleJobs).toHaveBeenCalledTimes(2);
-        expect(outboxRepository.create).toHaveBeenCalledTimes(3);
+        expect(outboxRepository.createMany).toHaveBeenCalledTimes(2);
         expect(transactionOutcomes).toEqual(['rejected', 'committed']);
         expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
     });
@@ -731,17 +739,17 @@ describe('OutboxRelayService.reapStaleProcessingJobs', () => {
         // A client that throws synchronously used to break out of the write
         // loop; inside the transaction it aborts the batch the same way a
         // rejection does, and the requeue rolls back with it.
-        outboxRepository.create
+        outboxRepository.createMany
             .mockImplementationOnce(() => {
                 throw new Error('outbox connection closed');
             })
-            .mockResolvedValue(undefined);
+            .mockResolvedValue([]);
 
         await expect(
             service.reapStaleProcessingJobs(),
         ).resolves.toBeUndefined();
 
-        expect(outboxRepository.create).toHaveBeenCalledTimes(1);
+        expect(outboxRepository.createMany).toHaveBeenCalledTimes(1);
         expect(incidentManager.failHeartbeat).not.toHaveBeenCalled();
     });
 });

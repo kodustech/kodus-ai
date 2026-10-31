@@ -2,6 +2,10 @@ import { OutboxMessage } from '../interfaces/outbox-message.interface';
 
 export interface IOutboxMessageRepository {
     create(message: OutboxMessage, transactionManager?: unknown): Promise<any>;
+    createMany(
+        messages: OutboxMessage[],
+        transactionManager?: unknown,
+    ): Promise<any[]>;
     claimBatch(limit: number, lockedBy: string): Promise<any[]>;
     markAsSent(messageId: string): Promise<void>;
     markAsFailed(

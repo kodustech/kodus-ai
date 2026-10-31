@@ -12,7 +12,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource } from 'typeorm';
 
 import {
     IOutboxMessageRepository,
@@ -29,6 +29,7 @@ import {
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { OutboxMessageModel } from './repositories/schemas/outbox-message.model';
+import { OutboxMessage } from '@libs/core/workflow/domain/interfaces/outbox-message.interface';
 import {
     DistributedLock,
     DistributedLockService,
@@ -485,41 +486,41 @@ export class OutboxRelayService
     }
 
     /**
-     * Queue a fresh resume message for one reclaimed job, as an OUTBOX row
-     * rather than a publish (#1902 review). Publishing here left the failure
+     * Builds the resume message for one reclaimed job, as an OUTBOX row rather
+     * than a publish (#1902 review). Publishing here left the failure
      * invisible: the row was already PENDING, the broker rejected the message,
      * and nothing ever re-drove it. The relay that owns the outbox retries the
      * publish and, when it gives up, marks the job FAILED, which is the state a
-     * person can act on. Called inside the requeue transaction, so a rejection
-     * here rolls the requeue back instead of leaving the row PENDING with no
-     * message and nothing to re-drive it.
+     * person can act on. The reaper writes these inside the requeue
+     * transaction, so a rejection rolls the requeue back instead of leaving the
+     * row PENDING with no message and nothing to re-drive it.
+     *
+     * Pure, and returned rather than written: the reaper collects one message
+     * per reclaimed job and writes them in one batch, instead of two round
+     * trips per job while that transaction is open (#1902 review).
      */
-    private async publishReclaimedJob(
+    private reclaimedJobMessage(
         uuid: string,
         workflowType: string,
         at: Date,
-        transactionManager?: EntityManager,
-    ): Promise<void> {
-        const messageId = `reclaim-${uuid}-${at.getTime()}`;
-        await this.outboxRepository.create(
-            {
-                jobId: uuid,
-                exchange: 'workflow.exchange',
-                routingKey: `workflow.jobs.resumed.${workflowType}`,
-                payload: {
-                    event_name: 'workflow.jobs.resumed',
-                    event_version: 1,
-                    occurred_on: at,
-                    // The relay reads the envelope's `payload` for the job id and
-                    // the workflow type it puts in the AMQP headers, and the
-                    // consumer reads `jobId` to re-drive the turn.
-                    payload: { jobId: uuid, workflowType },
-                    messageId,
-                } as unknown as Record<string, unknown>,
-                nextAttemptAt: at,
+    ): OutboxMessage {
+        return {
+            jobId: uuid,
+            exchange: 'workflow.exchange',
+            routingKey: `workflow.jobs.resumed.${workflowType}`,
+            payload: {
+                event_name: 'workflow.jobs.resumed',
+                event_version: 1,
+                occurred_on: at,
+                // The relay reads the envelope's `payload` for the job id and
+                // the workflow type it puts in the AMQP headers, and the
+                // consumer reads `jobId` to re-drive the turn. `messageId` is
+                // set at insert time to the row uuid, which is what the
+                // envelope carries once written.
+                payload: { jobId: uuid, workflowType },
             },
-            transactionManager,
-        );
+            nextAttemptAt: at,
+        };
     }
 
     /**
@@ -662,7 +663,7 @@ export class OutboxRelayService
                         // Only the rows the guarded UPDATE actually flipped get
                         // a message: a job that finished between the SELECT and
                         // the write must not be re-driven (#1902).
-                        for (const uuid of requeuedUuids) {
+                        const resumeMessages = requeuedUuids.map((uuid) => {
                             const workflowType = typeByUuid.get(uuid);
                             if (workflowType === undefined) {
                                 // Committing here would leave the row PENDING
@@ -675,10 +676,20 @@ export class OutboxRelayService
                                     `Reclaimed workflow job ${uuid} has no workflow type; refusing to requeue it without a resume message`,
                                 );
                             }
-                            await this.publishReclaimedJob(
+                            return this.reclaimedJobMessage(
                                 uuid,
                                 workflowType,
                                 now,
+                            );
+                        });
+
+                        // One insert for the whole batch, on the requeue
+                        // transaction: per-job writes held this transaction
+                        // open for two round trips per backlog item (#1902
+                        // review). A cycle that flipped nothing writes nothing.
+                        if (resumeMessages.length > 0) {
+                            await this.outboxRepository.createMany(
+                                resumeMessages,
                                 transactionManager,
                             );
                         }
