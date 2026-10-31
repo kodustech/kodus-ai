@@ -3424,35 +3424,61 @@ export class BitbucketDataCenterService implements Omit<
             );
             const latestPrCommit = prResponse.data.fromRef.latestCommit;
 
-            const diffResponse = await axiosClient.get(
-                `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/compare/changes`,
-                {
-                    params: {
-                        from: lastCommit.sha,
-                        to: latestPrCommit,
-                        limit: 1000,
+            const repoPath = `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}`;
+            const compared = await this.readAllPages(
+                axiosClient,
+                `${repoPath}/compare/changes`,
+                { from: lastCommit.sha, to: latestPrCommit },
+            );
+            // Files the target branch brought in through a merge are in the
+            // compare; only the PR's own changes are kept (#2268).
+            const prChanges = compared.complete
+                ? await this.readAllPages(
+                      axiosClient,
+                      `${repoPath}/pull-requests/${prNumber}/changes`,
+                  )
+                : null;
+
+            if (!compared.complete || !prChanges?.complete) {
+                this.logger.warn({
+                    message: `Changes of PR#${prNumber} since ${lastCommit.sha} were not read in full`,
+                    context: BitbucketDataCenterService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        repositoryId: repository?.id,
+                        prNumber,
+                        baseCommit: lastCommit.sha,
+                        targetCommitId: latestPrCommit,
+                        comparedRead: compared.values.length,
+                        reason: 'diff_incomplete',
                     },
-                },
+                });
+                return null;
+            }
+
+            const prPaths = new Set(
+                prChanges.values.map((change: any) => change.path?.toString),
             );
 
-            const changes = diffResponse.data.values || [];
-
-            return changes.map((change: any) => ({
-                filename: change.path.toString,
-                sha: latestPrCommit,
-                status:
-                    change.type === 'MODIFY'
-                        ? 'modified'
-                        : change.type === 'ADD'
-                          ? 'added'
-                          : 'removed',
-                additions: 0,
-                deletions: 0,
-                changes: 0,
-                patch: null, // Requires individual diff endpoint calls in DC
-                content: null,
-            }));
+            return compared.values
+                .filter((change: any) => prPaths.has(change.path?.toString))
+                .map((change: any) => ({
+                    filename: change.path.toString,
+                    sha: latestPrCommit,
+                    status:
+                        change.type === 'MODIFY'
+                            ? 'modified'
+                            : change.type === 'ADD'
+                              ? 'added'
+                              : 'removed',
+                    additions: 0,
+                    deletions: 0,
+                    changes: 0,
+                    patch: null, // Requires individual diff endpoint calls in DC
+                    content: null,
+                }));
         } catch (error) {
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message:
                     'Error fetching changed files since last commit in Data Center',
@@ -3461,6 +3487,30 @@ export class BitbucketDataCenterService implements Omit<
             });
             return null;
         }
+    }
+
+    /** Follows `nextPageStart` until `isLastPage`; `complete` is false when
+     *  the last page was not reached. */
+    private async readAllPages(
+        axiosClient: AxiosInstance,
+        url: string,
+        params: Record<string, string> = {},
+    ): Promise<{ values: any[]; complete: boolean }> {
+        const values: any[] = [];
+        let start = 0;
+        for (let page = 0; page < MAX_FILE_PAGES; page++) {
+            const { data } = await axiosClient.get(url, {
+                params: { ...params, limit: FILES_PAGE_SIZE, start },
+            });
+            // A page without its list or its last-page flag is not a read.
+            if (!Array.isArray(data?.values)) break;
+            values.push(...data.values);
+            if (data.isLastPage === true) return { values, complete: true };
+            if (data.isLastPage !== false || data.nextPageStart === undefined)
+                break;
+            start = data.nextPageStart;
+        }
+        return { values, complete: false };
     }
 
     async getPullRequestByNumber(params: {

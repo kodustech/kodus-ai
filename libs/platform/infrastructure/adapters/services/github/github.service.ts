@@ -4189,6 +4189,24 @@ export class GithubService
 
         const compareFiles = comparison.files || [];
 
+        // Compare cannot page its files, and after the base branch is merged
+        // in the PR's own files can sort past the cap (#2268).
+        if (compareFiles.length >= GITHUB_COMPARE_MAX_FILES) {
+            this.logger.warn({
+                message: `Compare for PR#${prNumber} since ${baseSha} hit the ${GITHUB_COMPARE_MAX_FILES}-file cap`,
+                context: GithubService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    repository: repository?.name,
+                    prNumber,
+                    baseSha,
+                    headSha,
+                    reason: 'compare_file_cap',
+                },
+            });
+            return null;
+        }
+
         // 4. Get the PR files list to filter out files that came from merge commits
         // pulls.listFiles only returns files that belong to the PR (relative to base branch)
         const prFiles = await octokit.paginate(octokit.pulls.listFiles, {
