@@ -6,14 +6,14 @@
  * Roda sob bun, nao node: o baseline do grafana tem 705MB e o limite de string
  * do node e 512MB.
  *
- *   bun filtrar-baseline.js <baseline-completo> <saida> <arquivo-com-a-lista>
+ *   bun filter-baseline.js <baseline-completo> <saida> <arquivo-com-a-lista>
  */
 const fs = require('fs');
-const { subgrafoComoProducao } = require('./subgrafo-producao');
+const { subgrafoComoProducao } = require('./production-subgraph');
 
 const [entrada, saida, listaPath] = process.argv.slice(2);
 if (!entrada || !saida || !listaPath) {
-    console.error('uso: bun filtrar-baseline.js <entrada> <saida> <lista>');
+    console.error('uso: bun filter-baseline.js <entrada> <saida> <lista>');
     process.exit(1);
 }
 const arquivos = JSON.parse(fs.readFileSync(listaPath, 'utf8'));

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # O PROCESSO PADRAO. Uma rodada completa, sem parametro para esquecer de passar.
 #
-#   ./protocolo.sh <modelo> <nome-da-rodada>
+#   ./protocol.sh <modelo> <nome-da-rodada>
 #
 # Fases, na ordem em que dependem umas das outras:
 #   1. geracao      generalista (passada base) -> verify -> dedup, nos 30 PRs;
@@ -17,7 +17,7 @@
 # O judge julga TODOS os candidatos, nao so os que sobram do dedup: sem isso
 # nao existe TP/FP por agente nem a medida pre-dedup.
 set -euo pipefail
-MODELO="${1:?uso: ./protocolo.sh <modelo> [nome]}"
+MODELO="${1:?uso: ./protocol.sh <modelo> [nome]}"
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$AQUI"
 
@@ -79,25 +79,25 @@ fi
 # montado, diff truncado ou agente com zero passos ja foram lidos como
 # "a arquitetura piorou". Vermelho aqui para a rodada.
 echo; echo "==== saude, PR por PR ===="
-if ! python3 saude.py "$RECALL_DUMP" "results/run-$NOME.log" | tee "results/saude-$NOME.log"; then
+if ! python3 health.py "$RECALL_DUMP" "results/run-$NOME.log" | tee "results/saude-$NOME.log"; then
     echo "ABORTADO: saude vermelha. Corrija o harness antes de pagar judge por cima disso."
     exit 1
 fi
 
 echo; echo "==== 2/4 judge (candidatos pos-verify/pre-dedup + descartados pelo verificador) ===="
-node matriz-prefilter.js --dump="$NOME" --par=10 --out="results/matriz-$NOME.json" \
+node prefilter-matrix.js --dump="$NOME" --par=10 --out="results/matriz-$NOME.json" \
     > "results/matriz-$NOME.log" 2>&1 &
 PID_J=$!
 # O que o verificador derrubou, julgado contra os mesmos goldens: responde se
 # ele descarta bug bom. Custa uma chamada de judge por descartado x golden.
-node matriz-prefilter.js --dump="$NOME" --fonte=descartados --par=10 \
+node prefilter-matrix.js --dump="$NOME" --fonte=descartados --par=10 \
     --out="results/matriz-descartados-$NOME.json" > "results/matriz-descartados-$NOME.log" 2>&1 &
 PID_D=$!
 wait $PID_J; wait $PID_D
 echo "judge pronto"
 
 echo; echo "==== 3/4 relatorio ===="
-python3 relatorio.py --run="$NOME"
+python3 report.py --run="$NOME"
 
 echo; echo "==== 4/4 trace debugger ===="
 # So le artefato ja gravado: nenhuma chamada de LLM, instantaneo. Pode ser

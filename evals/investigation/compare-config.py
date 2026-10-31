@@ -2,7 +2,7 @@
 """Pode comparar a rodada A com a rodada B? Sai 0 se a configuracao e a mesma
 (ou difere so no que foi declarado como o braco do experimento), 2 se nao.
 
-  python3 comparar-config.py <rodadaA> <rodadaB> [--braco=RECALL_DOCS,model]
+  python3 compare-config.py <rodadaA> <rodadaB> [--braco=RECALL_DOCS,model]
 
 O --braco lista as chaves que DEVEM diferir (o que esta sendo testado). Qualquer
 outra diferenca invalida a comparacao: foi assim que 400k virou 922k de janela

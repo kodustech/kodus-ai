@@ -28,7 +28,7 @@ O que ele roda por PR: o generalista (passada base) → synthesis-rescue → ver
 (com o evidence gate) → descarte do parse schema → dedup no mesmo modelo.
 `trace.preFilterCandidates` é o snapshot depois do verify e antes do dedup.
 
-Roda sempre a partir da **raiz do repositório** (`/Users/juniorsartori/Projects/Kody/kodus-ai`),
+Roda sempre a partir da **raiz do repositório** (o diretório do clone do `kodus-ai`),
 nunca de dentro de `evals/investigation` — os caminhos de `tsconfig-paths` são
 resolvidos a partir da raiz.
 
@@ -310,7 +310,7 @@ de "nunca encontrados" pulou de 40 para 48 quando corrigido.
 | `evals/investigation/run-recall-1821.js` | entrada do run de pesquisa |
 | `evals/investigation/agent-provider-1821.js` | onde as env vars viram configuração do loop, e o dedup |
 | `evals/investigation/recall-tests-1821.js` | definição dos conjuntos (`LIGHT_CASES` etc) |
-| `evals/investigation/protocolo.sh` | a rodada padrão (ver `instructions-eval.md`) |
+| `evals/investigation/protocol.sh` | a rodada padrão (ver `instructions-eval.md`) |
 | `evals/investigation/datasets/*.json` | os PRs: diff, goldens, call graph, toolReplay |
 | `evals/investigation/materialize-full-diff.js` | grava o diff completo |
 | `evals/investigation/build-call-graphs.js` | grava o call graph do corpus |

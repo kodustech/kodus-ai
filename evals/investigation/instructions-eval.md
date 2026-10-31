@@ -75,14 +75,14 @@ pelo verify são julgados à parte (`matriz-descartados-<rodada>.json`).
 geração (generalista → verify → dedup)
         │
         ▼
-portão (30 dumps) → saude.py
+portão (30 dumps) → health.py
         │
         ├──────────────────┐
         ▼                  ▼
       judge      judge dos descartados    rodam em paralelo
         │                  │
         ▼                  │
-   relatório ◄─────────────┘  (relatorio.py)
+   relatório ◄─────────────┘  (report.py)
         │
         ▼
    trace debugger
@@ -94,14 +94,14 @@ portão (30 dumps) → saude.py
 
 ```bash
 cd evals/investigation
-./protocolo.sh <modelo> [nome-da-rodada]
+./protocol.sh <modelo> [nome-da-rodada]
 ```
 
 Exemplos:
 
 ```bash
-./protocolo.sh deepseek-v4.1-flash@fireworks            # nomeia sozinho: 25.09.26_v1
-./protocolo.sh gpt-5.6-sol@sub 25.09.26_v2_crossfile    # ou você nomeia
+./protocol.sh deepseek-v4.1-flash@fireworks            # nomeia sozinho: 25.09.26_v1
+./protocol.sh gpt-5.6-sol@sub 25.09.26_v2_crossfile    # ou você nomeia
 ```
 
 **Padrão de nome: `DD.MM.AA_vN[_titulo]`.** Sem o segundo argumento ele usa a
@@ -111,7 +111,7 @@ sobrescrever pasta existente.
 ### O que o protocolo faz, em ordem
 
 1. **geração** — generalista → verify → dedup, nos 30 PRs (sem synthesis-rescue)
-2. **portão** — 30 dumps e zero INFRA, ou aborta; depois `saude.py`, vermelho aborta
+2. **portão** — 30 dumps e zero INFRA, ou aborta; depois `health.py`, vermelho aborta
 3. **judge ∥ judge dos descartados** — em paralelo
 4. **relatório** e **trace debugger** — offline
 
@@ -160,12 +160,12 @@ default já entrega o volume máximo de raciocínio e os parâmetros só reduzem
 | `ABORTADO: N/30 dumps` | cota, rate limit ou agente com zero passos | resolver a causa e **rodar tudo de novo**. Não remende PRs avulsos: misturar regimes no mesmo pool é o erro do `gpt-30` |
 | `The usage limit has been reached` | cota do plano de assinatura | esperar a janela virar, ou trocar de modelo. Login novo não resolve |
 | recall muito abaixo do esperado, sem erro | ver §6 | antes de culpar o código, comparar o trabalho por passo |
-| `ABORTADO: saude vermelha` | o `saude.py` achou falha de harness num PR: repo não montado, arquivo faltando no prompt, agente com 0 passos, pool com configurações misturadas | abrir `results/saude-<rodada>.log`, corrigir o harness e rodar de novo. Amarelo não bloqueia, mas vale abrir o PR antes de confiar no número dele |
-| `NAO COMPARAVEL` no `comparar-config.py` | as duas rodadas diferem em algo além do braço declarado | não compare. Rode os dois braços com a mesma configuração |
+| `ABORTADO: saude vermelha` | o `health.py` achou falha de harness num PR: repo não montado, arquivo faltando no prompt, agente com 0 passos, pool com configurações misturadas | abrir `results/saude-<rodada>.log`, corrigir o harness e rodar de novo. Amarelo não bloqueia, mas vale abrir o PR antes de confiar no número dele |
+| `NAO COMPARAVEL` no `compare-config.py` | as duas rodadas diferem em algo além do braço declarado | não compare. Rode os dois braços com a mesma configuração |
 
 ### O que cada rodada grava desde 26/09
 
-- `config` em cada dump: hash do código e dos datasets, modelo, esforço, janela de contexto, busca de docs e as `RECALL_*`. O `relatorio.py` para se o pool mistura configurações; `python3 comparar-config.py A B --braco=<chave>` diz se duas rodadas podem ser comparadas.
+- `config` em cada dump: hash do código e dos datasets, modelo, esforço, janela de contexto, busca de docs e as `RECALL_*`. O `report.py` para se o pool mistura configurações; `python3 compare-config.py A B --braco=<chave>` diz se duas rodadas podem ser comparadas.
 - `verification.verifyMs` e, em cada descarte, `droppedFinding` com o texto. O protocolo julga os descartados em `results/matriz-descartados-<rodada>.json`: é assim que se sabe se o verificador joga fora bug bom.
 - `searchDocs` (Exa) ligado nos agentes, como na produção. `RECALL_DOCS=0` desliga, para o braço de comparação.
 - 8 PRs em paralelo por padrão (`RECALL_CONCURRENCY`).
@@ -179,8 +179,8 @@ com 208 falsos positivos, que não corresponde a nenhuma configuração real.
 ## 5. Ler o resultado
 
 ```bash
-python3 relatorio.py --run=<nome>
-python3 relatorio.py --run=<nome> --secao=prereducer   # uma seção só
+python3 report.py --run=<nome>
+python3 report.py --run=<nome> --secao=prereducer   # uma seção só
 ```
 
 Seções: `tempo`, `tokens`, `prereducer`, `agentes`.

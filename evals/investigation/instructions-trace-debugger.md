@@ -19,7 +19,7 @@
 **O protocolo gera sozinho.** Ao rodar
 
 ```bash
-./protocolo.sh <modelo> [nome]
+./protocol.sh <modelo> [nome]
 ```
 
 a última fase escreve a página em:
@@ -173,7 +173,7 @@ desenvolvedor receberia é a linha pós-reducer.
 
 **Sem judge não existe acerto.** Se o cartão "judge disponível" estiver em
 vermelho, a página mostra contagens (quantos achados, quantos grupos) mas
-nenhuma métrica de qualidade. Rode `matriz-prefilter.js --dump=<run>` e gere a
+nenhuma métrica de qualidade. Rode `prefilter-matrix.js --dump=<run>` e gere a
 página de novo.
 
 **Comparar duas rodadas exige cuidado.** A variância entre rodadas da mesma
@@ -192,6 +192,6 @@ ali que se vê se o corte doeu.
 | erro | causa | o que fazer |
 |---|---|---|
 | `não achei pools/<run>` | nome errado, ou a geração não rodou | confira `ls evals/investigation/pools/` |
-| abre, mas sem métricas | falta a matriz do judge | `node matriz-prefilter.js --dump=<run> --par=10 --out=results/matriz-<run>.json` |
+| abre, mas sem métricas | falta a matriz do judge | `node prefilter-matrix.js --dump=<run> --par=10 --out=results/matriz-<run>.json` |
 | PRs aparecem como "sem dump" | a geração falhou naqueles PRs | veja `results/run-<run>.log`; se houver INFRA, a rodada não serve e deve ser refeita inteira |
 | tabela de grupos vazia | a rodada não usou o reducer em fluxo | rode com `RECALL_REDUCER=v2` (o protocolo já faz) |

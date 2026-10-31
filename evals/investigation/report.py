@@ -8,7 +8,7 @@ dele no denominador. Toda tabela de 29 PRs que saiu daqui antes veio de iterar
 as chaves de um artefato em vez de iterar o conjunto — o artefato perdia o PR
 vazio, o denominador encolhia e o recall subia de graca.
 
-  python3 relatorio.py --run=<nome> [--secao=tempo|tokens|prereducer|agentes]
+  python3 report.py --run=<nome> [--secao=tempo|tokens|prereducer|agentes]
 """
 import json, os, sys, statistics as st
 
@@ -24,7 +24,7 @@ def arg(n, d=None):
     return d
 
 RUN = arg('run')
-if not RUN: sys.exit('uso: relatorio.py --run=<nome>')
+if not RUN: sys.exit('uso: report.py --run=<nome>')
 
 OS30 = json.load(open(os.path.join(AQUI,'light-30.json')))
 # REL_SO=arquivo.json (lista de caseIds): mede so esses PRs — para comparar com

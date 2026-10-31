@@ -279,7 +279,7 @@ async function buildPrCallGraph(vars, headDir, caseId, log) {
         try {
             const { stdout } = await execFileAsync(
                 BUN,
-                [path.join(__dirname, 'filtrar-baseline.js'), graphCompleto, filtrado, lista],
+                [path.join(__dirname, 'filter-baseline.js'), graphCompleto, filtrado, lista],
                 { maxBuffer: 64 * 1024 * 1024, timeout: PARSE_ALL_TIMEOUT_MS },
             );
             log?.(`  ${String(stdout).trim()}`);

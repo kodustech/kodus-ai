@@ -116,7 +116,7 @@ function donosDoGolden(cid, cands) {
     const dono = new Map();
     // `cobre` percorre TODOS os goldens, nao so os core: um candidato que venceu
     // um golden fora do perfil acertou alguma coisa e nao e falso positivo. E a
-    // mesma regra do relatorio.py — se as duas divergirem, a pagina e o relatorio
+    // mesma regra do report.py — se as duas divergirem, a pagina e o relatorio
     // dao numeros diferentes para a mesma rodada, que e pior que estar errado.
     const cobre = new Set();
     for (let gi = 0; gi < m.goldens.length; gi++) {
@@ -424,7 +424,7 @@ function funil() {
 function metricas() {
     if (!MATRIZ) return `<h2>Métricas</h2><div class="card"><p class="muted" style="margin:0">
       Sem <code>results/matriz-${esc(RUN)}.json</code> não dá para dizer o que é acerto. Rode o judge
-      (<code>matriz-prefilter.js --dump=${esc(RUN)}</code>) e gere a página de novo.</p></div>`;
+      (<code>prefilter-matrix.js --dump=${esc(RUN)}</code>) e gere a página de novo.</p></div>`;
     const pre = f1(AG.tpPre, AG.fpPre, AG.goldensCore);
     const pos = f1(AG.tpPos, AG.fpPos, AG.goldensCore);
     const linha = (nome, m, tp, fp, expl) => `<tr><td><b>${nome}</b><div class="muted" style="font-size:11.5px">${expl}</div></td>

@@ -20,7 +20,7 @@
 | Node | **24.x** | o harness roda em `node` com `ts-node/register/transpile-only` |
 | pnpm | **11.9.0** | `packageManager` do repo |
 | git | qualquer recente | o harness cria **worktrees** por PR |
-| Python | 3.9+ | `relatorio.py` e os scripts de análise |
+| Python | 3.9+ | `report.py` e os scripts de análise |
 | **bun** | 1.x | **só se for usar grafo** — o CLI do `kodus-graph` roda em bun |
 
 ```bash

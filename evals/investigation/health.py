@@ -5,7 +5,7 @@ Varias vezes a investigacao concluiu algo sobre a arquitetura quando o problema
 era o harness: repo nao montado, diff truncado, agente que nao rodou. Este
 script procura exatamente isso.
 
-  python3 saude.py <pasta-do-pool> [log-da-rodada]
+  python3 health.py <pasta-do-pool> [log-da-rodada]
 
 VERMELHO bloqueia (sai 2): a rodada nao mede o que diz medir.
 AMARELO so avisa: vale abrir o PR antes de confiar no numero dele.
