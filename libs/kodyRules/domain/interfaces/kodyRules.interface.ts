@@ -243,6 +243,13 @@ export type KodyRuleSourceFileIssue = 'not_a_rule_template';
 export interface IKodyRuleCentralizedConfig {
     path: string;
     status: KodyRuleCentralizedStatus;
+    /**
+     * Id of the centralized config repository the rule was synced from. Rules
+     * are stored per organization while each team syncs its own config
+     * repository, so sync and stale cleanup only touch rules carrying their
+     * own repository id (#2215). Absent on rules synced before it existed.
+     */
+    sourceRepositoryId?: string;
 }
 
 export interface IKodyRuleMemory extends Omit<
