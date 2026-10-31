@@ -284,6 +284,20 @@ export class CreateRepositoriesUseCase implements IUseCase {
             (await this.codeManagementService.getTypeIntegration(orgTeam)) ||
             'github';
 
+        // repositories.integration_config_id references integration_configs.uuid,
+        // not the team uuid.
+        const repositoriesConfig =
+            await this.integrationConfigService.findOneIntegrationConfigWithIntegrations(
+                IntegrationConfigKey.REPOSITORIES,
+                orgTeam,
+            );
+
+        if (!repositoriesConfig?.uuid) {
+            throw new Error(
+                `No repositories integration config found for org=${orgTeam.organizationId} team=${orgTeam.teamId}`,
+            );
+        }
+
         this.logger.log({
             message: `[AST-GRAPH] Processing ${repositories.length} repos for AST graph build (platform=${platformType})`,
             context: CreateRepositoriesUseCase.name,
@@ -306,7 +320,7 @@ export class CreateRepositoriesUseCase implements IUseCase {
                         : `${repo.organizationName || ''}/${repo.name}`);
 
                 const repoRecord = await this.repositoryService.findOrCreate({
-                    integrationConfigId: orgTeam.teamId,
+                    integrationConfigId: repositoriesConfig.uuid,
                     externalId: String(repo.id),
                     name: repo.name,
                     fullName,
