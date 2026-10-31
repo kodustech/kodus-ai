@@ -14,18 +14,19 @@ export { LEAN_FINDER_FIELDS };
 
 export type LeanFinderField = (typeof LEAN_FINDER_FIELDS)[number];
 
-const LOCATION_FIELDS: LeanFinderField[] = [
-    'relevantFile',
-    'relevantLinesStart',
-    'relevantLinesEnd',
-];
+const CONTENT_FIELDS: LeanFinderField[] = ['label', 'suggestionContent'];
+const LOCATION_FIELDS = LEAN_FINDER_FIELDS.filter(
+    (f) => !CONTENT_FIELDS.includes(f),
+);
 
 export type ParseFinderSchemaResult = {
     discarded: Array<{ index: number; missing: LeanFinderField[] }>;
 };
 
 const isPresent = (v: unknown) =>
-    v !== undefined && v !== null && !(typeof v === 'string' && v.trim() === '');
+    v !== undefined &&
+    v !== null &&
+    !(typeof v === 'string' && v.trim() === '');
 
 export function parseFinderSchema(
     suggestions: Array<Record<string, unknown>>,
@@ -35,8 +36,7 @@ export function parseFinderSchema(
         const item = s && typeof s === 'object' ? s : {};
         const label = item.label;
         const required: LeanFinderField[] = [
-            'label',
-            'suggestionContent',
+            ...CONTENT_FIELDS,
             ...(label === 'kody_rules' ? [] : LOCATION_FIELDS),
         ];
         const missing = LEAN_FINDER_FIELDS.filter(
