@@ -91,6 +91,18 @@ describe('checkFix', () => {
             expect(checkFix(existingCode, improvedCode)).toBe('truncated');
         });
 
+        it('flags a closer that mismatches an open bracket even when the original has an orphan closer', () => {
+            const existingCode = "}.property('a')";
+            const improvedCode = "x(}).property('b')";
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('still accepts an orphan closer met with an empty stack (positive control)', () => {
+            const existingCode = "}.property('a')";
+            const improvedCode = "}.property('b').other()";
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
         it('flags a fix cut inside a block when the original was balanced', () => {
             const existingCode = 'foo();';
             const improvedCode = 'if (a) {\n  foo();';

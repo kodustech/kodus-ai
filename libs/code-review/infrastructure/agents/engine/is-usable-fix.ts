@@ -201,15 +201,22 @@ function stripRegexLiterals(code: string): string {
 }
 
 /**
- * The brackets `code` leaves open or unmatched, as a signature: `null` when
+ * The brackets `code` leaves open or unmatched. `signature` is `null` when
  * they balance, otherwise "<closers with no opener>|<unclosed openers>" ("|{("
  * for an open block holding an open call, "}|" for a lone "}"). Two texts with
- * the same signature are cut in the same place.
+ * the same signature are cut in the same place. `mismatched` is true when a
+ * closer meets a NON-empty stack whose top is a different bracket
+ * (`x(})`): that is broken whatever the quoted lines look like, whereas a
+ * closer met with an empty stack is only an orphan the original can share.
  */
-function bracketImbalance(nonLiteral: string): string | null {
+function bracketImbalance(nonLiteral: string): {
+    signature: string | null;
+    mismatched: boolean;
+} {
     const closers: Record<string, string> = { '}': '{', ')': '(', ']': '[' };
     const stack: string[] = [];
     let orphans = '';
+    let mismatched = false;
     for (const ch of nonLiteral) {
         if (ch === '{' || ch === '(' || ch === '[') {
             stack.push(ch);
@@ -217,11 +224,17 @@ function bracketImbalance(nonLiteral: string): string | null {
             if (stack[stack.length - 1] === closers[ch]) {
                 stack.pop();
             } else {
+                if (stack.length > 0) {
+                    mismatched = true;
+                }
                 orphans += ch;
             }
         }
     }
-    return orphans || stack.length > 0 ? `${orphans}|${stack.join('')}` : null;
+    return {
+        signature: orphans || stack.length > 0 ? `${orphans}|${stack.join('')}` : null,
+        mismatched,
+    };
 }
 
 /**
@@ -246,7 +259,8 @@ function bracketImbalance(nonLiteral: string): string | null {
  *
  * `reference` (the code the fix replaces) only relaxes the bracket check: when
  * the quoted lines cut a block, the fix inherits that same imbalance, so an
- * identical signature in `reference` is not a truncation signal.
+ * identical signature in `reference` is not a truncation signal. A closer that
+ * mismatches an open bracket (`x(})`) is never excused by `reference`.
  */
 function isStructurallyBroken(
     code: string,
@@ -319,12 +333,15 @@ function isStructurallyBroken(
     }
 
     const imbalance = bracketImbalance(nonLiteral);
+    if (imbalance.mismatched) {
+        return true;
+    }
     return (
-        imbalance !== null &&
-        imbalance !==
+        imbalance.signature !== null &&
+        imbalance.signature !==
             (reference === undefined
                 ? null
-                : bracketImbalance(nonLiteralOf(reference)))
+                : bracketImbalance(nonLiteralOf(reference)).signature)
     );
 }
 
