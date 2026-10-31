@@ -325,6 +325,43 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         );
     });
 
+    it('reads the cited code from the diff when the review has no file content (CLI)', async () => {
+        const moved = earlier({
+            suggestionId: 'old-moved',
+            relevantFile: 'src/user.ts',
+            existingCode: 'const total = items.reduce((a, b) => a + b.price);',
+            suggestionContent: 'The reduce has no initial value.',
+        });
+        const { stage, reviewOrchestrator } = makeStage([moved]);
+        reviewOrchestrator.execute.mockResolvedValue(
+            envelope([
+                {
+                    relevantFile: 'src/cart.ts',
+                    relevantLinesStart: 2,
+                    relevantLinesEnd: 2,
+                    label: 'bug',
+                    suggestionContent: 'Empty carts throw a TypeError.',
+                },
+            ]),
+        );
+        const ctx = makeContext(
+            [moved],
+            [
+                {
+                    filename: 'src/cart.ts',
+                    patch: '@@ -1,2 +1,3 @@\n export function total(items) {\n+const total = items.reduce((a, b) => a + b.price);\n }',
+                },
+            ],
+        );
+
+        await run(stage, ctx);
+
+        const repeatCall = runSpy.mock.calls.find(
+            ([req]: any) => req.spanName === 'code-review::repeat-check',
+        );
+        expect(JSON.stringify(repeatCall?.[0])).toContain('old-moved');
+    });
+
     it('posts a bug the check does not match, with the revision link its finder chose', async () => {
         const applied = earlier({
             suggestionId: 'old-bug',

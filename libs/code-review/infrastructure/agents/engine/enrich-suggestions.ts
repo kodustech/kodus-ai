@@ -85,7 +85,7 @@ export function newSideLines(patch: string): Map<number, string> {
 }
 
 /** The cited lines, when every one of them is on the new side of the diff. */
-function citedFromPatch(
+export function citedFromPatch(
     patch: string,
     start: number,
     end: number,

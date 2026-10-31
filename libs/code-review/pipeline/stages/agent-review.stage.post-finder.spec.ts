@@ -178,6 +178,10 @@ describe('AgentReviewStage — after the finder (#1821)', () => {
         expect(published[0]).toEqual(
             expect.objectContaining({
                 oneSentenceSummary: 'Total ignores item quantity',
+                // The cited lines 11-12, read from the diff's new side: the
+                // fixture carries a patch and no file content.
+                existingCode:
+                    'for (const item of items) total += item.price;\nreturn total;',
                 improvedCode:
                     'for (const item of items) total += item.price * item.qty;',
             }),

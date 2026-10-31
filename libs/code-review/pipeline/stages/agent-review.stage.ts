@@ -6,7 +6,10 @@ import { tracedEmbed as embed } from '@libs/llm/llm-call';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { parseFinderSchema } from '@libs/code-review/infrastructure/agents/engine/parse-finder-schema';
 import { normalizeFinderLabels } from '@libs/code-review/infrastructure/agents/engine/normalize-finder-label';
-import { enrichSuggestions } from '@libs/code-review/infrastructure/agents/engine/enrich-suggestions';
+import {
+    citedFromPatch,
+    enrichSuggestions,
+} from '@libs/code-review/infrastructure/agents/engine/enrich-suggestions';
 import { enrichDeterministic } from '@libs/code-review/infrastructure/agents/engine/enrich-deterministic';
 import { CATEGORY_LABELS } from '@libs/code-review/infrastructure/agents/engine/finding-labels';
 import {
@@ -1535,10 +1538,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             >();
             const withCitedCode = severityNormalizedNonRules.map((s) => {
                 if (s.existingCode || isCustomAgentFinding(s)) return s;
-                const { existingCode } = enrichDeterministic(
-                    s,
-                    headFiles.get(s.relevantFile)?.fileContent ?? null,
-                );
+                const file = headFiles.get(s.relevantFile);
+                // A review sent as a diff (the CLI's) has no file content:
+                // the cited lines come from the diff's new side.
+                const existingCode =
+                    file?.fileContent == null && file?.patch
+                        ? citedFromPatch(
+                              file.patch,
+                              s.relevantLinesStart ?? 1,
+                              s.relevantLinesEnd ?? s.relevantLinesStart ?? 1,
+                          )
+                        : enrichDeterministic(s, file?.fileContent ?? null)
+                              .existingCode;
                 if (!existingCode) return s;
                 const copy = { ...s, existingCode };
                 originalOf.set(copy, s);
