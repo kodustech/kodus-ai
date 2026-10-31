@@ -228,19 +228,35 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 >['codeSuggestions'];
             }> = [];
             for (const batch of batches) {
-                const batchResult = await LLM.run({
-                    schema: validateImplementedSchema,
-                    user: prompt_validateImplementedSuggestions(batch),
-                    runName,
-                    organizationId: organizationAndTeamData?.organizationId,
-                    byokConfig,
-                    attrs: {
+                // A failing batch must not discard the ones that succeeded or
+                // stop the remaining ones: log it and keep going.
+                try {
+                    const batchResult = await LLM.run({
+                        schema: validateImplementedSchema,
+                        user: prompt_validateImplementedSuggestions(batch),
+                        runName,
                         organizationId: organizationAndTeamData?.organizationId,
-                        prNumber,
-                    },
-                });
-                if (batchResult) {
-                    results.push(batchResult);
+                        byokConfig,
+                        attrs: {
+                            organizationId:
+                                organizationAndTeamData?.organizationId,
+                            prNumber,
+                        },
+                    });
+                    if (batchResult) {
+                        results.push(batchResult);
+                    }
+                } catch (error) {
+                    this.logger.error({
+                        message: `${LLM_ERROR_TAG} Error validating a batch of implemented suggestions:`,
+                        error,
+                        context: LLMAnalysisService.name,
+                        metadata: {
+                            organizationAndTeamData,
+                            prNumber,
+                            usingByok: !!byokConfig,
+                        },
+                    });
                 }
             }
 
@@ -318,15 +334,20 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 modelName: byokConfig.model,
             }) * 0.9,
         );
-        const fixedTokens = estimateTokens(
-            prompt_validateImplementedSuggestions({
-                codePatch: '',
-                codeSuggestions,
-            }),
-        );
-        const available = budget - fixedTokens;
-        if (available <= 0) return [whole];
-        if (estimateTokens(JSON.stringify(codePatch)) <= available) {
+        // The prompt's fixed part (instructions + suggestions) depends on the
+        // suggestions a request carries, so it is measured per batch.
+        const fixedFor = (batchSuggestions: Partial<CodeSuggestion>[]) =>
+            estimateTokens(
+                prompt_validateImplementedSuggestions({
+                    codePatch: '',
+                    codeSuggestions: batchSuggestions,
+                }),
+            );
+        if (
+            fixedFor(codeSuggestions) +
+                estimateTokens(JSON.stringify(codePatch)) <=
+            budget
+        ) {
             return [whole];
         }
 
@@ -367,17 +388,24 @@ export class LLMAnalysisService implements IAIAnalysisService {
             let section = raw;
             // The prompt embeds the patch JSON-escaped, which costs more tokens.
             const cost = (text: string) => estimateTokens(JSON.stringify(text));
+            // Room left for patch text next to this file's own suggestions.
+            const own = budget - fixedFor(forFile);
             let tokens = cost(section);
             // A single patch over the budget is cut, measuring as it goes: no
             // fixed chars-per-token ratio holds for dense diffs.
-            while (tokens > available && section.length > 1) {
+            while (own > 0 && tokens > own && section.length > 1) {
                 section = section.slice(
                     0,
-                    Math.floor((section.length * available) / tokens) - 1,
+                    Math.floor((section.length * own) / tokens) - 1,
                 );
                 tokens = cost(section);
             }
-            if (used + tokens > available) flush();
+            if (
+                suggestions.length &&
+                fixedFor([...suggestions, ...forFile]) + used + tokens > budget
+            ) {
+                flush();
+            }
             sections.push(section);
             suggestions.push(...forFile);
             used += tokens;

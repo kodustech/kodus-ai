@@ -267,6 +267,84 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             ).toBeLessThanOrEqual(12000);
         });
 
+        it('measures the fixed prompt part per batch, not for all suggestions', async () => {
+            const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts'];
+            const codePatch = files
+                .map((f) => `File: ${f}\n${'+ const x = 1;\n'.repeat(500)}`)
+                .join('\n\n');
+            const sugg = files.flatMap((f) =>
+                [1, 2, 3, 4, 5].map((n) => ({
+                    id: `${f}-${n}`,
+                    relevantFile: f,
+                    suggestionContent: 'lorem ipsum '.repeat(300),
+                })),
+            ) as any[];
+            runSpy.mockResolvedValue({ codeSuggestions: [] });
+            const service = buildService();
+            jest.spyOn(
+                (service as any).llmResponseProcessor,
+                'processResponse',
+            ).mockReturnValue({ codeSuggestions: [] });
+
+            await service.validateImplementedSuggestions(
+                org,
+                77,
+                { ...byokConfig, maxInputTokens: 12000 },
+                codePatch,
+                sugg,
+            );
+
+            // The payload with all suggestions overflows the slot, and every
+            // batch must be sized with only its own suggestions.
+            expect(runSpy.mock.calls.length).toBeGreaterThan(1);
+            for (const [arg] of runSpy.mock.calls) {
+                expect(estimateTokens(arg.user)).toBeLessThanOrEqual(12000);
+            }
+        });
+
+        it('keeps the results of the batches that succeed when one batch throws', async () => {
+            const bigPatch = (name: string) =>
+                `File: ${name}\n${'+ const x = 1;\n'.repeat(1500)}`;
+            const codePatch = ['a.ts', 'b.ts', 'c.ts']
+                .map(bigPatch)
+                .join('\n\n');
+            const sugg = [
+                { id: 'a', relevantFile: 'a.ts' },
+                { id: 'b', relevantFile: 'b.ts' },
+                { id: 'c', relevantFile: 'c.ts' },
+            ] as any[];
+            runSpy.mockImplementation(async (arg: any) => {
+                if (arg.user.includes('"b"')) throw new Error('provider down');
+                return {
+                    codeSuggestions: sugg
+                        .filter((x) => arg.user.includes(`"${x.id}"`))
+                        .map((x) => ({
+                            id: x.id,
+                            relevantFile: x.relevantFile,
+                            implementationStatus: 'implemented',
+                        })),
+                };
+            });
+            const service = buildService();
+            jest.spyOn(
+                (service as any).llmResponseProcessor,
+                'processResponse',
+            ).mockImplementation((_o: any, _n: any, raw: string) =>
+                JSON.parse(raw),
+            );
+
+            const out = await service.validateImplementedSuggestions(
+                org,
+                77,
+                { ...byokConfig, maxInputTokens: 12000 },
+                codePatch,
+                sugg,
+            );
+
+            expect(runSpy).toHaveBeenCalledTimes(3);
+            expect(out.map((x) => x.id).sort()).toEqual(['a', 'c']);
+        });
+
         it('returns the parsed implemented-status suggestions on success', async () => {
             runSpy.mockResolvedValue({ codeSuggestions: [] });
             const service = buildService();
@@ -360,7 +438,6 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             expect(out).toEqual({ suggestions: input });
         });
     });
-
 });
 
 /**
@@ -418,8 +495,10 @@ describe('LLMAnalysisService — LLM.run I/O contract matrix', () => {
     // The severity boundary is the primary vehicle: it goes through the shared
     // processResponse re-parse AND owns the fail-safe-to-INPUT contract, so both
     // the recover branch and the #1786 silent-drop are observable on it.
-    const runSeverity = (service: LLMAnalysisService, input = inputSuggestions) =>
-        service.severityAnalysisAssignment(org, 77, input, byokConfig);
+    const runSeverity = (
+        service: LLMAnalysisService,
+        input = inputSuggestions,
+    ) => service.severityAnalysisAssignment(org, 77, input, byokConfig);
 
     // ── A. Output-shape zoo ────────────────────────────────────────────────
 
@@ -436,9 +515,7 @@ describe('LLMAnalysisService — LLM.run I/O contract matrix', () => {
     it.failing(
         'A2 — bare array of inner items must NOT silently drop to [] (#1786: recover or fall back to input)',
         async () => {
-            runSpy.mockResolvedValue([
-                { id: 's1', severity: 'high' },
-            ] as any);
+            runSpy.mockResolvedValue([{ id: 's1', severity: 'high' }] as any);
             const out = await runSeverity(buildService());
             expect(out).not.toEqual([]);
         },
@@ -485,16 +562,13 @@ describe('LLMAnalysisService — LLM.run I/O contract matrix', () => {
         },
     );
 
-    it(
-        'C29 — malformed JSON string (trailing comma / single quotes) must fall back, not silently drop',
-        async () => {
-            runSpy.mockResolvedValue(
-                "{'codeSuggestions':[{'id':'s1','severity':'high',},],}" as any,
-            );
-            const out = await runSeverity(buildService());
-            expect(out).not.toEqual([]);
-        },
-    );
+    it('C29 — malformed JSON string (trailing comma / single quotes) must fall back, not silently drop', async () => {
+        runSpy.mockResolvedValue(
+            "{'codeSuggestions':[{'id':'s1','severity':'high',},],}" as any,
+        );
+        const out = await runSeverity(buildService());
+        expect(out).not.toEqual([]);
+    });
 
     it('C32 — on-schema empty success {codeSuggestions:[]} is trusted and returned as []', async () => {
         runSpy.mockResolvedValue({ codeSuggestions: [] } as any);
