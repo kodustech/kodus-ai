@@ -431,7 +431,14 @@ export class IntegrationConfigRepository implements IIntegrationConfigRepository
                 IntegrationConfigEntity,
             );
         } catch (error) {
+            // Same rule as `findAllIntegrationConfigs` above and `delete`
+            // below, for the same reason: callers turn an empty result into
+            // their own "not configured" answer, so swallowing here reports a
+            // failed query as a missing configuration. A read that fails has
+            // to stay distinguishable from a read that found nothing - the
+            // caller decides what its own surface does with the rejection.
             console.log(error);
+            throw error;
         }
     }
 
