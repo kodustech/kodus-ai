@@ -445,12 +445,11 @@ export abstract class BaseCodeReviewAgentProvider {
                 (estimatedPromptTokens > promptBudget &&
                     input.reviewMode !== 'deep'));
 
-        // Tiering is scored SEPARATELY from the low-signal filter. Bundling the
-        // two meant a normal-sized PR never got tiers — so CompletionGatePolicy
-        // saw criticalTotal=0 and the agent could finalize without opening the
-        // highest blast-radius file. Dropping tests/docs stays gated (it removes
-        // real review surface); marking blast radius does not.
-        const shouldTierFiles = input.changedFiles.length > 1;
+        // Tiers only where main has them: a PR over the prompt budget or a
+        // small-window model. With tiers, CompletionGatePolicy holds the
+        // result until every critical hunk is read, which on a PR that fits
+        // can run a finder that answers from the diff to its step cap.
+        const shouldTierFiles = shouldFireFilter;
 
         if (shouldFireFilter) {
             const filesBefore = input.changedFiles.length;
