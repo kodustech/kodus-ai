@@ -86,7 +86,10 @@ export type FindingsOutput = z.infer<typeof _findingsSchema>;
 function withContentFallback(item: unknown): unknown {
     if (!item || typeof item !== 'object') return item;
     const it = item as Record<string, unknown>;
-    if (typeof it.suggestionContent === 'string' || typeof it.oneSentenceSummary !== 'string') {
+    const hasContent =
+        typeof it.suggestionContent === 'string' &&
+        nonBlank(it.suggestionContent);
+    if (hasContent || typeof it.oneSentenceSummary !== 'string') {
         return item;
     }
     return { ...it, suggestionContent: it.oneSentenceSummary };
@@ -108,7 +111,10 @@ function parseStringifiedSuggestions(value: unknown): unknown {
     // text, and extractJsonFromText unwraps the FIRST fence it sees — an inner
     // code block, not the array (that is what kept 10 of 40 failing after the
     // first fix). The extractor stays as the fallback for prose/fence wrapping.
-    for (const candidate of [suggestions.trim(), extractJsonFromText(suggestions)]) {
+    for (const candidate of [
+        suggestions.trim(),
+        extractJsonFromText(suggestions),
+    ]) {
         if (!candidate) continue;
         try {
             const parsed = JSON.parse(candidate);

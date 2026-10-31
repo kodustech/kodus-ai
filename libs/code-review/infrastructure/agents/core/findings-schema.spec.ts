@@ -139,6 +139,14 @@ describe('sanitizeFindingsResult', () => {
         expect(result!.suggestions[0].suggestionContent).toBe('null deref in foo');
     });
 
+    it('uses oneSentenceSummary when suggestionContent is blank', () => {
+        const result = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [{ relevantFile: 'a.ts', suggestionContent: ' ', oneSentenceSummary: 'null deref in foo', existingCode: 'x', improvedCode: 'y' }],
+        } as any);
+        expect(result!.suggestions[0].suggestionContent).toBe('null deref in foo');
+    });
+
     it('normalizes severity case and clears an unknown severity instead of dropping', () => {
         const result = sanitizeFindingsResult({
             reasoning: 'r',
