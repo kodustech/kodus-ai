@@ -1374,51 +1374,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             // After the finder, in order: parse schema, anchoring, label
             // normalization (#1821). Then the dedup and the rest.
-            //
-            // Parse schema: a finder suggestion without the five lean fields
-            // is discarded here, before anchoring, so every suggestion
-            // anchored has a file and lines. The mapper already gave it the
-            // lean shape (finding-mapper.ts, leanOutput).
-            // Custom agents write the full finding and keep main's anchoring:
-            // one without lines snaps to the first hunk.
-            const finderSuggestions = result.suggestions.filter(
-                isFinderSuggestion,
+            const logIds = {
+                organizationId: context.organizationAndTeamData?.organizationId,
+                teamId: context.organizationAndTeamData?.teamId,
+                prNumber,
+            };
+            const parsedSuggestions = this.discardUnparsedFindings(
+                result.suggestions,
+                allDiscarded,
+                logIds,
             );
-            const parsed = parseFinderSchema(
-                finderSuggestions as Array<Record<string, unknown>>,
-            );
-            const parseDiscarded = new Set(
-                parsed.discarded.map((d) => d.index),
-            );
-            for (const d of parsed.discarded) {
-                allDiscarded.push({
-                    ...finderSuggestions[d.index],
-                    priorityStatus: PriorityStatus.DISCARDED_BY_SCHEMA,
-                    deliveryStatus: DeliveryStatus.NOT_SENT,
-                });
-            }
-            if (parsed.discarded.length > 0) {
-                this.logger.warn({
-                    message: `[PARSE-SCHEMA] PR#${prNumber}: discarded ${parsed.discarded.length} finder suggestions missing lean fields`,
-                    context: this.stageName,
-                    metadata: {
-                        organizationId:
-                            context.organizationAndTeamData?.organizationId,
-                        teamId: context.organizationAndTeamData?.teamId,
-                        prNumber,
-                        discarded: parsed.discarded,
-                    },
-                });
-            }
-            const discardedByParse = new Set(
-                finderSuggestions.filter((_, i) => parseDiscarded.has(i)),
-            );
-            const anchoringInput: Partial<CodeSuggestion>[] = [
-                ...result.suggestions.filter(
-                    (s) => s.label !== 'kody_rules' && !discardedByParse.has(s),
-                ),
-                ...result.suggestions.filter((s) => s.label === 'kody_rules'),
-            ];
 
             const changedFilesByName = new Map(
                 changedFiles.map((f) => [f.filename, f]),
@@ -1426,72 +1391,20 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // A custom agent's findings on an ignored file it names are held
             // to that file's hunks like any other.
             const anchoredSuggestions = this.anchorSuggestionsToDiff(
-                anchoringInput,
+                parsedSuggestions,
                 [...changedFiles, ...ignoredChangedFiles],
                 context.codeReviewConfig?.kodyRules ?? [],
                 allDiscarded,
-                {
-                    organizationId:
-                        context.organizationAndTeamData?.organizationId,
-                    teamId: context.organizationAndTeamData?.teamId,
-                    prNumber,
-                },
+                logIds,
             );
 
-            // Label normalization: a label off the list becomes `bug`, and a
-            // label the team turned off is discarded, never moved to one that
-            // is on. Kody Rules and custom agents answer to their own config.
-            const labeled = normalizeFinderLabels(anchoredSuggestions, {
-                allowed: new Set<string>([
-                    ...CATEGORY_LABELS.filter(
-                        (c) => reviewOptions?.[c] !== false,
-                    ),
-                    ...(repoInstructions?.files?.length
-                        ? ['repo_instruction']
-                        : []),
-                ]),
-                exempt: (s) =>
-                    s.label === 'kody_rules' || isCustomAgentFinding(s),
-            });
-            for (const s of labeled.discarded) {
-                allDiscarded.push({
-                    ...s,
-                    priorityStatus: PriorityStatus.DISCARDED_BY_CATEGORY,
-                    deliveryStatus: DeliveryStatus.NOT_SENT,
-                });
-            }
-            if (labeled.discarded.length > 0) {
-                const byLabel: Record<string, number> = {};
-                for (const s of labeled.discarded) {
-                    byLabel[s.label] = (byLabel[s.label] || 0) + 1;
-                }
-                this.logger.log({
-                    message: `[LABEL-NORMALIZE] PR#${prNumber}: discarded ${labeled.discarded.length} suggestions in categories the team turned off`,
-                    context: this.stageName,
-                    metadata: {
-                        organizationId:
-                            context.organizationAndTeamData?.organizationId,
-                        teamId: context.organizationAndTeamData?.teamId,
-                        prNumber,
-                        byLabel,
-                    },
-                });
-            }
-            if (Object.keys(labeled.replaced).length > 0) {
-                this.logger.warn({
-                    message: `[LABEL-NORMALIZE] PR#${prNumber}: replaced the label of ${Object.values(labeled.replaced).reduce((a, b) => a + b, 0)} suggestions with bug`,
-                    context: this.stageName,
-                    metadata: {
-                        organizationId:
-                            context.organizationAndTeamData?.organizationId,
-                        teamId: context.organizationAndTeamData?.teamId,
-                        prNumber,
-                        replaced: labeled.replaced,
-                    },
-                });
-            }
-
-            const validatedSuggestions = labeled.suggestions;
+            const validatedSuggestions = this.normalizeSuggestionLabels(
+                anchoredSuggestions,
+                reviewOptions,
+                !!repoInstructions?.files?.length,
+                allDiscarded,
+                logIds,
+            );
 
             // Verify/Discover removed — was hurting recall across all models.
             // Benchmark showed F1 drops of -5.7pp to -18.3pp with verify enabled.
@@ -1520,71 +1433,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // them, a group was kept or dropped whole by whichever occurrence
             // had the longest text. Also before the severity and formatter
             // passes, so a repeat costs no further model call.
-            //
-            // The finder's suggestions carry no code: the cited lines, read
-            // from the PR head as the enrichment reads them, let the check
-            // match an earlier comment on the same code in another file.
-            const headFiles = new Map(
-                [...changedFiles, ...ignoredChangedFiles].map((f) => [
-                    f.filename,
-                    f,
-                ]),
-            );
-            // The cited code goes on a copy the check reads; the suggestion
-            // itself stays lean, and the enrichment reads the code again.
-            const originalOf = new Map<
-                Partial<CodeSuggestion>,
-                Partial<CodeSuggestion>
-            >();
-            const withCitedCode = severityNormalizedNonRules.map((s) => {
-                if (s.existingCode || isCustomAgentFinding(s)) return s;
-                const file = headFiles.get(s.relevantFile);
-                // A review sent as a diff (the CLI's) has no file content:
-                // the cited lines come from the diff's new side.
-                const existingCode =
-                    file?.fileContent == null && file?.patch
-                        ? citedFromPatch(
-                              file.patch,
-                              s.relevantLinesStart ?? 1,
-                              s.relevantLinesEnd ?? s.relevantLinesStart ?? 1,
-                          )
-                        : enrichDeterministic(s, file?.fileContent ?? null)
-                              .existingCode;
-                if (!existingCode) return s;
-                const copy = { ...s, existingCode };
-                originalOf.set(copy, s);
-                return copy;
-            });
-            const repeatCheck = await this.dropRepeats(
+            const repeatCheck = await this.dropRepeatsOnCitedCode(
                 context,
-                [
-                    ...withCitedCode,
-                    ...analyzerSuggestions,
-                    ...kodyRulesWithSeverity,
-                ],
+                severityNormalizedNonRules,
+                [...analyzerSuggestions, ...kodyRulesWithSeverity],
+                [...changedFiles, ...ignoredChangedFiles],
                 kodyRulesById,
+                allDiscarded,
                 telemetryMeta,
             );
-            for (const s of repeatCheck.repeats) {
-                allDiscarded.push({
-                    ...s,
-                    priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
-                    deliveryStatus: DeliveryStatus.NOT_SENT,
-                });
-            }
-            let severityNormalized: Partial<CodeSuggestion>[] =
-                repeatCheck.kept.map((s) => {
-                    const original = originalOf.get(s);
-                    if (!original) return s;
-                    // The check links a kept finding to the earlier comment it
-                    // revises on the copy; the link goes back with it.
-                    return s.revisesSuggestionId
-                        ? {
-                              ...original,
-                              revisesSuggestionId: s.revisesSuggestionId,
-                          }
-                        : original;
-                });
+            let severityNormalized = repeatCheck.kept;
 
             // A custom agent's own severity floor and comment limit apply
             // whatever the team's filter is (#2172), and also before dedup:
@@ -2298,7 +2156,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         this.logger.log({
                             message: `[AGENT] File-anchored finding for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} sit outside every hunk, but the rule declared it needs context beyond the diff — delivering it as a PR-level comment`,
                             context: this.stageName,
-                            metadata: { ...logMeta, relevantFile: s.relevantFile },
+                            metadata: {
+                                ...logMeta,
+                                relevantFile: s.relevantFile,
+                            },
                         });
                         return { ...s, fileAnchored: true };
                     }
@@ -2328,6 +2189,179 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             })
             .filter((s): s is Partial<CodeSuggestion> => s !== null);
         return validatedSuggestions;
+    }
+
+    /**
+     * Parse schema (#1821): a finder suggestion without the five lean fields
+     * is discarded into `allDiscarded`, before anchoring, so every suggestion
+     * anchored has a file and lines. The mapper already gave it the lean shape
+     * (finding-mapper.ts, leanOutput). Custom agents write the full finding and
+     * keep main's anchoring: one without lines snaps to the first hunk.
+     * Returns what goes on to anchoring, Kody Rules last.
+     */
+    private discardUnparsedFindings(
+        suggestions: Partial<CodeSuggestion>[],
+        allDiscarded: Partial<CodeSuggestion>[],
+        /** The review's ids, on every log line. */
+        logMeta: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        },
+    ): Partial<CodeSuggestion>[] {
+        const finderSuggestions = suggestions.filter(isFinderSuggestion);
+        const parsed = parseFinderSchema(
+            finderSuggestions as Array<Record<string, unknown>>,
+        );
+        const parseDiscarded = new Set(parsed.discarded.map((d) => d.index));
+        for (const d of parsed.discarded) {
+            allDiscarded.push({
+                ...finderSuggestions[d.index],
+                priorityStatus: PriorityStatus.DISCARDED_BY_SCHEMA,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        if (parsed.discarded.length > 0) {
+            this.logger.warn({
+                message: `[PARSE-SCHEMA] PR#${logMeta.prNumber}: discarded ${parsed.discarded.length} finder suggestions missing lean fields`,
+                context: this.stageName,
+                metadata: { ...logMeta, discarded: parsed.discarded },
+            });
+        }
+        const discardedByParse = new Set(
+            finderSuggestions.filter((_, i) => parseDiscarded.has(i)),
+        );
+        return [
+            ...suggestions.filter(
+                (s) => s.label !== 'kody_rules' && !discardedByParse.has(s),
+            ),
+            ...suggestions.filter((s) => s.label === 'kody_rules'),
+        ];
+    }
+
+    /**
+     * Label normalization (#1821): a label off the list becomes `bug`, and a
+     * label the team turned off is discarded into `allDiscarded`, never moved
+     * to one that is on. Kody Rules and custom agents answer to their own
+     * config.
+     */
+    private normalizeSuggestionLabels(
+        suggestions: Partial<CodeSuggestion>[],
+        reviewOptions: ReturnType<
+            typeof resolveAgentReviewSettings
+        >['reviewOptions'],
+        hasRepoInstructions: boolean,
+        allDiscarded: Partial<CodeSuggestion>[],
+        /** The review's ids, on every log line. */
+        logMeta: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        },
+    ): Partial<CodeSuggestion>[] {
+        const labeled = normalizeFinderLabels(suggestions, {
+            allowed: new Set<string>([
+                ...CATEGORY_LABELS.filter((c) => reviewOptions?.[c] !== false),
+                ...(hasRepoInstructions ? ['repo_instruction'] : []),
+            ]),
+            exempt: (s) => s.label === 'kody_rules' || isCustomAgentFinding(s),
+        });
+        for (const s of labeled.discarded) {
+            allDiscarded.push({
+                ...s,
+                priorityStatus: PriorityStatus.DISCARDED_BY_CATEGORY,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        if (labeled.discarded.length > 0) {
+            const byLabel: Record<string, number> = {};
+            for (const s of labeled.discarded) {
+                byLabel[s.label] = (byLabel[s.label] || 0) + 1;
+            }
+            this.logger.log({
+                message: `[LABEL-NORMALIZE] PR#${logMeta.prNumber}: discarded ${labeled.discarded.length} suggestions in categories the team turned off`,
+                context: this.stageName,
+                metadata: { ...logMeta, byLabel },
+            });
+        }
+        if (Object.keys(labeled.replaced).length > 0) {
+            this.logger.warn({
+                message: `[LABEL-NORMALIZE] PR#${logMeta.prNumber}: replaced the label of ${Object.values(labeled.replaced).reduce((a, b) => a + b, 0)} suggestions with bug`,
+                context: this.stageName,
+                metadata: { ...logMeta, replaced: labeled.replaced },
+            });
+        }
+        return labeled.suggestions;
+    }
+
+    /**
+     * The repeat check (#2097) on findings that carry their cited code. The
+     * finder's suggestions carry no code: the cited lines, read from the PR
+     * head as the enrichment reads them, let the check match an earlier
+     * comment on the same code in another file. The code goes on a copy the
+     * check reads; the suggestion itself stays lean, and the enrichment reads
+     * the code again. Repeats go to `allDiscarded`; returns what was kept and
+     * the history read, so the revision links resolve against it.
+     */
+    private async dropRepeatsOnCitedCode(
+        context: CodeReviewPipelineContext,
+        nonRuleSuggestions: Partial<CodeSuggestion>[],
+        otherSuggestions: Partial<CodeSuggestion>[],
+        headFileList: FileChange[],
+        kodyRulesById: ReadonlyMap<string, Partial<IKodyRule>>,
+        allDiscarded: Partial<CodeSuggestion>[],
+        telemetryMeta?: LangfuseTelemetryMetadata,
+    ): Promise<{
+        kept: Partial<CodeSuggestion>[];
+        history: readonly PrDecisionRecord[] | undefined;
+    }> {
+        const headFiles = new Map(headFileList.map((f) => [f.filename, f]));
+        const originalOf = new Map<
+            Partial<CodeSuggestion>,
+            Partial<CodeSuggestion>
+        >();
+        const withCitedCode = nonRuleSuggestions.map((s) => {
+            if (s.existingCode || isCustomAgentFinding(s)) return s;
+            const file = headFiles.get(s.relevantFile);
+            // A review sent as a diff (the CLI's) has no file content:
+            // the cited lines come from the diff's new side.
+            const existingCode =
+                file?.fileContent == null && file?.patch
+                    ? citedFromPatch(
+                          file.patch,
+                          s.relevantLinesStart ?? 1,
+                          s.relevantLinesEnd ?? s.relevantLinesStart ?? 1,
+                      )
+                    : enrichDeterministic(s, file?.fileContent ?? null)
+                          .existingCode;
+            if (!existingCode) return s;
+            const copy = { ...s, existingCode };
+            originalOf.set(copy, s);
+            return copy;
+        });
+        const repeatCheck = await this.dropRepeats(
+            context,
+            [...withCitedCode, ...otherSuggestions],
+            kodyRulesById,
+            telemetryMeta,
+        );
+        for (const s of repeatCheck.repeats) {
+            allDiscarded.push({
+                ...s,
+                priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        const kept = repeatCheck.kept.map((s) => {
+            const original = originalOf.get(s);
+            if (!original) return s;
+            // The check links a kept finding to the earlier comment it
+            // revises on the copy; the link goes back with it.
+            return s.revisesSuggestionId
+                ? { ...original, revisesSuggestionId: s.revisesSuggestionId }
+                : original;
+        });
+        return { kept, history: repeatCheck.history };
     }
 
     /**
