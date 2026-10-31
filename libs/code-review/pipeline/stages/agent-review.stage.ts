@@ -1295,6 +1295,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // and an agent-level one for the same (model, window) fold
             // into a single bullet in the user-facing notice.
             const allWarnings = dedupReviewWarnings([
+                // Recorded by earlier stages (e.g. a diff cut at the patch
+                // line limit in FetchChangedFilesStage).
+                ...(context.reviewWarnings ?? []),
                 ...(context.customAgentClis?.warnings ?? []),
                 ...stageWarnings,
                 ...(result.warnings ?? []),

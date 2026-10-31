@@ -11,9 +11,12 @@ import {
 } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
+import { buildPatchLineLimitWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
     convertToUnifiedDiffWithLineNumbers,
+    exceedsPatchLineLimit,
     handlePatchDeletions,
+    MAX_PATCH_LINES,
 } from '@libs/common/utils/patch';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -177,8 +180,11 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
                 filesToAnalyze,
             );
 
-        const filesWithLineNumbers =
-            this.prepareFilesWithLineNumbers(filesWithContent);
+        const cutAtLineLimit: string[] = [];
+        const filesWithLineNumbers = this.prepareFilesWithLineNumbers(
+            filesWithContent,
+            cutAtLineLimit,
+        );
 
         const stats = this.getStatsForPR(filesWithLineNumbers);
 
@@ -188,9 +194,30 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             filesForCustomAgents,
         );
 
+        if (cutAtLineLimit.length > 0) {
+            this.logger.warn({
+                message: `Cut ${cutAtLineLimit.length} file diff(s) at ${MAX_PATCH_LINES} lines for PR#${context.pullRequest.number}`,
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repository: context.repository.name,
+                    files: cutAtLineLimit,
+                },
+            });
+        }
+
         return this.updateContext(context, (draft) => {
             draft.changedFiles = filesWithLineNumbers;
             draft.pullRequest.stats = stats;
+            if (cutAtLineLimit.length > 0) {
+                draft.reviewWarnings = [
+                    ...(draft.reviewWarnings ?? []),
+                    buildPatchLineLimitWarning({
+                        filenames: cutAtLineLimit,
+                        maxLines: MAX_PATCH_LINES,
+                    }),
+                ];
+            }
             draft.ignoredFiles = ignoredList?.map((f) => f.filename) || [];
             draft.ignoredFileChanges = ignoredFileChanges;
         });
@@ -285,7 +312,12 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
         return { canProceed: true };
     }
 
-    private prepareFilesWithLineNumbers(files: FileChange[]): FileChange[] {
+    /** Names of the files whose diff was cut at MAX_PATCH_LINES are pushed
+     *  to `cutAtLineLimit`. */
+    private prepareFilesWithLineNumbers(
+        files: FileChange[],
+        cutAtLineLimit: string[] = [],
+    ): FileChange[] {
         if (!files?.length || files?.length === 0) {
             return [];
         }
@@ -310,6 +342,9 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
                     patchFormatted,
                     file,
                 );
+                if (exceedsPatchLineLimit(patchFormatted)) {
+                    cutAtLineLimit.push(file.filename);
+                }
 
                 return {
                     ...file,
