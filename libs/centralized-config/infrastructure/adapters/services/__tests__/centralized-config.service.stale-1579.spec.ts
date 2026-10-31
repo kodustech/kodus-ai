@@ -42,6 +42,7 @@ import { PULL_REQUEST_MESSAGES_SERVICE_TOKEN } from '@libs/code-review/domain/pu
 import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
 import { DeleteRuleInOrganizationByIdKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/delete-rule-in-organization-by-id.use-case';
 import { KODY_RULES_SERVICE_TOKEN } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
+import { TEAM_SERVICE_TOKEN } from '@libs/organization/domain/team/contracts/team.service.contract';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import { CentralizedConfigService } from '../centralized-config.service';
 
@@ -350,6 +351,10 @@ async function buildHarness(opts: {
                 useValue: deleteRuleUseCase,
             },
             { provide: KODY_RULES_SERVICE_TOKEN, useValue: kodyRulesService },
+            {
+                provide: TEAM_SERVICE_TOKEN,
+                useValue: { find: jest.fn().mockResolvedValue([]) },
+            },
         ],
     }).compile();
 
