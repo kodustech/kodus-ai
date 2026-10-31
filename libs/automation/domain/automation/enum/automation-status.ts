@@ -30,6 +30,7 @@ export enum AutomationMessage {
     NO_NEW_COMMITS_SINCE_LAST = 'No new commits since the last run.',
     ONLY_MERGE_COMMITS_SINCE_LAST = 'Only merge commits since the last run.',
     PROVIDER_RATE_LIMITED = 'The Git provider rate-limited the request; the review was not run.',
+    PROVIDER_CREDENTIAL_REJECTED = 'The Git provider rejected the integration credential (HTTP 401); reconnect the integration.',
     USER_IGNORED = 'User is ignored by configuration.',
     VALIDATION_FAILED = 'Prerequisites validation failed.',
 }

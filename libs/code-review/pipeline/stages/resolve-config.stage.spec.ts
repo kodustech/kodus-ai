@@ -154,6 +154,31 @@ describe('ResolveConfigStage — input contract', () => {
         });
     });
 
+    it.each([
+        [
+            'GitHub 401',
+            Object.assign(new Error('Bad credentials'), { status: 401 }),
+        ],
+        [
+            'GitLab 401',
+            Object.assign(new Error('invalid_token'), {
+                cause: { response: { status: 401 } },
+            }),
+        ],
+    ])(
+        'SKIPS with a credential message, not a config one, on a %s (#2107)',
+        async (_, error) => {
+            prManager.getChangedFilesMetadata.mockRejectedValue(error);
+
+            const result = await stage.execute(buildContext());
+
+            expect(result.statusInfo).toEqual({
+                status: AutomationStatus.SKIPPED,
+                message: AutomationMessage.PROVIDER_CREDENTIAL_REJECTED,
+            });
+        },
+    );
+
     it('runs the centralized-config sync ONLY when it is enabled', async () => {
         // disabled → no sync resolution
         await stage.execute(buildContext());
