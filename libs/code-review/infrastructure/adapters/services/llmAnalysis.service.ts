@@ -218,6 +218,8 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 codePatch,
                 codeSuggestions,
             );
+            // No patch section matches a suggestion: nothing to verify against.
+            if (!batches.length) return codeSuggestions;
 
             // One call per batch: a diff that exceeds the BYOK slot's context
             // window is rejected by the provider, so each batch carries only the
@@ -385,33 +387,62 @@ export class LLMAnalysisService implements IAIAnalysisService {
             const forFile = filename && suggestionsByFile.get(filename);
             if (!forFile) continue;
 
-            let section = raw;
             // The prompt embeds the patch JSON-escaped, which costs more tokens.
             const cost = (text: string) => estimateTokens(JSON.stringify(text));
-            // Room left for patch text next to this file's own suggestions.
-            const own = budget - fixedFor(forFile);
-            let tokens = cost(section);
-            // A single patch over the budget is cut, measuring as it goes: no
-            // fixed chars-per-token ratio holds for dense diffs.
-            while (own > 0 && tokens > own && section.length > 1) {
-                section = section.slice(
-                    0,
-                    Math.floor((section.length * own) / tokens) - 1,
-                );
-                tokens = cost(section);
+            // One file can carry more suggestions than a request holds: group
+            // them so the fixed part leaves at least half the budget for the
+            // patch, then give each group the section cut to what is left.
+            const groups: Partial<CodeSuggestion>[][] = [];
+            let group: Partial<CodeSuggestion>[] = [];
+            for (const suggestion of forFile) {
+                if (
+                    group.length &&
+                    fixedFor([...group, suggestion]) > budget / 2
+                ) {
+                    groups.push(group);
+                    group = [];
+                }
+                group.push(suggestion);
             }
-            if (
-                suggestions.length &&
-                fixedFor([...suggestions, ...forFile]) + used + tokens > budget
-            ) {
-                flush();
+            if (group.length) groups.push(group);
+
+            for (const [index, groupSuggestions] of groups.entries()) {
+                // Each group carries its own copy of the section: keep them in
+                // separate requests.
+                if (index > 0) flush();
+                let section = raw;
+                // Room left for patch text next to this group's suggestions.
+                const own = budget - fixedFor(groupSuggestions);
+                // Suggestions that alone fill the slot cannot be verified.
+                if (own <= 0) continue;
+                let tokens = cost(section);
+                // A single patch over the budget is cut, measuring as it goes:
+                // no fixed chars-per-token ratio holds for dense diffs.
+                while (tokens > own && section.length > 1) {
+                    section = section.slice(
+                        0,
+                        Math.floor((section.length * own) / tokens) - 1,
+                    );
+                    tokens = cost(section);
+                }
+                if (
+                    suggestions.length &&
+                    fixedFor([...suggestions, ...groupSuggestions]) +
+                        used +
+                        tokens >
+                        budget
+                ) {
+                    flush();
+                }
+                sections.push(section);
+                suggestions.push(...groupSuggestions);
+                used += tokens;
             }
-            sections.push(section);
-            suggestions.push(...forFile);
-            used += tokens;
         }
         flush();
 
-        return batches.length ? batches : [whole];
+        // Nothing matched a patch section: there is nothing to verify against,
+        // and resending the oversized payload would only be rejected.
+        return batches;
     }
 }

@@ -302,6 +302,57 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             }
         });
 
+        it('splits one file with many suggestions into requests that each fit the slot', async () => {
+            const codePatch = `File: a.ts\n${'+ const x = 1;\n'.repeat(500)}`;
+            const sugg = Array.from({ length: 40 }, (_, n) => ({
+                id: `a-${n}`,
+                relevantFile: 'a.ts',
+                suggestionContent: 'lorem ipsum '.repeat(300),
+            })) as any[];
+            runSpy.mockResolvedValue({ codeSuggestions: [] });
+            const service = buildService();
+            jest.spyOn(
+                (service as any).llmResponseProcessor,
+                'processResponse',
+            ).mockReturnValue({ codeSuggestions: [] });
+
+            await service.validateImplementedSuggestions(
+                org,
+                77,
+                { ...byokConfig, maxInputTokens: 12000 },
+                codePatch,
+                sugg,
+            );
+
+            expect(runSpy.mock.calls.length).toBeGreaterThan(1);
+            const seen = new Set<string>();
+            for (const [arg] of runSpy.mock.calls) {
+                expect(estimateTokens(arg.user)).toBeLessThanOrEqual(12000);
+                for (const x of sugg) {
+                    if (arg.user.includes(`"${x.id}"`)) seen.add(x.id);
+                }
+            }
+            expect(seen.size).toBe(40);
+        });
+
+        it('makes no request when no suggestion has a patch section', async () => {
+            const codePatch = `File: a.ts\n${'+ const x = 1;\n'.repeat(20000)}`;
+            const sugg = [{ id: 'z', relevantFile: 'binary.png' }] as any[];
+            runSpy.mockResolvedValue({ codeSuggestions: [] });
+            const service = buildService();
+
+            const out = await service.validateImplementedSuggestions(
+                org,
+                77,
+                { ...byokConfig, maxInputTokens: 12000 },
+                codePatch,
+                sugg,
+            );
+
+            expect(runSpy).not.toHaveBeenCalled();
+            expect(out).toEqual(sugg);
+        });
+
         it('keeps the results of the batches that succeed when one batch throws', async () => {
             const bigPatch = (name: string) =>
                 `File: ${name}\n${'+ const x = 1;\n'.repeat(1500)}`;
