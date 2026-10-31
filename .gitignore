@@ -307,3 +307,12 @@ evals/severity/results/
 # Research data kept locally, out of the repo (#1821).
 evals/dedup/gold-v3/trabalho/
 evals/dedup/holdout-20/
+evals/shared/secondary-models.js
+evals/dedup/dedup-runner.js
+evals/enrichment/dataset/candidates.json
+evals/enrichment/dataset/references-self/
+evals/enrichment/dataset/references-candidates/
+evals/severity/dataset/*
+!evals/severity/dataset/items.json
+evals/benchmark-sets/
+.kodus/workspace.bench.yaml
