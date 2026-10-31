@@ -10,7 +10,9 @@ import {
     OnModuleDestroy,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectDataSource } from '@nestjs/typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { DataSource } from 'typeorm';
 
 import {
     IOutboxMessageRepository,
@@ -27,6 +29,7 @@ import {
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { OutboxMessageModel } from './repositories/schemas/outbox-message.model';
+import { OutboxMessage } from '@libs/core/workflow/domain/interfaces/outbox-message.interface';
 import {
     DistributedLock,
     DistributedLockService,
@@ -148,6 +151,8 @@ export class OutboxRelayService
         private readonly observability: ObservabilityService,
         private readonly configService: ConfigService,
         private readonly distributedLockService: DistributedLockService,
+        @InjectDataSource()
+        private readonly dataSource: DataSource,
         @Inject(SANDBOX_LEASE_MANAGER_TOKEN)
         private readonly sandboxLeaseManager: ISandboxLeaseManager,
         @Optional()
@@ -481,6 +486,44 @@ export class OutboxRelayService
     }
 
     /**
+     * Builds the resume message for one reclaimed job, as an OUTBOX row rather
+     * than a publish (#1902 review). Publishing here left the failure
+     * invisible: the row was already PENDING, the broker rejected the message,
+     * and nothing ever re-drove it. The relay that owns the outbox retries the
+     * publish and, when it gives up, marks the job FAILED, which is the state a
+     * person can act on. The reaper writes these inside the requeue
+     * transaction, so a rejection rolls the requeue back instead of leaving the
+     * row PENDING with no message and nothing to re-drive it.
+     *
+     * Pure, and returned rather than written: the reaper collects one message
+     * per reclaimed job and writes them in one batch, instead of two round
+     * trips per job while that transaction is open (#1902 review).
+     */
+    private reclaimedJobMessage(
+        uuid: string,
+        workflowType: string,
+        at: Date,
+    ): OutboxMessage {
+        return {
+            jobId: uuid,
+            exchange: 'workflow.exchange',
+            routingKey: `workflow.jobs.resumed.${workflowType}`,
+            payload: {
+                event_name: 'workflow.jobs.resumed',
+                event_version: 1,
+                occurred_on: at,
+                // The relay reads the envelope's `payload` for the job id and
+                // the workflow type it puts in the AMQP headers, and the
+                // consumer reads `jobId` to re-drive the turn. `messageId` is
+                // set at insert time to the row uuid, which is what the
+                // envelope carries once written.
+                payload: { jobId: uuid, workflowType },
+            },
+            nextAttemptAt: at,
+        };
+    }
+
+    /**
      * Reaper for workflow jobs orphaned in PROCESSING.
      *
      * A worker SIGKILLed mid-job (OOM / node eviction / /tmp overflow) never
@@ -508,55 +551,314 @@ export class OutboxRelayService
         }
 
         try {
+            const now = new Date();
             const olderThan = new Date(
                 Date.now() - this.staleJobTimeoutMinutes * 60 * 1000,
             );
 
-            const reaped = await this.jobRepository.failStaleProcessing?.({
-                olderThan,
-                lastError: `Orphaned: worker crashed/evicted while job was PROCESSING (no terminal update within ${this.staleJobTimeoutMinutes}min). Reaped by stale-job watchdog.`,
-                errorClassification: ErrorClassification.PERMANENT,
-            });
+            // Reclaim by job-ownership LEASE (issue #1830): PROCESSING jobs
+            // whose lease has EXPIRED (a worker that died can no longer renew)
+            // or, for legacy rows that pre-date the lease, jobs older than the
+            // age cutoff. A renewed lease means the worker is alive — leave it
+            // alone. This detects a dead worker in ~90s instead of waiting out
+            // the 180-min in-process timeout.
+            const stale =
+                (await this.jobRepository.findStaleProcessing?.({
+                    now,
+                    olderThan,
+                })) ?? [];
+            if (stale.length === 0) {
+                return;
+            }
 
-            const reapedCount = reaped?.length ?? 0;
+            // Retry budget still available? `retryCount` is the number of
+            // retries ALREADY consumed, so a job is requeueable while
+            // `retryCount < maxRetries`. The previous `+ 1 < maxRetries` was
+            // always false for `maxRetries: 1` (code_review /
+            // check_implementation): a first-ever stale job (retryCount 0)
+            // went straight to FAILED instead of being retried.
+            // Only rows that actually carried a lease are reclaimed and retried
+            // (#1830 review). A PROCESSING row with no lease predates the lease
+            // (every workflow type other than code review), and on `main` those
+            // were failed as PERMANENT. Requeueing them would republish a job
+            // that may be what killed its worker (an OOM on a huge repo) up to
+            // `maxRetries` times, taking several more workers down with it. They
+            // keep the legacy fail-only path below instead.
+            const requeueable = stale.filter(
+                (job) =>
+                    job.leaseExpiresAt != null &&
+                    (job.retryCount ?? 0) < (job.maxRetries ?? 3),
+            );
+            // Set membership keeps the dead partition O(n) instead of the
+            // O(n²) `requeueable.includes(job)` scan over the whole batch.
+            const requeueableSet = new Set(requeueable);
+            const dead = stale.filter((job) => !requeueableSet.has(job));
+            const requeueUuids = requeueable.map((job) => job.uuid);
+            // Two kinds of dead row, and they must not share a message: one had
+            // a lease and spent its retry budget, the other never had a lease at
+            // all (every workflow type except code review). Telling both that
+            // "the lease expired" was the misleading diagnosis that made #1830
+            // harder to read (#1902 review).
+            const retryExhausted = dead.filter(
+                (job) => job.leaseExpiresAt != null,
+            );
+            const neverLeased = dead.filter(
+                (job) => job.leaseExpiresAt == null,
+            );
+            const leaseExpiredReason =
+                'Worker died while job was PROCESSING (job lease expired) — reclaimed by stale-job watchdog.';
+            const unleasedReason =
+                'Job left PROCESSING without a lease (this workflow type does not take one) — reclaimed by stale-job watchdog, never retried.';
+
+            // Fire both writes concurrently and settle BOTH before counting:
+            // sequenced awaits meant a rejection on the first write skipped the
+            // second entirely, leaving half the stale batch unreclaimed.
+            //
+            // The requeue and its resume message are ONE unit of work (#1902
+            // review). `requeueStaleJobs` only flips PROCESSING to PENDING, and
+            // the reaper only ever looks at PROCESSING rows, so a requeued row
+            // whose outbox insert never landed stayed PENDING with no message
+            // and nothing to re-drive it. Both writes now share a transaction:
+            // if a message write rejects, the requeue rolls back, the row is
+            // still PROCESSING with its expired lease, and the next cycle picks
+            // it up again. The retry counter rolls back too, so a transient
+            // outbox failure does not spend the job's retry budget.
+            const requeueTask = (async (): Promise<string[]> => {
+                if (
+                    requeueUuids.length === 0 ||
+                    !this.jobRepository.requeueStaleJobs
+                ) {
+                    return [];
+                }
+                // Keep the call on the repository: reading the method into a
+                // local drops its receiver, and the implementation reads
+                // `this.repository` (#1902 review).
+                const repository = this.jobRepository;
+                const typeByUuid = new Map(
+                    requeueable.map((job) => [job.uuid, job.workflowType]),
+                );
+
+                return this.dataSource.transaction(
+                    async (transactionManager) => {
+                        const requeuedUuids =
+                            await repository.requeueStaleJobs!(
+                                {
+                                    uuids: requeueUuids,
+                                    lastError: leaseExpiredReason,
+                                    requeuedBy: this.constructor.name,
+                                    // Tenant traceability: the uuid list alone
+                                    // cannot be correlated to an organization
+                                    // in the log system.
+                                    organizationIds: [
+                                        ...new Set(
+                                            requeueable.map(
+                                                (job) => job.organizationId,
+                                            ),
+                                        ),
+                                    ],
+                                },
+                                transactionManager,
+                            );
+
+                        // Only the rows the guarded UPDATE actually flipped get
+                        // a message: a job that finished between the SELECT and
+                        // the write must not be re-driven (#1902).
+                        const resumeMessages = requeuedUuids.map((uuid) => {
+                            const workflowType = typeByUuid.get(uuid);
+                            if (workflowType === undefined) {
+                                // Committing here would leave the row PENDING
+                                // with no resume message, the exact state this
+                                // transaction exists to prevent. Throwing rolls
+                                // the requeue back, so the row stays PROCESSING
+                                // and the next cycle reports it again instead of
+                                // stranding it silently (#1902 review).
+                                throw new Error(
+                                    `Reclaimed workflow job ${uuid} has no workflow type; refusing to requeue it without a resume message`,
+                                );
+                            }
+                            return this.reclaimedJobMessage(
+                                uuid,
+                                workflowType,
+                                now,
+                            );
+                        });
+
+                        // One insert for the whole batch, on the requeue
+                        // transaction: per-job writes held this transaction
+                        // open for two round trips per backlog item (#1902
+                        // review). A cycle that flipped nothing writes nothing.
+                        if (resumeMessages.length > 0) {
+                            await this.outboxRepository.createMany(
+                                resumeMessages,
+                                transactionManager,
+                            );
+                        }
+
+                        return requeuedUuids;
+                    },
+                );
+            })();
+            const failTask = (async (): Promise<number> => {
+                // Keep the call on the repository: reading the method into a
+                // local drops its receiver, and the implementation reads
+                // `this.repository` (#1902 review).
+                const repository = this.jobRepository;
+                if (!repository.failStaleJobs) {
+                    return 0;
+                }
+                const groups = [
+                    {
+                        jobs: retryExhausted,
+                        lastError: `${leaseExpiredReason} Retry budget exhausted (${retryExhausted.length} job(s)).`,
+                    },
+                    { jobs: neverLeased, lastError: unleasedReason },
+                ].filter((group) => group.jobs.length > 0);
+
+                // Settle both writes: with Promise.all a rejected one hid the
+                // other group's outcome, so a batch that half landed was
+                // reported as wholly failed, and the group that succeeded was
+                // never counted in the reap report (#1902 review).
+                const results = await Promise.allSettled(
+                    groups.map((group) =>
+                        repository.failStaleJobs({
+                            uuids: group.jobs.map((job) => job.uuid),
+                            lastError: group.lastError,
+                            errorClassification: ErrorClassification.PERMANENT,
+                        }),
+                    ),
+                );
+
+                let failed = 0;
+                results.forEach((result, index) => {
+                    if (result.status === 'fulfilled') {
+                        failed += result.value ?? 0;
+                        return;
+                    }
+                    this.logger.error({
+                        message: 'Failed to permanently fail stale workflow jobs',
+                        context: OutboxRelayService.name,
+                        error:
+                            result.reason instanceof Error
+                                ? result.reason
+                                : new Error(String(result.reason)),
+                        metadata: {
+                            uuids: groups[index].jobs.map((job) => job.uuid),
+                            organizationIds: [
+                                ...new Set(
+                                    groups[index].jobs.map(
+                                        (job) => job.organizationId,
+                                    ),
+                                ),
+                            ],
+                        },
+                    });
+                });
+                return failed;
+            })();
+
+            const [requeueResult, failResult] = await Promise.allSettled([
+                requeueTask,
+                failTask,
+            ]);
+
+            if (requeueResult.status === 'rejected') {
+                this.logger.error({
+                    message:
+                        'Failed to requeue stale PROCESSING workflow jobs and queue their resume messages',
+                    context: OutboxRelayService.name,
+                    error:
+                        requeueResult.reason instanceof Error
+                            ? requeueResult.reason
+                            : new Error(String(requeueResult.reason)),
+                    metadata: {
+                        uuids: requeueUuids,
+                        organizationIds: [
+                            ...new Set(
+                                requeueable.map((job) => job.organizationId),
+                            ),
+                        ],
+                        // The requeue and its resume messages are one
+                        // transaction, so a failure here means nothing landed:
+                        // the rows are still PROCESSING with an expired lease
+                        // and the next cycle retries them.
+                        rolledBack: true,
+                    },
+                });
+            }
+            if (failResult.status === 'rejected') {
+                this.logger.error({
+                    message: 'Failed to permanently fail stale workflow jobs',
+                    context: OutboxRelayService.name,
+                    error:
+                        failResult.reason instanceof Error
+                            ? failResult.reason
+                            : new Error(String(failResult.reason)),
+                    metadata: {
+                        uuids: dead.map((job) => job.uuid),
+                        // Tenant-scoped rows: without the organization ids a
+                        // batch failure cannot be correlated to a customer in
+                        // the log system (#1902 review).
+                        organizationIds: [
+                            ...new Set(
+                                dead.map((job) => job.organizationId),
+                            ),
+                        ],
+                    },
+                });
+            }
+
+            const requeued =
+                requeueResult.status === 'fulfilled'
+                    ? requeueResult.value.length
+                    : 0;
+            const permanentlyFailed =
+                failResult.status === 'fulfilled' ? (failResult.value ?? 0) : 0;
+
+            const reapedCount = requeued + permanentlyFailed;
             if (reapedCount === 0) {
                 return;
             }
 
             this.logger.warn({
-                message: `Reaped ${reapedCount} stale PROCESSING workflow jobs`,
+                message: `Reclaimed ${requeued} stale PROCESSING workflow job(s) for retry; permanently failed ${permanentlyFailed}`,
                 context: OutboxRelayService.name,
                 metadata: {
-                    reapedCount,
+                    requeued,
+                    permanentlyFailed,
                     staleTimeoutMinutes: this.staleJobTimeoutMinutes,
-                    olderThan: olderThan.toISOString(),
-                    jobs: reaped.map((job) => ({
+                    now: now.toISOString(),
+                    stale: stale.map((job) => ({
                         jobId: job.uuid,
                         workflowType: job.workflowType,
                         organizationId: job.organizationId,
                         startedAt: job.startedAt,
+                        leaseExpiresAt: job.leaseExpiresAt,
+                        retryCount: job.retryCount,
+                        maxRetries: job.maxRetries,
                     })),
                 },
             });
 
             if (reapedCount > STALE_JOB_HIGH_REAP_THRESHOLD) {
                 this.logger.error({
-                    message: `HIGH REAP RATE: ${reapedCount} workflow jobs orphaned in PROCESSING!`,
+                    message: `HIGH REAP RATE: ${reapedCount} workflow jobs reclaimed from PROCESSING (${requeued} for retry, ${permanentlyFailed} permanently failed)!`,
                     context: OutboxRelayService.name,
                     metadata: {
-                        reapedCount,
+                        requeued,
+                        permanentlyFailed,
                         possibleCause:
-                            'Worker crashes/evictions (OOM, node pressure, restarts)',
+                            'Worker crashes/evictions (OOM, node pressure, restarts) — detected by an expired job-ownership lease',
                     },
                 });
 
                 this.incidentManager
                     ?.failHeartbeat(
                         'API_BETTERSTACK_HEARTBEAT_OUTBOX_URL',
-                        `High stale-job reap rate: ${reapedCount} workflow jobs orphaned in PROCESSING. Possible cause: worker crashes/evictions (OOM, node pressure, restarts). ${this.formatContext(
+                        `High stale-job reap rate: ${reapedCount} workflow jobs reclaimed from PROCESSING (${requeued} for retry, ${permanentlyFailed} permanently failed). Possible cause: worker crashes/evictions (OOM, node pressure, restarts) — job-ownership lease expired. ${this.formatContext(
                             {
                                 monitor: 'stale_job_reap_rate',
-                                reapedCount,
+                                requeued,
+                                permanentlyFailed,
                             },
                         )}`,
                     )
@@ -566,7 +868,7 @@ export class OutboxRelayService
                                 'Failed to report stale-job reap heartbeat failure',
                             context: OutboxRelayService.name,
                             error: err instanceof Error ? err : undefined,
-                            metadata: { reapedCount },
+                            metadata: { requeued, permanentlyFailed },
                         });
                     });
             }
