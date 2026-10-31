@@ -873,7 +873,9 @@ describe('#1518 guards must not make the last element undeletable', () => {
     const rule = (uuid: string, path?: string) => ({
         uuid,
         title: uuid,
-        centralizedConfig: path ? { path } : undefined,
+        centralizedConfig: path
+            ? { path, sourceRepositoryId: 'config-repo' }
+            : undefined,
     });
 
     it('P1: the last centralized rule is removable when the tree read is proven', async () => {

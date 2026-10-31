@@ -2089,6 +2089,16 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     continue;
                 }
 
+                // Another team's config repository owns this rule (#2215).
+                const ruleSourceRepositoryId =
+                    existingRule.centralizedConfig?.sourceRepositoryId;
+                if (
+                    ruleSourceRepositoryId &&
+                    ruleSourceRepositoryId !== String(centralizedRepository.id)
+                ) {
+                    continue;
+                }
+
                 const currentMapped =
                     existingRuleBySourcePath.get(sourcePathKey);
 
@@ -2317,6 +2327,9 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         centralizedConfig: {
                             path: ruleFileMeta.path,
                             status: KodyRuleCentralizedStatus.SYNCED,
+                            sourceRepositoryId: String(
+                                centralizedRepository.id,
+                            ),
                         },
                         origin:
                             existingMatch?.origin ??
@@ -2500,6 +2513,14 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 ruleFiles.map((meta) => meta.path),
             );
 
+            const centralizedConfigParameter =
+                await this.parametersService.findByKey(
+                    ParametersKey.CENTRALIZED_CONFIG,
+                    organizationAndTeamData,
+                );
+            const configRepositoryId =
+                centralizedConfigParameter?.configValue?.repository?.id;
+
             let removedCount = 0;
 
             const existingRules = existingEntity?.toJson?.()?.rules || [];
@@ -2550,6 +2571,22 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 // centralized PR is open) — deleting it here would wipe data
                 // the centralized config never owned.
                 if (!sourcePath) {
+                    continue;
+                }
+
+                // Rules are stored per organization, but each team syncs its
+                // own config repository: only reconcile this repository's
+                // rules (#2215). Rules synced before the marker existed are
+                // stamped by the next sync that still has their file; until
+                // then absence proves nothing, unless a delete was requested.
+                const ruleSourceRepositoryId =
+                    rule.centralizedConfig?.sourceRepositoryId;
+                const isOwnRule = ruleSourceRepositoryId
+                    ? configRepositoryId !== undefined &&
+                      ruleSourceRepositoryId === String(configRepositoryId)
+                    : rule.centralizedConfig?.status ===
+                      KodyRuleCentralizedStatus.PENDING_DELETE;
+                if (!isOwnRule) {
                     continue;
                 }
 
