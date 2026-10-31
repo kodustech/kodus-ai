@@ -1,4 +1,10 @@
+import axios from 'axios';
+
 import { AzureReposRequestHelper } from './azure-repos-request-helper';
+
+jest.mock('@libs/common/utils/crypto', () => ({
+    decrypt: (value: string) => value,
+}));
 
 /**
  * Tests for the two pre-existing bugs in the Azure DevOps adapter
@@ -225,5 +231,61 @@ describe('AzureReposRequestHelper.getFileContent — 404 wrapper preserves statu
         // as 404 and silently swallowed downstream.
         expect(thrown).toBeDefined();
         expect(thrown.status).not.toBe(404);
+    });
+});
+
+describe('AzureReposRequestHelper base URL (issue #2246)', () => {
+    let helper: AzureReposRequestHelper;
+    let createSpy: jest.SpyInstance;
+    let get: jest.Mock;
+
+    beforeEach(() => {
+        helper = new AzureReposRequestHelper();
+        get = jest.fn().mockResolvedValue({ data: { value: [] } });
+        createSpy = jest.spyOn(axios, 'create').mockReturnValue({ get } as any);
+    });
+
+    afterEach(() => {
+        delete process.env.API_AZURE_DEVOPS_BASE_URL;
+        createSpy.mockRestore();
+    });
+
+    it('defaults to dev.azure.com and vssps.dev.azure.com', async () => {
+        await helper.getProjects({ orgName: 'org', token: 'pat' });
+        await helper.getUser({
+            orgName: 'org',
+            token: 'pat',
+            identifier: 'user@example.com',
+        });
+
+        expect(createSpy.mock.calls[0][0].baseURL).toBe(
+            'https://dev.azure.com/org',
+        );
+        expect(createSpy.mock.calls[1][0].baseURL).toBe(
+            'https://vssps.dev.azure.com/org',
+        );
+        expect(get.mock.calls[1][0]).toMatch(/^\/_apis\/graph\/users\?/);
+    });
+
+    it('uses API_AZURE_DEVOPS_BASE_URL for core and graph calls', async () => {
+        process.env.API_AZURE_DEVOPS_BASE_URL = 'https://tfs.example.com/tfs/';
+
+        await helper.getProjects({
+            orgName: 'DefaultCollection',
+            token: 'pat',
+        });
+        await helper.getUser({
+            orgName: 'DefaultCollection',
+            token: 'pat',
+            identifier: 'user@example.com',
+        });
+
+        expect(createSpy.mock.calls[0][0].baseURL).toBe(
+            'https://tfs.example.com/tfs/DefaultCollection',
+        );
+        expect(createSpy.mock.calls[1][0].baseURL).toBe(
+            'https://tfs.example.com/tfs/DefaultCollection',
+        );
+        expect(get.mock.calls[1][0]).toMatch(/^\/_apis\/graph\/users\?/);
     });
 });

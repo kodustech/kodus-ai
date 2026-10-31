@@ -166,6 +166,7 @@
 | `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
 | `BITBUCKET_RATE_GATE_MIN_INTERVAL_MS` | – | number | ⚙️ Both (opt-in) | Minimum interval (ms) between Bitbucket API calls per worker instance. In-memory rate gate to keep us under Bitbucket's per-minute throttle. Note: this is per-replica — with N workers the effective rate is N× whatever you set here. 400ms is safe for typical multi-replica setups; raise it if a customer's Bitbucket instance throttles aggressively. |
 | `BITBUCKET_RATE_GATE_429_MAX_RETRIES` | – | number | ⚙️ Both (opt-in) | How many times to retry a Bitbucket call that returns HTTP 429 (honouring Retry-After) before giving up. Reviews legitimately burst past Bitbucket Cloud's ~1000 req/hour ceiling; retrying keeps them alive instead of failing the review. 4 attempts covers the worst observed throttle windows. |
+| `API_AZURE_DEVOPS_BASE_URL` | – | url | ⚙️ Both | Base URL of a self-hosted Azure DevOps Server, e.g. https://tfs.example.com/tfs. The organization name entered in the Azure Repos connection is then the collection name. Leave empty for Azure DevOps Services (dev.azure.com). |
 | `GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
 | `API_FORGEJO_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
 | `CODE_MANAGEMENT_SECRET` | ✅ | secret | ⚙️ Both | Shared secret used to sign internal webhook calls. |
