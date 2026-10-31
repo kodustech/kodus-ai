@@ -127,7 +127,9 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
             return this.updateContext(context, (draft) => {
                 draft.statusInfo = {
                     status: AutomationStatus.SKIPPED,
-                    message: AutomationMessage.FAILED_RESOLVE_CONFIG,
+                    message: isUnauthorizedError(error)
+                        ? AutomationMessage.PROVIDER_CREDENTIAL_REJECTED
+                        : AutomationMessage.FAILED_RESOLVE_CONFIG,
                 };
             });
         }
@@ -201,4 +203,13 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
 
         return pullRequestMessagesConfig;
     }
+}
+
+// Octokit sets `status`; gitbeaker keeps the response on `cause`.
+function isUnauthorizedError(error: any): boolean {
+    return (
+        error?.status === 401 ||
+        error?.response?.status === 401 ||
+        error?.cause?.response?.status === 401
+    );
 }
