@@ -166,7 +166,22 @@ export function createMCPAdapter(config: MCPAdapterConfig): MCPAdapter {
             await this.ensureConnection();
 
             const mcpTools = await registry.listAllTools();
-            const engineTools = mcpToolsToEngineTools(mcpTools);
+            const engineTools = mcpToolsToEngineTools(
+                mcpTools,
+                (toolName, servers) => {
+                    const message = `MCP tool "${toolName}" is listed by more than one server (${servers.join(', ')}); leaving it out so the other tools stay available. Rename it in one of the servers to use it.`;
+
+                    logger.warn({
+                        message,
+                        context: 'getTools',
+                        metadata: { toolName, servers },
+                    });
+
+                    // The caller decides what to show: connectMcpTools forwards
+                    // this to the conversation, which runs without that tool.
+                    config.onError?.(new Error(message), 'mcp-adapter');
+                },
+            );
 
             return engineTools.map((tool: EngineTool) => ({
                 name: tool.name,
