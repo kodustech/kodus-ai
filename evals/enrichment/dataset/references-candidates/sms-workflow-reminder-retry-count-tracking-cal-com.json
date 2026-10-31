@@ -1,0 +1,33 @@
+{
+ "caseId": "sms-workflow-reminder-retry-count-tracking-cal-com",
+ "items": [
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#02",
+   "defectStatement": "The retryCount > 1 branch of the cleanup OR lacks an SMS method filter, allowing the SMS cron to delete email or WhatsApp reminders whose retry count exceeds one.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Restrict retry-count cleanup to SMS reminders.",
+    "Preserve deletion of SMS reminders with retryCount > 1.",
+    "Preserve the existing scheduled-date cleanup behavior."
+   ],
+   "exampleFix": "        {\n          method: WorkflowMethods.SMS,\n          retryCount: {\n            gt: 1,\n          },\n        },",
+   "notes": "The method constraint must apply within this OR branch; the sibling branch's constraint does not apply here."
+  },
+  {
+   "issueId": "sms-workflow-reminder-retry-count-tracking-cal-com#06",
+   "defectStatement": "The outer catch increments retryCount for unrelated preparation and database exceptions as well as SMS-provider exceptions. If those increments succeed twice, affected reminders become eligible for deletion on the next cleanup despite potentially never reaching SMS scheduling.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Do not consume the retry budget for unrelated exceptions caught by the outer handler.",
+    "Preserve error logging and continuation to subsequent reminders.",
+    "Preserve successful scheduling updates and the existing falsy-result retry accounting."
+   ],
+   "exampleFix": "    } catch (error) {\n      console.log(`Error scheduling SMS with error ${error}`);",
+   "notes": "Removing the broad increment is a conservative local fix; thrown provider errors also remain uncounted. Preserving retry accounting specifically for provider exceptions requires wider changes around the scheduling call. Whole-queue deletion is conditional, and an outage preventing counter updates will not itself accumulate retries."
+  }
+ ]
+}

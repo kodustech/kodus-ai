@@ -1,0 +1,634 @@
+{
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#15": {
+  "severity": "medium",
+  "reason": "The request returns all-zero counts, falling under wrong metrics or other secondary output."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03": {
+  "severity": "medium",
+  "reason": "Missing production assets break the embed iframe, falling under failures confined to an embed."
+ },
+ "unified-storage-performance-optimizations-grafana-codex#02": {
+  "severity": "high",
+  "reason": "Concurrent index publication can cause a fatal initialization panic, making a supported operational path unusable."
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02": {
+  "severity": "high",
+  "reason": "Every metric_alert_fire detector crashes when processed, making that supported operational path unusable."
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#05": {
+  "severity": "low",
+  "reason": "The docstring incorrectly describes process allocation, falling under maintenance inconsistencies."
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#02": {
+  "severity": "medium",
+  "reason": "An unavailable slot is incorrectly shown as available, falling under wrong secondary output without supported acceptance of an ineligible booking."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#03": {
+  "severity": "high",
+  "reason": "Deletion targets the primary calendar instead of the stored destination, causing an essential calendar integration effect to fail."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#01": {
+  "severity": "medium",
+  "reason": "Spoofed messages can manipulate iframe height, constituting a limited security weakness without a supported stronger consequence."
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com#10": {
+  "severity": "high",
+  "reason": "Persisting the refresh-result wrapper corrupts credentials and breaks Google Calendar integration, making a supported operational path unusable."
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#08": {
+  "severity": "medium",
+  "reason": "Raw-count ranking selects the wrong top groups, falling under wrong metrics or other secondary output."
+ },
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#01": {
+  "severity": "low",
+  "reason": "Incorrect docstring examples and a typo are maintenance inconsistencies."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#05": {
+  "severity": "low",
+  "reason": "Swapped fabricator filenames create a maintenance inconsistency without a stated functional or verification failure."
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#opa-01": {
+  "severity": "low",
+  "reason": "An unsupported bundle-size comment misleads maintainers, falling under maintenance inconsistencies."
+ },
+ "replays-self-serve-bulk-delete-system-sentry#opa-01": {
+  "severity": "medium",
+  "reason": "Every page request loads all error payloads with large latency and memory costs, falling under significant extra work."
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#04": {
+  "severity": "high",
+  "reason": "A blocked email address can successfully sign up by changing domain capitalization, bypassing a participation blocklist admission control."
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11": {
+  "severity": "medium",
+  "reason": "The test passes even when the removal permission check is absent, falling under tests that falsely verify their claimed behavior."
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#02": {
+  "severity": "medium",
+  "reason": "Users with blocked but well-formed addresses receive an invalid-email message, falling under misleading feedback shown to users."
+ },
+ "authzservice-improve-authz-caching-grafana-codex#08": {
+  "severity": "low",
+  "reason": "The struct comment omits the denial cache, falling under maintenance inconsistencies."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#09": {
+  "severity": "medium",
+  "reason": "The test passes independently of its named embeddable-host condition, falling under tests that falsely verify their claimed behavior."
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#03": {
+  "severity": "medium",
+  "reason": "A leaked worker interferes with later tests and can prevent JVM shutdown, falling under failures that block development rather than a test-only leak without broader consequences."
+ },
+ "advanced-sql-analytics-framework-grafana-codex#oph-01": {
+  "severity": "high",
+  "reason": "Enabling the flag cannot activate SQL expressions, making a supported operational path unusable."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#musep-01": {
+  "severity": "medium",
+  "reason": "Failed calendar updates appear successful to callers, constituting misleading feedback rather than a separately established durable-effect failure."
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#08": {
+  "severity": "high",
+  "reason": "An attacker can register with an unapproved domain, bypassing a material security admission control."
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com#09": {
+  "severity": "low",
+  "reason": "The comment identifies duplicated increment logic without a demonstrated behavioral consequence, falling under maintenance or minor redundant work."
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor#opa-01": {
+  "severity": "medium",
+  "reason": "Duplicate usernames cause request failures and partial membership changes, constituting meaningful bounded defects."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#12": {
+  "severity": "high",
+  "reason": "Calendar updates overwrite previously preserved calendar and credential linkage with undefined values, breaking an essential durable calendar-integration effect."
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#10": {
+  "severity": "medium",
+  "reason": "Attendees can disclose meeting details to arbitrary recipients and trigger unwanted invitations, constituting a limited security/privacy weakness."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#sncc-02": {
+  "severity": "medium",
+  "reason": "Per-group authorization evaluations materially slow searches and listings, falling under significant extra work."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#snloop-01": {
+  "severity": "low",
+  "reason": "The comment establishes an unchecked value but no reachable null-triggered failure, supporting only a maintenance concern."
+ },
+ "feat-2fa-backup-codes-cal-com#04": {
+  "severity": "low",
+  "reason": "The wrong component name creates a cosmetic and maintenance inconsistency, with no current failing import established."
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#11": {
+  "severity": "low",
+  "reason": "The function and flag names misdescribe cancellation behavior, constituting a maintenance and documentation inconsistency."
+ },
+ "frontend-asset-optimization-grafana-codex#01": {
+  "severity": "medium",
+  "reason": "A competing failed load clears a populated cache and forces subsequent reloads, constituting significant extra work without an established outage."
+ },
+ "advanced-sql-analytics-framework-grafana-codex#06": {
+  "severity": "low",
+  "reason": "The stale local variable name is a cosmetic and maintenance inconsistency."
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#08": {
+  "severity": "medium",
+  "reason": "Stale caches expose a hidden or link-only identity provider on the login page, constituting incorrect user-facing output without a demonstrated authentication bypass."
+ },
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor#07": {
+  "severity": "medium",
+  "reason": "The assertion passes for nil while claiming to verify exact false, falling under tests that falsely verify their claimed behavior."
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#04": {
+  "severity": "high",
+  "reason": "Existing legacy providers cause initialization to crash when the new abstract method is invoked, making an operational startup path unusable."
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#02": {
+  "severity": "medium",
+  "reason": "Missing TopicUser data produces request-level 500 errors, falling under isolated request failures."
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#14": {
+  "severity": "medium",
+  "reason": "The test passes even when returned providers are empty or incorrect, falling under tests that falsely verify their claimed behavior."
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor#04": {
+  "severity": "medium",
+  "reason": "Affected animated GIF uploads lose their animation, constituting a bounded defect confined to an individual uploaded record or embed."
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com#05": {
+  "severity": "low",
+  "reason": "The migration warning incorrectly describes how existing rows are handled, falling under misleading diagnostic content and maintenance inconsistencies."
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#snapi-01": {
+  "severity": "low",
+  "reason": "The extra database lookup is minor redundant work, which falls under Low."
+ },
+ "notification-rule-processing-engine-grafana-codex#04": {
+  "severity": "medium",
+  "reason": "The unusable action buttons provide misleading user feedback, which falls under Medium."
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex#opa-04": {
+  "severity": "low",
+  "reason": "The inaccurate method documentation is a maintenance inconsistency, which falls under Low."
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#11": {
+  "severity": "low",
+  "reason": "The outdated Javadoc misstates the login-filter criteria, a maintenance inconsistency covered by Low."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#03": {
+  "severity": "medium",
+  "reason": "An uppercase referer host causes a bounded host-matching failure for an embed, covered by Medium's failures confined to one record or embed."
+ },
+ "feat-2fa-backup-codes-cal-com#01": {
+  "severity": "critical",
+  "reason": "An attacker with a backup code can bypass password verification using an arbitrary TOTP value, meeting Critical's concrete authentication-factor bypass clause."
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#07": {
+  "severity": "medium",
+  "reason": "A request with no organization member raises an exception, meeting Medium's isolated request failure clause."
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak#pf-muse-C2": {
+  "severity": "low",
+  "reason": "The verifier diagnostic omits identifying context, meeting Low's missing log or diagnostic context clause."
+ },
+ "database-performance-optimizations-grafana-codex#musep-01": {
+  "severity": "medium",
+  "reason": "The cleanup can terminate early and leave eligible rows undeleted, a meaningful bounded defect covered by Medium."
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com#sncc-01": {
+  "severity": "medium",
+  "reason": "Invalid reminders are repeatedly retried until their date passes, meeting Medium's repeated work and ordinary invalid-input handling clauses."
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#04": {
+  "severity": "medium",
+  "reason": "Incorrect upsampling produces wrong counts for mixed or negated queries, meeting Medium's wrong metrics clause."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#06": {
+  "severity": "low",
+  "reason": "The Javadoc references the wrong permission check, a maintenance inconsistency covered by Low."
+ },
+ "notification-rule-processing-engine-grafana-codex#kimi-02": {
+  "severity": "low",
+  "reason": "The stray comment is a cosmetic maintenance issue, which falls under Low."
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#04": {
+  "severity": "medium",
+  "reason": "Concurrent calls create duplicate attendees without a stated admission violation, meeting Medium's bounded duplication clause."
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#06": {
+  "severity": "low",
+  "reason": "The outdated test name is a cosmetic maintenance inconsistency, which falls under Low."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#30": {
+  "severity": "medium",
+  "reason": "Each unknown embed request synchronously processes the entire feed with heavy database work, meeting Medium's significant extra work clause."
+ },
+ "replays-self-serve-bulk-delete-system-sentry#02": {
+  "severity": "medium",
+  "reason": "Logging full report bodies exposes potentially sensitive values in application logs, meeting Medium's limited privacy weakness clause."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01": {
+  "severity": "low",
+  "reason": "Per-subgroup permission evaluations add page-bounded redundant work without demonstrated significant load, meeting Low's bounded N+1 clause."
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#oph-01": {
+  "severity": "high",
+  "reason": "Valid datetime cursors produce invalid or wrong comparisons on subsequent pages, meeting High's supported operational path becoming unusable for valid inputs clause."
+ },
+ "replays-self-serve-bulk-delete-system-sentry#07": {
+  "severity": "medium",
+  "reason": "The unnecessary Snuba dependency can fail individual opt-out summary requests, meeting Medium's isolated request failure clause."
+ },
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#snloop-02": {
+  "severity": "low",
+  "reason": "Unused logger objects are maintenance clutter, covered by the low maintenance clause."
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com#13": {
+  "severity": "medium",
+  "reason": "Every booking or calendar operation incurs an unnecessary external request and database write, covered by significant extra work."
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#11": {
+  "severity": "high",
+  "reason": "Closing the old strategy shuts down the new strategy's shared pool during rebalance, making a supported operational path unusable."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#kimi-01": {
+  "severity": "low",
+  "reason": "An otherwise accurate message remains untranslated, covered by cosmetic inconsistencies."
+ },
+ "fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak#01": {
+  "severity": "medium",
+  "reason": "Returning null can cause a downstream null dereference or incorrect count display, covered by isolated failures or wrong secondary output."
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#04": {
+  "severity": "medium",
+  "reason": "A missing Clients type resource causes a fallback permission check to throw, covered by isolated request failures."
+ },
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#01": {
+  "severity": "low",
+  "reason": "The unintended lighter link color is a cosmetic inconsistency."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#19": {
+  "severity": "medium",
+  "reason": "Missing Readability output causes an individual import failure or a titleless topic, covered by failures confined to one record or embed."
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com#01": {
+  "severity": "critical",
+  "reason": "The stated timing exploit allows arbitrary users' credentials to be overwritten, providing a concrete path to broad unauthorized administration."
+ },
+ "github-oauth-security-enhancement-sentry#03": {
+  "severity": "high",
+  "reason": "A forged OAuth callback bypasses installer-versus-authenticated-user validation, covered by bypassing a material security admission control."
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#07": {
+  "severity": "medium",
+  "reason": "Slots incorrectly show a host as available outside working hours, covered by wrong secondary output without demonstrated acceptance of an ineligible booking."
+ },
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry#04": {
+  "severity": "medium",
+  "reason": "Negative-offset slicing breaks prior cursor semantics, supporting a meaningful bounded functional defect beyond the documentation inconsistency."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#09": {
+  "severity": "critical",
+  "reason": "Request-controlled URLs inject executable event-handler attributes into stored raw HTML, providing a concrete path to attacker-controlled browser execution."
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#12": {
+  "severity": "low",
+  "reason": "The untranslated tooltip is a cosmetic inconsistency."
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor#03": {
+  "severity": "medium",
+  "reason": "An empty group name produces undefined and breaks promise chaining, covered by ordinary invalid-input handling."
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor#12": {
+  "severity": "medium",
+  "reason": "The test uses the wrong HTTP method and fails with a routing error, covered by failures that block only development."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#04": {
+  "severity": "high",
+  "reason": "Unnormalized migrated host values disable embedding after upgrade, making a supported operational path unusable for existing valid configurations."
+ },
+ "notification-rule-processing-engine-grafana-codex#02": {
+  "severity": "high",
+  "reason": "The authorized Delete action never appears in the list view, making an identified supported UI path unusable."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#14": {
+  "severity": "high",
+  "reason": "Events are written to the primary calendar instead of the configured destination, so an essential durable calendar-integration effect fails."
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak#oph-03": {
+  "severity": "low",
+  "reason": "The error log names a nonexistent credential type, explicitly covered by wrong or misleading log content."
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#01": {
+  "severity": "low",
+  "reason": "The stale TODO is a documentation maintenance issue, covered by Low’s maintenance clause."
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#10": {
+  "severity": "low",
+  "reason": "The unreachable helper leaves misleading unused code, covered by Low’s maintenance clause."
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#05": {
+  "severity": "high",
+  "reason": "Provider selection can silently use noncompliant crypto on a FIPS classpath, bypassing a material security control under High."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#sncc-01": {
+  "severity": "medium",
+  "reason": "Repeated calendar deletions cause duplicate API calls and 404 errors, covered by Medium’s bounded duplication clause."
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#02": {
+  "severity": "high",
+  "reason": "A blacklisted guest is actually added by changing email casing, bypassing a participation blocklist under High."
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor#03": {
+  "severity": "medium",
+  "reason": "Failed resizing wastes attempts and uploads an oversized or corrupt file, a bounded per-record defect under Medium."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#08": {
+  "severity": "high",
+  "reason": "Collected team calendars are dropped from collective events, preventing an essential calendar integration effect under High."
+ },
+ "replays-self-serve-bulk-delete-system-sentry#12": {
+  "severity": "high",
+  "reason": "The enabled table visualization displays no results or columns, making an identified UI path unusable for valid inputs under High."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#07": {
+  "severity": "low",
+  "reason": "The return-type documentation contradicts the signature, a maintenance inconsistency under Low."
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-01": {
+  "severity": "high",
+  "reason": "Hosts can actually be booked partly outside date-override hours, bypassing permitted booking windows under High."
+ },
+ "implement-access-token-context-encoding-framework-keycloak#03": {
+  "severity": "medium",
+  "reason": "A custom grant’s token IDs fail decoding, but defects requiring a custom extension are capped at Medium."
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02": {
+  "severity": "high",
+  "reason": "Every token exchange fails with a 500 when V2 is enabled, making a supported operational path unusable under High."
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#03": {
+  "severity": "low",
+  "reason": "The fake loses captured calls and context without demonstrated false verification, a fixture-fidelity gap under Low."
+ },
+ "dual-storage-architecture-grafana-codex#06": {
+  "severity": "high",
+  "reason": "The legacy primary-record update can diverge or fail after unified storage commits, breaking an essential durable effect under High."
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#03": {
+  "severity": "high",
+  "reason": "Skipping busy checks permits actual double bookings, bypassing a material operational admission control under High."
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex#09": {
+  "severity": "medium",
+  "reason": "Each uncached anonymous authentication incurs blocking database work before proceeding, covered by Medium’s significant extra work clause."
+ },
+ "plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex#sncc-02": {
+  "severity": "low",
+  "reason": "The copied documentation misdescribes contextual logger attributes, a maintenance issue under Low."
+ },
+ "unified-storage-performance-optimizations-grafana-codex#03": {
+  "severity": "medium",
+  "reason": "Failed initialization leaks live contexts and background resources, a meaningful resource defect under Medium without a demonstrated outage."
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com#07": {
+  "severity": "medium",
+  "reason": "Every cron tick scans the entire reminders table, covered by Medium’s significant extra work clause."
+ },
+ "ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry#02": {
+  "severity": "low",
+  "reason": "Occurrence context uses a raw schedule-type value instead of its readable label, a cosmetic representation inconsistency under Low."
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#01": {
+  "severity": "medium",
+  "reason": "Marking slots outside working hours as available is misleading user feedback; actual acceptance of an ineligible booking is not established."
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#03": {
+  "severity": "high",
+  "reason": "Orphaned flusher processes accumulate until the consumer crashes, meeting the production-outage clause."
+ },
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#03": {
+  "severity": "low",
+  "reason": "The outdated return-type docstring is a maintenance inconsistency."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#13": {
+  "severity": "high",
+  "reason": "Cancellation leaves calendar events undeleted, so an essential durable calendar-integration effect fails."
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#kimi-01": {
+  "severity": "medium",
+  "reason": "Accepting malformed constructed INTEGER encodings falls under ordinary invalid-input handling."
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#18": {
+  "severity": "medium",
+  "reason": "The assertion passes even with the intended guard removed, so the test falsely verifies its claimed behavior."
+ },
+ "feat-2fa-backup-codes-cal-com#sncc-01": {
+  "severity": "medium",
+  "reason": "Nonconstant-time comparisons leak secret-related timing information, a limited security weakness without a demonstrated authentication bypass."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#kimi-04": {
+  "severity": "low",
+  "reason": "The incorrect test description is a maintenance inconsistency without demonstrated verification harm."
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#09": {
+  "severity": "high",
+  "reason": "Persisted guests fail to reach the calendar and retries are rejected, so an essential durable calendar-integration effect fails."
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex#02": {
+  "severity": "high",
+  "reason": "Attacker-created device IDs exhaust capacity and deny legitimate anonymous logins, making a supported operational path unusable for valid users."
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02": {
+  "severity": "medium",
+  "reason": "The premature assertion can cause flaky test failures, falling under failures that block only development."
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak#05": {
+  "severity": "critical",
+  "reason": "Superseded recovery codes remain usable for login, providing a concrete authentication-factor bypass."
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com#16": {
+  "severity": "medium",
+  "reason": "The unreliable status check causes false refresh failures or missed HTTP errors, supporting bounded request and error-handling defects."
+ },
+ "dual-storage-architecture-grafana-codex#01": {
+  "severity": "low",
+  "reason": "Delete operations lose request-specific log fields, explicitly falling under missing log context."
+ },
+ "replays-self-serve-bulk-delete-system-sentry#01": {
+  "severity": "medium",
+  "reason": "Mutually exclusive fields are accepted together when one is zero, an ordinary invalid-input handling defect."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#18": {
+  "severity": "medium",
+  "reason": "A deleted post causes retrieval failures and stale state for its embed, matching failures confined to one record or embed even when repeated."
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com#03": {
+  "severity": "low",
+  "reason": "The stale explanatory comment is a maintenance inconsistency."
+ },
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak#sncc-02": {
+  "severity": "medium",
+  "reason": "Returning the wrong crypto provider supports a bounded contract defect without establishing that a supported operational path becomes unusable."
+ },
+ "sms-workflow-reminder-retry-count-tracking-cal-com#06": {
+  "severity": "high",
+  "reason": "Unrelated transient failures permanently delete pending reminders, meeting the clause for wrongly destroyed operational data."
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com#07": {
+  "severity": "high",
+  "reason": "Overwriting the valid refresh token makes subsequent Office 365 calendar refreshes permanently fail, rendering a supported operational path unusable."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#musep-01": {
+  "severity": "high",
+  "reason": "A slow or huge embed URL hangs the worker and starves the queue, making a supported operational path unusable."
+ },
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor#07": {
+  "severity": "low",
+  "reason": "The outdated explanatory comment is a maintenance inconsistency, which falls under Low."
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor#07": {
+  "severity": "medium",
+  "reason": "A newly created group retains the wrong alias level, a bounded defect confined to one record."
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#01": {
+  "severity": "medium",
+  "reason": "The inconsistent metric tag breaks dashboard and alert queries, falling under wrong metrics or other secondary output."
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#01": {
+  "severity": "medium",
+  "reason": "Third-party content can change a victim's topic notification settings, a limited security weakness."
+ },
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01": {
+  "severity": "medium",
+  "reason": "Ignoring a legitimate global grant wrongly denies authorized administrators, falling under bounded denial rather than an admission-control bypass."
+ },
+ "async-import-of-the-appstore-packages-cal-com#02": {
+  "severity": "medium",
+  "reason": "Cleanup can outlive the function and its errors escape the surrounding handler, a bounded asynchronous error-handling defect without established durable-effect failure."
+ },
+ "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#snloop-01": {
+  "severity": "low",
+  "reason": "The unused variable is dead code, a maintenance issue."
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16": {
+  "severity": "medium",
+  "reason": "The test passes for serial processing despite claiming to verify concurrency, falling under tests that falsely verify their claimed behavior."
+ },
+ "implement-recovery-key-support-for-user-storage-providers-keycloak#pf-ds-C1": {
+  "severity": "low",
+  "reason": "The test storage provider fails to preserve consumed-code state, a fixture-fidelity gap without demonstrated false verification."
+ },
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10": {
+  "severity": "critical",
+  "reason": "Shutdown or rebalance drops the remaining unprocessed queued work with stated loss, falling under systemic destructive loss of a queue."
+ },
+ "dual-storage-architecture-grafana-codex#05": {
+  "severity": "high",
+  "reason": "Request cancellation prevents the legacy mirror writes from happening, so an essential durable effect fails."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#01": {
+  "severity": "high",
+  "reason": "A view-only principal can create top-level groups, bypassing a material security control."
+ },
+ "feature-automatically-downsize-large-images-discourse-cursor#opa-01": {
+  "severity": "critical",
+  "reason": "A request-controlled upload parameter reaches shell execution and runs arbitrary server commands, meeting the attacker-controlled server-execution clause."
+ },
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#04": {
+  "severity": "high",
+  "reason": "Valid V2 group permissions cannot retrieve or count their members, making the supported member-query path unusable."
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#prod-01": {
+  "severity": "medium",
+  "reason": "Canceled booking reminders remain scheduled, an error confined to secondary email output."
+ },
+ "enhance-embed-url-handling-and-validation-system-discourse-cursor#08": {
+  "severity": "critical",
+  "reason": "Malicious imported HTML executes through unsanitized rendering, providing a concrete path to attacker-controlled browser execution."
+ },
+ "feat-2fa-backup-codes-cal-com#15": {
+  "severity": "low",
+  "reason": "Each setup leaves a browser object URL allocated without a stated broader consequence, a minor resource-management defect."
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com#09": {
+  "severity": "high",
+  "reason": "Returning an unparsed Response breaks callers when credential sharing is enabled, making a supported operational path unusable for valid inputs."
+ },
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#oph-01": {
+  "severity": "medium",
+  "reason": "Repeated visits produce inconsistent notification settings and the confirmation misstates the result, falling under bounded defects and misleading user feedback."
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#05": {
+  "severity": "medium",
+  "reason": "Persistently stale provider membership results constitute a meaningful bounded defect; the comment does not establish a material admission-control bypass."
+ },
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com#01": {
+  "severity": "medium",
+  "reason": "Unauthorized exposure depends on a future change returning null, so it falls under the at-most-medium clause for problems no current code path reaches."
+ },
+ "optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor#kimi-01": {
+  "severity": "low",
+  "reason": "The ignored float declaration is dead styling code, falling under maintenance."
+ },
+ "oauth-credential-sync-and-app-integration-enhancements-cal-com#08": {
+  "severity": "medium",
+  "reason": "Malformed token responses pass validation and break expiry handling, falling under ordinary invalid-input handling."
+ },
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#10": {
+  "severity": "medium",
+  "reason": "The fixture causes assertions to miss the requested record's hydration behavior, falling under tests that falsely verify their claimed behavior."
+ },
+ "add-guest-management-functionality-to-existing-bookings-cal-com#e2b-01": {
+  "severity": "medium",
+  "reason": "Incorrect event identities appear in recipient invitation attachments, which the definitions classify as secondary output."
+ },
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com#08": {
+  "severity": "medium",
+  "reason": "Missing or unauthorized credentials produce an incorrect server-error response, falling under ordinary invalid-input handling."
+ },
+ "add-html-sanitizer-for-translated-message-resources-keycloak#06": {
+  "severity": "medium",
+  "reason": "An invalid message aborts the Maven verifier instead of producing a validation report, falling under invalid-input handling and development-only build failures."
+ },
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#09": {
+  "severity": "low",
+  "reason": "An unused parameter misleadingly suggests organization scoping without demonstrating incorrect results, falling under maintenance."
+ },
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak#02": {
+  "severity": "medium",
+  "reason": "Leaked test providers can break sibling assertions and cause flaky failures, exceeding a test-only leak without broader consequences and falling under development-only test failures."
+ },
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#07": {
+  "severity": "low",
+  "reason": "An unnecessary website_name: null field is a cosmetic serialization inconsistency, falling under cosmetic inconsistencies."
+ },
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com#14": {
+  "severity": "medium",
+  "reason": "The unused import fails lint and CI without an established production deployment impact, falling under development-only lint or CI failures."
+ },
+ "notification-rule-processing-engine-grafana-codex#07": {
+  "severity": "medium",
+  "reason": "Reused list items can display stale state for the wrong rule, falling under misleading user-visible output."
+ },
+ "dual-storage-architecture-grafana-codex#10": {
+  "severity": "low",
+  "reason": "The inaccurate test name misdescribes the write contract without demonstrating false verification, falling under maintenance."
+ },
+ "fix-proper-handling-of-group-memberships-discourse-cursor#kimip-01": {
+  "severity": "low",
+  "reason": "Per-member lookups add redundant queries without establishing significant load, matching the clause that N+1 alone does not establish significant load."
+ },
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-02": {
+  "severity": "medium",
+  "reason": "Timezone mismatches apply or skip overrides on the wrong day, a bounded scheduling defect without stated acceptance of an ineligible booking."
+ },
+ "span-buffer-multiprocess-enhancement-with-health-monitoring-sentry#02": {
+  "severity": "medium",
+  "reason": "The ineffective wait makes the test assertion race with flushing, falling under development-only test failures."
+ },
+ "anonymous-add-configurable-device-limit-grafana-codex#11": {
+  "severity": "high",
+  "reason": "Ignoring the configured device limit disables cap enforcement, falling under bypass of a material device admission control."
+ }
+}

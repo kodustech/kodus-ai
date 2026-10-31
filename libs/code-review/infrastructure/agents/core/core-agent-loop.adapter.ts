@@ -21,6 +21,8 @@
  *  - discardedBySeverity is [] by design: the new path has no severity
  *    pre-filter — verify alone decides keep/drop.
  */
+import { isClaudeModel } from '@libs/code-review/infrastructure/agents/core/finder-model-profile';
+import { withClaudeOneProblem, withClaudeWritingPolicy } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 
@@ -153,8 +155,16 @@ export function finderRunEnvironment(
     // buildFinderAgentSpec adds submitResultTool to the model's tool set, so its
     // schema (~210 tokens) is part of the real overhead and must be counted too
     // — it matters on small windows where the safety margin is tight.
+    // Claude gets the WHAT/WHY/HOW writing policy (#1821), so its system
+    // prompt, and the overhead counted from it, carry the policy too.
+    const claudeSafeWording =
+        input.byokProvider === 'anthropic' ||
+        [secrets.byokConfig?.model, secrets.byokConfig?.fallback?.model].some((id) => typeof id === 'string' && isClaudeModel(id));
+    const finderSystemPrompt = claudeSafeWording
+        ? withClaudeWritingPolicy(input.systemPrompt)
+        : input.systemPrompt;
     const overheadTokens = contextWindowTokens
-        ? estimateOverheadTokens(input.systemPrompt, [
+        ? estimateOverheadTokens(finderSystemPrompt, [
               ...tools.list(),
               submitResultTool,
           ])
@@ -198,12 +208,15 @@ export function finderRunEnvironment(
         : runner;
 
     return {
+        runner,
         tools,
         toolCache,
         isSelfContained,
         providerOptions,
         contextWindowTokens,
         overheadTokens,
+        claudeSafeWording,
+        finderSystemPrompt,
         specModelId,
         fallbackModelId,
         finderRunner,
@@ -259,11 +272,14 @@ export async function runAgentLoopViaCore(
         providerOptions,
         contextWindowTokens,
         overheadTokens,
+        claudeSafeWording,
+        finderSystemPrompt,
         specModelId,
         fallbackModelId,
-        verifyParams,
+        finderRunner,
         readGuide,
         astGrepLog,
+        verifyParams,
     } = finderRunEnvironment(input, secrets);
 
     const coverageLedger = new DiffCoverageLedger({
@@ -279,9 +295,10 @@ export async function runAgentLoopViaCore(
         !!input.skipHeavyPasses;
     const skipSynthesisRescue = !!input.skipSynthesisRescue;
 
-    // The ledger is read back below for the coverage summary.
+    // Claude also gets the one-problem rule in the user prompt (#1821); every
+    // other model keeps the prompts as built.
     const finderSpec = buildFinderAgentSpec({
-        systemPrompt: input.systemPrompt,
+        systemPrompt: finderSystemPrompt,
         modelId: specModelId,
         fallbackModelId,
         usageRunName: input.usageRunName,
@@ -298,7 +315,11 @@ export async function runAgentLoopViaCore(
         providerOptions,
         acceptsRevisions: !!input.previousDecisions?.length,
         acceptsConventions: !!readGuide,
+        fullOutput: input.conventionGuides !== undefined,
     });
+    const finderPrompt = claudeSafeWording
+        ? withClaudeOneProblem(input.userPrompt)
+        : input.userPrompt;
 
     // Standard agent run context: runId + a signal that aborts on the parent job
     // signal OR after the hard per-agent timeout. Shared with conversation +
@@ -346,6 +367,8 @@ export async function runAgentLoopViaCore(
           }
         : {};
 
+    // The same verifyParams the verify eval reads (evals/funnel/verify/run.js),
+    // so the eval measures what production runs.
     const r = await runFinderWithVerify(
         {
             ...verifyParams,
@@ -377,9 +400,11 @@ export async function runAgentLoopViaCore(
                     input.telemetryMetadata?.organizationId,
                     input.usageRunName,
                     input.previousDecisions,
+                    input.telemetryMetadata?.teamId,
+                    input.conventionGuides !== undefined,
                 ),
         },
-        { prompt: input.userPrompt },
+        { prompt: finderPrompt },
         ctx,
     ).finally(cleanup);
 
@@ -456,6 +481,7 @@ export async function runAgentLoopViaCore(
                       droppedByQuoteCheck: r.droppedByQuoteCheck.length,
                   }),
                   droppedByEvidenceFilter: 0,
+                  verifyMs: r.verifyMs,
                   decisions: [
                       ...r.kept.map((f, i) => ({
                           index: i,
@@ -475,6 +501,16 @@ export async function runAgentLoopViaCore(
                           parseMode: d.parseMode,
                           rationale: d.evidence ?? '',
                           verifierEvidence: d.verifierEvidence,
+                          droppedFinding: {
+                              oneSentenceSummary: d.finding.oneSentenceSummary,
+                              suggestionContent: d.finding.suggestionContent,
+                              relevantLinesStart: d.finding.relevantLinesStart,
+                              relevantLinesEnd: d.finding.relevantLinesEnd,
+                              label: d.finding.label,
+                              severity: d.finding.severity,
+                              producedBy: (d.finding as { producedBy?: string })
+                                  .producedBy,
+                          },
                       })),
                       ...r.unverified.map((u, i) => ({
                           index: r.kept.length + r.droppedByVerify.length + i,
@@ -572,6 +608,7 @@ export async function runAgentLoopViaCore(
         }),
         coverage,
         verification,
+        recallPasses: r.passStats,
         verificationUsage: {
             inputTokens: vu.inputTokens,
             cacheReadTokens: vu.cacheReadTokens,

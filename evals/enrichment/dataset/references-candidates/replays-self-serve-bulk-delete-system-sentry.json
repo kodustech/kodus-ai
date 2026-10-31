@@ -1,0 +1,106 @@
+{
+ "caseId": "replays-self-serve-bulk-delete-system-sentry",
+ "items": [
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#01",
+   "defectStatement": "The mutual-exclusion validators test truthiness instead of field presence, allowing a report with both age=0 and timestamp=0 to validate. If only one value is zero and the other is nonzero, the other validator still rejects the report.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Reject reports containing both age and timestamp, including when both equal zero.",
+    "Continue accepting otherwise valid reports containing only either field, including zero.",
+    "Preserve existing field constraints and do not introduce a requirement that either field be present."
+   ],
+   "exampleFix": "    def validate_timestamp(self, value: int) -> int:\n        \"\"\"Validate that age is absent, but timestamp is present.\"\"\"\n        if \"age\" in self.initial_data:\n            raise serializers.ValidationError(\"If timestamp is present, age must be absent\")\n        return value\n\n    def validate_age(self, value: int) -> int:\n        \"\"\"Validate that age is present, but not timestamp.\"\"\"\n        if \"timestamp\" in self.initial_data:\n            raise serializers.ValidationError(\"If age is present, timestamp must be absent\")\n        return value",
+   "notes": "The finding overstates the bypass: one zero alone does not bypass both validators; both numeric values must be zero."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#02",
+   "defectStatement": "The validation-failure warning includes the entire unvalidated browser report in raw_report, exposing caller-controlled and potentially sensitive report contents in application logs.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Remove raw report contents from the validation-failure log.",
+    "Avoid logging arbitrary input values through replacement metadata or validation-error messages.",
+    "Preserve validation rejection and the existing HTTP 422 response."
+   ],
+   "exampleFix": "                logger.warning(\"browser_report_validation_failed\")",
+   "notes": "Deleting this warning or retaining only safe metadata is also valid. Serializer errors can echo invalid inputs. Other raw-payload logs elsewhere remain separate issues."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#07",
+   "defectStatement": "The endpoint queries Snuba before checking enable_error_context, so opt-out requests incur an unnecessary replay lookup and can fail when Snuba is unavailable.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Skip query_replay_instance and error-detail fetching when enable_error_context is false.",
+    "Preserve case-insensitive flag handling and the default enabled behavior.",
+    "Continue paginating recording segments and analyzing them with an empty error-event list for opt-out requests.",
+    "Preserve the existing replay lookup and error enrichment for enabled requests."
+   ],
+   "exampleFix": "        if request.query_params.get(\"enable_error_context\", \"true\").lower() == \"false\":\n            return self.paginate(\n                request=request,\n                paginator_cls=GenericOffsetPaginator,\n                data_fn=functools.partial(fetch_segments_metadata, project.id, replay_id),\n                on_results=functools.partial(analyze_recording_segments, []),\n            )\n\n        filter_params = self.get_filter_params(request, project)\n\n        # Fetch the replay's error IDs from the replay_id.\n        snuba_response = query_replay_instance(\n            project_id=project.id,\n            replay_id=replay_id,\n            start=filter_params[\"start\"],\n            end=filter_params[\"end\"],\n            organization=project.organization,\n            request_user_id=request.user.id,\n        )",
+   "notes": "An early return makes this locally fixable using the pagination call shown in the frozen input. Merely guarding the query without initializing snuba_response breaks subsequent processing."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#13",
+   "defectStatement": "Both custom cell-renderer paths use truthiness to decide whether to accept a result, replacing valid results such as 0, an empty string, null, or false with default content.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Honor every custom body-renderer result except undefined.",
+    "Honor every custom header-renderer result except undefined.",
+    "Preserve default rendering when a renderer is absent or returns undefined."
+   ],
+   "exampleFix": null,
+   "notes": "Changing the cited body condition to cell !== undefined fixes only the body. The finding also requires changing the header condition at line 32."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-01",
+   "defectStatement": "Each paginated summary request passes the replay's entire error_ids list to fetch_error_details before pagination, causing nodestore to load all corresponding full event payloads without a bound.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Bound the number of error IDs passed to fetch_error_details by a fixed positive limit.",
+    "Apply the bound before fetching full event payloads.",
+    "Preserve opt-out behavior and handling of empty replay results.",
+    "Continue including error context for enabled requests."
+   ],
+   "exampleFix": "        error_ids = response[0].get(\"error_ids\", []) if response else []\n\n        # Check if error fetching should be disabled\n        disable_error_fetching = (\n            request.query_params.get(\"enable_error_context\", \"true\").lower() == \"false\"\n        )\n\n        if disable_error_fetching:\n            error_events = []\n        else:\n            # Bound full event payload retrieval for each summary request.\n            error_events = fetch_error_details(project_id=project.id, error_ids=error_ids[:100])",
+   "notes": "100 is an illustrative cap, not a mandated value. Capping before retrieval addresses this finding; caching across pages and bounding the preceding Snuba response are separate changes."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-02",
+   "defectStatement": "The empty-search branch returns all sorted attributes before hidden-attribute filtering runs, exposing is_segment, project_id, and received in the default view and for whitespace-only searches.",
+   "anchorCoversDefect": false,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Exclude all HIDDEN_ATTRIBUTES for empty, whitespace-only, and nonempty searches.",
+    "Preserve the existing attribute ordering.",
+    "Preserve trimmed, case-insensitive name matching for visible attributes."
+   ],
+   "exampleFix": null,
+   "notes": "The defective early return is at lines 61–62, outside the anchor. Replacing only the later filter cannot affect that already-returned result."
+  },
+  {
+   "issueId": "replays-self-serve-bulk-delete-system-sentry#opa-03",
+   "defectStatement": "The completion test supplies max_segment_id=None but mocks delete_matched_rows, preventing execution of _make_recording_filenames. It therefore does not detect removal of the production None guard.",
+   "anchorCoversDefect": false,
+   "fixability": "no-code-fix",
+   "contextSufficient": false,
+   "obligations": [
+    "Add regression coverage that executes the real filename-generation helper with max_segment_id=None.",
+    "Assert that this case produces an empty filename list without raising.",
+    "Ensure removal of the None guard causes the regression test to fail.",
+    "Preserve the existing bulk-job completion assertions."
+   ],
+   "exampleFix": null,
+   "notes": "Coverage-only finding: the production guard already exists, and replacing fixture data cannot supply the missing test. The frozen input omits the helper's implementation and import location."
+  }
+ ]
+}

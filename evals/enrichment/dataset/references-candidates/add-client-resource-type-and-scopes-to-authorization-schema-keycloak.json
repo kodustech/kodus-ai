@@ -1,0 +1,49 @@
+{
+ "caseId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "items": [
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#11",
+   "defectStatement": "The negative removal test catches ForbiddenException from the restricted getDefaultClientScopes() call before removeDefaultClientScope() executes. Consequently, this assertion passes even when unauthorized removal is allowed.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Obtain an existing default scope ID through the privileged client outside the exception assertion.",
+    "Invoke removal through the restricted client before granting permissions.",
+    "Fail if removal succeeds or throws anything other than ForbiddenException.",
+    "Preserve the subsequent authorized removal test."
+   ],
+   "exampleFix": "        String defaultScopeId = realm.admin().clients().get(myclient.getId()).getDefaultClientScopes().get(1).getId();\n        try {\n            clientResource.removeDefaultClientScope(defaultScopeId);\n            fail(\"Expected exception wasn't thrown.\");\n        } catch (Exception ex) {\n            assertThat(ex, instanceOf(ForbiddenException.class));",
+   "notes": "The closing catch brace on line 153 remains outside the replacement. Avoid declaring clientScopeRep at method scope because that name is declared later."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#musep-01",
+   "defectStatement": "hasPermission(ClientModel, String) evaluates the all-clients resource only when no per-client resource exists. An existing per-client resource that does not grant the requested scope therefore masks a valid all-clients grant.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Accept a per-client grant for the requested scope.",
+    "Accept an all-clients grant even when a per-client resource exists without a matching grant.",
+    "Deny when neither resource grants the requested scope, including when resources are absent.",
+    "Preserve the existing same-realm and resource-server checks."
+   ],
+   "exampleFix": "        Resource resource = resourceStore.findByName(server, client.getId(), server.getId());\n        if (resource != null && hasGrantedPermission(resource, scope)) {\n            return true;\n        }\n\n        resource = AdminPermissionsSchema.SCHEMA.getResourceTypeResource(session, server, AdminPermissionsSchema.CLIENTS_RESOURCE_TYPE);\n        if (resource == null || authz.getStoreFactory().getPolicyStore().findByResource(server, resource).isEmpty()) {\n            return false;\n        }",
+   "notes": "The existing evaluation below the anchor evaluates the all-clients resource after the replacement. The helper hasGrantedPermission is fully shown in the frozen diff; no wider change is needed."
+  },
+  {
+   "issueId": "add-client-resource-type-and-scopes-to-authorization-schema-keycloak#opa-02",
+   "defectStatement": "ClientPermissionsV2.canExchangeTo throws UnsupportedOperationException when the client-to-client token-exchange path requests a permission decision. With FGAP V2 active, requests reaching this check fail with a server error instead of the caller's normal access-denied response.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Return a boolean permission decision instead of throwing UnsupportedOperationException.",
+    "Deny unsupported V2 exchanges rather than granting them without authorization.",
+    "Preserve the method signature used by token-exchange callers."
+   ],
+   "exampleFix": "    @Override\n    public boolean canExchangeTo(ClientModel authorizedClient, ClientModel to, AccessToken token) {\n        return false;\n    }",
+   "notes": "Returning false is a sufficient fail-closed fix; implementing V2 token-exchange policies is unnecessary. The failure affects exchanges reaching this check, not every token-exchange request."
+  }
+ ]
+}

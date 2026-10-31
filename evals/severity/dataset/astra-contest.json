@@ -1,0 +1,70 @@
+{
+  "items": [
+    {
+      "key": "A1",
+      "decision": "concede",
+      "level": "high",
+      "argument": "Booking-time ensureAvailableUsers checks recurring working hours but does not enforce dateOverrides. A restrictive override skipped by the stated timezone defect can therefore permit an actual booking, bypassing a permitted booking window."
+    },
+    {
+      "key": "A2",
+      "decision": "concede",
+      "level": "high",
+      "argument": "Ordinary booking creation rechecks weekdays, but handleNewBooking.ts skips ensureAvailableUsers for seat-enabled events, a supported configuration. The wrongly offered slot can therefore become a booking with a fixed host outside their working days."
+    },
+    {
+      "key": "A3",
+      "decision": "concede",
+      "level": "high",
+      "argument": "Booking-time validation does not enforce date overrides. The incorrectly retained slot can pass recurring working-hours checks and be booked on a day explicitly marked unavailable, establishing an admission-control bypass."
+    },
+    {
+      "key": "A4",
+      "decision": "concede",
+      "level": "high",
+      "argument": "The booking handler skips its full-slot working-hours recheck for seat-enabled events. In that supported configuration, the incorrectly offered slot can be accepted beyond the host's working hours."
+    },
+    {
+      "key": "T1",
+      "decision": "concede",
+      "level": "high",
+      "argument": "The unsubscribe action deterministically crashes for an ordinary valid user state: no TopicUser row. That makes an identified supported path unusable for those users; the affected cohort does not lower severity."
+    },
+    {
+      "key": "W1",
+      "decision": "concede",
+      "level": "high",
+      "argument": "The stated production asset failure affects the shared embed layout, making the embed path unusable under precompiled assets. It is not confined to one embed record."
+    },
+    {
+      "key": "W2",
+      "decision": "concede",
+      "level": "high",
+      "argument": "The same incompatible geometry is passed on every attempt through the automatic-downsize path. Taking the claimed failure as true, valid oversized images cannot receive the promised resizing; this disables a supported operation rather than describing one defective image."
+    },
+    {
+      "key": "W3",
+      "decision": "concede",
+      "level": "high",
+      "argument": "For clients with a resource, administrators relying on the global grant cannot complete operations gated by hasPermission(ClientModel, String). This meets the exception for wrongful denial that makes a supported path unusable; it does not require all administration to fail."
+    },
+    {
+      "key": "Q1",
+      "decision": "concede",
+      "level": "medium",
+      "argument": "The described mechanism leaves offsets uncommitted; it does not mark unprocessed work complete. Dropping the in-memory queue therefore supports redelivery and reprocessing, while 'or loss' supplies no concrete mechanism for systemic destructive loss."
+    },
+    {
+      "key": "S1",
+      "decision": "hold",
+      "level": "critical",
+      "argument": "The comment explicitly claims exploitable byte-by-byte secret recovery followed by arbitrary users' credential overwrites. Under the instruction to assume its claims are true, that supplies the critical consequence; accepting that stated exploit does not invent exploit success."
+    },
+    {
+      "key": "R1",
+      "decision": "hold",
+      "level": "critical",
+      "argument": "The comment gives a concrete validation path that accepts superseded recovery codes for login, bypassing the replacement authentication factor. The supplied definition does not require a prerequisite-free attack; possession of an invalidated code does not make it a currently authorized factor."
+    }
+  ]
+}

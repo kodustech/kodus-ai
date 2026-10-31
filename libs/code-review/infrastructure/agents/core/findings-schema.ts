@@ -6,7 +6,10 @@
  */
 import { z } from 'zod';
 import { createLogger } from '@libs/core/log/logger';
-import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
+import {
+    extractJsonFromText,
+    normalizeEnvelope,
+} from '@libs/llm/structured-output-repair';
 import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 
 const logger = createLogger('FindingsSchema');
@@ -30,9 +33,9 @@ const suggestionSchema = z.object({
     // finder.agent.ts): without them there is no finding to keep.
     relevantFile: z.string().refine(nonBlank),
     language: lenient(z.string()),
-    label: lenient(
-        z.enum(['bug', 'security', 'performance', 'repo_instruction']),
-    ),
+    // Any string: a label off the list is replaced by `bug` after anchoring
+    // (normalizeFinderLabels, #1821), never a reason to drop the finding here.
+    label: lenient(z.string()),
     suggestionContent: z.string().refine(nonBlank),
     // A finding without a fix is still a finding: the #1833 gate
     // (agent-review.stage.ts) publishes it as a plain comment.
@@ -77,6 +80,47 @@ const _findingsSchema = z.object({
 });
 
 export type FindingsOutput = z.infer<typeof _findingsSchema>;
+
+/** A finding whose body is only in `oneSentenceSummary` still names a defect:
+ *  use the summary as the content instead of dropping it. */
+function withContentFallback(item: unknown): unknown {
+    if (!item || typeof item !== 'object') return item;
+    const it = item as Record<string, unknown>;
+    if (typeof it.suggestionContent === 'string' || typeof it.oneSentenceSummary !== 'string') {
+        return item;
+    }
+    return { ...it, suggestionContent: it.oneSentenceSummary };
+}
+
+/**
+ * Claude models (measured on Sonnet 5.5, #1821) often send the `suggestions`
+ * array of a tool call as a JSON-encoded STRING inside an otherwise valid
+ * object. normalizeEnvelope only parses a stringified container, so the field
+ * failed validation and every finding in it fell to text parsing and was lost
+ * (40 of 90 lens passes in one run). Parse the field when it holds a JSON
+ * array; any other string is left for validation to reject as before.
+ */
+function parseStringifiedSuggestions(value: unknown): unknown {
+    const suggestions = (value as { suggestions?: unknown } | null)
+        ?.suggestions;
+    if (typeof suggestions !== 'string') return value;
+    // The raw string first: a suggestion usually carries ``` fences in its own
+    // text, and extractJsonFromText unwraps the FIRST fence it sees — an inner
+    // code block, not the array (that is what kept 10 of 40 failing after the
+    // first fix). The extractor stays as the fallback for prose/fence wrapping.
+    for (const candidate of [suggestions.trim(), extractJsonFromText(suggestions)]) {
+        if (!candidate) continue;
+        try {
+            const parsed = JSON.parse(candidate);
+            if (Array.isArray(parsed)) {
+                return { ...(value as object), suggestions: parsed };
+            }
+        } catch {
+            // try the next candidate
+        }
+    }
+    return value;
+}
 
 const KNOWN_ITEM_KEYS = new Set(Object.keys(suggestionSchema.shape));
 const NUMERIC_KEYS = ['relevantLinesStart', 'relevantLinesEnd', 'confidence'];
@@ -203,8 +247,10 @@ export function inspectFindingsResult(
     // recovered instead of read as `undefined` and silently dropped. Pure and
     // conservative — a canonical `{reasoning,suggestions}` is returned untouched.
     // `[]` is the model saying it found nothing: zero findings, not unusable.
+    const unstringified = parseStringifiedSuggestions(raw);
+    if (unstringified !== raw) recoveries.push('parsed-field-string');
     let normalized = normalizeEnvelope(
-        raw,
+        unstringified,
         'suggestions',
         ['findings', 'codeSuggestions'],
         {
@@ -277,7 +323,7 @@ export function inspectFindingsResult(
     const kept: FindingsOutput['suggestions'] = [];
     const drops: ItemDrop[] = [];
     for (const item of suggestions) {
-        const prepared = prepareItem(item);
+        const prepared = prepareItem(withContentFallback(item));
         if ('drop' in prepared) {
             drops.push(prepared.drop);
             continue;

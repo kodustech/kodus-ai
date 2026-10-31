@@ -106,6 +106,16 @@ function finderResult(raw) {
 // turns its own result into the shared shape, `sets` is the folder of its sets
 // of its own (--set), and `teamConfig` says it takes --team-config.
 const STEP_EVALS = {
+    verify: {
+        smoke: ['funnel-verify'],
+        primary: {
+            id: 'funnel-verify',
+            label: 'Known bugs kept',
+            run: ['evals/funnel/verify/run.js'],
+            question: 'Of the known bugs reaching the verify in a real review, how many does it keep, and does it drop what matches no known bug?',
+        },
+        guards: [],
+    },
     dedup: {
         smoke: ['funnel-dedup'],
         primary: {
@@ -119,6 +129,29 @@ const STEP_EVALS = {
             derived: [{ id: 'pair-precision', label: 'Merges that were right', question: 'Of the pairs the dedup merged, how many does the gold put in one group?', hits: (c) => c.merged - c.falseMerges, total: (c) => c.merged }],
         },
         guards: [{ id: 'funnel-dedup', label: 'Known bugs kept', run: ['evals/funnel/dedup/run.js', '--set=full'], embedder: true, question: 'Of the known bugs reaching the dedup in a real review, how many does it keep?' }],
+    },
+    severity: {
+        // On demand only, never a PR's check: its files include the review stage,
+        // which nearly every engine change touches.
+        smoke: [],
+        primary: {
+            id: 'severity-levels',
+            label: 'Suggestions at their level',
+            run: ['evals/severity-levels/run.js'],
+            question: 'Does the severity step rate each suggestion at the level its text defines?',
+        },
+        guards: [{ id: 'funnel-severity', label: 'Known bugs kept', run: ['evals/funnel/severity/run.js', '--set=full'], question: 'Of the known bugs reaching the severity step in a real review, how many does it keep above the threshold?' }],
+    },
+    enrichment: {
+        // On demand only: each case is a model call plus a judge call.
+        smoke: [],
+        primary: {
+            id: 'suggestion-enrichment',
+            label: 'Fixes the judge passes',
+            run: ['evals/suggestion-enrichment/run.js'],
+            question: 'Does the enrichment write a fix that the judge passes, no code where none fits, and a title that names the problem?',
+        },
+        guards: [],
     },
     finder: {
         // On demand only, never a PR's check: every case is a full review, so the

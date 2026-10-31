@@ -27,7 +27,6 @@ import {
     runRecallPasses,
     submitResultTool,
 } from '@libs/code-review/infrastructure/agents/core/finder.agent';
-import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import { LLM } from '@libs/llm/llm';
 
 const sampleFindings = {
@@ -466,8 +465,7 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
 
 // ─── B. Semantic-but-wrong (valid JSON, wrong value encoding) ────────────────
 describe('matrix B — semantic-but-wrong value encodings', () => {
-    // #2112 FPARSE-13: an out-of-set enum clears the field; the finding stays.
-    it('[B24] enum out of allowed set (severity/label) → field cleared, finding kept', () => {
+    it('[B24] enum out of allowed set: bad severity is cleared, bad label kept for the label step', () => {
         const out = extractFindings(
             artifactState({
                 reasoning: 'r',
@@ -478,9 +476,11 @@ describe('matrix B — semantic-but-wrong value encodings', () => {
                 ],
             }),
         );
+        // Neither drops a real finding: the severity is cleared, and the label
+        // reaches the stage, which turns it into `bug` after anchoring.
         expect(out.suggestions).toHaveLength(3);
         expect(out.suggestions[1].severity).toBeUndefined();
-        expect(out.suggestions[2].label).toBeUndefined();
+        expect(out.suggestions[2].label).toBe('refactor');
     });
 
     // #2112 FPARSE-14: a numeric string is read as the number.
@@ -652,46 +652,9 @@ describe('recoverFindingsFromProse — request assembly (the LLM.run boundary)',
         expect(arg.schema).toBeDefined(); // RECOVERY_SCHEMA (private) present
         expect(arg.organizationId).toBe('org-9');
         expect(arg.user).toContain(prose);
+        expect(arg.user).toContain('Extract each defect the reviewer CONCLUDED');
+        expect(arg.user).toContain('checked and then dismissed');
         expect(arg.runName).toBe('code-review-recovery');
-    });
-
-    // #2157: recovery returned a 170-character title the stage then cut
-    // inside inline code. The finder's own schema states the title rule;
-    // recovery stated none, in the prompt or in the schema.
-    it.each([
-        ['without history', undefined],
-        [
-            'with history',
-            [
-                {
-                    suggestionId: 'round-a',
-                    suggestionContent: 'Earlier.',
-                    label: 'bug',
-                    outcome: 'pending' as const,
-                    decidedAt: '2026-10-03T10:00:00Z',
-                },
-            ],
-        ],
-    ])('asks for a bounded title, %s', async (_name, previous) => {
-        const spy = jest
-            .spyOn(LLM, 'run')
-            .mockResolvedValue({ suggestions: [] } as any);
-        await recoverFindingsFromProse(
-            prose,
-            undefined,
-            'org-9',
-            undefined,
-            previous,
-        );
-        const arg = spy.mock.calls[0][0] as any;
-        expect(arg.user).toContain(TITLE_PROMPT_SPEC);
-        expect(
-            arg.schema.shape.suggestions.element.shape.oneSentenceSummary
-                .description,
-        ).toBe(TITLE_PROMPT_SPEC);
-        // Regression (prod audit 2026-09-17): OpenAI json_object mode rejects a
-        // request whose messages never say "json"; recovery then returned [].
-        expect(arg.user).toMatch(/json/i);
     });
 
     it('suffixes usageRunName with -recovery when provided', async () => {
@@ -798,13 +761,13 @@ describe('matrix D — input variants', () => {
     });
 });
 
-describe('submitResult schema — finding title', () => {
+describe('submitResult schema — lean finder output', () => {
     const items = (submitResultTool.inputSchema as any).properties.suggestions
         .items;
 
-    it('describes oneSentenceSummary with the shared title spec', () => {
-        expect(items.properties.oneSentenceSummary.description).toBe(
-            TITLE_PROMPT_SPEC,
-        );
+    it('asks only for the five lean fields, all required', () => {
+        const lean = ['label', 'relevantFile', 'relevantLinesStart', 'relevantLinesEnd', 'suggestionContent'];
+        expect(Object.keys(items.properties).sort()).toEqual([...lean].sort());
+        expect([...items.required].sort()).toEqual([...lean].sort());
     });
 });

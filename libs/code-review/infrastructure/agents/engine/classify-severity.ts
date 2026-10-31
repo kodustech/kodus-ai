@@ -57,7 +57,7 @@ export async function classifySeverity(
         // A missing/failed model degrades through the catch below (→ all medium).
         const text = await LLM.run({
             byokConfig,
-            user: buildSeverityPrompt(suggestions, flags),
+            user: buildSeverityPrompt(suggestions, flags, organizationId),
             runName: 'severity-classifier',
             timeoutMs: SEVERITY_TIMEOUT_MS,
             // Stamp the org so this secondary pass's usage/cost lands in the

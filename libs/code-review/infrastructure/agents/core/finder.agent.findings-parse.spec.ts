@@ -119,15 +119,16 @@ describe('finder findings parse (#2112)', () => {
         ).toBe(false);
     });
 
+    // The lean finder output (#1821): the five fields, no code or summary.
     it('FPARSE-18 — the submitResult tool schema keeps its required fields', () => {
         const schema = submitResultTool.inputSchema as any;
         expect(schema.required).toEqual(['reasoning', 'suggestions']);
-        expect(schema.properties.suggestions.items.required).toEqual([
+        expect([...schema.properties.suggestions.items.required].sort()).toEqual([
+            'label',
             'relevantFile',
+            'relevantLinesEnd',
+            'relevantLinesStart',
             'suggestionContent',
-            'existingCode',
-            'improvedCode',
-            'oneSentenceSummary',
         ]);
     });
 

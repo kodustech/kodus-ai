@@ -1,0 +1,19 @@
+{
+ "caseId": "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "items": [
+  {
+   "issueId": "add-html-sanitizer-for-translated-message-resources-keycloak#10",
+   "defectStatement": "The admin UI's error-invalid-multivalued-size message uses Java MessageFormat placeholders and choice syntax, but its i18next renderer does not interpret them. Validation errors therefore display literal placeholders and choice text instead of the attribute name and size limits.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Interpolate the attribute name and minimum/maximum limits using the existing numeric i18next parameters.",
+    "Remove unsupported MessageFormat choice syntax from the rendered message.",
+    "Preserve the translation key and the meaning of the size constraint."
+   ],
+   "exampleFix": "error-invalid-multivalued-size=Attribute {{0}} must have at least {{1}} and at most {{2}} value(s).",
+   "notes": "Restoring the original value fixes the cited admin message; pluralization is optional. Plural keys alone would require callers to supply count. The account bundle has the same defect in a separate, uncited line."
+  }
+ ]
+}

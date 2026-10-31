@@ -1,0 +1,77 @@
+{
+ "caseId": "dual-storage-architecture-grafana-codex",
+ "items": [
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#02",
+   "defectStatement": "Mode 3 records the asynchronous Legacy.DeleteCollection duration and error status in the storage metric, contaminating storage observations and omitting the corresponding legacy observation.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Record the legacy DeleteCollection result in the legacy duration metric.",
+    "Preserve the error flag, labels, startLegacy timestamp, and legacy call arguments."
+   ],
+   "exampleFix": "\t\t_, err := d.Legacy.DeleteCollection(ctx, deleteValidation, options, listOptions)\n\t\td.recordLegacyDuration(err != nil, mode3Str, options.Kind, method, startLegacy)",
+   "notes": "Change the metric destination; do not add a second observation."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#04",
+   "defectStatement": "Mode 3 records Storage.Create and Storage.Update failures using recordLegacyDuration. These failed storage operations therefore produce legacy error observations instead of storage error observations.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Record failed Storage.Create and Storage.Update durations in the storage metric.",
+    "Preserve the error flag, operation labels, and startStorage timestamp.",
+    "Preserve logging and immediate return of the storage results and errors."
+   ],
+   "exampleFix": null,
+   "notes": "The finding singles out Create, which is locally fixable by changing recordLegacyDuration to recordStorageDuration. The gold description also includes Update at line 129; fixing that full scope requires another edit outside the anchor."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#05",
+   "defectStatement": "Mode 3's asynchronous legacy Create, Delete, Update, and DeleteCollection operations inherit cancellation from the request context. Request completion can cancel these operations after storage has succeeded, leaving legacy storage out of sync.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Prevent request cancellation or deadlines from aborting all four asynchronous legacy write paths.",
+    "Preserve request context values needed by legacy operations.",
+    "Retain a bounded execution timeout and release timeout resources.",
+    "Preserve storage-first execution and storage-derived return values."
+   ],
+   "exampleFix": null,
+   "notes": "Using context.WithoutCancel(ctx) as the timeout parent fixes each occurrence. Replacing the cited Create block alone leaves the other three explicitly reported paths defective."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#07",
+   "defectStatement": "The Mode 3 write tests neither wait for nor assert asynchronous legacy calls, and both backends share one mock's expectations and call history. Consequently, removing legacy mirroring can leave the tests passing.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Distinguish storage calls from legacy calls using independent observations.",
+    "Use bounded synchronization to verify legacy Create, Update, Delete, and DeleteCollection calls after successful storage writes.",
+    "Ensure removing any required legacy write causes its test to fail.",
+    "Configure storage failures on the storage mock and preserve existing result and error assertions."
+   ],
+   "exampleFix": null,
+   "notes": "Repair requires changes across the write tests beyond this partial Create setup. Only Create and Update explicitly register legacy expectations; Delete and DeleteCollection reuse storage expectations through the shared mock. Immediate assertions or fixed sleeps do not reliably verify asynchronous calls."
+  },
+  {
+   "issueId": "dual-storage-architecture-grafana-codex#11",
+   "defectStatement": "Mode 3 independently schedules legacy mutations after storage succeeds, so legacy operations on the same resource can execute in a different order from storage commits. An older update can overwrite a newer one, or an earlier create can run after a delete and resurrect the object.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Preserve storage commit order when applying legacy mutations to the same resource.",
+    "Coordinate ordering across Create, Update, Delete, and overlapping DeleteCollection operations.",
+    "Prevent older mirrored mutations from overwriting newer state or resurrecting deleted objects.",
+    "Preserve storage failure propagation and avoid mirroring failed storage operations."
+   ],
+   "exampleFix": null,
+   "notes": "Requires coordination across write paths outside the anchor. A lock acquired only inside legacy goroutines does not establish storage commit order; merely making this Update call synchronous is also insufficient. The frozen diff supplies the write paths needed for a broader serialization fix."
+  }
+ ]
+}

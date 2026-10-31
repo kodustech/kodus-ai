@@ -1,0 +1,19 @@
+{
+ "caseId": "github-oauth-security-enhancement-sentry",
+ "items": [
+  {
+   "issueId": "github-oauth-security-enhancement-sentry#10",
+   "defectStatement": "test_installation_not_found supplies an invalid OAuth state, so its generic error assertion passes on state rejection without exercising the mocked installation API 404. With valid state, the current implementation reaches build_integration and reports \"The GitHub installation could not be found.\", so the assertion must also change.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Supply valid OAuth state so the callback advances past state validation.",
+    "Exercise the existing mocked installation-not-found response.",
+    "Assert the installation-specific failure so state rejection cannot satisfy the test."
+   ],
+   "exampleFix": "        resp = self.client.get(\n            \"{}?{}\".format(\n                self.setup_path,\n                urlencode(\n                    {\"code\": \"12345678901234567890\", \"state\": \"9cae5e88803f35ed7970fc131e6e65d3\"}\n                ),\n            )\n        )\n        assert b\"The GitHub installation could not be found.\" in resp.content",
+   "notes": "The finding misidentifies the missing-installation behavior at this head: GitHubInstallation advances on the initial Integration.DoesNotExist; build_integration handles the API 404. Changing only the state leaves an incorrect assertion. The frozen diff supplies the required installation-specific message."
+  }
+ ]
+}

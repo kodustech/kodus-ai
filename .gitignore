@@ -293,3 +293,17 @@ reports/mutation/
 # it is the template and IS tracked; this one holds real vendor keys and must
 # never be committed — it exists so the JSON can be validated locally before it
 # is pasted into the GitHub secret.
+
+# Local yalc-linked packages and dev credentials: kodus-common/kodus-flow come
+# from the registry, and test.json holds a production credential.
+packages/kodus-common/
+packages/kodus-flow/
+packages/test.json
+
+# Research run outputs (#1821): kept locally, out of the repo.
+evals/enrichment/results/
+evals/severity/results/
+
+# Research data kept locally, out of the repo (#1821).
+evals/dedup/gold-v3/trabalho/
+evals/dedup/holdout-20/

@@ -13,10 +13,8 @@ import type {
     AgentRunner,
     AgentSpec,
 } from '@libs/agent-harness/domain/contracts/agent.contract';
-import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 import type { Compressor } from '@libs/agent-harness/domain/contracts/compression.contract';
 import type { ProgressLedger } from '@libs/agent-harness/domain/contracts/progress.contract';
-import type { JSONSchema } from '@libs/agent-harness/domain/contracts/json-schema.contract';
 import type {
     RunState,
     TokenUsage,
@@ -71,6 +69,18 @@ import { extractJsonFromText } from '@libs/llm/structured-output-repair';
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { z } from 'zod';
+import {
+    FULL_FINDING,
+    FULL_RECOVERY,
+    LEAN_FINDING,
+    LEAN_RECOVERY,
+    submitResultSchema,
+} from '@libs/code-review/infrastructure/agents/core/finder-output-schema';
+import {
+    FINDER_LABELS,
+    type FinderLabel,
+} from '@libs/code-review/infrastructure/agents/engine/finding-labels';
+import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-title';
 
 export const FINDER_DONE_TOOL = 'submitResult' as const;
 
@@ -81,10 +91,10 @@ const finderLogger = createLogger('finder');
 export interface FinderSuggestion {
     relevantFile: string;
     language?: string;
-    label?: 'bug' | 'security' | 'performance' | 'repo_instruction';
+    label?: FinderLabel;
     suggestionContent: string;
-    existingCode: string;
-    improvedCode: string;
+    existingCode?: string;
+    improvedCode?: string;
     oneSentenceSummary?: string;
     relevantLinesStart?: number;
     relevantLinesEnd?: number;
@@ -98,59 +108,10 @@ export interface FinderSuggestion {
     source?: { file: string; section?: string; quote: string };
 }
 
-const FINDER_LABELS = [
-    'bug',
-    'security',
-    'performance',
-    'repo_instruction',
-] as const;
+const SUBMIT_RESULT_SCHEMA = submitResultSchema(LEAN_FINDING);
 
-/** JSON schema for submitResult — mirrors the legacy _findingsSchema. */
-const SUBMIT_RESULT_SCHEMA: JSONSchema = {
-    type: 'object',
-    // additionalProperties:false on every object is required by provider strict
-    // tool use / structured output modes. Harmless in best-effort mode; optional
-    // properties are still allowed.
-    additionalProperties: false,
-    properties: {
-        reasoning: { type: 'string' },
-        suggestions: {
-            type: 'array',
-            items: {
-                type: 'object',
-                additionalProperties: false,
-                properties: {
-                    relevantFile: { type: 'string' },
-                    language: { type: 'string' },
-                    label: { type: 'string', enum: [...FINDER_LABELS] },
-                    suggestionContent: { type: 'string' },
-                    existingCode: { type: 'string' },
-                    improvedCode: { type: 'string' },
-                    oneSentenceSummary: {
-                        type: 'string',
-                        description: TITLE_PROMPT_SPEC,
-                    },
-                    relevantLinesStart: { type: 'number' },
-                    relevantLinesEnd: { type: 'number' },
-                    severity: {
-                        type: 'string',
-                        enum: ['critical', 'high', 'medium', 'low'],
-                    },
-                    confidence: { type: 'number' },
-                    ruleUuid: { type: 'string' },
-                },
-                required: [
-                    'relevantFile',
-                    'suggestionContent',
-                    'existingCode',
-                    'improvedCode',
-                    'oneSentenceSummary',
-                ],
-            },
-        },
-    },
-    required: ['reasoning', 'suggestions'],
-};
+/** Custom agents' output: the full finding, as main had it. */
+const FULL_SUBMIT_RESULT_SCHEMA = submitResultSchema(FULL_FINDING);
 
 /** The done tool. No-op execute: it is a finalize SIGNAL the CompletionGatePolicy
  *  detects by name; its input (the findings) is captured in the RunState.
@@ -299,14 +260,20 @@ export interface BuildFinderSpecParams {
     /** A custom agent with linked guides: the done-tool accepts `kind` +
      *  `source` (see withConventionFields). */
     acceptsConventions?: boolean;
+    /** A custom agent: the done-tool takes the full finding
+     *  (FULL_SUBMIT_RESULT_SCHEMA). */
+    fullOutput?: boolean;
     /** Provider options attached to the system message (e.g. Anthropic prompt
      *  caching) so the long system prompt is cached across the loop's steps. */
 }
 
 export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
-    let doneTool = params.acceptsRevisions
-        ? withRevisionField(submitResultTool)
+    const submitTool = params.fullOutput
+        ? { ...submitResultTool, inputSchema: FULL_SUBMIT_RESULT_SCHEMA }
         : submitResultTool;
+    let doneTool = params.acceptsRevisions
+        ? withRevisionField(submitTool)
+        : submitTool;
     if (params.acceptsConventions) doneTool = withConventionFields(doneTool);
     doneTool = withLabels(doneTool, params.labels);
     const tools = new InMemoryToolRegistry([
@@ -393,10 +360,11 @@ export function extractFindings(
     const artifact = [...state.artifacts]
         .reverse()
         .find((a) => a.type === FINDER_DONE_TOOL);
-    // OBSERVABILIDADE: "zero findings" tem TRES causas distintas aqui e nenhuma
-    // era registrada — artefato valido com lista vazia, artefato inutilizavel
-    // (submitResult({}) vazio ou prosa), e artefato ausente. Sem isto, o numero
-    // publicado nao distingue "revisou e nao achou" de "quebrou o formato".
+    // OBSERVABILITY: "zero findings" has THREE distinct causes here and none
+    // was recorded — a valid artifact with an empty list, an unusable artifact
+    // (empty submitResult({}) or prose), and a missing artifact. Without this,
+    // the published number does not tell "reviewed and found nothing" from
+    // "broke the format".
     // Validated ONCE: a second pass logged every failure twice (#2112).
     const clean = artifact
         ? sanitizeFindingsResult(artifact.payload, telemetryMetadata)
@@ -557,34 +525,21 @@ function looksLikeFindings(text: string): boolean {
     return signals.filter((r) => r.test(l)).length >= 2;
 }
 
-const RECOVERY_SCHEMA = z.object({
-    suggestions: z.array(
-        z.object({
-            relevantFile: z.string(),
-            suggestionContent: z.string(),
-            existingCode: z.string(),
-            improvedCode: z.string(),
-            language: z.string().nullable(),
-            label: z.string().nullable(),
-            oneSentenceSummary: z
-                .string()
-                .nullable()
-                .describe(TITLE_PROMPT_SPEC),
-            relevantLinesStart: z.number().nullable(),
-            relevantLinesEnd: z.number().nullable(),
-            severity: z.string().nullable(),
-            confidence: z.number().nullable(),
-        }),
-    ),
-});
+const RECOVERY_SCHEMA = LEAN_RECOVERY;
 
-const REVISION_RECOVERY_SCHEMA = RECOVERY_SCHEMA.extend({
-    suggestions: z.array(
-        RECOVERY_SCHEMA.shape.suggestions.element.extend({
-            revisesSuggestionId: z.string().optional(),
-        }),
-    ),
-});
+/** A custom agent's recovery: the full finding, as its submitResult asks.
+ *  Its findings skip the enrichment and the severity classifier, so what the
+ *  recovery leaves out would post missing. */
+const FULL_RECOVERY_SCHEMA = FULL_RECOVERY;
+
+const withRevisionId = (schema: typeof RECOVERY_SCHEMA | typeof FULL_RECOVERY_SCHEMA) =>
+    z.object({
+        suggestions: z.array(
+            schema.shape.suggestions.element.extend({
+                revisesSuggestionId: z.string().optional(),
+            }),
+        ),
+    });
 
 /** Injected capability: re-structure a prose `reasoning` into findings. The
  *  domain (finder/recall passes) depends only on this function; the adapter
@@ -625,14 +580,38 @@ export async function extractFindingsWithRecovery(
         : found;
 }
 
+export function recoverLeniently(err: unknown): FinderSuggestion[] {
+    try {
+        const e = err as { text?: string; value?: unknown; cause?: { value?: unknown } };
+        const raw =
+            e?.value ?? e?.cause?.value ?? (e?.text ? JSON.parse(extractJsonFromText(e.text) ?? e.text) : undefined);
+        const list = (raw as { suggestions?: unknown })?.suggestions;
+        if (!Array.isArray(list)) return [];
+        return list
+            .filter(
+                (s): s is Record<string, unknown> =>
+                    !!s &&
+                    typeof (s as Record<string, unknown>).relevantFile === 'string' &&
+                    typeof (s as Record<string, unknown>).suggestionContent === 'string',
+            ) as unknown as FinderSuggestion[];
+    } catch {
+        // Best-effort: recovery must never break the review.
+        return [];
+    }
+}
+
 export async function recoverFindingsFromProse(
     prose: string,
     byokConfig: NormalizedModel | undefined,
     organizationId: string | undefined,
     usageRunName?: string,
     previousDecisions?: readonly PrDecisionRecord[],
+    teamId?: string,
+    /** A custom agent: recover the full finding (FULL_RECOVERY_SCHEMA). */
+    fullOutput?: boolean,
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
+    const base = fullOutput ? FULL_RECOVERY_SCHEMA : RECOVERY_SCHEMA;
     try {
         // ONE primitive: LLM.run resolves the slot (or managed default), owns the
         // span + the json_schema→json_object fallback the recovery pass needs, and
@@ -641,9 +620,7 @@ export async function recoverFindingsFromProse(
         // it is part of the same review, not a separate `other` area.
         const result = await LLM.run({
             byokConfig,
-            schema: previousDecisions?.length
-                ? REVISION_RECOVERY_SCHEMA
-                : RECOVERY_SCHEMA,
+            schema: previousDecisions?.length ? withRevisionId(base) : base,
             // The title rule (#2157) mirrors the finder's own schema. The
             // "Respond with a JSON object" sentence must stay: the text must
             // literally contain the word "json" somewhere: OpenAI (and
@@ -664,11 +641,27 @@ export async function recoverFindingsFromProse(
             // between this call and a 400.
             user:
                 "The following is a code reviewer's analysis written as " +
-                'prose. Extract EVERY concrete finding it describes into ' +
-                'the structured schema — one entry per distinct issue, ' +
-                'using the file paths and line numbers mentioned. Do NOT ' +
-                'invent findings; only extract what is explicitly ' +
-                `described. oneSentenceSummary: ${TITLE_PROMPT_SPEC}.` +
+                'prose. Extract each defect the reviewer CONCLUDED is ' +
+                'present in the code into the structured schema — one ' +
+                'entry per distinct issue, using the file paths and line ' +
+                'numbers mentioned.\n\n' +
+                (fullOutput
+                    ? `For each finding also give the cited code, the fixed code, its severity and a title: ${TITLE_PROMPT_SPEC}.\n\n`
+                    : '') +
+                'Leave out everything the reviewer did not conclude is a ' +
+                'defect:\n' +
+                '- a hypothesis the analysis checked and then dismissed, ' +
+                'ruled out, or found handled elsewhere (e.g. "summing ' +
+                'floats would lose precision, but amounts are stored as ' +
+                'integer cents");\n' +
+                '- descriptions of what the change does, intentional ' +
+                'changes, and code the reviewer judged correct;\n' +
+                '- remarks the reviewer itself says are not a correctness, ' +
+                'security or performance issue (missing tests, style, ' +
+                'naming);\n' +
+                '- questions the analysis raises and answers itself.\n' +
+                'If the analysis concludes there is nothing to fix, return ' +
+                'an empty suggestions list. Do NOT invent findings.' +
                 `\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}` +
                 (previousDecisions?.length
                     ? `\n\n${formatPreviousDecisions(previousDecisions)}\nPreserve the earlier suggestion's Id in revisesSuggestionId when the analysis revises it. Do not invent a relationship absent from the analysis; omit the field for unrelated findings.`
@@ -678,10 +671,25 @@ export async function recoverFindingsFromProse(
                 : 'code-review-recovery',
             organizationId,
         });
-        return (result.suggestions as unknown as FinderSuggestion[]) ?? [];
-    } catch {
-        // Best-effort: recovery must never break the review.
-        return [];
+        return (result.suggestions ?? []) as unknown as FinderSuggestion[];
+    } catch (err) {
+        finderLogger.warn({
+            message: `[RECOVERY] prose recovery call failed: ${(err as Error)?.message ?? String(err)}`,
+            context: 'finder',
+            metadata: {
+                organizationId,
+                teamId,
+                runName: usageRunName
+                    ? `${usageRunName}-recovery`
+                    : 'code-review-recovery',
+            },
+        });
+        // Kimi K3 OMITS the optional fields instead of sending null, and
+        // strict validation fails the whole recovery (smoke test, 01/10). The
+        // schema cannot make them optional (OpenAI strict mode requires every
+        // field declared), so read the returned JSON requiring only what the
+        // main schema requires: file and description.
+        return recoverLeniently(err);
     }
 }
 
@@ -808,10 +816,17 @@ export interface FinderWithVerifyResult {
      *  finder's own usage is in finderState.usage; this is reported separately
      *  so callers can attribute cost — it is NOT in finderState. */
     verifyUsage: VerifyUsage;
+    /** Wall-clock of the verify sub-step (first pass + evidence gate), in ms.
+     *  Undefined when verify did not run. Without it the verifier's share of
+     *  review latency could only be inferred by subtraction. */
+    verifyMs?: number;
     /** Token usage of the recall pass (the extra synthesis-rescue finder run).
      *  NOT in finderState — summed here so the caller can add it to the finder
      *  cost. */
     recallUsage: VerifyUsage;
+    /** Per-pass stats (the base pass and the synthesis rescue), so a pass
+     *  that pays for itself can be told from one that doesn't. */
+    passStats: RecallPassStat[];
 }
 
 const ZERO_VERIFY_USAGE: VerifyUsage = {
@@ -855,6 +870,7 @@ export async function runFinderWithVerify(
     input: { prompt: string },
     ctx: ToolContext,
 ): Promise<FinderWithVerifyResult> {
+    const baseT0 = Date.now();
     const finderState = await params.runner.run(
         params.finderSpec,
         {
@@ -870,11 +886,21 @@ export async function runFinderWithVerify(
     );
     // Main finder findings — with prose-recovery applied (the same wrapper the
     // recall passes use, so an omission in any pass is caught consistently).
+    const baseMs = Date.now() - baseT0;
     const base = await extractFindingsWithRecovery(
         finderState,
         params.recoverProse,
         { ...params.telemetryMetadata, modelId: params.modelId },
     );
+    // The generalist as a pass, measured like the others: without it its cost
+    // and time only showed up summed into the review total (#1821).
+    const baseStat = passStatOf(finderState, {
+        label: 'generalist-base',
+        added: base.suggestions?.length ?? 0,
+        ms: baseMs,
+        startMs: 0,
+        startEpochMs: baseT0,
+    });
 
     // RECALL PASS: synthesis rescue — one extra finder run that re-thinks from
     // the evidence already gathered and surfaces concrete MISSED bugs BEFORE
@@ -903,6 +929,7 @@ export async function runFinderWithVerify(
     const reasoning = recall.findings.reasoning;
     const suggestions = recall.findings.suggestions;
     const recallUsage = recall.usage;
+    const passStats = [baseStat, ...recall.passStats];
 
     if (suggestions.length === 0) {
         return {
@@ -916,6 +943,7 @@ export async function runFinderWithVerify(
             finderState,
             verifyUsage: ZERO_VERIFY_USAGE,
             recallUsage,
+            passStats,
         };
     }
 
@@ -925,6 +953,7 @@ export async function runFinderWithVerify(
     // on the target branch, then the convention verifier. A finding an
     // ast-grep call in this run actually matched is proven and skips both.
     // Without `conventionCheck` everything below sees only `bugs` = all.
+    const verifyT0 = Date.now();
     const route = params.conventionCheck
         ? await routeByKind(suggestions, params.conventionCheck, {
               organizationId: params.telemetryMetadata?.organizationId,
@@ -944,7 +973,12 @@ export async function runFinderWithVerify(
     // HV2 on the bug findings (refute-to-drop + evidence gate), on the check
     // model when the caller gave one.
     const verify = verifyModelOf(params);
-    const investigated = strongFilesFromRun(finderState);
+    // EVIDENCE GATE input: the base pass's reads AND the recall pass's: a
+    // finding on a file the pass read itself is evidenced.
+    const investigated = new Set([
+        ...strongFilesFromRun(finderState),
+        ...(recall.investigatedFiles ?? []),
+    ]);
     const hv2 = await verifyFindings(
         {
             ...params,
@@ -1013,6 +1047,7 @@ export async function runFinderWithVerify(
             (a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0),
         );
     }
+    const verifyMs = Date.now() - verifyT0;
 
     // Map the generic verdict.toolCalls (name/args/result) into the review
     // ToolEvidenceSummary (strong=readFile/checkTypes files, weak=grep hits).
@@ -1062,7 +1097,9 @@ export async function runFinderWithVerify(
         droppedByQuoteCheck: route.rejected,
         finderState,
         verifyUsage: sumVerifyUsage(hv2.verifyUsage, conventionUsage),
+        verifyMs,
         recallUsage,
+        passStats,
     };
 }
 
@@ -1155,8 +1192,8 @@ export async function verifyFindings(
         }
     }
 
-    // Verify each finding (HV2 refute-to-drop) with the confidence SPLIT inside
-    // LlmVerifier: high-confidence → light depth, low-confidence → full depth.
+    // Verify each finding (HV2 refute-to-drop) at the light depth; the
+    // evidence gate below re-verifies at the full depth.
     const verifier = new LlmVerifier(params.runner, {
         modelId: params.modelId,
         fallbackModelId: params.fallbackModelId,
@@ -1476,21 +1513,101 @@ const ZERO_RECALL_USAGE: VerifyUsage = {
     cacheReadTokens: 0,
 };
 
+/** How many NEW findings each extra pass contributed. Without this, a pass that
+ *  costs a full finder run and adds nothing is indistinguishable from one that
+ *  carries the whole gain — the merged total looks the same either way. */
+export interface RecallPassStat {
+    label: string;
+    added: number;
+    /** Steps the pass ran before finalizing — what a maxSteps cap actually
+     *  bounds. A step can issue multiple tool calls at once, so this is NOT
+     *  derivable from toolCalls. */
+    steps: number;
+    /** Tool calls the pass made. Zero means it answered without investigating. */
+    toolCalls: number;
+    /** Wall clock of the pass. */
+    ms?: number;
+    /** Output and reasoning tokens of the pass (#1821: cost per pass). */
+    outputTokens?: number;
+    reasoningTokens?: number;
+    /** Start, in epoch ms. `startMs` is relative to the start of its own block
+     *  of passes; only the absolute value compares passes across blocks. */
+    startEpochMs?: number;
+    /** When the pass STARTED, in ms since the start of its block. With `ms`
+     *  this gives the timeline: which passes overlap and how long the block
+     *  took in wall clock. */
+    startMs?: number;
+    /** Range-less readFile calls — the whole-file reads. */
+    fullFileReads: number;
+    /** Prompt-cache diagnostic: this pass's own inputTokens/cacheReadTokens.
+     *  A recall pass prepends the SAME userPrompt (diff + rules) as the base
+     *  pass — if the provider caches that shared prefix, cacheReadTokens
+     *  should be close to inputTokens. If it stays near 0, the prefix is
+     *  being paid for fresh every time. */
+    inputTokens: number;
+    cacheReadTokens: number;
+}
+
+/** One pass's stats from its run: steps (what maxSteps bounds; a step can
+ *  fire several tool calls), tool calls, whole-file reads and tokens. */
+function passStatOf(
+    state: RunState,
+    pass: Pick<
+        RecallPassStat,
+        'label' | 'added' | 'ms' | 'startMs' | 'startEpochMs'
+    >,
+): RecallPassStat {
+    const u = usageOf(state.usage);
+    const calls = collectToolCalls(state);
+    return {
+        ...pass,
+        steps: state.steps.length,
+        toolCalls: calls.length,
+        fullFileReads: calls.filter(
+            (c) =>
+                c.tool === 'readFile' &&
+                !(c.args as { startLine?: number })?.startLine,
+        ).length,
+        inputTokens: u.inputTokens,
+        cacheReadTokens: u.cacheReadTokens,
+        outputTokens: u.outputTokens,
+        reasoningTokens: u.reasoningTokens,
+    };
+}
+
 export async function runRecallPasses(
     base: FinderFindings,
     params: RecallPassesParams,
     ctx: ToolContext,
-): Promise<{ findings: FinderFindings; usage: VerifyUsage }> {
+): Promise<{
+    findings: FinderFindings;
+    usage: VerifyUsage;
+    passStats: RecallPassStat[];
+    /** Files the recall passes opened with readFile/checkTypes. The evidence
+     *  gate only saw the base pass's reads, so a recall finding on a file the
+     *  pass itself read still got the full re-verify as "uninvestigated". */
+    investigatedFiles?: Set<string>;
+}> {
     let findings = base;
+    const investigatedFiles = new Set<string>();
     let usage = ZERO_RECALL_USAGE;
+    // Time zero of the timeline: every `startMs` is relative to it, so the
+    // numbers compare across PRs and runs without carrying epochs.
+    const FINDER_T0 = Date.now();
+    const passStats: RecallPassStat[] = [];
     if (params.skipHeavyPasses) {
-        return { findings, usage };
+        return { findings, usage, passStats, investigatedFiles };
     }
 
     const toolCalls = collectToolCalls(params.finderState);
     // Re-run the finder with a focused prompt; merge its ADDITIONAL findings.
     // `label` names the observation so each pass is distinct in the trace.
     const runPass = async (prompt: string, label: string): Promise<void> => {
+        // Wall clock per pass. Tokens do not answer "why was this review
+        // slow": a cheap pass that waits 90s on the provider costs the same
+        // tokens as one that takes 9s, and only one of them is the bottleneck.
+        const t0 = Date.now();
+        const relativeStart = t0 - FINDER_T0;
         const state = await params.runner.run(
             params.finderSpec,
             {
@@ -1504,14 +1621,37 @@ export async function runRecallPasses(
             },
             ctx,
         );
+        const elapsedMs = Date.now() - t0;
+        // Extract BEFORE touching the shared accumulators, then merge
+        // synchronously (single-threaded, so the read-modify-write is atomic).
         const extracted = await extractFindingsWithRecovery(
             state,
             params.recoverProse,
             { ...params.telemetryMetadata, modelId: params.modelId },
         );
-        usage = sumVerifyUsage(usage, usageOf(state.usage));
+        const passUsage = usageOf(state.usage);
+        usage = sumVerifyUsage(usage, passUsage);
         toolCalls.push(...collectToolCalls(state));
+        for (const f of strongFilesFromRun(state)) investigatedFiles.add(f);
+        // Which pass produced a finding is invisible downstream once the sets
+        // merge; stamp it so precision can be read per pass.
+        for (const sug of extracted.suggestions ?? []) {
+            if (sug && !(sug as { producedBy?: string }).producedBy) {
+                (sug as { producedBy?: string }).producedBy = label;
+            }
+        }
+        const before = findings.suggestions.length;
         findings = mergeSuggestions(findings, extracted);
+        const added = findings.suggestions.length - before;
+        passStats.push(
+            passStatOf(state, {
+                label,
+                added,
+                ms: elapsedMs,
+                startMs: relativeStart,
+                startEpochMs: t0,
+            }),
+        );
     };
 
     // Synthesis rescue — re-think from the evidence already gathered, surface
@@ -1535,7 +1675,7 @@ export async function runRecallPasses(
         );
     }
 
-    return { findings, usage };
+    return { findings, usage, passStats, investigatedFiles };
 }
 
 /** Dedup-merge extra findings into the base set (ported from legacy

@@ -147,6 +147,15 @@ export type AIAnalysisResultPrLevel = {
     codeSuggestions: ISuggestionByPR[];
 };
 
+/** The enrichment's answer on a suggestion's fix (enrich-content.ts). */
+export const FIX_STATUSES = [
+    'local',
+    'needs-wider-change',
+    'insufficient-context',
+    'no-code-fix',
+] as const;
+export type FixStatus = (typeof FIX_STATUSES)[number];
+
 export type CodeSuggestion = {
     id?: string;
     relevantFile: string;
@@ -155,6 +164,8 @@ export type CodeSuggestion = {
     existingCode?: string;
     improvedCode: string;
     oneSentenceSummary?: string;
+    /** The enrichment's answer on the fix; anything but `local` leaves `improvedCode` empty on purpose. */
+    fixStatus?: FixStatus;
     /** The finder's whole explanation, labels stripped; `suggestionContent` is the short body shown to people. */
     fullExplanation?: string;
     relevantLinesStart?: number;

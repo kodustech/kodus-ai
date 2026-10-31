@@ -1,0 +1,120 @@
+{
+ "caseId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "items": [
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#04",
+   "defectStatement": "The error-handling test asserts that no offsets were committed, contradicting its intended verification that processing continues and commits advance after an exception. Its short sleep can finish before the periodic commit runs, allowing a consumer that never commits to pass.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Keep the first processing call failing and the second succeeding.",
+    "Wait for the expected commit with a bounded timeout.",
+    "Assert both processing calls occurred and the partition's committed next-read offset is 102."
+   ],
+   "exampleFix": "    def test_thread_queue_parallel_error_handling(self) -> None:\n        \"\"\"\n        Test that errors in processing don't block offset commits for other messages.\n        \"\"\"\n        committed_offsets: dict[Partition, int] = {}\n\n        def track_commits(offsets: Mapping[Partition, int], force: bool = False) -> None:\n            committed_offsets.update(offsets)\n\n        factory = UptimeResultsStrategyFactory(\n            mode=\"thread-queue-parallel\",\n            max_workers=2,\n        )\n\n        test_partition = Partition(Topic(\"test\"), 1)\n        consumer = factory.create_with_partitions(track_commits, {test_partition: 0})\n\n        try:\n            with mock.patch.object(type(factory.result_processor), \"__call__\") as mock_processor_call:\n                mock_processor_call.side_effect = [Exception(\"Processing failed\"), None]\n\n                codec = kafka_definition.get_topic_codec(kafka_definition.Topic.UPTIME_RESULTS)\n\n                for offset, minutes in [(100, 5), (101, 4)]:\n                    result = self.create_uptime_result(\n                        self.subscription.subscription_id,\n                        scheduled_check_time=datetime.now() - timedelta(minutes=minutes),\n                    )\n                    message = Message(\n                        BrokerValue(\n                            KafkaPayload(None, codec.encode(result), []),\n                            test_partition,\n                            offset,\n                            datetime.now(),\n                        )\n                    )\n                    consumer.submit(message)\n\n                for _ in range(50):\n                    if committed_offsets.get(test_partition) == 102:\n                        break\n                    time.sleep(0.1)\n\n                assert mock_processor_call.call_count == 2\n                assert committed_offsets.get(test_partition) == 102\n        finally:\n            factory.shutdown()",
+   "notes": "Expect 102, not 101: the factory converts the highest completed offset to the next-read offset. Queue emptiness or processor call count alone does not establish that a commit occurred."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#10",
+   "defectStatement": "close() stops the commit thread before workers finish, leaving later completions uncommitted. Separately, FixedQueuePool.shutdown() sets worker stop flags before draining their queues, so graceful shutdown can abandon queued work and cause replay.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Allow accepted queued work and in-flight processing to finish before workers stop.",
+    "Commit the final contiguous completed offsets after processing finishes.",
+    "Serialize final committing with the background commit thread and stop that thread before shutdown completes.",
+    "Mark offsets committed only after the commit callback succeeds."
+   ],
+   "exampleFix": null,
+   "notes": "The anchor covers the strategy ordering defect, but the pool's premature worker flags are outside it. Merely moving queue_pool.shutdown() earlier does not fix draining; queue emptiness also excludes in-flight work."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#16",
+   "defectStatement": "test_concurrent_processing_across_groups checks delivery counts and group membership without observing overlapping processing. A fully serial implementation therefore passes the purported concurrency test.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Demonstrate that processing for distinct groups overlaps and fail for serial processing.",
+    "Ensure tested groups use distinct queues rather than relying on collision-free string hashes.",
+    "Use bounded synchronization and release blocked callbacks on failure.",
+    "Continue verifying delivery of all submitted items."
+   ],
+   "exampleFix": "    def test_concurrent_processing_across_groups(self):\n        \"\"\"Test that groups assigned to different queues are processed concurrently.\"\"\"\n        partition = Partition(Topic(\"test\"), 0)\n        self.pool.shutdown()\n        all_started = threading.Event()\n        release = threading.Event()\n        timed_out = threading.Event()\n        groups_started = set()\n        self.expected_items = 6\n        self.process_complete_event.clear()\n\n        def result_processor(identifier: str, item: str):\n            with self.process_lock:\n                groups_started.add(item.split(\"_\")[2])\n                if len(groups_started) == 3:\n                    all_started.set()\n            if not release.wait(timeout=5.0):\n                timed_out.set()\n            with self.process_lock:\n                self.processed_items.append((identifier, item))\n                self.items_processed += 1\n                if self.items_processed == self.expected_items:\n                    self.process_complete_event.set()\n\n        self.pool = FixedQueuePool(\n            result_processor=result_processor,\n            identifier=\"test\",\n            num_queues=3,\n        )\n        expected_items = [f\"item_group_{i % 3}_{i}\" for i in range(6)]\n\n        try:\n            with mock.patch.object(\n                self.pool,\n                \"get_queue_for_group\",\n                side_effect=lambda group: int(group.rsplit(\"_\", 1)[1]),\n            ):\n                for i, item in enumerate(expected_items):\n                    work_item = WorkItem(\n                        partition=partition,\n                        offset=i,\n                        result=item,\n                        message=Message(\n                            BrokerValue(\n                                KafkaPayload(b\"key\", b\"value\", []),\n                                partition,\n                                i,\n                                datetime.now(),\n                            )\n                        ),\n                    )\n                    self.pool.submit(f\"group_{i % 3}\", work_item)\n\n                assert all_started.wait(timeout=5.0), \"Groups did not process concurrently\"\n        finally:\n            release.set()\n\n        assert self.process_complete_event.wait(timeout=5.0), \"Processing did not complete in time\"\n        assert not timed_out.is_set(), \"A processor timed out waiting for concurrent groups\"\n        assert sorted(item for _, item in self.processed_items) == sorted(expected_items)",
+   "notes": "Worker exceptions may be swallowed, so synchronization failures must reach assertions on the test thread. Renaming the test removes the misleading claim but does not repair the missing concurrency coverage."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#17",
+   "defectStatement": "The strategy ordering test submits messages whose decoded results are identical and asserts only the number processed. Reversing their processing order would produce the same observed result and pass.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Give each submitted message a distinct sequence value that survives decoding.",
+    "Keep all messages assigned to the same subscription group.",
+    "Submit through SimpleQueueProcessingStrategy and assert the exact processed sequence.",
+    "Bound the wait for completion and preserve resource cleanup."
+   ],
+   "exampleFix": "    def test_preserves_order_within_group(self):\n        \"\"\"Test that messages for the same subscription are processed in order.\"\"\"\n        self.strategy.close()\n        self.expected_items = 5\n        self.process_complete_event.clear()\n\n        def result_processor(identifier: str, result: dict):\n            with self.process_lock:\n                self.processed_results.append(result)\n                if len(self.processed_results) == self.expected_items:\n                    self.process_complete_event.set()\n\n        def decoder(payload: KafkaPayload | FilteredPayload) -> dict | None:\n            if isinstance(payload, FilteredPayload):\n                return None\n            subscription_id, sequence = payload.value.decode().split(\":\")\n            return {\"subscription_id\": subscription_id, \"sequence\": int(sequence)}\n\n        self.queue_pool = FixedQueuePool(\n            result_processor=result_processor,\n            identifier=\"test\",\n            num_queues=2,\n        )\n        self.strategy = SimpleQueueProcessingStrategy(\n            queue_pool=self.queue_pool,\n            decoder=decoder,\n            grouping_fn=lambda result: result[\"subscription_id\"],\n            commit_function=mock.Mock(),\n        )\n\n        for i in range(5):\n            message = self.create_message(f\"sub1:{i}\", 0, 100 + i)\n            self.strategy.submit(message)\n\n        assert self.process_complete_event.wait(timeout=5.0), \"Processing did not complete in time\"\n        assert self.processed_results == [\n            {\"subscription_id\": \"sub1\", \"sequence\": i} for i in range(5)\n        ]",
+   "notes": "The replacement rebuilds the fixture using constructor interfaces shown in the frozen diff; existing tearDown cleans it up. Varying subscription IDs without normalizing the grouping key would test different groups instead."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#18",
+   "defectStatement": "The graceful-shutdown test only checks that the factory cleared its pool reference. It therefore passes when shutdown leaves queued work abandoned or worker threads alive.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Retain access to the pool before the factory clears its reference.",
+    "Assert that shutdown leaves no queued or outstanding processing work.",
+    "Assert every worker has stopped when shutdown returns.",
+    "Preserve the assertion that the factory releases its pool reference."
+   ],
+   "exampleFix": "        queue_pool = factory.queue_pool\n        assert queue_pool is not None\n        factory.shutdown()\n        assert factory.queue_pool is None\n        assert all(not worker.is_alive() for worker in queue_pool.workers)\n        assert queue_pool.get_stats()[\"total_items\"] == 0\n        assert all(not offsets for offsets in queue_pool.offset_tracker.outstanding.values())",
+   "notes": "The frozen input does not expose workers or offset_tracker.outstanding. These checks detect this implementation's abandoned queues and live workers; outstanding offsets alone are insufficient because send_result reuses an offset. Deterministic pending-work setup would require earlier instrumentation."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#musep-01",
+   "defectStatement": "terminate() signals the commit thread but does not wait for it to exit, allowing its current iteration or an in-flight commit callback to outlive termination. The loop does eventually observe the event; the defect is the missing synchronization, not indefinite continued looping.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Signal the commit thread to stop.",
+    "Ensure the commit thread has exited before terminate returns normally.",
+    "Preserve shutdown of the queue pool."
+   ],
+   "exampleFix": "    def terminate(self) -> None:\n        self.shutdown_event.set()\n        self.commit_thread.join()\n        self.queue_pool.shutdown()",
+   "notes": "An unchecked timed join can still return with a live commit thread. Joining prevents commits after termination returns; preventing every commit after the event is signaled would additionally require changes to the commit loop."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01",
+   "defectStatement": "Each worker reports its own queue depth with only the shared identifier tag, causing different queues to write to the same gauge series. The reported depth consequently reflects whichever worker reported last.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Distinguish individual workers' queue-depth metric series.",
+    "Preserve the metric name, queue-size value, and identifier tag."
+   ],
+   "exampleFix": "                metrics.gauge(\n                    \"remote_subscriptions.queue_worker.queue_depth\",\n                    self.work_queue.qsize(),\n                    tags={\n                        \"identifier\": self.identifier,\n                        \"worker_id\": str(self.worker_id),\n                    },\n                )",
+   "notes": "Use the stable worker index, not a per-message identifier."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#sncc-02",
+   "defectStatement": "The wait loop exits once the queue is empty and any commit exists, even if that commit covers only an earlier portion of the batch. The following assertion expects 105 immediately, creating a race with the next periodic commit.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Continue waiting when the recorded partition offset is below 105.",
+    "Keep waiting bounded and fail if the expected commit never arrives.",
+    "Preserve the exact final assertion that the partition's committed offset is 105."
+   ],
+   "exampleFix": "            for _ in range(max_wait):\n                assert queue_pool is not None\n                stats = queue_pool.get_stats()\n                if stats[\"total_items\"] == 0 and committed_offsets.get(test_partition) == 105:\n                    break\n\n                time.sleep(0.1)\n\n            assert test_partition in committed_offsets\n            assert committed_offsets[test_partition] == 105",
+   "notes": "Waiting directly on the expected committed offset is also valid; queue emptiness is not evidence of a final commit."
+  }
+ ]
+}

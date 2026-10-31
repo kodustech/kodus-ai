@@ -1,0 +1,19 @@
+{
+ "caseId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor",
+ "items": [
+  {
+   "issueId": "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor#prod-01",
+   "defectStatement": "EmbeddableHost restricts the final hostname suffix to 2–5 letters, rejecting legitimate hosts such as example.technology when administrators create or update embedding relationships.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Accept legitimate alphabetic hostname suffixes longer than five letters, including example.technology.",
+    "Preserve acceptance of previously supported valid hosts.",
+    "Retain hostname format validation rather than accepting arbitrary strings."
+   ],
+   "exampleFix": "  validates_format_of :host, :with => /\\A[a-z0-9]+([\\-\\.]{1}[a-z0-9]+)*\\.[a-z]{2,}(:[0-9]{1,5})?(\\/.*)?\\Z/i",
+   "notes": "Removing the suffix upper bound fixes this defect locally; a broader hostname-validator rewrite is unnecessary."
+  }
+ ]
+}

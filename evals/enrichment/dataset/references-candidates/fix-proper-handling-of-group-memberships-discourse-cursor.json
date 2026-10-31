@@ -1,0 +1,90 @@
+{
+ "caseId": "fix-proper-handling-of-group-memberships-discourse-cursor",
+ "items": [
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#04",
+   "defectStatement": "findMembers unconditionally applies every response, allowing an older request that finishes last to overwrite the latest page or membership refresh.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Only the latest member request for a model may update its members and pagination metadata.",
+    "Distinguish overlapping requests even when they request the same offset.",
+    "Preserve member conversion to Discourse.User and the returned promise."
+   ],
+   "exampleFix": "    }).then(self._latestMembersRequest = function applyMembers(result) {\n      if (self._latestMembersRequest !== applyMembers) { return; }\n      self.setProperties({\n        user_count: result.meta.total,\n        limit: result.meta.limit,\n        offset: result.meta.offset,\n        members: result.members.map(function(member) { return Discourse.User.create(member); })",
+   "notes": "Callback identity supplies a per-request token within the exact anchor. Comparing offsets alone misses same-page refresh races. The replacement passed simulated out-of-order navigation and refresh checks."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#07",
+   "defectStatement": "Admin::GroupsController#create ignores the submitted alias_level, so newly created groups retain the default instead of the administrator's selection.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Assign a supplied alias_level before saving, using the same conversion as update.",
+    "Preserve the default when alias_level is absent or blank.",
+    "Preserve name trimming, visibility handling, and save response behavior."
+   ],
+   "exampleFix": "    group = Group.new\n    group.name = (params[:name] || '').strip\n    group.visible = params[:visible] == \"true\"\n    group.alias_level = params[:alias_level].to_i if params[:alias_level].present?\n\n    if group.save",
+   "notes": "The update action supplies the required assignment pattern."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#muse13-01",
+   "defectStatement": "The Next action permits offset == user_count, requesting an empty page when the count is an exact multiple of the page size. The incorrect totalPages calculation also prevents showingLast from blocking that navigation.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Prevent Next from advancing beyond the last valid page start.",
+    "Preserve normal advancement to full and partially filled pages.",
+    "Keep the offset nonnegative for empty groups."
+   ],
+   "exampleFix": "    next: function() {\n      if (this.get(\"showingLast\")) { return; }\n\n      var group = this.get(\"model\"),\n          limit = group.get(\"limit\"),\n          lastOffset = Math.max(0, Math.ceil(group.get(\"user_count\") / limit) - 1) * limit,\n          offset = Math.min(group.get(\"offset\") + limit, lastOffset);\n\n      if (offset === group.get(\"offset\")) { return; }",
+   "notes": "Using the existing totalPages value would retain the bug. This local fix prevents empty-page navigation; correcting the page-count display and disabled styling requires a separate change outside the anchor."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#musep-01",
+   "defectStatement": "remove_member deletes the membership through group.users.delete, bypassing GroupUser destruction callbacks and leaving the group's cached user_count inflated.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Destroy the matching membership with callbacks so its counter cache is decremented.",
+    "Remove only the specified group's membership, preserving the user and other memberships.",
+    "Preserve automatic-group protection and response handling."
+   ],
+   "exampleFix": "  def remove_member\n    group = Group.find(params.require(:group_id).to_i)\n    user_id = params.require(:user_id).to_i\n\n    return can_not_modify_automatic if group.automatic\n\n    group.group_users.where(user_id: user_id).destroy_all\n\n    if group.save\n      render json: success_json\n    else\n      render_json_error(group)\n    end\n  end",
+   "notes": "The finding supplies the association and destruction operation; the repository confirms both. Loading a User and still calling group.users.delete does not address the callback defect."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#opa-02",
+   "defectStatement": "The public members endpoint passes unchecked limit and offset parameters into its query. Oversized limits permit excessive serialization, while negative pagination values can cause database errors.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Enforce a positive, bounded page size while preserving the default of 50.",
+    "Prevent negative offsets from reaching the query.",
+    "Report the effective limit and offset in response metadata.",
+    "Preserve member ordering and total-count semantics."
+   ],
+   "exampleFix": "    limit = (params[:limit] || 50).to_i\n    limit = 50 if limit <= 0\n    limit = [limit, 200].min\n    offset = [params[:offset].to_i, 0].max\n\n    total = group.users.count\n    members = group.users.order(:username_lower).limit(limit).offset(offset)",
+   "notes": "Other reasonable finite caps and explicit validation errors are valid alternatives. An upper bound alone does not handle zero or negative limits."
+  },
+  {
+   "issueId": "fix-proper-handling-of-group-memberships-discourse-cursor#snloop-01",
+   "defectStatement": "Passing user_id to group.users.delete performs an association-scoped lookup that raises RecordNotFound when the user is no longer a member, causing repeated or concurrent removal requests to fail.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Treat an already absent membership as a successful no-op.",
+    "Continue removing existing memberships without deleting the user.",
+    "Preserve automatic-group protection and existing response handling."
+   ],
+   "exampleFix": "    if user = User.find_by(id: user_id)\n      group.remove(user)\n    end",
+   "notes": "The finding's claim that integer IDs always cause AssociationTypeMismatch is inaccurate for the pinned Rails version. The relevant failure is the missing associated record. The supplied finding identifies group.remove; its implementation safely destroys matching join records."
+  }
+ ]
+}

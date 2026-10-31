@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+ "items": [
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#04",
+   "defectStatement": "The shared mock occurrence builder discards `value`, so result and producer-call assertions cannot detect an incorrect value passed by the detector. Several expected occurrences consequently use 6 despite evaluated inputs of 10, 100, or 8.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Make different input values distinguishable by the tests' assertions.",
+    "Correct expected values to match the evaluated inputs, including both dedupe tests and the results-on-change test.",
+    "Preserve existing checks for priority, state transitions, deduplication, and occurrence production."
+   ],
+   "exampleFix": null,
+   "notes": "Updating the helper alone either leaves assertions insensitive or exposes incorrect expectations outside the anchor. IssueOccurrence.__eq__ compares only id, so adding value to evidence_data alone is insufficient. This equality behavior and the direct evaluate_group_key_value input of 10 are absent from the frozen input."
+  }
+ ]
+}

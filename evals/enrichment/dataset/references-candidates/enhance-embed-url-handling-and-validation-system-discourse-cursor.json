@@ -1,0 +1,91 @@
+{
+ "caseId": "enhance-embed-url-handling-and-validation-system-discourse-cursor",
+ "items": [
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#04",
+   "defectStatement": "EmbedController and TopicRetriever compare URI hosts with SiteSetting.embeddable_host case-sensitively, rejecting otherwise matching hosts whose letter case differs.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Compare hostnames case-insensitively in both referer validation and embed URL validation.",
+    "Continue rejecting different hosts, missing hosts, and malformed URLs.",
+    "Preserve rejection when the configured embeddable host is blank."
+   ],
+   "exampleFix": null,
+   "notes": "The controller check alone is locally fixable, but the finding explicitly includes lib/topic_retriever.rb, whose implementation is absent from the frozen input. Handle nil URI hosts safely."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#18",
+   "defectStatement": "When an existing TopicEmbed has no associated post and imported content has changed, import passes nil to PostRevisor, whose revise! call dereferences it and crashes. Unchanged content does not enter this failing branch.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Do not invoke PostRevisor when the associated post is missing.",
+    "Do not advance content_sha1 when skipping an import because its post is missing.",
+    "Preserve revision and checksum updates for existing posts with changed content."
+   ],
+   "exampleFix": "      post = embed.post\n      return if post.blank?\n      # Update the topic if it changed\n      if content_sha1 != embed.content_sha1\n        revisor = PostRevisor.new(post)\n        revisor.revise!(user, absolutize_urls(url, contents), skip_validations: true, bypass_rate_limiter: true)\n        embed.update_column(:content_sha1, content_sha1)",
+   "notes": "Returning nil is sufficient; recreating deleted content is not required. The closing end for the changed-content conditional is outside the replacement."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#19",
+   "defectStatement": "import_remote forwards extracted content and the selected title without checking for blank values. Nil content crashes at contents << in import, while a missing title can fail topic persistence despite skip_validations.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Skip importing nil or blank extracted content.",
+    "Ensure an import receives a nonblank title, or skip the import when no usable title exists.",
+    "Preserve precedence of a nonblank explicit title over the extracted title.",
+    "Continue importing usable content through TopicEmbed.import."
+   ],
+   "exampleFix": "    contents = doc.content\n    return if contents.blank?\n\n    title = opts[:title].presence || doc.title.presence || url\n    TopicEmbed.import(user, url, title, contents)",
+   "notes": "This addresses the finding's extraction-output validation. The gold description additionally mentions fetch errors at line 48, which these guards do not handle. Nil titles need not produce persisted untitled topics: the repository documents a NOT NULL title column. Rejecting a missing title instead of supplying a fallback is also valid."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#33",
+   "defectStatement": "The URL and username prerequisite specs leave polling disabled, so execute skips poll_feed before testing either prerequisite. Other blank defaults also mask removal of the individual checks.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Enable polling in both examples.",
+    "Provide a nonblank username when testing the missing URL.",
+    "Provide a nonblank URL when testing the missing username.",
+    "Retain assertions that poll_feed is never called, with each example failing if its corresponding guard is removed."
+   ],
+   "exampleFix": "    it \"requires feed_polling_url\" do\n      SiteSetting.stubs(:feed_polling_enabled?).returns(true)\n      SiteSetting.stubs(:feed_polling_url).returns(nil)\n      SiteSetting.stubs(:embed_by_username).returns(embed_by_username)\n      poller.expects(:poll_feed).never\n      poller.execute({})\n    end\n\n    it \"requires embed_by_username\" do\n      SiteSetting.stubs(:feed_polling_enabled?).returns(true)\n      SiteSetting.stubs(:feed_polling_url).returns(url)\n      SiteSetting.stubs(:embed_by_username).returns(nil)\n      poller.expects(:poll_feed).never\n      poller.execute({})\n    end",
+   "notes": "Stubbing only feed_polling_enabled? to true, as suggested in the finding, is insufficient because the other required setting defaults to blank."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#opa-04",
+   "defectStatement": "The disabled-polling spec leaves both the feed URL and embedding username blank, so those guards independently prevent polling. It therefore passes even if the enabled-flag check is removed.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Keep feed_polling_enabled? false.",
+    "Set both the feed URL and embedding username to nonblank values.",
+    "Retain the no-polling assertion so removing the enabled-flag guard fails the example."
+   ],
+   "exampleFix": "    it \"requires feed_polling_enabled?\" do\n      SiteSetting.stubs(:feed_polling_enabled?).returns(false)\n      SiteSetting.stubs(:feed_polling_url).returns(url)\n      SiteSetting.stubs(:embed_by_username).returns(embed_by_username)\n      poller.expects(:poll_feed).never\n      poller.execute({})\n    end",
+   "notes": "The surrounding context already supplies suitable URL and username values."
+  },
+  {
+   "issueId": "enhance-embed-url-handling-and-validation-system-discourse-cursor#sncc-03",
+   "defectStatement": "The precompile configuration omits embed.css and embed.js, leaving the iframe stylesheet and external embedding script unavailable in deployments relying on precompiled assets. The layout references embed.css; it does not itself reference embed.js.",
+   "anchorCoversDefect": false,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Include embed.css and embed.js in the production asset precompile targets.",
+    "Preserve existing precompile targets.",
+    "Keep the iframe stylesheet reference resolving to the compiled embed stylesheet."
+   ],
+   "exampleFix": null,
+   "notes": "The cited stylesheet helper is a consumer, not the defective configuration. The fix belongs in config/application.rb, which is not shown in the frozen input; deleting the helper or adding a script tag does not fix asset compilation."
+  }
+ ]
+}

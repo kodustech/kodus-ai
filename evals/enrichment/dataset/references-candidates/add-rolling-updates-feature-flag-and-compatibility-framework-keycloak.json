@@ -1,0 +1,33 @@
+{
+ "caseId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "items": [
+  {
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#03",
+   "defectStatement": "The distribution tests exercise feature-disabled rejection only for the metadata subcommand. Removing or breaking the check subcommand's feature guard would therefore escape this coverage.",
+   "anchorCoversDefect": false,
+   "fixability": "no-code-fix",
+   "contextSufficient": false,
+   "obligations": [
+    "Exercise the check subcommand without enabling rolling-updates.",
+    "Assert the disabled-feature diagnostic and exit code 4.",
+    "Preserve the existing metadata coverage and production feature guard."
+   ],
+   "exampleFix": null,
+   "notes": "Uses the requested no-code-fix category for missing tests elsewhere. The cited production guard is correct; the remedy belongs in the distribution tests, which this item's frozen input does not show."
+  },
+  {
+   "issueId": "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak#04",
+   "defectStatement": "testFeatureNotEnabled asserts only the metadata command's error text. It would pass if the command printed that diagnostic but returned an exit code other than FEATURE_DISABLED (4).",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Assert that the command exits with FEATURE_DISABLED (4).",
+    "Preserve the disabled-feature diagnostic assertion.",
+    "Keep the metadata launch without enabling rolling-updates."
+   ],
+   "exampleFix": "    @Test\n    @Launch({UpdateCompatibility.NAME, UpdateCompatibilityMetadata.NAME})\n    public void testFeatureNotEnabled(CLIResult cliResult) {\n        cliResult.assertError(\"Unable to use this command. The preview feature 'rolling-updates' is not enabled.\");\n        assertEquals(org.keycloak.quarkus.runtime.compatibility.CompatibilityResult.FEATURE_DISABLED, cliResult.exitCode());\n    }",
+   "notes": "The fully qualified constant avoids changing imports outside the anchor. Asserting the literal contract value 4 is also valid."
+  }
+ ]
+}

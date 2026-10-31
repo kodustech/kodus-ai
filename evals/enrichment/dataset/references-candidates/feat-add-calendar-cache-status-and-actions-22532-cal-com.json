@@ -1,0 +1,48 @@
+{
+ "caseId": "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "items": [
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#04",
+   "defectStatement": "The cache timestamp uses the hard-coded en-US locale, so its date ordering and time conventions can disagree with the user's selected application language.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": false,
+   "obligations": [
+    "Format the timestamp using the active application locale.",
+    "Preserve the short date and time presentation of cacheUpdatedAt.",
+    "Keep locale hooks unconditional and before the early return."
+   ],
+   "exampleFix": null,
+   "notes": "The repository confirms useLocale exposes i18n, but only t is bound here. Destructure i18n at line 37 and use i18n.language in the formatter. That hook contract is absent from the frozen input. Calling useLocale inside this conditional JSX would violate hook rules; using the browser's default locale does not ensure the application locale."
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#08",
+   "defectStatement": "When the credential is missing or belongs to another user, deleteCacheHandler throws a plain Error, causing tRPC to report INTERNAL_SERVER_ERROR instead of an appropriate client error.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Return a structured NOT_FOUND or FORBIDDEN tRPC error when the ownership lookup fails.",
+    "Prevent cache deletion when the lookup fails.",
+    "Preserve successful deletion for an owned credential."
+   ],
+   "exampleFix": "  if (!credential) {\n    const { TRPCError } = await import(\"@trpc/server\");\n    throw new TRPCError({\n      code: \"NOT_FOUND\",\n      message: \"Credential not found or access denied\",\n    });\n  }",
+   "notes": "A dynamic import inside the existing async handler makes the fix possible within the exact anchor. A conventional static import would require an additional edit outside it."
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#muse13-01",
+   "defectStatement": "connectedCalendarsHandler queries cache status through the concrete repository without checking the global calendar-cache flag. Disabled installations therefore still query cached records and can expose stale cache timestamps.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Skip the cache-status database query when calendar-cache is globally disabled.",
+    "Produce no cache timestamps when the feature is disabled.",
+    "Preserve credential-specific cache status when the feature is enabled.",
+    "Preserve connected calendars and the destination calendar in the response."
+   ],
+   "exampleFix": "  const credentialIds = connectedCalendars.map((cal) => cal.credentialId);\n  const { FeaturesRepository } = await import(\"@calcom/features/flags/features.repository\");\n  const isCalendarCacheEnabled = await new FeaturesRepository().checkIfFeatureIsEnabledGlobally(\n    \"calendar-cache\"\n  );\n  const cacheRepository = new CalendarCacheRepository();\n  const cacheStatuses = isCalendarCacheEnabled\n    ? await cacheRepository.getCacheStatusByCredentialIds(credentialIds)\n    : [];",
+   "notes": "The dynamic import permits an exact-anchor fix while retaining the existing repository import. The frozen input omits the feature repository API and the factory's module path and required argument; repository inspection confirms these. CalendarCache.init(null) is another valid approach when its import is available."
+  }
+ ]
+}

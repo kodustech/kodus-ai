@@ -40,6 +40,24 @@ describe('sanitizeFindingsResult', () => {
         expect(result?.suggestions[0]?.label).toBe('repo_instruction');
     });
 
+    it('keeps a finding whose label is off the list, for the label step to fix', () => {
+        const result = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [
+                {
+                    relevantFile: 'src/a.ts',
+                    label: 'criticism',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 2,
+                    suggestionContent: 'The total ignores refunds.',
+                },
+            ],
+        } as unknown as FindingsOutput);
+
+        expect(result?.suggestions).toHaveLength(1);
+        expect(result?.suggestions[0]?.label).toBe('criticism');
+    });
+
     it('returns null when given null', () => {
         expect(sanitizeFindingsResult(null)).toBeNull();
     });
@@ -66,6 +84,80 @@ describe('sanitizeFindingsResult', () => {
     it('returns null when suggestions is missing entirely', () => {
         const malformed = { reasoning: 'some text' } as any;
         expect(sanitizeFindingsResult(malformed)).toBeNull();
+    });
+
+    it('recovers suggestions sent as a JSON-encoded string (Claude tool calls)', () => {
+        const item = {
+            relevantFile: 'src/foo.ts',
+            suggestionContent: 'Fix the null check',
+            existingCode: 'if (x)',
+            improvedCode: 'if (x != null)',
+        };
+        const result = sanitizeFindingsResult({
+            reasoning: 'found a bug',
+            suggestions: JSON.stringify([item]),
+        } as any);
+        expect(result).not.toBeNull();
+        expect(result!.suggestions).toEqual([item]);
+        expect(mockLogger.warn.mock.calls[0][0].message).toContain(
+            'recovered an off-shape findings payload',
+        );
+    });
+
+    it('recovers a stringified array whose items carry markdown code fences', () => {
+        const item = {
+            relevantFile: 'src/foo.ts',
+            suggestionContent: 'Use a guard:\n```ts\nif (x != null) {}\n```',
+            existingCode: 'if (x)',
+            improvedCode: 'if (x != null)',
+        };
+        const result = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: JSON.stringify([item]),
+        } as any);
+        expect(result!.suggestions).toEqual([item]);
+    });
+
+    it('keeps a finding that omits improvedCode / existingCode or sends null', () => {
+        const result = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [
+                { relevantFile: 'a.ts', suggestionContent: 'bug A', existingCode: 'x' },
+                { relevantFile: 'b.ts', suggestionContent: 'bug B', relevantLinesStart: 3, relevantLinesEnd: 4, existingCode: null, improvedCode: null },
+            ],
+        } as any);
+        expect(result!.suggestions).toHaveLength(2);
+        expect(result!.suggestions[0].improvedCode).toBe('');
+        expect(result!.suggestions[1].existingCode).toBe('');
+    });
+
+    it('uses oneSentenceSummary when suggestionContent is missing', () => {
+        const result = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [{ relevantFile: 'a.ts', oneSentenceSummary: 'null deref in foo', existingCode: 'x', improvedCode: 'y' }],
+        } as any);
+        expect(result!.suggestions[0].suggestionContent).toBe('null deref in foo');
+    });
+
+    it('normalizes severity case and clears an unknown severity instead of dropping', () => {
+        const result = sanitizeFindingsResult({
+            reasoning: 'r',
+            suggestions: [
+                { relevantFile: 'a.ts', suggestionContent: 'A', existingCode: 'x', improvedCode: 'y', severity: 'High' },
+                { relevantFile: 'b.ts', suggestionContent: 'B', existingCode: 'x', improvedCode: 'y', severity: 'info' },
+            ],
+        } as any);
+        expect(result!.suggestions).toHaveLength(2);
+        expect(result!.suggestions[0].severity).toBe('high');
+        expect(result!.suggestions[1].severity).toBeUndefined();
+    });
+
+    it('leaves a JSON-encoded non-array suggestions string to fail as before', () => {
+        const result = sanitizeFindingsResult({
+            reasoning: 'x',
+            suggestions: JSON.stringify({ not: 'an array' }),
+        } as any);
+        expect(result).toBeNull();
     });
 
     // Regression: prod audit (2026-09-17) of 619 [LLM_ENVELOPE] events found
@@ -311,14 +403,15 @@ describe('sanitizeFindingsResult — provider shapes (#2112)', () => {
             expect(r!.suggestions[0].label).toBe('bug');
         });
 
-        it('FPARSE-13 — an unknown enum value clears the field and keeps the finding', () => {
+        it('FPARSE-13 — an unknown severity clears the field and keeps the finding', () => {
             const r = run({
                 reasoning: 'r',
                 suggestions: [finding({ severity: 'urgent', label: 'style' })],
             });
             expect(r!.suggestions).toHaveLength(1);
             expect(r!.suggestions[0].severity).toBeUndefined();
-            expect(r!.suggestions[0].label).toBeUndefined();
+            // Any label reaches the stage, which turns it into `bug` (#1821).
+            expect(r!.suggestions[0].label).toBe('style');
         });
 
         it('FPARSE-14 — numeric strings become numbers; other strings clear the field', () => {
@@ -508,8 +601,10 @@ describe('sanitizeFindingsResult — provider shapes (#2112)', () => {
             });
             expect(metadata.drops).toEqual([
                 {
-                    reason: 'missing-suggestionContent',
-                    field: 'suggestionContent',
+                    // The summary stands in for the content, and a finding
+                    // with neither code nor lines has nothing to anchor on.
+                    reason: 'missing-location',
+                    field: 'relevantLinesStart',
                     type: 'object',
                     length: expect.any(Number),
                     keys: ['relevantFile', 'oneSentenceSummary'],

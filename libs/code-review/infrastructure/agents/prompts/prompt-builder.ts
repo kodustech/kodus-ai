@@ -7,6 +7,7 @@
  * (identity, category prompt/label, allowed labels) arrive via PromptAgentMeta,
  * so the builders carry no `this` and are unit-testable.
  */
+import { ONE_PROBLEM_RULE } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { CheckEvidence } from '@libs/platform/domain/platformIntegrations/types/codeManagement/checkEvidence.type';
 import { AnalyzerFinding } from '@libs/code-review/infrastructure/analyzers/analyzer-finding.type';
@@ -753,6 +754,29 @@ ${rendered}
   </Commits>`;
 }
 
+/** Custom agents keep the full output: their findings skip the enrichment
+ *  and the severity classifier, so the agent writes the snippet, the fix, the
+ *  title and the severity itself. */
+function customAgentSuggestionFields(outputLabelLine: string, confidenceExample: number): string {
+    return `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
+      "language": "the file language",
+      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
+      "existingCode": "problematic code snippet from the diff",
+      "improvedCode": "fixed code snippet (only if fix is clear from context)",
+      "oneSentenceSummary": "${TITLE_PROMPT_SPEC}",
+      "relevantLinesStart": 10,
+      "relevantLinesEnd": 15,
+      "severity": "critical|high|medium|low",
+      "confidence": ${confidenceExample}`;
+}
+
+const CUSTOM_AGENT_CONFIDENCE_RULE = `
+    - Assign a confidence score (1-10) to each finding. Be honest — overconfidence wastes verification budget:
+      9-10: You read BOTH the callsite AND the callee definition, confirmed the types/signatures mismatch or the wrong return value, and can name the exact failing input. Reserve 10 for bugs where you verified the fix would work.
+      7-8: You read the relevant code and traced the failure path, but did not verify the callee definition or could not confirm the exact input that triggers it.
+      5-6: The code pattern looks wrong based on the diff, but you only read one side (caller OR callee, not both). The bug is plausible but not fully confirmed.
+      1-4: Suspicious pattern, speculative concern, or you are reporting based on experience rather than evidence from this codebase.`;
+
 export function buildSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta): string {
         return withKnowledgeSection(
             buildSystemPromptBody(input, meta),
@@ -1043,10 +1067,9 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
     - Do not suppress a concrete performance issue just because it is not a correctness bug. If the primary failure mode is scale, query count, cache blowup, unbounded loading, async fanout, or blocking I/O, label it as performance.
     - Do not suppress a concrete security issue just because the code also has a bug. If the primary failure mode is exploitability, authorization bypass, trust-boundary failure, or unsafe input reaching a sink, label it as security.`
             : '';
-        const outputLabelLine = mixedLabelMode
-            ? `"label": "${allowedSuggestionLabels.join('|')}",
-      `
-            : '';
+        // label is required by the submitResult schema, so it is always shown.
+        const outputLabelLine = `"label": "${allowedSuggestionLabels.join('|')}",
+      `;
 
         const taskDescriptions: Record<string, string> = {
             bug: 'real bugs introduced, exposed, or made worse by these changes',
@@ -1062,6 +1085,15 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
                 ? `real ${allowedSuggestionLabels.join(', ')} issues introduced, exposed, or made worse by these changes`
                 : (taskDescriptions[categoryLabel] ??
                   'issues introduced by these changes');
+
+        // Each finding carries only what finding the bug needs; fix, snippets,
+        // severity and confidence are added by a later enrichment stage.
+        const suggestionFields = hasOwnLane(meta)
+            ? customAgentSuggestionFields(outputLabelLine, 8)
+            : `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
+      "relevantLinesStart": 10,
+      "relevantLinesEnd": 15,
+      "suggestionContent": "the ONE problem: what is wrong and why it matters"`;
 
         // A custom agent kept to its lane gets the same task and rules scoped
         // to its focus; every other agent gets the defect hunt verbatim.
@@ -1121,11 +1153,7 @@ ${coverageIntro}${coverageTargets ? `${coverageTargets}\n` : ''}
     - Root cause must be in lines added or modified by this PR.
 ${findingRules}    ${mixedLabelRules}
     ${mixedLabelLensRules}
-    - Assign a confidence score (1-10) to each finding. Be honest — overconfidence wastes verification budget:
-      9-10: You read BOTH the callsite AND the callee definition, confirmed the types/signatures mismatch or the wrong return value, and can name the exact failing input. Reserve 10 for bugs where you verified the fix would work.
-      7-8: You read the relevant code and traced the failure path, but did not verify the callee definition or could not confirm the exact input that triggers it.
-      5-6: The code pattern looks wrong based on the diff, but you only read one side (caller OR callee, not both). The bug is plausible but not fully confirmed.
-      1-4: Suspicious pattern, speculative concern, or you are reporting based on experience rather than evidence from this codebase.
+    - ${ONE_PROBLEM_RULE}${hasOwnLane(meta) ? CUSTOM_AGENT_CONFIDENCE_RULE : ''}
     - Return only the JSON object inside markdown fences, no extra text.
   </Rules>
 
@@ -1137,16 +1165,7 @@ ${findingRules}    ${mixedLabelRules}
   "reasoning": "For each changed function: what you challenged, what callers you found, why you reported or dismissed. Example: 'Challenged CreateDevice: what if two requests pass count check simultaneously? Grepped TagDevice(, found caller at impl.go:155. No lock or unique constraint — race condition. Reported.'",
   "suggestions": [
     {
-      ${outputLabelLine}"relevantFile": "path/to/file.ext",
-      "language": "the file language",
-      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact. HOW: concrete fix if clear from the code — omit if speculative.",
-      "existingCode": "problematic code snippet from the diff",
-      "improvedCode": "fixed code snippet (only if fix is clear from context)",
-      "oneSentenceSummary": "${TITLE_PROMPT_SPEC}",
-      "relevantLinesStart": 10,
-      "relevantLinesEnd": 15,
-      "severity": "critical|high|medium|low",
-      "confidence": 8
+${suggestionFields}
     }
   ]
 }
@@ -1225,7 +1244,7 @@ ${compactTask}${compactCoverage}${coverageTargets ?? ''}</CoverageContract>
   <Rules>
     - Root cause must be in lines added or modified by this PR.
 ${compactThreshold}    - "Looks correct" is not a dismissal — explain why it cannot fail.
-    - Assign confidence 1–10. Be honest: ≥9 only when both caller and callee read; ≤4 = speculative, do not report below 5.
+    - ${ONE_PROBLEM_RULE}${lane ? CUSTOM_AGENT_CONFIDENCE_RULE : ''}
     - Submit via the submitResult tool; do not print free-form JSON.
   </Rules>
 </ReviewTask>`;
@@ -1286,7 +1305,6 @@ export function buildSelfContainedSystemPrompt(input: ReviewAgentInput, meta: Pr
 
     PHASE 3 — RESPOND
       Return a JSON object with your findings. Every finding must cite exact line numbers from the diff.
-      Assign confidence honestly: 7+ only when the defect is obvious from the shown lines, 3-5 when you suspect it but cannot fully prove it, below 3 for speculation (do NOT report below 5).
 
     FORBIDDEN:
       - Claiming a caller passes wrong data (you cannot see callers).
@@ -1335,12 +1353,10 @@ export function buildSelfContainedUserPrompt(input: ReviewAgentInput, meta: Prom
         );
 
         const categoryLabel = meta.categoryLabel;
-        const mixedLabelMode = meta.supportsMixed;
         const allowedSuggestionLabels = meta.allowedLabels;
-        const outputLabelLine = mixedLabelMode
-            ? `"label": "${allowedSuggestionLabels.join('|')}",
-      `
-            : '';
+        // label is required by the submitResult schema, so it is always shown.
+        const outputLabelLine = `"label": "${allowedSuggestionLabels.join('|')}",
+      `;
 
         const taskDescriptions: Record<string, string> = {
             bug: 'real bugs introduced, exposed, or made worse by these changes',
@@ -1382,7 +1398,7 @@ ${hasOwnLane(meta) ? LANE_SELF_CONTAINED_TASK : `  <Task>
     - DO NOT report: generic performance theories, missing CSRF/rate-limiting, speculative race conditions without a visible shared-state violation, suggestions that require knowing how the code is used elsewhere.`}
     - Every finding must pass this test: "Can I point to the exact lines in the diff and explain the failure path using only what is visible here?"
     - If in doubt, do NOT report it.
-    - Assign a confidence score (1-10). In self-contained mode, confidence above 7 is rare — reserve it for defects that are obvious from the shown lines alone.
+    - ${ONE_PROBLEM_RULE}${hasOwnLane(meta) ? '\n    - Assign a confidence score (1-10). In self-contained mode, confidence above 7 is rare — reserve it for defects that are obvious from the shown lines alone.' : ''}
     - Return only the JSON object inside markdown fences, no extra text.
   </Rules>
 
@@ -1394,16 +1410,10 @@ ${hasOwnLane(meta) ? LANE_SELF_CONTAINED_TASK : `  <Task>
   "reasoning": "What you checked and why. Example: 'Looked at auth.ts line 42: new code dereferences user.email without checking if user is null. Parameter comes from an unchecked path in the same function. Reported.'",
   "suggestions": [
     {
-      ${outputLabelLine}"relevantFile": "path/to/file.ext",
-      "language": "the file language",
-      "suggestionContent": "WHAT: one sentence naming the exact problem. WHY: one sentence on the real impact visible from the diff. HOW: concrete fix if clear.",
-      "existingCode": "problematic code snippet from the diff",
-      "improvedCode": "fixed code snippet",
-      "oneSentenceSummary": "${TITLE_PROMPT_SPEC}",
+${hasOwnLane(meta) ? customAgentSuggestionFields(outputLabelLine, 6) : `      ${outputLabelLine}"relevantFile": "path/to/file.ext",
       "relevantLinesStart": 10,
       "relevantLinesEnd": 15,
-      "severity": "critical|high|medium|low",
-      "confidence": 6
+      "suggestionContent": "the ONE problem: what is wrong and why it matters"`}
     }
   ]
 }
@@ -1532,9 +1542,8 @@ function formatOverrides(input: ReviewAgentInput, meta: PromptAgentMeta): string
             }
         }
 
-        // Severity classification is handled by a separate post-processing step (classify-severity.ts)
-        // to avoid biasing the agent's investigation. The agent assigns a rough severity but
-        // the final classification uses dedicated criteria (default or client-custom).
+        // The finder does not assign severity; a later stage does, with dedicated
+        // criteria (default or client-custom).
 
         const savedGenerationMain = resolvePromptOverrideText(
             input.generationMain ?? input.v2PromptOverrides?.generation?.main,

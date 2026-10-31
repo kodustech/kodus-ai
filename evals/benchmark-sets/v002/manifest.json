@@ -1,0 +1,101 @@
+{
+ "version": "v002",
+ "status": "frozen",
+ "frozenAt": "2026-09-22",
+ "summary": "Golden set da Martian atualizado, com o campo `category` e os perfis de pontuacao.",
+ "origin": {
+  "upstream": "https://github.com/withmartian/code-review-benchmark",
+  "commit": "e616e84 (2026-08-30)",
+  "copiedFrom": [
+   "offline/golden_comments/*.json"
+  ],
+  "note": "Os 50 PRs do v001 casam 1:1 com o upstream por url/original_url. A lista de PRs e os caseId vem do v001; os comentarios e categorias vem do upstream."
+ },
+ "counts": {
+  "full": {
+   "prs": 50,
+   "goldens": 173
+  },
+  "light": {
+   "prs": 30,
+   "goldens": 120
+  },
+  "goldensByCategory": {
+   "bug": 94,
+   "concurrency": 14,
+   "api": 13,
+   "security": 11,
+   "style": 10,
+   "doc_defect": 9,
+   "data": 7,
+   "perf": 6,
+   "speculative": 5,
+   "test_gap": 4
+  },
+  "byProfile": {
+   "strict": {
+    "full": 139,
+    "light": 99
+   },
+   "core": {
+    "full": 158,
+    "light": 111
+   },
+   "all": {
+    "full": 173,
+    "light": 120
+   }
+  }
+ },
+ "profiles": {
+  "strict": {
+   "categories": [
+    "bug",
+    "security",
+    "concurrency",
+    "data",
+    "api"
+   ],
+   "note": "Um achado que casa com golden de categoria FORA do perfil e matched-excluded: nao entra como tp nem como fp. Achado que nao casa com golden nenhum e fp em qualquer perfil."
+  },
+  "core": {
+   "categories": [
+    "bug",
+    "security",
+    "concurrency",
+    "data",
+    "api",
+    "perf",
+    "test_gap",
+    "doc_defect"
+   ],
+   "note": "Um achado que casa com golden de categoria FORA do perfil e matched-excluded: nao entra como tp nem como fp. Achado que nao casa com golden nenhum e fp em qualquer perfil."
+  },
+  "all": {
+   "categories": [
+    "bug",
+    "security",
+    "concurrency",
+    "data",
+    "api",
+    "perf",
+    "test_gap",
+    "doc_defect",
+    "style",
+    "speculative"
+   ],
+   "note": "Um achado que casa com golden de categoria FORA do perfil e matched-excluded: nao entra como tp nem como fp. Achado que nao casa com golden nenhum e fp em qualquer perfil."
+  }
+ },
+ "schema": {
+  "prs[].caseId": "key used by the eval runner",
+  "prs[].comments[].comment": "text of the expected bug",
+  "prs[].comments[].severity": "Low | Medium | High | Critical",
+  "prs[].comments[].category": "bug | security | concurrency | data | api | perf | test_gap | doc_defect | style | speculative"
+ },
+ "knownGaps": [
+  "Os numeros produzidos aqui NAO sao comparaveis ao leaderboard da Martian: eles pontuam com tres juizes (Opus 4.5, GPT-5.2, Sonnet 4.5) e reportam por juiz; nos usamos um.",
+  "Contra o v001, nos mesmos 30 PRs do light: 76 goldens identicos, 19 que so existiam no v001 (removidos ou reescritos la) e 44 novos. Numero total 95 -> 120.",
+  "Dois PRs do upstream trazem `az_comment` indicando que o commit revisado nao esta no repo; mantidos como no v001."
+ ]
+}

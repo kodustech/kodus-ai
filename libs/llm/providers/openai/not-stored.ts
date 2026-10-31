@@ -7,12 +7,11 @@
  *
  * Without the stored item, a multi-step tool loop has nothing to point its
  * reasoning at (the SDK resends it as an `item_reference`), so every call also
- * asks for `reasoning.encrypted_content` and carries it between steps, as the
- * Codex route does (codex-subscription-model.ts). Always, not only for ids
- * recognized as reasoners: a fine-tune or an aliased deployment reasons too,
- * and OpenAI accepts the include on a model that does not (gpt-4o and
- * gpt-4.1-mini answer 200, 2026-10-15). An option the caller set explicitly (a
- * pasted override) still wins.
+ * asks for `reasoning.encrypted_content` and carries it between steps. Always,
+ * not only for ids recognized as reasoners: a fine-tune or an aliased
+ * deployment reasons too, and OpenAI accepts the include on a model that does
+ * not (gpt-4o and gpt-4.1-mini answer 200, 2026-10-15). An option the caller
+ * set explicitly (a pasted override) still wins.
  */
 import type { LanguageModel } from 'ai';
 

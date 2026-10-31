@@ -2,6 +2,7 @@ import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context
 import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { LLM } from '@libs/llm/llm';
+import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { hasManagedModelKey } from '@libs/llm/managed-slot';
 
 // The stage's post-orchestrator helpers (severity reclassification + content
@@ -230,7 +231,9 @@ describe('B. semantic-but-wrong finding values', () => {
     // B24 — severity out of the allowed set. normalizeSeverity coerces any
     // unknown value to the documented MEDIUM default — the finding is NEVER
     // dropped, and the default is observable on the shipped suggestion.
-    it('B24: out-of-set severity "URGENT" — coerced to medium, not dropped', async () => {
+    // Off (#1821): the finder sends no severity and the parse schema drops it;
+    // severity is checked before enrichment by its own test.
+    it.skip('B24: out-of-set severity "URGENT" — coerced to medium, not dropped', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
             happyEnvelope([sugg({ severity: 'URGENT' })]),
@@ -277,12 +280,10 @@ describe('B. semantic-but-wrong finding values', () => {
 // C. Unparseable / transport / fail-safe
 // ════════════════════════════════════════════════════════════════════════════
 describe('C. transport / fail-safe', () => {
-    // C28 — truncated envelope: a finding missing its relevantFile (dropped to
-    // max_tokens). It cannot anchor to a changed file, so it is TRACKED in
-    // discardedSuggestions (DISCARDED_BY_CODE_DIFF) with a warn — the silent-drop
-    // guard (agent-review.stage.ts:1382-1388). It still survives on
-    // validSuggestions so it reaches Mongo and can be reconciled — never silent.
-    it('C28: truncated finding (no relevantFile) — tracked, not silently lost', async () => {
+    // C28 — truncated envelope: a finder finding missing its relevantFile
+    // (dropped to max_tokens). The parse schema (#1821) discards it before the
+    // dedup: only a Kody Rule may go without file and lines. Never throws.
+    it('C28: truncated finding (no relevantFile) — discarded by the parse schema, no throw', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
             happyEnvelope([
@@ -292,13 +293,7 @@ describe('C. transport / fail-safe', () => {
 
         const result = await run(stage, makeContext());
 
-        // Preserved on validSuggestions AND recorded in discardedSuggestions —
-        // the finding is observable in both places, not vanished.
-        expect(result.validSuggestions).toHaveLength(1);
-        expect((result.discardedSuggestions ?? []).length).toBeGreaterThanOrEqual(
-            1,
-        );
-        // Never throws past the boundary.
+        expect(result.validSuggestions).toHaveLength(0);
         expect(result.fileAnalysisResults).toBeDefined();
     });
 
@@ -372,6 +367,31 @@ describe('D. input variants', () => {
 
         expect(result).toBe(ctx);
         expect(reviewOrchestrator.execute).not.toHaveBeenCalled();
+    });
+
+    // D39 — a finder finding with null/undefined file and lines: no throw; the
+    // parse schema (#1821) discards it before the dedup.
+    it('D39: finding with null relevantFile — no throw, discarded by the parse schema', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([
+                sugg({
+                    relevantFile: null,
+                    relevantLinesStart: null,
+                    relevantLinesEnd: undefined,
+                }),
+            ]),
+        );
+
+        const result = await run(stage, makeContext());
+
+        expect(result.validSuggestions).toHaveLength(0);
+        expect(result.fileAnalysisResults).toBeDefined();
+        expect(result.discardedSuggestions).toEqual([
+            expect.objectContaining({
+                priorityStatus: PriorityStatus.DISCARDED_BY_SCHEMA,
+            }),
+        ]);
     });
 });
 
