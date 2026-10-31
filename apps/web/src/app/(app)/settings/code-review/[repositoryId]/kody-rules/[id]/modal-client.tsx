@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { KODY_RULES_PATHS } from "@services/kodyRules";
 import { useSuspenseKodyRulesByRepositoryId } from "@services/kodyRules/hooks";
@@ -30,20 +29,10 @@ export function KodyRuleModalClient({
         repositoryId,
         directoryId,
     );
-    const [hydratedRule, setHydratedRule] = useState<KodyRule>(rule);
-
-    useEffect(() => {
-        setHydratedRule(rule);
-    }, [rule]);
-
-    useEffect(() => {
-        const match = scopeRules.find(
-            (currentRule) => currentRule.uuid === rule.uuid,
-        );
-        if (match) {
-            setHydratedRule(match);
-        }
-    }, [scopeRules, rule.uuid]);
+    // The suspense query has resolved before the form mounts. Initialize from
+    // it immediately: useForm defaultValues only apply on that first render.
+    const hydratedRule =
+        scopeRules.find((currentRule) => currentRule.uuid === rule.uuid) ?? rule;
     const canEdit = usePermission(
         Action.Update,
         ResourceType.CodeReviewSettings,
@@ -75,6 +64,7 @@ export function KodyRuleModalClient({
 
     return (
         <KodyRuleAddOrUpdateItemModal
+            key={`${repositoryId}:${directoryId ?? ""}:${rule.uuid}`}
             rule={hydratedRule}
             onClose={handleClose}
             directory={directory}
