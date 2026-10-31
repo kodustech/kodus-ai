@@ -371,6 +371,40 @@ describe('AgentReviewStage — repeat check (#2097)', () => {
         );
     });
 
+    it("links a lean finder finding, whose cited code the check read on a copy", async () => {
+        const applied = earlier({
+            suggestionId: 'old-bug',
+            outcome: 'implemented',
+            suggestionContent: 'Return early when user is missing.',
+        });
+        const { stage, reviewOrchestrator } = makeStage([applied]);
+        const { existingCode, improvedCode, oneSentenceSummary, ...lean } =
+            bugFinding;
+        reviewOrchestrator.execute.mockResolvedValue(envelope([lean]));
+        repeatAnswer = {
+            verdicts: [
+                {
+                    finding: 0,
+                    verdict: 'caused_by_earlier',
+                    earlierId: 'old-bug',
+                },
+            ],
+        };
+        const lines = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`);
+        lines[19] = 'const name = user.name;';
+
+        const result = await run(
+            stage,
+            makeContext(
+                [applied],
+                [{ filename: 'src/user.ts', fileContent: lines.join('\n') }],
+            ),
+        );
+
+        const [comment] = published(result);
+        expect(comment.revisesSuggestionId).toBe('old-bug');
+    });
+
     it('leaves an unrelated finding unlinked', async () => {
         const applied = earlier({ suggestionId: 'old-bug' });
         const { stage, reviewOrchestrator } = makeStage([applied]);

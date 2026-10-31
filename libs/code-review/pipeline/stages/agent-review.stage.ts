@@ -1562,7 +1562,18 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 });
             }
             let severityNormalized: Partial<CodeSuggestion>[] =
-                repeatCheck.kept.map((s) => originalOf.get(s) ?? s);
+                repeatCheck.kept.map((s) => {
+                    const original = originalOf.get(s);
+                    if (!original) return s;
+                    // The check links a kept finding to the earlier comment it
+                    // revises on the copy; the link goes back with it.
+                    return s.revisesSuggestionId
+                        ? {
+                              ...original,
+                              revisesSuggestionId: s.revisesSuggestionId,
+                          }
+                        : original;
+                });
 
             // A custom agent's own severity floor and comment limit apply
             // whatever the team's filter is (#2172), and also before dedup:
