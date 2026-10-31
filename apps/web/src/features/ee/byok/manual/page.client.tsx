@@ -35,6 +35,7 @@ import { ErrorBoundary } from "react-error-boundary";
 import { FormProvider, useForm } from "react-hook-form";
 import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import { ConfirmModal } from "src/core/components/ui/confirm-modal";
+import { extractRejectionMessage } from "src/core/utils/extract-error-message";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
 import { ByokAdvancedSettings } from "../_components/_modals/edit-key/_components/advanced-settings";
@@ -543,12 +544,14 @@ export function ByokManualPageClient({
                             : { status: "error", result },
                     );
                     return result;
-                } catch {
+                } catch (error) {
                     const result: TestBYOKResult = {
                         ok: false,
                         code: "unknown",
                         latencyMs: 0,
-                        message: "Couldn't reach Kodus. Try again in a moment.",
+                        message:
+                            extractRejectionMessage(error) ??
+                            "Couldn't reach Kodus. Try again in a moment.",
                     };
                     setTestState({ status: "error", result });
                     return result;
@@ -608,12 +611,14 @@ export function ByokManualPageClient({
                 setTestState({ status: "error", result });
             }
             return result;
-        } catch {
+        } catch (error) {
             const result: TestBYOKResult = {
                 ok: false,
                 code: "unknown",
                 latencyMs: 0,
-                message: "Couldn't reach Kodus. Try again in a moment.",
+                message:
+                    extractRejectionMessage(error) ??
+                    "Couldn't reach Kodus. Try again in a moment.",
             };
             setTestState({ status: "error", result });
             return result;
@@ -784,11 +789,12 @@ export function ByokManualPageClient({
                     ? "/byok#kodus"
                     : "/byok",
             );
-        } catch {
+        } catch (error) {
             toast({
                 variant: "danger",
                 title: `Couldn't save ${newConfig.model}`,
                 description:
+                    extractRejectionMessage(error) ??
                     "Something went wrong. Check the model and try again.",
             });
         } finally {
