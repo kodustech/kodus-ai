@@ -350,7 +350,7 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             );
 
             expect(runSpy).not.toHaveBeenCalled();
-            expect(out).toEqual(sugg);
+            expect(out).toEqual([]);
         });
 
         it('keeps the results of the batches that succeed when one batch throws', async () => {

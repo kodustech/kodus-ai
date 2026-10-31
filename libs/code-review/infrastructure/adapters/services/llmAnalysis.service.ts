@@ -219,7 +219,14 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 codeSuggestions,
             );
             // No patch section matches a suggestion: nothing to verify against.
-            if (!batches.length) return codeSuggestions;
+            if (!batches.length) {
+                this.logger.warn({
+                    message: `No patch section matches the suggestions of PR#${prNumber}: skipping the implemented check`,
+                    context: LLMAnalysisService.name,
+                    metadata: { organizationAndTeamData, prNumber },
+                });
+                return [];
+            }
 
             // One call per batch: a diff that exceeds the BYOK slot's context
             // window is rejected by the provider, so each batch carries only the
