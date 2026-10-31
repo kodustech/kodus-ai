@@ -183,13 +183,7 @@ function observeFinderPasses() {
             const run = finderRun.getStore();
             if (!run) return real.runVerificationPass(args, ctx);
             const startedAt = Date.now();
-            // RECALL_STOP_AFTER=finder measures the generalist and the rescue only:
-            // the verify judges after both, so skipping it changes nothing they
-            // produce. Every candidate is kept with the verdict production gives a
-            // candidate whose verify failed, and no model is called.
-            const out = process.env.RECALL_STOP_AFTER === 'finder'
-                ? { kept: [...args.candidates], keptVerdicts: args.candidates.map(() => ({ keep: true })), dropped: [], skipped: true }
-                : await inStage('finder.verify', () => real.runVerificationPass(args, ctx));
+            const out = await inStage('finder.verify', () => real.runVerificationPass(args, ctx));
             const idx = (c) => args.candidates.indexOf(c);
             run.verify.push({
                 // The first pass judges every candidate; a second one is the
@@ -298,18 +292,6 @@ function observeFinderPasses() {
             });
         };
     }
-    // RECALL_STOP_AFTER=finder: the review ends when the finder returns (its
-    // verify skipped, above). Anchoring gets nothing, so no later step has anything
-    // to judge and none calls a model.
-    const anchor = AgentReviewStage.prototype.anchorSuggestionsToDiff;
-    AgentReviewStage.prototype.anchorSuggestionsToDiff = function maybeStop(...args) {
-        const store = observedLoops.getStore();
-        if (process.env.RECALL_STOP_AFTER === 'finder' && store) {
-            store.stoppedAfterFinder = true;
-            return [];
-        }
-        return anchor.apply(this, args);
-    };
     finderObserved = true;
 }
 
@@ -744,7 +726,7 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
     }
     try {
         const stage = buildAgentReviewStage({ permissionService, codeManagement, previousDecisionsUseCase: decisionsUseCase });
-        const store = { loops: [], agentLoop, steps: observeSteps ? {} : undefined, finder: [], stoppedAfterFinder: false };
+        const store = { loops: [], agentLoop, steps: observeSteps ? {} : undefined, finder: [] };
         const ruleReviews = [];
         const reviewed = sandbox ? { ...context, sandboxHandle: wrapSandbox ? wrapSandbox(sandbox) : sandbox } : context;
         const out = await observedRuleReviews.run(ruleReviews, () => observedLoops.run(store, () => inStage('agent-review', () => stage.execute(reviewed))));
@@ -759,7 +741,6 @@ async function reviewPullRequest({ pr, team = {}, route, permissionService, prev
             steps: store.steps,
             finder: store.finder,
             dedupOut: store.dedupOut ?? null,
-            stoppedAfterFinder: store.stoppedAfterFinder,
             context: out,
             errors: out.errors || [],
         };

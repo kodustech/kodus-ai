@@ -258,7 +258,6 @@ class InvestigationAgentProvider {
                 // The finder pass by pass, before the
                 // verify (review-stage.js observeFinderPasses), and tokens and time per step.
                 finderPasses: review.finder || [],
-                stoppedAfterFinder: !!review.stoppedAfterFinder,
                 stages: global.__EVAL_CASE_ALS?.getStore()?.byStage || null,
                 // What the dedup kept (review-stage.js), scored as its own step.
                 dedupFindings: review.dedupOut,
