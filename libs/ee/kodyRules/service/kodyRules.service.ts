@@ -2184,6 +2184,7 @@ Analyze the suggestions and recommend the most relevant rules.`;
                 ...(memoryPayload as CreateKodyRuleDto),
                 type: KodyRulesType.MEMORY,
                 centralizedConfig: {
+                    ...memoryPayload.centralizedConfig,
                     path: centralizedPath,
                     status:
                         operation === 'create'
