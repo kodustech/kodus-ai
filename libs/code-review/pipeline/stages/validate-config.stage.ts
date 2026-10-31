@@ -1,4 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { In, Not } from 'typeorm';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { IStageValidationResult } from '@libs/core/infrastructure/pipeline/interfaces/stage-result.interface';
@@ -344,8 +345,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         shouldSaveSkipped: boolean;
         automaticReviewStatus?: AutomaticReviewStatus;
     }> {
-        const hasExistingReview =
-            await this.hasExistingSuccessfulReview(context);
+        const hasExistingReview = await this.hasExistingReview(context);
 
         if (!hasExistingReview) {
             return {
@@ -381,8 +381,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         shouldSaveSkipped: boolean;
         automaticReviewStatus?: AutomaticReviewStatus;
     }> {
-        const hasExistingReview =
-            await this.hasExistingSuccessfulReview(context);
+        const hasExistingReview = await this.hasExistingReview(context);
 
         if (!hasExistingReview) {
             return {
@@ -439,18 +438,27 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         };
     }
 
-    private async hasExistingSuccessfulReview(
+    private async hasExistingReview(
         context: CodeReviewPipelineContext,
     ): Promise<boolean> {
-        const executions =
-            await this.automationExecutionService.findLatestExecutionByFilters({
-                status: AutomationStatus.SUCCESS,
-                teamAutomation: { uuid: context.teamAutomationId },
-                pullRequestNumber: context.pullRequest.number,
-                repositoryId: context?.repository?.id,
-            });
+        const currentExecutionId =
+            context.pipelineMetadata?.lastExecution?.uuid;
 
-        return !!executions;
+        // A review still running (or one that finished with partial errors)
+        // already counts as the first review; only this run is excluded (#2077).
+        const executions = await this.automationExecutionService.find({
+            status: In([
+                AutomationStatus.SUCCESS,
+                AutomationStatus.PARTIAL_ERROR,
+                AutomationStatus.IN_PROGRESS,
+            ]),
+            teamAutomation: { uuid: context.teamAutomationId },
+            pullRequestNumber: context.pullRequest.number,
+            repositoryId: context?.repository?.id,
+            ...(currentExecutionId ? { uuid: Not(currentExecutionId) } : {}),
+        } as any);
+
+        return !!executions?.length;
     }
 
     private async getCurrentPRStatus(
