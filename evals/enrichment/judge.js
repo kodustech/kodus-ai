@@ -34,7 +34,8 @@ const { execFileSync } = require('child_process');
 const { z } = require('zod');
 const ts = require('typescript');
 const { LLM } = require(path.join(__dirname, '../../libs/llm/llm.ts'));
-const { createSlot } = require('../investigation/agent-provider-1821');
+const { orgRouteOrExit } = require('../shared/model-route');
+const { routeCodeReviewModel } = require(path.join(__dirname, '../../libs/code-review/pipeline/stages/route-code-review-model.ts'));
 
 const args = process.argv.slice(2);
 const JUDGE_MODEL = (args.find((a) => a.startsWith('--judge=')) || '--judge=claude-opus-5.5@api').slice(8);
@@ -119,7 +120,8 @@ let judgeSlot;
 async function judge(it, ref, ans) {
     const key = crypto.createHash('sha256').update(JSON.stringify(TAG ? [TAG, it.issueId, ans.oneSentenceSummary, ans.fixStatus, ans.improvedCode] : [it.issueId, ans.oneSentenceSummary, ans.fixStatus, ans.improvedCode])).digest('hex');
     if (cache[key]) return cache[key];
-    judgeSlot ||= (() => { process.env.RECALL_MODEL = JUDGE_MODEL; return createSlot({ provider: 'tier0' }); })();
+    // resolveRoute reads RECALL_MODEL first, which names the model being judged.
+    judgeSlot ||= (() => { process.env.RECALL_MODEL = JUDGE_MODEL; return routeCodeReviewModel(orgRouteOrExit(JUDGE_MODEL).storedConfig, {}).resolvedModelSlot; })();
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
             const v = await LLM.run({ system: selfRefs ? SYSTEM_SELF_REF : NO_REF ? SYSTEM_NO_REF : SYSTEM, user: judgePrompt(it, ref, ans), schema: VERDICT, byokConfig: judgeSlot, runName: 'eval-enrich-judge' });

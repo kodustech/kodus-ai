@@ -23,7 +23,8 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { z } = require('zod');
 const { LLM } = require(path.join(__dirname, '../../libs/llm/llm.ts'));
-const { createSlot } = require('../investigation/agent-provider-1821');
+const { orgRouteOrExit } = require('../shared/model-route');
+const { routeCodeReviewModel } = require(path.join(__dirname, '../../libs/code-review/pipeline/stages/route-code-review-model.ts'));
 const lib = (p) => require(path.join(__dirname, '../../libs', p));
 const { buildFinderToolRegistry } = lib('code-review/infrastructure/agents/adapters/finder-tools.adapter.ts');
 const { InMemoryToolRegistry } = lib('agent-harness/infrastructure/tools/in-memory-tool-registry.ts');
@@ -112,7 +113,7 @@ const prompt = (it) => [
     fs.mkdirSync(OUT_DIR, { recursive: true });
     const prev = fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 'utf8')).items : [];
     const done = new Map(prev.map((r) => [r.issueId, r]));
-    const slot = createSlot({ provider: 'tier0' });
+    const slot = routeCodeReviewModel(orgRouteOrExit(MODEL).storedConfig, {}).resolvedModelSlot;
     const todo = items.filter((it) => !done.has(it.issueId));
     const save = () => fs.writeFileSync(OUT, JSON.stringify({ model: MODEL, tools: TOOLS, items: [...done.values()] }, null, 1));
     let fail = 0;

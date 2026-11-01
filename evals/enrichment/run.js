@@ -25,7 +25,8 @@ const { buildFinderToolRegistry } = lib('code-review/infrastructure/agents/adapt
 const { InMemoryToolRegistry } = lib('agent-harness/infrastructure/tools/in-memory-tool-registry.ts');
 const { AiSdkAgentRunner } = lib('agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner.ts');
 const { createAgentRunContext } = lib('llm/agent-run-context.ts');
-const { createSlot } = require('../investigation/agent-provider-1821');
+const { orgRouteOrExit } = require('../shared/model-route');
+const { routeCodeReviewModel } = require(path.join(__dirname, '../../libs/code-review/pipeline/stages/route-code-review-model.ts'));
 const { medir, instalaNoLLM } = require('../shared/usage-meter');
 const { comandosSandboxLocal } = require('../shared/local-sandbox');
 
@@ -48,7 +49,7 @@ const items = JSON.parse(fs.readFileSync(path.join(__dirname, 'dataset/items.jso
 
 // The model, reached the way an org reaches it (evals/shared/model-route.js);
 // every call's tokens summed per item through LLM.run's observability port.
-const SLOT = createSlot({ provider: 'tier0', model: MODEL });
+const SLOT = routeCodeReviewModel(orgRouteOrExit(MODEL).storedConfig, {}).resolvedModelSlot;
 instalaNoLLM();
 
 const worktrees = new Map();

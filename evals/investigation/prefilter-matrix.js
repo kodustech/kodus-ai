@@ -13,7 +13,7 @@ require('tsconfig-paths/register');
  */
 const fs = require('fs');
 const path = require('path');
-const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge-1821');
+const { loadJudgeKey, matchCommentDetailed } = require('./recall-judge');
 const S = process.env.POOL_ROOT || path.join(__dirname, 'pools');
 const arg = (n, d) => {
     const h = process.argv.slice(2).find((a) => a.startsWith(`--${n}=`));

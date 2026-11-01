@@ -13,7 +13,8 @@ const fs = require('fs');
 const path = require('path');
 const { z } = require('zod');
 const { LLM } = require(path.join(__dirname, '../../libs/llm/llm.ts'));
-const { createSlot } = require('../investigation/agent-provider-1821');
+const { orgRouteOrExit } = require('../shared/model-route');
+const { routeCodeReviewModel } = require(path.join(__dirname, '../../libs/code-review/pipeline/stages/route-code-review-model.ts'));
 const [defsFile, relFile, outFile] = process.argv.slice(2);
 const defs = fs.readFileSync(defsFile, 'utf8');
 const rel = JSON.parse(fs.readFileSync(relFile, 'utf8'));
@@ -22,7 +23,7 @@ const SCHEMA = z.object({
     items: z.array(z.object({ issueId: z.string(), agree: z.boolean(), level: z.enum(['low', 'medium', 'high', 'critical']), reason: z.string() })),
 });
 (async () => {
-    const slot = createSlot({ provider: 'tier0' });
+    const slot = routeCodeReviewModel(orgRouteOrExit(process.env.RECALL_MODEL).storedConfig, {}).resolvedModelSlot;
     const user = `We are writing the severity definitions of an AI code reviewer from a labelled dataset of real code-review problems, and fixing labels that are inconsistent. Another reviewer proposed the definitions below and a list of relabels. Review them independently.
 
 === PROPOSED DEFINITIONS ===

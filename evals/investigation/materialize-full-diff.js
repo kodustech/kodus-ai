@@ -49,12 +49,9 @@ const SET = arg('set', 'light');
 const ONLY = arg('case');
 
 function caseIds(name) {
-    const src = fs.readFileSync(path.join(__dirname, 'recall-tests-1821.js'), 'utf8');
-    const block = src.match(
-        new RegExp(`${name.toUpperCase()}_CASES\\s*=\\s*\\[([\\s\\S]*?)\\]`),
-    );
-    if (!block) throw new Error(`no ${name.toUpperCase()}_CASES`);
-    return new Set([...block[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
+    const ids = require('./recall-tests').CASE_SETS[name];
+    if (!ids) throw new Error(`no case set '${name}'`);
+    return new Set(ids);
 }
 
 const git = (dir, args) =>

@@ -47,7 +47,7 @@ const setName = (args.find((a) => a.startsWith('--set=')) || '').split('=')[1];
 /** Only the cases of a named set (LIGHT_CASES etc). Without it the script
  *  touches all 53 datasets, and the ones with no `changedFilesFull` would be
  *  rewritten with the same graph they already had — noise in the diff. */
-const { CASE_SETS } = require('./recall-tests-1821');
+const { CASE_SETS } = require('./recall-tests');
 if (setName && !CASE_SETS[setName]) {
     console.error(`unknown --set=${setName}; known: ${Object.keys(CASE_SETS).join(', ')}`);
     process.exit(2);
