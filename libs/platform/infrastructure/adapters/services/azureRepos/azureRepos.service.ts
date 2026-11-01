@@ -1642,7 +1642,7 @@ export class AzureReposService implements Omit<
 
     async getChangedFilesSinceLastCommit(params: {
         organizationAndTeamData: OrganizationAndTeamData;
-        repository: { id: string; name: string; project: { id: string } };
+        repository: { id: string; name: string; project?: { id: string } };
         prNumber: number;
         lastCommit: any;
     }): Promise<FileChange[] | null> {
@@ -1656,7 +1656,34 @@ export class AzureReposService implements Omit<
             const { orgName, token } = await this.getAuthDetails(
                 organizationAndTeamData,
             );
-            const projectId = repository.project.id;
+
+            // The caller builds this reference from the PR's repository, which
+            // may carry no project at all: reading `project.id` straight out of
+            // it sent the Azure calls to `/undefined/_apis/...`, a 404 that the
+            // check below reads as "this PR changed nothing" (#2318). Every
+            // other method of this adapter reads the project from the
+            // integration config, so this one does too. A project that is
+            // already on the reference is used as is, without the extra read.
+            const projectId =
+                repository.project?.id ??
+                (await this.getProjectIdFromRepository(
+                    organizationAndTeamData,
+                    repository.id,
+                ));
+
+            if (!projectId) {
+                this.logger.error({
+                    message: `No project to read PR#${prNumber} from`,
+                    context: this.getChangedFilesSinceLastCommit.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        repositoryId: repository?.id,
+                        prNumber,
+                        reason: 'missing_project',
+                    },
+                });
+                return null;
+            }
 
             // Obter detalhes do PR
             const pr = await this.azureReposRequestHelper.getPullRequestDetails(
