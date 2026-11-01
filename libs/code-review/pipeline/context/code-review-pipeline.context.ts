@@ -489,3 +489,12 @@ export const resolvedProvider = (
         ? provider
         : undefined;
 };
+
+/**
+ * Whether the review ran on a key the org brought (BYOK). Only BYOK slots carry
+ * a `credentialId`; the Kodus-managed env default does not. An exhausted quota
+ * on the org's own key is the org's to fix; on the managed key it is ours.
+ */
+export const usesOrgOwnedKey = (
+    context: Pick<CodeReviewPipelineContext, 'codeReviewConfig'>,
+): boolean => !!context.codeReviewConfig?.resolvedModelSlot?.credentialId;
