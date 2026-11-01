@@ -314,5 +314,6 @@ evals/enrichment/dataset/references-self/
 evals/enrichment/dataset/references-candidates/
 evals/severity/dataset/*
 !evals/severity/dataset/items.json
+!evals/severity/dataset/anchors.json
 evals/benchmark-sets/
 .kodus/workspace.bench.yaml

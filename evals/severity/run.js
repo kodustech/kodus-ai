@@ -21,7 +21,8 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { LLM } = require(path.join(__dirname, '../../libs/llm/llm.ts'));
 const { parseSeverityResponse } = require(path.join(__dirname, '../../libs/code-review/infrastructure/agents/engine/severity-prompt.ts'));
-const { createSlot } = require('../investigation/agent-provider-1821');
+const { orgRouteOrExit } = require('../shared/model-route');
+const { routeCodeReviewModel } = require(path.join(__dirname, '../../libs/code-review/pipeline/stages/route-code-review-model.ts'));
 const PROMPTS = require('./prompts');
 
 const arg = (k, d) => (process.argv.find((a) => a.startsWith(`--${k}=`)) || '').split('=').slice(1).join('=') || d;
@@ -124,7 +125,7 @@ async function one(list, slot) {
         console.log(PROMPTS[PROMPT].build(items.filter((x) => x.caseId === items[0].caseId).map(view)));
         process.exit(0);
     }
-    const slot = createSlot({ provider: 'tier0' });
+    const slot = routeCodeReviewModel(orgRouteOrExit(MODEL).storedConfig, {}).resolvedModelSlot;
     const byCase = new Map();
     for (const it of items) (byCase.get(it.caseId) || byCase.set(it.caseId, []).get(it.caseId)).push(it);
     const todo = SINGLE ? items.map((it) => [it]) : [...byCase.values()];
