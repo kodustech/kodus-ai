@@ -22,6 +22,9 @@ export interface LoadedReference {
 export interface LoadedReferencesResult {
     referencesMap: Map<string, LoadedReference[]>;
     mcpResultsMap: Map<string, Record<string, unknown>>;
+    /** Rules whose context reference names no file to load: nothing was
+     *  expected, so an empty result is not a failed load. */
+    rulesWithoutFileReferences?: Set<string>;
 }
 
 @Injectable()
@@ -38,6 +41,8 @@ export class ExternalReferenceLoaderService {
     ): Promise<{
         references: LoadedReference[];
         augmentations: Map<string, Record<string, unknown>>;
+        /** False when the rule's reference names no file at all. */
+        expectsReferences?: boolean;
     }> {
         if (!rule.contextReferenceId) {
             this.logger.debug({
@@ -73,6 +78,7 @@ export class ExternalReferenceLoaderService {
     ): Promise<{
         references: LoadedReference[];
         augmentations: Map<string, Record<string, unknown>>;
+        expectsReferences?: boolean;
     }> {
         if (!rule.contextReferenceId) {
             return { references: [], augmentations: new Map() };
@@ -86,6 +92,10 @@ export class ExternalReferenceLoaderService {
                 pullRequest: context.pullRequest,
             });
 
+            // No pack, or a pack without dependencies: the reference names no
+            // file (a rule with no @file mention), so there was nothing to load.
+            const expectsReferences =
+                (result.pack?.dependencies?.length ?? 0) > 0;
             const layers = result.pack?.layers ?? [];
             const references: LoadedReference[] = [];
             for (const layer of layers) {
@@ -158,7 +168,7 @@ export class ExternalReferenceLoaderService {
                     });
                 }
             }
-            return { references, augmentations };
+            return { references, augmentations, expectsReferences };
         } catch (error) {
             this.logger.warn({
                 message: 'Failed to load references via Context Pack',
@@ -179,6 +189,7 @@ export class ExternalReferenceLoaderService {
     ): Promise<LoadedReferencesResult> {
         const referencesMap = new Map<string, LoadedReference[]>();
         const mcpResultsMap = new Map<string, Record<string, unknown>>();
+        const rulesWithoutFileReferences = new Set<string>();
 
         // Per-rule loads are independent network round-trips; run them with
         // bounded concurrency instead of strictly serially. `loadReferences`
@@ -190,11 +201,14 @@ export class ExternalReferenceLoaderService {
                 .filter((rule) => rule.uuid)
                 .map((rule) =>
                     limit(async () => {
-                        const { references, augmentations } =
+                        const { references, augmentations, expectsReferences } =
                             await this.loadReferences(
                                 rule as IKodyRule,
                                 context,
                             );
+                        if (expectsReferences === false) {
+                            rulesWithoutFileReferences.add(rule.uuid as string);
+                        }
                         if (references.length > 0) {
                             referencesMap.set(rule.uuid as string, references);
                         }
@@ -208,6 +222,6 @@ export class ExternalReferenceLoaderService {
                 ),
         );
 
-        return { referencesMap, mcpResultsMap };
+        return { referencesMap, mcpResultsMap, rulesWithoutFileReferences };
     }
 }

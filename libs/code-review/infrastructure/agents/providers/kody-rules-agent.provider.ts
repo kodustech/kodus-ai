@@ -393,8 +393,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                                     );
                                     if (
                                         text?.trim() &&
-                                        text.length <=
-                                            FILE_CONTENT_BUDGET_CHARS
+                                        text.length <= FILE_CONTENT_BUDGET_CHARS
                                     ) {
                                         fileContents.set(file.filename, text);
                                     }
@@ -634,7 +633,9 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 // decided — but the message must not claim "semantic" rules the
                 // org may not have.
                 const kind =
-                    semanticRules.length > 0 ? 'Kody Rules' : 'mechanical Kody Rules';
+                    semanticRules.length > 0
+                        ? 'Kody Rules'
+                        : 'mechanical Kody Rules';
                 throw new Error(
                     `Kody Rules could not be evaluated: all ${shardsRun} rule check(s) failed to run. Your ${kind} were not applied to this PR.`,
                 );
@@ -1003,7 +1004,7 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
                 },
             } as any;
 
-            const { referencesMap } =
+            const { referencesMap, rulesWithoutFileReferences } =
                 await this.externalReferenceLoaderService.loadReferencesForRules(
                     refRules,
                     analysisContext,
@@ -1015,6 +1016,7 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
             const unresolved = findUnresolvedReferenceRules(
                 refRules,
                 referencesMap,
+                rulesWithoutFileReferences,
             );
             if (unresolved.length > 0) {
                 this.shardLogger.warn({
@@ -1028,7 +1030,11 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
                 });
             }
 
-            return inlineLoadedReferences(rules, referencesMap, this.shardLogger);
+            return inlineLoadedReferences(
+                rules,
+                referencesMap,
+                this.shardLogger,
+            );
         } catch (err) {
             this.shardLogger.warn({
                 message: `[kody-rules-shard] Context OS reference load failed for PR#${input.prNumber}; judging without external refs: ${err instanceof Error ? err.message : String(err)}`,
