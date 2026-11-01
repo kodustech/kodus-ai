@@ -25,6 +25,29 @@ import {
 import { AzureReposProject } from '@libs/platform/domain/azure/entities/azureReposProject.type';
 import { AzureReposRepository } from '@libs/platform/domain/azure/entities/azureReposRepository.type';
 
+/**
+ * Azure DevOps Services splits APIs across dev.azure.com and
+ * vssps.dev.azure.com; Azure DevOps Server serves all of them, graph and
+ * profile included, from the collection URL set in API_AZURE_DEVOPS_BASE_URL.
+ */
+export function getAzureDevOpsBaseURL(
+    orgName: string,
+    useGraphApi = false,
+): string {
+    const customBaseURL = process.env.API_AZURE_DEVOPS_BASE_URL?.replace(
+        /\/+$/,
+        '',
+    );
+
+    if (customBaseURL) {
+        return `${customBaseURL}/${orgName}`;
+    }
+
+    return useGraphApi
+        ? `https://vssps.dev.azure.com/${orgName}`
+        : `https://dev.azure.com/${orgName}`;
+}
+
 @Injectable()
 export class AzureReposRequestHelper {
     constructor() {}
@@ -401,9 +424,7 @@ export class AzureReposRequestHelper {
         token: string;
         useGraphApi?: boolean;
     }): Promise<AxiosInstance> {
-        const baseURL = useGraphApi
-            ? `https://vssps.dev.azure.com/${orgName}`
-            : `https://dev.azure.com/${orgName}`;
+        const baseURL = getAzureDevOpsBaseURL(orgName, useGraphApi);
 
         const instance = axios.create({
             baseURL,
@@ -937,8 +958,8 @@ export class AzureReposRequestHelper {
         const isDescriptor = /^(aad|msa|vss|svc)\./.test(params.identifier);
 
         const url = isDescriptor
-            ? `https://vssps.dev.azure.com/${params.orgName}/_apis/graph/users/${params.identifier}?api-version=7.1-preview.1`
-            : `https://vssps.dev.azure.com/${params.orgName}/_apis/graph/users?filterValue=${encodeURIComponent(params.identifier)}&api-version=7.1-preview.1`;
+            ? `/_apis/graph/users/${params.identifier}?api-version=7.1-preview.1`
+            : `/_apis/graph/users?filterValue=${encodeURIComponent(params.identifier)}&api-version=7.1-preview.1`;
 
         const { data } = await instance.get(url);
 
