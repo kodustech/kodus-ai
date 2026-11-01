@@ -129,6 +129,41 @@ function sliceBalancedJson(s: string): string | null {
 }
 
 /**
+ * Drop the reasoning a model wrote into the answer text. Some models (MiniMax-M3
+ * in production) put <think>…</think> before the JSON, and the reasoning quotes
+ * code, so the first balanced {…} would be a quote, not the answer.
+ *
+ * Only a block that opens BEFORE the JSON starts is reasoning: past that point a
+ * <think> or </think> is text inside the answer (a finding about a prompt file
+ * quotes both), and each block ends at its FIRST closing tag so an answer that
+ * quotes the tag, or is followed by another block, survives. One left-to-right
+ * pass, so the cost grows with the length of the text and not with its length
+ * times the number of blocks.
+ */
+function stripReasoning(text: string): string {
+    const s = text;
+    let kept = '';
+    let pos = 0;
+    for (;;) {
+        const open = s.indexOf('<think>', pos);
+        if (open < 0) break;
+        const gap = s.slice(pos, open);
+        if (/[{[]/.test(gap)) break;
+        const close = s.indexOf('</think>', open);
+        if (close < 0) {
+            // A block that never closes and is the first thing in the response
+            // carries no answer at all. Anywhere else, including right after a
+            // block that did close, the scan below may still find one.
+            if (pos === 0 && !gap.trim()) return '';
+            break;
+        }
+        kept += gap;
+        pos = close + '</think>'.length;
+    }
+    return (kept + s.slice(pos)).trim();
+}
+
+/**
  * Pull the JSON value out of free-form LLM text: unwrap a ```json fence, drop any
  * prose before/after the outermost balanced `{…}`/`[…]` (string-aware), and strip
  * trailing commas. Returns the JSON substring — even when the input was ALREADY
@@ -143,36 +178,7 @@ export function extractJsonFromText(text: string): string | null {
     }
     let s = text.trim();
 
-    // 0. Skip reasoning written into the answer. Some models (MiniMax-M3 in
-    // production) put <think>…</think> before the JSON, and the reasoning
-    // quotes code, so the first balanced {…} below would be a quote, not the
-    // answer.
-    //
-    // Only a block that opens BEFORE the JSON starts is reasoning: past that
-    // point a <think> or </think> is text inside the answer (a finding about a
-    // prompt file quotes both), and each block ends at its FIRST closing tag so
-    // an answer that quotes the tag, or is followed by another block, survives.
-    // One left-to-right pass, so the cost grows with the length of the text and
-    // not with its length times the number of blocks.
-    let kept = '';
-    let pos = 0;
-    for (;;) {
-        const open = s.indexOf('<think>', pos);
-        if (open < 0) break;
-        const gap = s.slice(pos, open);
-        if (/[{[]/.test(gap)) break;
-        const close = s.indexOf('</think>', open);
-        if (close < 0) {
-            // A block that never closes and is the first thing in the response
-            // carries no answer at all. Anywhere else, including right after a
-            // block that did close, the scan below may still find one.
-            if (pos === 0 && !gap.trim()) return null;
-            break;
-        }
-        kept += gap;
-        pos = close + '</think>'.length;
-    }
-    s = (kept + s.slice(pos)).trim();
+    s = stripReasoning(s);
 
     // 1. Unwrap a markdown code fence.
     const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -430,36 +436,72 @@ export async function repairAndValidate<T = unknown>(
     wire: unknown,
     rawText: string,
 ): Promise<T | undefined> {
-    const candidate = extractJsonFromText(rawText);
-    if (candidate == null) {
-        return undefined;
-    }
-    let value: unknown;
-    try {
-        value = JSON.parse(candidate);
-    } catch {
-        // A single invalid escape inside a string literal - code quoted in a
-        // suggestion, such as Swift `\(title)` or a regex `\d` - makes the whole
-        // payload unparseable, and the reroute-json caller then loses every
-        // finding for that shard (#2259). Legalise the string escapes and retry;
-        // a payload broken any other way still fails, so a cut list is never
-        // accepted as a whole one.
-        const escaped = escapeStringLiterals(candidate);
-        if (escaped === candidate) {
-            return undefined;
-        }
-        const retried = tryParse(escaped);
-        if (!retried.ok) {
-            return undefined;
-        }
-        value = retried.value;
-    }
     const schema = asSchema(wire as any);
-    if (typeof schema.validate !== 'function') {
-        return value as T;
+    for (const candidate of jsonCandidates(rawText)) {
+        let value: unknown;
+        try {
+            value = JSON.parse(candidate);
+        } catch {
+            // A single invalid escape inside a string literal - code quoted in a
+            // suggestion, such as Swift `\(title)` or a regex `\d` - makes the whole
+            // payload unparseable, and the reroute-json caller then loses every
+            // finding for that shard (#2259). Legalise the string escapes and retry;
+            // a payload broken any other way still fails, so a cut list is never
+            // accepted as a whole one.
+            const escaped = escapeStringLiterals(candidate);
+            if (escaped === candidate) {
+                continue;
+            }
+            const retried = tryParse(escaped);
+            if (!retried.ok) {
+                continue;
+            }
+            value = retried.value;
+        }
+        if (typeof schema.validate !== 'function') {
+            return value as T;
+        }
+        const r = await schema.validate(value);
+        if (r.success) return r.value as T;
     }
-    const r = await schema.validate(value);
-    return r.success ? (r.value as T) : undefined;
+    return undefined;
+}
+
+/**
+ * The places the answer can be in free-form text, best guess first. The first is
+ * what {@link extractJsonFromText} returns; when the model quotes a code block
+ * before its answer that is the quote, so the remaining candidates give the
+ * validating caller the answer to fall back on: the text after each fenced
+ * block (last fence first, so a bare answer written after the quotes wins over
+ * an example quoted earlier), then each fenced block itself, last first. Fences
+ * are never stripped from the text: a bare answer can carry Markdown fences
+ * inside its string values (`improvedCode`), and removing them would corrupt it.
+ * Reasoning is dropped first, so a schema-valid example quoted in a <think>
+ * block is never mistaken for the answer. A wrong candidate is harmless: the
+ * caller only keeps one that validates against its schema.
+ */
+function jsonCandidates(rawText: string): string[] {
+    const candidates: string[] = [];
+    const seen = new Set<string>();
+    const add = (candidate: string | null) => {
+        if (candidate != null && !seen.has(candidate)) {
+            seen.add(candidate);
+            candidates.push(candidate);
+        }
+    };
+    add(extractJsonFromText(rawText));
+    const answerText = stripReasoning(rawText);
+    const fenced = [...answerText.matchAll(/```[^\n`]*\n?([\s\S]*?)```/g)];
+    for (const block of [...fenced].reverse()) {
+        const after = sliceBalancedJson(
+            answerText.slice((block.index ?? 0) + block[0].length),
+        );
+        add(after != null ? after.replace(/,(\s*[}\]])/g, '$1') : null);
+    }
+    for (const block of fenced.reverse()) {
+        add(extractJsonFromText(block[1]));
+    }
+    return candidates;
 }
 
 /**
