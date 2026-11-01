@@ -44,6 +44,16 @@ export const LEAN_FINDER_FIELDS = Object.keys(LEAN_FINDING.shape) as Array<
     keyof typeof LEAN_FINDING.shape
 >;
 
+/** Required on every lean finding; the rest locate it, and a PR-level
+ *  kody_rules finding has no location. */
+export const LEAN_CONTENT_FIELDS = [
+    'label',
+    'suggestionContent',
+] as const satisfies ReadonlyArray<keyof typeof LEAN_FINDING.shape>;
+export const LEAN_LOCATION_FIELDS = LEAN_FINDER_FIELDS.filter(
+    (f) => !(LEAN_CONTENT_FIELDS as readonly string[]).includes(f),
+);
+
 /** An object schema as provider strict tool use needs it:
  *  additionalProperties false, every key in a fixed order. */
 function strictObject(item: z.ZodObject): JSONSchema {

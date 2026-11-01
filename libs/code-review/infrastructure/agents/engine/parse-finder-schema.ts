@@ -8,16 +8,15 @@
  * (finding-mapper.ts, `leanOutput`); snippets, fix and title come at
  * enrichment.
  */
-import { LEAN_FINDER_FIELDS } from '@libs/code-review/infrastructure/agents/core/finder-output-schema';
+import {
+    LEAN_CONTENT_FIELDS,
+    LEAN_FINDER_FIELDS,
+    LEAN_LOCATION_FIELDS,
+} from '@libs/code-review/infrastructure/agents/core/finder-output-schema';
 
 export { LEAN_FINDER_FIELDS };
 
 export type LeanFinderField = (typeof LEAN_FINDER_FIELDS)[number];
-
-const CONTENT_FIELDS: LeanFinderField[] = ['label', 'suggestionContent'];
-const LOCATION_FIELDS = LEAN_FINDER_FIELDS.filter(
-    (f) => !CONTENT_FIELDS.includes(f),
-);
 
 export type ParseFinderSchemaResult = {
     discarded: Array<{ index: number; missing: LeanFinderField[] }>;
@@ -36,8 +35,8 @@ export function parseFinderSchema(
         const item = s && typeof s === 'object' ? s : {};
         const label = item.label;
         const required: LeanFinderField[] = [
-            ...CONTENT_FIELDS,
-            ...(label === 'kody_rules' ? [] : LOCATION_FIELDS),
+            ...LEAN_CONTENT_FIELDS,
+            ...(label === 'kody_rules' ? [] : LEAN_LOCATION_FIELDS),
         ];
         const missing = LEAN_FINDER_FIELDS.filter(
             (f) => required.includes(f) && !isPresent(item[f]),
