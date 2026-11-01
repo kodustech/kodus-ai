@@ -86,13 +86,15 @@ export type FindingsOutput = z.infer<typeof _findingsSchema>;
 function withContentFallback(item: unknown): unknown {
     if (!item || typeof item !== 'object') return item;
     const it = item as Record<string, unknown>;
-    const hasContent =
-        typeof it.suggestionContent === 'string' &&
-        nonBlank(it.suggestionContent);
-    if (hasContent || typeof it.oneSentenceSummary !== 'string') {
+    const content = it.suggestionContent;
+    const summary = it.oneSentenceSummary;
+    if (
+        (typeof content === 'string' && nonBlank(content)) ||
+        typeof summary !== 'string'
+    ) {
         return item;
     }
-    return { ...it, suggestionContent: it.oneSentenceSummary };
+    return { ...it, suggestionContent: summary };
 }
 
 /**
