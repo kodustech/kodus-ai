@@ -1585,29 +1585,21 @@ fi
     // On-demand caller/callee lookup, backed by the runtime callGraph string
     // (kodus-graph). The STANCE prompt gives the agent a REASON to pull it:
     // proving a change fulfills its intent "everywhere it touches" requires
-    // checking callers/implementations. Parsed by ←/→ markers.
+    // checking callers/implementations. The graph is the XML that
+    // `kodus-graph context --format xml` writes: one <ChangedFunction> per entry.
     if (callGraph && callGraph.trim().length > 0) {
-        const blocks: Array<{ header: string; lines: string[] }> = [];
-        for (const raw of callGraph.split('\n')) {
-            const line = raw.replace(/\s+$/, '');
-            if (!line.trim()) continue;
-            const isChild = /^\s+[←→]/.test(line) || /^\s+\(no /.test(line);
-            if (isChild && blocks.length > 0) {
-                blocks[blocks.length - 1].lines.push(line.trim());
-            } else if (
-                !/^Changed functions/i.test(line) &&
-                !line.startsWith(' ')
-            ) {
-                blocks.push({ header: line.trim(), lines: [] });
-            }
-        }
+        const blocks = [
+            ...callGraph.matchAll(
+                /<ChangedFunction\b[^>]*\bname="([^"]*)"[^>]*>[\s\S]*?<\/ChangedFunction>/g,
+            ),
+        ].map((m) => ({ name: m[1], xml: m[0] }));
         if (blocks.length > 0) {
-            const names = blocks.map((b) => b.header);
+            const names = blocks.map((b) => b.name);
             tools.getCallers = mkTool(
-                'CROSS-FILE tool: look up who CALLS a changed function and what it CALLS ' +
-                    '(callers ← and callees →) from the precomputed AST call graph. ' +
+                'CROSS-FILE tool: look up who CALLS a changed function ' +
+                    '(its <Callers>, with what changed and its risk signals) from the precomputed AST call graph. ' +
                     'Use this for EVERY changed function to check cross-file impact — ' +
-                    'who breaks if the signature/behavior changes, and which dependencies it relies on. ' +
+                    'who breaks if the signature/behavior changes. ' +
                     'Then readFile each caller to confirm. More precise than grep for caller lookup.',
                 {
                     type: 'object',
@@ -1624,7 +1616,7 @@ fi
                     const q = (args?.functionName || '').toString().trim();
                     if (!q) return 'Error: functionName is required';
                     const hits = blocks.filter((b) =>
-                        b.header.toLowerCase().includes(q.toLowerCase()),
+                        b.name.toLowerCase().includes(q.toLowerCase()),
                     );
                     if (hits.length === 0) {
                         return (
@@ -1634,11 +1626,7 @@ fi
                     }
                     return hits
                         .slice(0, 3)
-                        .map((b) =>
-                            b.lines.length > 0
-                                ? `${b.header}\n${b.lines.map((l) => '  ' + l).join('\n')}`
-                                : `${b.header}\n  (no callers/callees recorded)`,
-                        )
+                        .map((b) => b.xml)
                         .join('\n\n');
                 },
             );
