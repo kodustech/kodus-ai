@@ -13,6 +13,7 @@ import {
     ValidationErrorType,
 } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
+import { overrideContext } from '@libs/llm/routing-strategy';
 import type { MCPServerConfig } from '@libs/mcp-server/mcp-adapter';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
@@ -1077,16 +1078,15 @@ export class BusinessValidationService {
     private async judge(
         request: BusinessValidationRequest,
     ): Promise<IntentJudge> {
-        const overrideRef =
-            request.byokModelId?.trim() || request.byokModel?.trim();
         const model =
             (await this.permissionValidationService.resolveTaskSlot(
                 request.organizationAndTeamData,
                 LLM_TASK.businessValidation,
                 {
-                    ctx: overrideRef
-                        ? { override: { modelId: overrideRef } }
-                        : {},
+                    ctx: overrideContext(
+                        request.byokModelId,
+                        request.byokModel,
+                    ),
                 },
             )) ?? undefined;
 

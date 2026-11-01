@@ -7,7 +7,10 @@
 // and which files the review handed it, against the feature's properties
 // (README.md).
 //
-//   node evals/custom-agents/run.js [--model=<id>] [--gate] [--output=<result.json>] [--cases=<id,...>] [--concurrency=N]
+//   node evals/custom-agents/run.js [--model=<id>] [--gate] [--output=<result.json>] [--cases=<id,...>] [--concurrency=N] [--sandbox=none]
+//
+// --sandbox=none reviews with no sandbox, as production does when none could
+// be created: every agent sees only the diff.
 //
 // Exit: 0 pass, 1 below a floor (--gate), 2 did not measure (evals/README.md).
 const fs = require('fs');
@@ -22,7 +25,10 @@ const args = Object.fromEntries(
     }),
 );
 const MODEL = args.model || 'deepseek-v4-flash@fireworks';
-const TARGET = (require('./targets.json').models || {})[MODEL] || {};
+const SANDBOX = args.sandbox === 'none' ? 'none' : 'local';
+// A no-sandbox run is judged only on floors measured without a sandbox.
+const MODEL_TARGET = (require('./targets.json').models || {})[MODEL] || {};
+const TARGET = SANDBOX === 'none' ? MODEL_TARGET.noSandbox || {} : MODEL_TARGET;
 const picked = args.cases
     ? CASES.filter((c) => String(args.cases).split(',').includes(c.id))
     : CASES;
@@ -122,6 +128,7 @@ async function review(c, route) {
         team: teamOf(vars, teamConfig(c)),
         route,
         permissionService: evalPermissionService(route.storedConfig),
+        ...(args.sandbox === 'none' && { sandbox: 'none' }),
     });
     if (out.skipped)
         throw new Error(`production skipped the review: ${out.skipped}`);
@@ -286,6 +293,7 @@ async function main() {
         eval: 'custom-agents',
         question: evalQuestion('evals/custom-agents'),
         model: MODEL,
+        sandbox: SANDBOX,
         runs: 1,
         metric: {
             name: "of the agents' property checks right",
@@ -348,7 +356,7 @@ async function main() {
     if (!args.gate) return 0;
     if (result.metric.floor === null) {
         console.error(
-            `not measured: no floor for ${MODEL} in evals/custom-agents/targets.json, so --gate cannot judge it`,
+            `not measured: no floor for ${MODEL}${SANDBOX === 'none' ? ' without a sandbox (noSandbox)' : ''} in evals/custom-agents/targets.json, so --gate cannot judge it`,
         );
         return 2;
     }

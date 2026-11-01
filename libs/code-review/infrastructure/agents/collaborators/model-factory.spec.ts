@@ -81,7 +81,25 @@ describe('resolveReviewAgentModel', () => {
     describe('per-run model override', () => {
         it('lets byokModelId (id) win over the legacy byokModel NAME', async () => {
             await run({ byokModelId: 'm-B', byokModel: 'gpt-4o' });
-            expect(overrideCtx()).toEqual({ override: { modelId: 'm-B' } });
+            expect(overrideCtx()).toEqual({
+                override: { modelId: 'm-B', byId: true },
+            });
+        });
+
+        it("puts a custom agent's pin over the repository override, which it falls back to", async () => {
+            await resolveReviewAgentModel(
+                { organizationAndTeamData: orgTeam, byokModelId: 'm-B' } as any,
+                svc,
+                'customAgent' as any,
+                'pin',
+            );
+            expect(overrideCtx()).toEqual({
+                override: {
+                    modelId: 'pin',
+                    byId: true,
+                    then: { modelId: 'm-B', byId: true },
+                },
+            });
         });
 
         it('falls back to the trimmed byokModel NAME when no id is set', async () => {

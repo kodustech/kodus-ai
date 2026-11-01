@@ -57,6 +57,8 @@ export function buildCustomAgentPrompt(
             previous_filename?: string;
         }
     >,
+    /** False when the review has no sandbox: the agent sees only the diff. */
+    options: { readsRepository?: boolean } = {},
 ): string {
     const instructions = (agent.instructions || '')
         .replace(/<\/?TeamInstructions>/gi, '')
@@ -95,8 +97,12 @@ ${files
     Read any other file for context, but report findings only on these files. A renamed file with no diff still counts: check what the move breaks, such as its relative imports.
   </Scope>`
         : '';
+    const evidence =
+        options.readsRepository === false
+            ? 'Back each finding with evidence visible in the diff and the file contents shown, or returned by the tools you are given; this review cannot read the rest of the repository.'
+            : 'Investigate the codebase before reporting, and back each finding with evidence from the code.';
     return `  <Mission>
-    You are the team's "${agent.name}" reviewer. Find the problems the team's instructions below ask you to look for, in the code this pull request changes. Investigate the codebase before reporting, and back each finding with evidence from the code.
+    You are the team's "${agent.name}" reviewer. Find the problems the team's instructions below ask you to look for, in the code this pull request changes. ${evidence}
   </Mission>
 
   <TeamInstructions>
@@ -369,7 +375,9 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
     }
 
     protected getCategoryPrompt(input?: ReviewAgentInput): string {
-        return buildCustomAgentPrompt(this.agent, input?.changedFiles);
+        return buildCustomAgentPrompt(this.agent, input?.changedFiles, {
+            readsRepository: !input || !!input.remoteCommands,
+        });
     }
 
     protected getUsageRunName(): string {
@@ -378,20 +386,19 @@ export class CustomAgentProvider extends BaseCodeReviewAgentProvider {
 
     /**
      * Runs on the `customAgent` routing task, overridable per agent by a BYOK
-     * model id; with no agent override the repository's model override still
-     * applies. Its findings are verified on that same model, as the built-in
+     * model id; with no agent override, or when its model was deleted, the
+     * repository's model override applies. Its findings are verified on that
+     * same model, as the built-in
      * agents' are: the check is the review's verify, not a model of its own.
      */
     protected async resolveModels(
         input: ReviewAgentInput,
     ): Promise<ResolvedAgentModel> {
-        const runOverride = this.agent.models?.run?.trim();
         return resolveReviewAgentModel(
-            runOverride
-                ? { ...input, byokModelId: runOverride, byokModel: undefined }
-                : input,
+            input,
             this.permissionValidationService,
             LLM_TASK.customAgent,
+            this.agent.models?.run,
         );
     }
 

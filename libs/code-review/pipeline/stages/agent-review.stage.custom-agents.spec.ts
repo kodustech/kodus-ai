@@ -292,6 +292,38 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         expect(JSON.stringify(entry)).not.toContain('Rounding note.');
     });
 
+    it('logs why an agent failed or stopped short', async () => {
+        const { stage } = makeStage(
+            output([], {
+                customAgentRuns: [
+                    {
+                        id: 'agent-ledger',
+                        name: 'Ledger Rules',
+                        slug: 'ledger-rules',
+                        status: 'failed',
+                        reason: 'RATE_LIMIT (HTTP 429)',
+                        droppedByVerify: 0,
+                    },
+                ],
+            }),
+        );
+        const log = jest
+            .spyOn((stage as any).logger, 'log')
+            .mockImplementation(() => undefined);
+
+        await run(stage, makeContext([agent()]));
+
+        const entry = log.mock.calls
+            .map(([e]: any[]) => e)
+            .find((e: any) =>
+                String(e?.message).startsWith('[AGENT] Custom agents outcome'),
+            );
+        expect(entry?.metadata.agents[0]).toMatchObject({
+            status: 'failed',
+            reason: 'RATE_LIMIT (HTTP 429)',
+        });
+    });
+
     it('logs why the checks dropped each finding', async () => {
         const dropped = (over: Record<string, any>) => ({
             relevantFile: 'src/ledger.ts',

@@ -30,8 +30,6 @@ const CATALOG: Array<{ id: string; name: string }> = [
     { id: 'gemini-3.1-pro-preview', name: 'Vertex Gemini 3.1 Pro' },
     { id: 'gemini-3.8-flash', name: 'Vertex Gemini 3.8 Flash' },
     { id: 'gemini-3.5-flash', name: 'Vertex Gemini 3.5 Flash' },
-    { id: 'gemini-2.5-pro', name: 'Vertex Gemini 2.5 Pro' },
-    { id: 'gemini-2.5-flash', name: 'Vertex Gemini 2.5 Flash' },
     { id: 'claude-opus-5', name: 'Vertex Claude Opus 5' },
     { id: 'claude-sonnet-5', name: 'Vertex Claude Sonnet 5' },
     { id: 'claude-opus-4-8', name: 'Vertex Claude Opus 4.8' },

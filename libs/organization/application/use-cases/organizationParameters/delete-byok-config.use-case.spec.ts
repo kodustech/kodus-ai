@@ -10,6 +10,7 @@ import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 
 const ORG = 'org-1';
+const TEAM = 'team-1';
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -38,10 +39,14 @@ function makeByokConfig(overrides: Partial<BYOKConfig> = {}): BYOKConfig {
     };
 }
 
+// The code-review config is stored per team; the guard reads every team of
+// the org. `codeReviewConfig` alone is the config of the org's only team.
 function buildUseCase(opts: {
     byokConfig: unknown;
     codeReviewConfig?: unknown;
+    teamConfigs?: Record<string, unknown>;
 }) {
+    const teamConfigs = opts.teamConfigs ?? { t1: opts.codeReviewConfig };
     const deleteByokModel = jest.fn().mockResolvedValue(true);
     const deleteByokConfig = jest.fn().mockResolvedValue(true);
     const organizationParametersService = {
@@ -53,24 +58,29 @@ function buildUseCase(opts: {
         deleteByokModel,
         deleteByokConfig,
     } as any;
+    // Mirrors the repository: a row is found by team id only (a lookup with
+    // no team id matches nothing).
     const parametersService = {
-        findByKey: jest
-            .fn()
-            .mockResolvedValue(
-                opts.codeReviewConfig
-                    ? { configValue: opts.codeReviewConfig }
-                    : null,
-            ),
+        findByKey: jest.fn(async (_key, { teamId }) =>
+            teamConfigs[teamId] ? { configValue: teamConfigs[teamId] } : null,
+        ),
+    } as any;
+    const teamService = {
+        find: jest.fn(async () =>
+            Object.keys(teamConfigs).map((uuid) => ({ uuid })),
+        ),
     } as any;
     const useCase = new DeleteByokConfigUseCase(
         organizationParametersService,
         parametersService,
+        teamService,
     );
     return {
         useCase,
         deleteByokModel,
         deleteByokConfig,
         organizationParametersService,
+        teamService,
     };
 }
 
@@ -222,6 +232,93 @@ describe('DeleteByokConfigUseCase — referential-integrity guard (REQ-DELETE-01
             /acme\/web/,
         );
         expect(deleteByokModel).not.toHaveBeenCalled();
+    });
+
+    it('rejects a model a custom agent runs on, naming the agent', async () => {
+        const codeReviewConfig = {
+            configs: {
+                customAgents: [
+                    {
+                        id: 'new-agent-6',
+                        name: 'silent-failures',
+                        models: { run: 'm2' },
+                    },
+                ],
+            },
+            repositories: [],
+        };
+        const { useCase, deleteByokModel } = buildUseCase({
+            byokConfig: makeByokConfig(),
+            codeReviewConfig,
+        });
+
+        await expect(useCase.execute(ORG, { modelId: 'm2' })).rejects.toThrow(
+            /custom agent "silent-failures"/,
+        );
+        expect(deleteByokModel).not.toHaveBeenCalled();
+    });
+
+    it("reads every team's config: a custom agent on the org's second team blocks the delete", async () => {
+        const { useCase, deleteByokModel, teamService } = buildUseCase({
+            byokConfig: makeByokConfig(),
+            teamConfigs: {
+                t1: { configs: {}, repositories: [] },
+                t2: {
+                    configs: {
+                        customAgents: [
+                            {
+                                id: 'a1',
+                                name: 'silent-failures',
+                                models: { run: 'm2' },
+                            },
+                        ],
+                    },
+                    repositories: [],
+                },
+            },
+        });
+
+        await expect(useCase.execute(ORG, { modelId: 'm2' })).rejects.toThrow(
+            /custom agent "silent-failures"/,
+        );
+        expect(teamService.find).toHaveBeenCalledWith({
+            organization: { uuid: ORG },
+        });
+        expect(deleteByokModel).not.toHaveBeenCalled();
+    });
+
+    it('rejects the delete when a team config cannot be read, instead of passing unchecked', async () => {
+        const { useCase, deleteByokModel } = buildUseCase({
+            byokConfig: makeByokConfig(),
+            codeReviewConfig: { configs: {}, repositories: [] },
+        });
+        (useCase as any).parametersService.findByKey = jest
+            .fn()
+            .mockRejectedValue(new Error('db down'));
+
+        await expect(useCase.execute(ORG, { modelId: 'm2' })).rejects.toThrow(
+            'db down',
+        );
+        expect(deleteByokModel).not.toHaveBeenCalled();
+    });
+
+    it('ignores customAgents outside a scope configs (not where agents are stored)', async () => {
+        const codeReviewConfig = {
+            customAgents: [
+                { id: 'stray', name: 'stray', models: { run: 'm2' } },
+            ],
+            configs: {},
+            repositories: [],
+        };
+        const { useCase, deleteByokModel } = buildUseCase({
+            byokConfig: makeByokConfig(),
+            codeReviewConfig,
+        });
+
+        await expect(useCase.execute(ORG, { modelId: 'm2' })).resolves.toBe(
+            true,
+        );
+        expect(deleteByokModel).toHaveBeenCalledWith(ORG, 'm2');
     });
 
     it('(c) delegates to deleteByokModel for an unreferenced model (guard clear)', async () => {
@@ -457,10 +554,15 @@ function buildExecuteHarness(opts: {
         );
     }
     const parametersService = { findByKey: paramFindByKey } as any;
+    // One team in the org: its code-review config is the one read.
+    const teamService = {
+        find: jest.fn().mockResolvedValue([{ uuid: TEAM }]),
+    } as any;
 
     const useCase = new DeleteByokConfigUseCase(
         organizationParametersService,
         parametersService,
+        teamService,
     );
     return {
         useCase,
@@ -777,7 +879,7 @@ describe('DeleteByokConfigUseCase.execute — deterministic guards & branches', 
         );
     });
 
-    it('looks up the code-review config with the CODE_REVIEW_CONFIG key (multi-model path)', async () => {
+    it("looks up each team's code-review config with the CODE_REVIEW_CONFIG key and its team id (multi-model path)", async () => {
         const { useCase, paramFindByKey } = buildExecuteHarness({
             byokConfig: makeByokConfig(),
             crConfig: { configs: {}, repositories: [] },
@@ -785,7 +887,7 @@ describe('DeleteByokConfigUseCase.execute — deterministic guards & branches', 
         await useCase.execute(ORG, { modelId: 'm2' });
         expect(paramFindByKey).toHaveBeenCalledWith(
             ParametersKey.CODE_REVIEW_CONFIG,
-            { organizationId: ORG },
+            { organizationId: ORG, teamId: TEAM },
         );
     });
 
@@ -841,17 +943,18 @@ describe('DeleteByokConfigUseCase.execute — deterministic guards & branches', 
         expect(deleteByokModel).toHaveBeenCalledWith(ORG, 'm2');
     });
 
-    it('falls back to no override refs when the code-review lookup REJECTS (catch → null)', async () => {
-        // m2 is unreferenced by routing; the CR lookup throws. The catch(() => null)
-        // fallback must yield an empty override set so the delete still proceeds.
+    it('rejects the delete when the code-review lookup REJECTS (no unchecked pass)', async () => {
+        // m2 is unreferenced by routing; the CR lookup throws. Reading it as
+        // "no references" is how the guard passed without checking anything,
+        // so the delete fails instead.
         const { useCase, deleteByokModel } = buildExecuteHarness({
             byokConfig: makeByokConfig(),
             crRejects: true,
         });
-        await expect(useCase.execute(ORG, { modelId: 'm2' })).resolves.toBe(
-            true,
+        await expect(useCase.execute(ORG, { modelId: 'm2' })).rejects.toThrow(
+            'DB down',
         );
-        expect(deleteByokModel).toHaveBeenCalledWith(ORG, 'm2');
+        expect(deleteByokModel).not.toHaveBeenCalled();
     });
 
     it('treats a code-review param with no configValue as null (?? null default)', async () => {
@@ -867,7 +970,10 @@ describe('DeleteByokConfigUseCase.execute — deterministic guards & branches', 
         const paramSvc = {
             findByKey: jest.fn().mockResolvedValue({ configValue: undefined }),
         } as any;
-        const uc = new DeleteByokConfigUseCase(orgSvc, paramSvc);
+        const teamSvc = {
+            find: jest.fn().mockResolvedValue([{ uuid: TEAM }]),
+        } as any;
+        const uc = new DeleteByokConfigUseCase(orgSvc, paramSvc, teamSvc);
         await expect(uc.execute(ORG, { modelId: 'm2' })).resolves.toBe(true);
         expect(deleteByokModel).toHaveBeenCalledWith(ORG, 'm2');
     });

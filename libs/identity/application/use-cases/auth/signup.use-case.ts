@@ -22,6 +22,7 @@ import {
     ITeamService,
     TEAM_SERVICE_TOKEN,
 } from '@libs/organization/domain/team/contracts/team.service.contract';
+import { sanitizeFirstTouch } from '@libs/organization/domain/organization/first-touch';
 import { ITeam } from '@libs/organization/domain/team/interfaces/team.interface';
 import {
     ITeamMemberService,
@@ -59,7 +60,7 @@ export class SignUpUseCase implements IUseCase {
         payload: SignUpDTO,
         options?: SignUpOptions,
     ): Promise<Partial<IUser>> {
-        const { email, password, name, organizationId } = payload;
+        const { email, password, name, organizationId, firstTouch } = payload;
 
         this.logger.error({
             message: 'TEST LOG: Starting signup process',
@@ -104,9 +105,14 @@ export class SignUpUseCase implements IUseCase {
 
                 user.role = Role.OWNER;
                 user.status = STATUS.ACTIVE;
+                // First touch is recorded only here, in the insert that creates
+                // the organization: joining an existing one never changes it.
                 user.organization =
                     await this.organizationService.createOrganizationWithTenant(
-                        user.organization,
+                        {
+                            ...user.organization,
+                            firstTouch: sanitizeFirstTouch(firstTouch),
+                        },
                     );
             }
 

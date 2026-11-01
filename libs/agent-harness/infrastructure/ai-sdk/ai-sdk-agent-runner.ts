@@ -202,10 +202,11 @@ export class AiSdkAgentRunner implements AgentRunner {
             // is intentional — not flagged.)
             const toolCalls = event?.toolCalls ?? [];
             const toolResults = event?.toolResults ?? [];
+            const fr = event?.finishReason;
+            const stepFinishReason: string | undefined =
+                typeof fr === 'string' ? fr : fr?.unified;
             if (toolCalls.length > toolResults.length) {
-                const fr = event?.finishReason;
-                const finishReason =
-                    typeof fr === 'string' ? fr : (fr?.unified ?? 'unknown');
+                const finishReason = stepFinishReason ?? 'unknown';
                 if (finishReason !== 'stop' && finishReason !== 'tool-calls') {
                     emit('runner', {
                         kind: 'tool.skipped',
@@ -224,6 +225,7 @@ export class AiSdkAgentRunner implements AgentRunner {
                 index: steps.length,
                 message: eventToMessage(event),
                 usage: event?.usage ? readAiSdkUsage(event.usage) : undefined,
+                ...(stepFinishReason && { finishReason: stepFinishReason }),
             });
             const view = buildView(steps.length, messages, allToolNames);
             for (const p of spec.policies) {

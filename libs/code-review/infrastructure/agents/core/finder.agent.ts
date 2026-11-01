@@ -475,11 +475,17 @@ function findingsFromText(
         const json = extractJsonFromText(text);
         if (!json) continue;
         try {
-            const clean = sanitizeFindingsResult(
-                JSON.parse(json),
-                telemetryMetadata,
-            );
+            const parsed = JSON.parse(json);
+            const clean = sanitizeFindingsResult(parsed, telemetryMetadata);
             if (clean) {
+                // A result written as the final answer is the finder's result,
+                // as much as a submitResult call is (#2171); the adapter holds
+                // the payload to the same whole-result test. JSON in an earlier
+                // step was only part of its investigation.
+                if (i === state.steps.length - 1) {
+                    (state as any).__findingsOutcome = 'text';
+                    (state as any).__textResult = parsed;
+                }
                 return {
                     reasoning: clean.reasoning ?? '',
                     suggestions: (clean.suggestions ??
@@ -594,6 +600,17 @@ export function recoverLeniently(err: unknown): FinderSuggestion[] {
     }
 }
 
+// Prose that names no path leaves the recoverer writing "unknown". Such a
+// finding would be verified and then dropped at path mapping.
+function onlyChangedFiles(
+    recovered: FinderSuggestion[],
+    changedFiles?: readonly string[],
+): FinderSuggestion[] {
+    if (!changedFiles?.length) return recovered;
+    const changed = new Set(changedFiles.map(normalizePath));
+    return recovered.filter((f) => changed.has(normalizePath(f.relevantFile)));
+}
+
 export async function recoverFindingsFromProse(
     prose: string,
     byokConfig: NormalizedModel | undefined,
@@ -603,6 +620,7 @@ export async function recoverFindingsFromProse(
     teamId?: string,
     /** A custom agent: recover the full finding (FULL_RECOVERY_SCHEMA). */
     fullOutput?: boolean,
+    changedFiles?: readonly string[],
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
     const base = fullOutput ? FULL_RECOVERY_SCHEMA : RECOVERY_SCHEMA;
@@ -657,6 +675,9 @@ export async function recoverFindingsFromProse(
                 'If the analysis concludes there is nothing to fix, return ' +
                 'an empty suggestions list. Do NOT invent findings.' +
                 `\n\nRespond with a JSON object.\n\nANALYSIS:\n${prose}` +
+                (changedFiles?.length
+                    ? `\n\nCHANGED FILES (relevantFile must be exactly one of these paths):\n${changedFiles.join('\n')}`
+                    : '') +
                 (previousDecisions?.length
                     ? `\n\n${formatPreviousDecisions(previousDecisions)}\nPreserve the earlier suggestion's Id in revisesSuggestionId when the analysis revises it. Do not invent a relationship absent from the analysis; omit the field for unrelated findings.`
                     : ''),
@@ -665,7 +686,10 @@ export async function recoverFindingsFromProse(
                 : 'code-review-recovery',
             organizationId,
         });
-        return (result.suggestions ?? []) as unknown as FinderSuggestion[];
+        return onlyChangedFiles(
+            (result.suggestions ?? []) as unknown as FinderSuggestion[],
+            changedFiles,
+        );
     } catch (err) {
         finderLogger.warn({
             message: `[RECOVERY] prose recovery call failed: ${(err as Error)?.message ?? String(err)}`,
@@ -683,7 +707,7 @@ export async function recoverFindingsFromProse(
         // schema cannot make them optional (OpenAI strict mode requires every
         // field declared), so read the returned JSON requiring only what the
         // main schema requires: file and description.
-        return recoverLeniently(err);
+        return onlyChangedFiles(recoverLeniently(err), changedFiles);
     }
 }
 

@@ -506,4 +506,142 @@ describe('rebaseInterdiff', () => {
 
         expect(result.files).toEqual([]);
     });
+
+    it('names the file when the push drops a line the review had added (#2319)', () => {
+        const before = hunk(
+            '@@ -1,3 +1,4 @@ function pay()',
+            ' const order = find(id);',
+            '+if (!order) return;',
+            '+log(order.id);',
+            ' }',
+        );
+        const after = hunk(
+            '@@ -1,3 +1,4 @@ function pay()',
+            ' const order = find(id);',
+            '+log(order.id);',
+            ' }',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/pay.ts', after)],
+            [file('src/pay.ts', before)],
+        );
+
+        // What is left to review is unchanged, and that was the bug: the run
+        // skipped with "No changed files". The removal itself has to be
+        // reviewed, so the file is named for a full review instead.
+        expect(result.files).toEqual([]);
+        expect(result.unchangedFiles).toEqual(['src/pay.ts']);
+        expect(result.revertedFiles).toEqual(['src/pay.ts']);
+    });
+
+    it('names a file whose changes the push took out of the PR diff entirely', () => {
+        const before = hunk(
+            '@@ -1,3 +1,4 @@ function pay()',
+            ' const order = find(id);',
+            '+if (!order) return;',
+            ' }',
+        );
+
+        const result = rebaseInterdiff([], [file('src/pay.ts', before)]);
+
+        expect(result.files).toEqual([]);
+        expect(result.revertedFiles).toEqual(['src/pay.ts']);
+    });
+
+    it('names a file when a removed base line comes back', () => {
+        const before = hunk('@@ -1,3 +1,2 @@', ' a', '-old', ' c');
+        const after = hunk('@@ -1,3 +1,2 @@', ' a', ' c');
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        expect(result.revertedFiles).toEqual(['src/a.ts']);
+    });
+
+    it('names a file when a change moved, since a move and a removal read alike', () => {
+        const before = hunk(
+            '@@ -10,3 +10,4 @@ function a()',
+            ' const x = 1;',
+            '+newCall();',
+            ' return x;',
+        );
+        const after = hunk(
+            '@@ -40,3 +40,4 @@ function b()',
+            ' const z = 1;',
+            '+newCall();',
+            ' return z;',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        // The moved change is reviewed again in its new place, and the file is
+        // named too: from the two diffs alone a move is indistinguishable from
+        // a line removed here and an identical one added there (#2319).
+        expect(result.files).toHaveLength(1);
+        expect(result.revertedFiles).toEqual(['src/a.ts']);
+    });
+
+    it('does not name a file when only the context around a change was edited', () => {
+        const before = hunk(
+            '@@ -10,3 +10,4 @@ function a()',
+            ' const x = 1;',
+            '+call();',
+            ' return x;',
+        );
+        const after = hunk(
+            '@@ -10,3 +10,4 @@ function a()',
+            ' const x = 2;',
+            '+call();',
+            ' return x;',
+        );
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        // The change is still there, only its neighbours moved: the hunk is
+        // reviewed again, but it is not a removal (#2319 review finding).
+        expect(result.revertedFiles).toEqual([]);
+        expect(result.files).toHaveLength(1);
+    });
+
+    it('names a file whose patch is empty now, when it carried changes before', () => {
+        const before = hunk('@@ -1,3 +1,4 @@', ' a', '+guard();', ' c');
+        const renamed: FileChange = {
+            ...file('src/b.ts', ''),
+            previous_filename: 'src/a.ts',
+        };
+
+        const result = rebaseInterdiff([renamed], [file('src/a.ts', before)]);
+
+        // A rename with no content change has no patch to compare, and the
+        // changes it carried before must not go unreported.
+        expect(result.revertedFiles).toEqual(['src/b.ts']);
+        expect(result.files).toHaveLength(1);
+    });
+
+    it('names a file whose comparison gave up on size, when a line also went missing', () => {
+        const big = (prefix: string) =>
+            Array.from({ length: 5000 }, (_, i) => `+${prefix}${i}`);
+        const before = hunk('@@ -0,0 +1,5001 @@', '+guard();', ...big('old'));
+        const after = hunk('@@ -0,0 +1,5000 @@', ...big('new'));
+
+        const result = rebaseInterdiff(
+            [file('src/a.ts', after)],
+            [file('src/a.ts', before)],
+        );
+
+        // The comparison exceeds its bound, so the file is reviewed whole...
+        expect(result.uncomparedFiles).toEqual(['src/a.ts']);
+        // ...and the removal is still reported: it must not depend on a
+        // comparison that gave up (#2319 review finding).
+        expect(result.revertedFiles).toEqual(['src/a.ts']);
+    });
 });

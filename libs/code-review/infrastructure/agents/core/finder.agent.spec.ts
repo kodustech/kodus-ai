@@ -626,6 +626,44 @@ describe('recoverFindingsFromProse — request assembly (the LLM.run boundary)',
         expect((spy.mock.calls[0][0] as any).user).toContain('Id: round-a');
     });
 
+    // #2291: prose that names no path made the recoverer write
+    // relevantFile "unknown"; the findings went through verify and were then
+    // dropped as PATH_MISMATCH.
+    it('lists the changed files and drops recovered findings that name none of them', async () => {
+        const unknown = { ...validFinding, relevantFile: 'unknown' };
+        const missing = { ...validFinding, relevantFile: '' };
+        const other = { ...validFinding, relevantFile: 'src/not-changed.ts' };
+        const spy = jest.spyOn(LLM, 'run').mockResolvedValue({
+            suggestions: [unknown, missing, other, validFinding],
+        } as any);
+
+        const out = await recoverFindingsFromProse(
+            prose,
+            undefined,
+            'org-9',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            ['src/a.ts', 'src/b.ts'],
+        );
+
+        expect(out).toEqual([validFinding]);
+        const user = (spy.mock.calls[0][0] as any).user as string;
+        expect(user).toContain('src/a.ts');
+        expect(user).toContain('src/b.ts');
+    });
+
+    it('keeps every recovered finding when the changed files are not given', async () => {
+        const unknown = { ...validFinding, relevantFile: 'unknown' };
+        jest.spyOn(LLM, 'run').mockResolvedValue({
+            suggestions: [unknown, validFinding],
+        } as any);
+        await expect(
+            recoverFindingsFromProse(prose, undefined, 'org-9'),
+        ).resolves.toEqual([unknown, validFinding]);
+    });
+
     it('keeps the recovery schema unchanged when there is no earlier history', async () => {
         const spy = jest
             .spyOn(LLM, 'run')

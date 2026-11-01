@@ -701,6 +701,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     id: run.id,
                     slug: run.slug,
                     status: run.status,
+                    reason: run.reason,
                     kept: run.posted,
                     droppedByChecks: run.droppedByVerify,
                     mergedInDedup: mergedInDedup.filter(

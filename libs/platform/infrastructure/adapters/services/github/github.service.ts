@@ -164,6 +164,9 @@ interface GitHubInstallationData {
 /** A compare response lists at most this many files, with no way to page. */
 const GITHUB_COMPARE_MAX_FILES = 300;
 
+/** GitHub said the App installation is uninstalled or suspended. */
+export class InstallationUnavailableError extends Error {}
+
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITHUB, 'codeManagement')
 export class GithubService
@@ -179,6 +182,9 @@ export class GithubService
 {
     private readonly MAX_RETRY_ATTEMPTS = 2;
     private readonly TTL = 50 * 60 * 1000; // 50 minutes
+    // How long GitHub's "uninstalled" / "suspended" answer is trusted before
+    // asking again: a reinstall or unsuspend is picked up within this window.
+    private readonly UNAVAILABLE_INSTALLATION_TTL = 60 * 60 * 1000;
 
     private readonly logger = createLogger(GithubService.name);
 
@@ -2618,6 +2624,14 @@ export class GithubService
         installationId: string,
         retryCount = 0,
     ): Promise<GitHubAuthResponse> {
+        const unavailableKey = `github:installation-unavailable:${installationId}`;
+        const unavailable = await this.cacheService.getFromCache<{
+            message: string;
+        }>(unavailableKey);
+        if (unavailable) {
+            throw new InstallationUnavailableError(unavailable.message);
+        }
+
         try {
             const cachedAuth = await this.getCachedToken(installationId);
 
@@ -2633,6 +2647,28 @@ export class GithubService
 
             return await this.generateAndCacheNewToken(installationId);
         } catch (error) {
+            // The App was uninstalled (404) or suspended: GitHub gives the same
+            // answer until the customer acts, so don't retry it or ask again on
+            // every call.
+            if (
+                error?.status === 404 ||
+                (error?.status === 403 &&
+                    /installation has been suspended/i.test(error.message))
+            ) {
+                await this.cacheService.addToCache(
+                    unavailableKey,
+                    { message: error.message },
+                    this.UNAVAILABLE_INSTALLATION_TTL,
+                );
+                this.logger.warn({
+                    message:
+                        'GitHub App installation is uninstalled or suspended; skipping it for an hour',
+                    context: GithubService.name,
+                    metadata: { installationId, status: error.status },
+                });
+                throw new InstallationUnavailableError(error.message);
+            }
+
             if (
                 error.message?.includes('token') &&
                 retryCount < this.MAX_RETRY_ATTEMPTS
@@ -3462,15 +3498,18 @@ export class GithubService
                 throw new BadRequestException('Unknown authentication type.');
             }
         } catch (err) {
-            this.logger.error({
-                message: 'Error instantiating instanceOctokit',
-                context: GithubService.name,
-                serviceName: 'GithubService',
-                error: err,
-                metadata: {
-                    organizationAndTeamData,
-                },
-            });
+            // Already logged once, when GitHub first answered it.
+            if (!(err instanceof InstallationUnavailableError)) {
+                this.logger.error({
+                    message: 'Error instantiating instanceOctokit',
+                    context: GithubService.name,
+                    serviceName: 'GithubService',
+                    error: err,
+                    metadata: {
+                        organizationAndTeamData,
+                    },
+                });
+            }
             throw new BadRequestException(err);
         }
     }

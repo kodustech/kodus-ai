@@ -296,7 +296,9 @@ function matchByHttpStatus(
         // Most other provider 404s on the inference endpoint are model-not-found.
         return LlmErrorCategory.MODEL_NOT_FOUND;
     }
-    if (status >= 500 && status < 600) {
+    // 499 is the gateway status for a request its upstream dropped (nginx,
+    // LiteLLM and Codex-account proxies use it): the same call can succeed.
+    if ((status >= 500 && status < 600) || status === 499) {
         return LlmErrorCategory.TRANSIENT;
     }
     return LlmErrorCategory.UNKNOWN;
@@ -437,7 +439,9 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('token limit') ||
         lower.includes('too many tokens') ||
         // OpenAI: "Your input exceeds the context window of this model."
-        lower.includes('exceeds the context window')
+        lower.includes('exceeds the context window') ||
+        // A gateway that caps the body: "The total text input size exceeds 8 MB".
+        lower.includes('input size exceeds')
     ) {
         return LlmErrorCategory.CONTEXT_OVERFLOW;
     }
