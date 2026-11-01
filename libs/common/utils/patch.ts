@@ -72,13 +72,16 @@ function omitDeletionHunks(patchLines: string[]): string {
  */
 // Maximum number of lines to process to prevent DoS attacks
 const MAX_PATCH_LINES = 50000;
+// Appended to a line-numbered diff cut at MAX_PATCH_LINES, so the reader knows the rest is missing.
+export const PATCH_TRUNCATED_NOTE = `... (diff truncated at ${MAX_PATCH_LINES} patch lines; the rest of this file's changes are not shown)`;
 
 export function convertToHunksWithLinesNumbers(
     patch: string,
     file: { filename?: string },
 ): string {
     let patchWithLinesStr = `\n\n## file: '${file.filename.trim()}'\n`;
-    const patchLines = patch.split('\n').slice(0, MAX_PATCH_LINES);
+    const allPatchLines = patch.split('\n');
+    const patchLines = allPatchLines.slice(0, MAX_PATCH_LINES);
     const RE_HUNK_HEADER =
         /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@[ ]?(.*)/;
 
@@ -184,6 +187,10 @@ export function convertToHunksWithLinesNumbers(
         }
     }
 
+    if (allPatchLines.length > MAX_PATCH_LINES) {
+        patchWithLinesStr += `\n${PATCH_TRUNCATED_NOTE}`;
+    }
+
     return patchWithLinesStr.trim();
 }
 
@@ -211,7 +218,8 @@ export function convertToUnifiedDiffWithLineNumbers(
 ): string {
     if (!patch) return '';
 
-    const lines = patch.split('\n').slice(0, MAX_PATCH_LINES);
+    const allLines = patch.split('\n');
+    const lines = allLines.slice(0, MAX_PATCH_LINES);
     const RE_HUNK_HEADER =
         /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@[ ]?(.*)/;
     const result: string[] = [`## file: '${file.filename?.trim()}'`];
@@ -239,6 +247,10 @@ export function convertToUnifiedDiffWithLineNumbers(
             result.push(`${String(newLine).padStart(6)} ${line}`);
             newLine++;
         }
+    }
+
+    if (allLines.length > MAX_PATCH_LINES) {
+        result.push(PATCH_TRUNCATED_NOTE);
     }
 
     return result.join('\n');

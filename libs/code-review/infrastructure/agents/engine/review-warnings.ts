@@ -10,6 +10,7 @@
  */
 
 import type { ModelFailoverEvent } from '@libs/llm/model-failover';
+import { PATCH_TRUNCATED_NOTE } from '@libs/common/utils/patch';
 
 export type ReviewWarningKind =
     /** Compact system prompt was used (workflow/rules trimmed). */
@@ -88,7 +89,8 @@ export type ReviewWarningReason =
     | 'path_mismatch'
     /** A Kody Rules judge shard errored. */
     | 'judge_shard_failed'
-    /** The prompt did not fit the single-batch budget on a large PR. */
+    /** The PR was too large for a step: the single-batch prompt budget, or
+     *  the patch line limit of a file's diff. */
     | 'large_pr'
     /** The verifier's model call failed (provider error, 429, abort). */
     | 'verify_failed'
@@ -215,6 +217,28 @@ export function buildCallGraphFailedWarning(params: {
         contextWindowTokens: 0,
         modelName: params.modelName,
         detail: 'the call graph could not be built, so the review ran without knowing who calls the changed code',
+    };
+}
+
+/** Files whose line-numbered diff was cut at the patch line limit; undefined
+ *  when none was. */
+export function buildPatchTruncatedWarning(params: {
+    changedFiles: ReadonlyArray<{
+        filename?: string;
+        patchWithLinesStr?: string;
+    }>;
+    modelName: string;
+}): ReviewWarning | undefined {
+    const names = params.changedFiles
+        .filter((f) => f.patchWithLinesStr?.endsWith(PATCH_TRUNCATED_NOTE))
+        .map((f) => f.filename ?? 'unknown');
+    if (!names.length) return undefined;
+    return {
+        kind: 'DIFF_TRUNCATED',
+        reason: 'large_pr',
+        contextWindowTokens: 0,
+        modelName: params.modelName,
+        detail: `${names.length} file(s) reviewed on a diff cut at the patch line limit: ${names.join(', ')}`,
     };
 }
 

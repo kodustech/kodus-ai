@@ -33,6 +33,7 @@ import {
     buildBadFixDowngradedWarning,
     buildCallGraphFailedWarning,
     buildConfigFileKeysIgnoredWarning,
+    buildPatchTruncatedWarning,
     buildSandboxUnavailableWarning,
     crossRepoUnavailableWarning,
     type ReviewWarning,
@@ -808,6 +809,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             context.codeReviewConfig?.kodusConfigFileDroppedKeys,
         );
         if (configFileWarning) stageWarnings.push(configFileWarning);
+        const patchTruncatedWarning = buildPatchTruncatedWarning({
+            changedFiles,
+            modelName: effectiveModelName || 'unknown',
+        });
+        if (patchTruncatedWarning) stageWarnings.push(patchTruncatedWarning);
 
         if (adaptiveProfile.kind !== 'full') {
             this.logger.log({

@@ -4,6 +4,7 @@ import {
     convertToUnifiedDiffWithLineNumbers,
     extractLinesFromDiffHunk,
     extractLinesFromUnifiedDiff,
+    PATCH_TRUNCATED_NOTE,
 } from './patch';
 
 describe('patch utils (mutation-killing)', () => {
@@ -190,6 +191,40 @@ describe('patch utils (mutation-killing)', () => {
                 '     2 +b',
             ].join('\n');
             expect(out).toBe(expected);
+        });
+    });
+
+    describe('patch line limit (#2206)', () => {
+        const patchOf = (added: number) =>
+            ['@@ -0,0 +1,' + added + ' @@']
+                .concat(Array.from({ length: added }, (_, i) => `+l${i}`))
+                .join('\n');
+
+        it('ends a diff cut at 50000 patch lines with a note', () => {
+            const unified = convertToUnifiedDiffWithLineNumbers(
+                patchOf(50_000),
+                { filename: 'big.ts' },
+            ).split('\n');
+            expect(unified.at(-2)).toBe(' 49999 +l49998');
+            expect(unified.at(-1)).toBe(PATCH_TRUNCATED_NOTE);
+
+            const hunks = convertToHunksWithLinesNumbers(patchOf(50_000), {
+                filename: 'big.ts',
+            });
+            expect(hunks.endsWith(PATCH_TRUNCATED_NOTE)).toBe(true);
+        });
+
+        it('adds no note when the patch fits the limit', () => {
+            expect(
+                convertToUnifiedDiffWithLineNumbers(patchOf(49_999), {
+                    filename: 'ok.ts',
+                }),
+            ).not.toContain(PATCH_TRUNCATED_NOTE);
+            expect(
+                convertToHunksWithLinesNumbers(patchOf(49_999), {
+                    filename: 'ok.ts',
+                }),
+            ).not.toContain(PATCH_TRUNCATED_NOTE);
         });
     });
 
