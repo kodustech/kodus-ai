@@ -9,10 +9,12 @@ import {
     buildKodyRulesPartialWarning,
     formatConfigFileNotice,
     buildPathMismatchWarning,
+    buildPatchTruncatedWarning,
     buildSandboxUnavailableWarning,
     withFallbackWarnings,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import { PATCH_TRUNCATED_NOTE } from '@libs/common/utils/patch';
 
 const w = (
     kind: ReviewWarning['kind'],
@@ -335,5 +337,36 @@ describe('kodus-config.yml keys set in the app', () => {
             formatConfigFileNotice([w('PROMPT_COMPACTED', { detail: 'x' })]),
         ).toBe('');
         expect(formatConfigFileNotice(undefined)).toBe('');
+    });
+});
+
+describe('buildPatchTruncatedWarning', () => {
+    it('names the files whose diff was cut at the patch line limit (#2206)', () => {
+        const warning = buildPatchTruncatedWarning({
+            changedFiles: [
+                { filename: 'small.ts', patchWithLinesStr: '     1 +a' },
+                {
+                    filename: 'big.ts',
+                    patchWithLinesStr: `     1 +a\n${PATCH_TRUNCATED_NOTE}`,
+                },
+            ],
+            modelName: 'm',
+        });
+        expect(warning).toMatchObject({
+            kind: 'DIFF_TRUNCATED',
+            reason: 'large_pr',
+            modelName: 'm',
+        });
+        expect(warning?.detail).toContain('big.ts');
+        expect(warning?.detail).not.toContain('small.ts');
+    });
+
+    it('returns undefined when no diff was cut', () => {
+        expect(
+            buildPatchTruncatedWarning({
+                changedFiles: [{ filename: 'a.ts', patchWithLinesStr: 'x' }],
+                modelName: 'm',
+            }),
+        ).toBeUndefined();
     });
 });
