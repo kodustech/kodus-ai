@@ -8,6 +8,7 @@ import type {
     CustomAgentsStatus,
     CustomAgentTryTrace,
     KnowledgeItem,
+    KnowledgeSource,
 } from "./types";
 
 export const CUSTOM_AGENTS_PATHS = {
@@ -26,6 +27,8 @@ export const resolveCustomAgent = (body: {
     agent?: CustomAgent;
     knowledge?: KnowledgeItem[];
     discover?: boolean;
+    /** List skills and docs in this other repository instead. */
+    source?: KnowledgeSource;
 }) =>
     authorizedFetch<CustomAgentResolveReport>(CUSTOM_AGENTS_PATHS.RESOLVE, {
         method: "POST",

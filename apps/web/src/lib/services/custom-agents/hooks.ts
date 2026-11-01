@@ -7,7 +7,7 @@ import {
     resolveCustomAgent,
     tryCustomAgent,
 } from "./fetch";
-import type { CustomAgent, KnowledgeItem } from "./types";
+import type { CustomAgent, KnowledgeItem, KnowledgeSource } from "./types";
 
 export const useCustomAgentsStatus = (params: {
     teamId?: string;
@@ -65,6 +65,8 @@ export const useResolveCustomAgent = (params: {
     agent?: CustomAgent;
     knowledge?: KnowledgeItem[];
     discover?: boolean;
+    /** List skills and docs in this other repository instead. */
+    source?: KnowledgeSource;
     enabled?: boolean;
 }) =>
     useQuery({
@@ -75,6 +77,7 @@ export const useResolveCustomAgent = (params: {
             params.agent ?? null,
             params.knowledge ?? null,
             params.discover === true,
+            params.source ?? null,
         ],
         queryFn: () =>
             resolveCustomAgent({
@@ -83,6 +86,7 @@ export const useResolveCustomAgent = (params: {
                 agent: params.agent,
                 knowledge: params.knowledge,
                 discover: params.discover,
+                ...(params.source?.repository && { source: params.source }),
             }),
         enabled:
             !!params.teamId &&
