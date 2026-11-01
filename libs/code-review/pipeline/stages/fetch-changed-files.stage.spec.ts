@@ -248,6 +248,102 @@ describe('FetchChangedFilesStage', () => {
         expect(result.changedFiles[0]).toEqual(binary);
     });
 
+    describe('a patch longer than the line limit (#2206)', () => {
+        const bigPatch = [
+            '@@ -0,0 +1,50005 @@',
+            ...Array.from({ length: 50005 }, (_, i) => `+row ${i}`),
+        ].join('\n');
+        const smallFile = {
+            filename: 'src/small.ts',
+            status: 'modified',
+            patch: '@@ -1,1 +1,2 @@\n a\n+b',
+        };
+
+        it('notes the cut in the diff and records DIFF_TRUNCATED naming the file', async () => {
+            const files = [
+                { filename: 'data/big.sql', status: 'added', patch: bigPatch },
+                smallFile,
+            ];
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files,
+            );
+            mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue(
+                files,
+            );
+
+            const result = await stage.execute(context);
+
+            const [big, small] = result.changedFiles;
+            expect(big.patchWithLinesStr).toMatch(
+                /\n\.\.\. \(diff truncated: first 50000 of 50006 lines shown;[^\n]*\)$/,
+            );
+            expect(small.patchWithLinesStr).not.toContain('diff truncated');
+            expect(result.reviewWarnings).toEqual([
+                expect.objectContaining({
+                    kind: 'DIFF_TRUNCATED',
+                    reason: 'patch_line_limit',
+                    detail: '1 file diff(s) cut at 50000 lines, the rest was not reviewed: data/big.sql',
+                }),
+            ]);
+        });
+
+        it('records the cut of an ignored file a custom agent names', async () => {
+            const files = [
+                { filename: 'data/big.sql', status: 'added', patch: bigPatch },
+                {
+                    filename: 'data/seed.sql',
+                    status: 'added',
+                    patch: bigPatch,
+                },
+                smallFile,
+            ];
+            context.codeReviewConfig.ignorePaths = ['data/**'];
+            context.codeReviewConfig.customAgents = [
+                {
+                    id: 'agent-1',
+                    name: 'Seeds',
+                    enabled: true,
+                    instructions: 'Check the seed.',
+                    scope: { include: ['data/seed.sql'] },
+                },
+            ] as any;
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files,
+            );
+            mockPullRequestManagerService.enrichFilesWithContent.mockImplementation(
+                async (_o: any, _r: any, _p: any, list: any[]) => list,
+            );
+
+            const result = await stage.execute(context);
+
+            const seed = result.ignoredFileChanges.find(
+                (f) => f.filename === 'data/seed.sql',
+            );
+            expect(seed.patchWithLinesStr).toContain('diff truncated');
+            expect(result.reviewWarnings).toEqual([
+                expect.objectContaining({
+                    kind: 'DIFF_TRUNCATED',
+                    reason: 'patch_line_limit',
+                    detail: '1 file diff(s) cut at 50000 lines, the rest was not reviewed: data/seed.sql',
+                }),
+            ]);
+        });
+
+        it('records no warning when every patch fits', async () => {
+            const files = [smallFile];
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files,
+            );
+            mockPullRequestManagerService.enrichFilesWithContent.mockResolvedValue(
+                files,
+            );
+
+            const result = await stage.execute(context);
+
+            expect(result.reviewWarnings).toBeUndefined();
+        });
+    });
+
     describe('ignored files a custom agent names (#2172)', () => {
         const PATCH =
             '@@ -1,2 +1,2 @@\n {\n-  "name": "hive"\n+  "name": "apiary"';

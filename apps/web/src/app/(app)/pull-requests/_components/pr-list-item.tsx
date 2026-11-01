@@ -1235,7 +1235,7 @@ const WARNING_KIND_LABEL: Record<ReviewWarningKind, string> = {
     CALLGRAPH_DROPPED: "Pre-computed call graph omitted",
     HUNK_HEADERS_ONLY:
         "File diffs sent as hunk headers only; agent reads on demand",
-    DIFF_TRUNCATED: "Long file diffs truncated to fit the window",
+    DIFF_TRUNCATED: "Long file diffs truncated",
     LOW_SIGNAL_FILES_DROPPED: "Low-signal files (tests, docs, styles) dropped",
     HEAVY_PASSES_SKIPPED: "Verifier / second-chance / rescue passes skipped",
     // Rendered by ProviderFallbackNotice, not the fidelity list — label kept
