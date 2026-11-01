@@ -182,6 +182,38 @@ describe('a code block quoted before the answer does not hide the answer', () =>
         await expect(repairAndValidate(reviewWire, raw)).resolves.toEqual(answer);
     });
 
+    it('keeps Markdown fences that sit inside the string values of a bare answer', async () => {
+        const withCode = {
+            suggestions: [
+                { id: '4', body: 'use:\n```ts\nconst a = 1;\n```\ninstead' },
+            ],
+        };
+        const raw =
+            'The call looks like:\n```\n{}\n```\n' + JSON.stringify(withCode);
+        await expect(repairAndValidate(reviewWire, raw)).resolves.toEqual(
+            withCode,
+        );
+    });
+
+    it('prefers the bare answer after the quotes over a schema-valid example quoted earlier', async () => {
+        const example = { suggestions: [{ id: '0', body: 'example' }] };
+        const raw =
+            'Not JSON:\n```\nfoo\n```\nExample:\n```json\n' +
+            JSON.stringify(example) +
+            '\n```\n' +
+            JSON.stringify(answer);
+        await expect(repairAndValidate(reviewWire, raw)).resolves.toEqual(answer);
+    });
+
+    it('does not take a schema-valid example from the reasoning as the answer', async () => {
+        const example = { suggestions: [{ id: '0', body: 'example' }] };
+        const raw =
+            '<think>Output looks like:\n```json\n' +
+            JSON.stringify(example) +
+            '\n```\n</think>\nNo findings.';
+        await expect(repairAndValidate(reviewWire, raw)).resolves.toBeUndefined();
+    });
+
     it('still rejects text whose only JSON is off-schema', async () => {
         const raw = 'See:\n```\n{}\n```\n{"items":[{"id":"1","body":"x"}]}';
         await expect(repairAndValidate(reviewWire, raw)).resolves.toBeUndefined();
