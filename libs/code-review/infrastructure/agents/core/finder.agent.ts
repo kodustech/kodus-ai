@@ -607,8 +607,16 @@ function onlyChangedFiles(
     changedFiles?: readonly string[],
 ): FinderSuggestion[] {
     if (!changedFiles?.length) return recovered;
-    const changed = new Set(changedFiles.map(normalizePath));
-    return recovered.filter((f) => changed.has(normalizePath(f.relevantFile)));
+    const changed = changedFiles.map(normalizePath);
+    // The finding mapper also accepts a path that cites a unique tail.
+    return recovered.filter((f) => {
+        const p = normalizePath(f.relevantFile);
+        return (
+            !!p &&
+            (changed.includes(p) ||
+                changed.filter((c) => c.endsWith('/' + p)).length === 1)
+        );
+    });
 }
 
 export async function recoverFindingsFromProse(

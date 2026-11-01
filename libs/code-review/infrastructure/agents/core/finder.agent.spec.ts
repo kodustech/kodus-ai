@@ -654,6 +654,27 @@ describe('recoverFindingsFromProse — request assembly (the LLM.run boundary)',
         expect(user).toContain('src/b.ts');
     });
 
+    it('keeps a recovered finding whose path cites a unique tail of a changed file', async () => {
+        const tail = { ...validFinding, relevantFile: 'b.ts' };
+        const ambiguous = { ...validFinding, relevantFile: 'x.ts' };
+        jest.spyOn(LLM, 'run').mockResolvedValue({
+            suggestions: [tail, ambiguous],
+        } as any);
+
+        const out = await recoverFindingsFromProse(
+            prose,
+            undefined,
+            'org-9',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            ['src/a.ts', 'src/b.ts', 'src/x.ts', 'lib/x.ts'],
+        );
+
+        expect(out).toEqual([tail]);
+    });
+
     it('keeps every recovered finding when the changed files are not given', async () => {
         const unknown = { ...validFinding, relevantFile: 'unknown' };
         jest.spyOn(LLM, 'run').mockResolvedValue({
