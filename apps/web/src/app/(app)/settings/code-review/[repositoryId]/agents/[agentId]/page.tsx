@@ -343,6 +343,8 @@ function AgentContent() {
                                         repositoryId,
                                         directoryId,
                                     )}
+                                    teamId={teamId}
+                                    repositoryId={repositoryId}
                                 />
                                 <ToolsCard
                                     agent={agent}

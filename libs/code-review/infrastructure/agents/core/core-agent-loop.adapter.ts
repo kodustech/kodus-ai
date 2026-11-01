@@ -58,6 +58,7 @@ import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { buildAgentAnomalies } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
 import {
     AstGrepOutputLog,
+    guideSourcesFor,
     makeTargetBranchGuideLister,
     makeTargetBranchGuideReader,
     recordAstGrepOutputs,
@@ -116,13 +117,22 @@ export function finderRunEnvironment(
     // Second pass for convention findings (custom agents): needs the guides
     // as they are on the target branch, so only with a sandbox that can run
     // git. Without one, convention findings fall back to HV2 like any other.
-    const readGuide =
+    const guideSources =
         input.conventionGuides !== undefined
-            ? makeTargetBranchGuideReader(
-                  secrets.remoteCommands,
-                  input.baseBranch,
+            ? guideSourcesFor(
+                  input.conventionGuides,
+                  input.conventionGuideReader,
+                  makeTargetBranchGuideReader(
+                      secrets.remoteCommands,
+                      input.baseBranch,
+                  ),
+                  makeTargetBranchGuideLister(
+                      secrets.remoteCommands,
+                      input.baseBranch,
+                  ),
               )
             : undefined;
+    const readGuide = guideSources?.readGuide;
     // What ast-grep matched in this review: a convention finding it backs
     // needs no model check.
     const astGrepLog = readGuide ? new AstGrepOutputLog() : undefined;
@@ -208,6 +218,7 @@ export function finderRunEnvironment(
         fallbackModelId,
         finderRunner,
         readGuide,
+        listGuideDir: guideSources?.listGuideDir,
         astGrepLog,
         // What verify runs with (verifyFindings), as runFinderWithVerify gets it.
         verifyParams: {
@@ -263,6 +274,7 @@ export async function runAgentLoopViaCore(
         fallbackModelId,
         verifyParams,
         readGuide,
+        listGuideDir,
         astGrepLog,
     } = finderRunEnvironment(input, secrets);
 
@@ -358,10 +370,7 @@ export async function runAgentLoopViaCore(
             ...(readGuide && {
                 conventionCheck: {
                     readGuide,
-                    listGuideDir: makeTargetBranchGuideLister(
-                        secrets.remoteCommands,
-                        input.baseBranch,
-                    ),
+                    listGuideDir,
                     guideFiles: input.conventionGuides,
                     teamInstructions: input.teamInstructions,
                     astGrepLog,

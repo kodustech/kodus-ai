@@ -11,6 +11,9 @@ import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/pri
 import type { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { isAnalyzerSuggestion } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { isTeamInstructionsSource } from '@libs/code-review/infrastructure/agents/core/convention-check';
+import type { KnowledgeRepositorySource } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
+import { parseKnowledgeSourcePath } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import type { DedupGroup } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
 import type { CustomAgentCliRun } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 
@@ -278,18 +281,86 @@ export function keepOwnFindingsApart(
  * which rewrites the body and would paraphrase or drop it. Empty for any
  * other finding.
  */
-export function ruleCitation(s: Finding): string {
+export function ruleCitation(s: Finding, sources?: RuleSources): string {
     const quote = s.kind === 'convention' ? s.source?.quote?.trim() : '';
     if (!quote) return '';
     const file = s.source?.file?.trim() ?? '';
+    const other = otherRepositoryOf(file, sources);
+    const named = `\`${file}\``;
     const where = isTeamInstructionsSource(file)
         ? "agent's instructions"
-        : `\`${file}\``;
+        : other?.url
+          ? `[${named}](${other.url})`
+          : named;
+    // A rule kept in a private repository is not copied into a comment on a
+    // public one: the comment names the file, and whoever can read it opens
+    // it. The quote was still checked against it.
+    if (other?.source.visibility === 'private' && sources?.reviewedIsPublic) {
+        return `\n\n**Rule**: ${where}`;
+    }
     const quoted = quote
         .split(/\r?\n/)
         .map((line) => `> ${line}`)
         .join('\n');
     return `\n\n**Rule** (${where}):\n${quoted}`;
+}
+
+/** The other repositories a review read skills and docs from, to cite a
+ *  rule of one of them. */
+export interface RuleSources {
+    sources: readonly KnowledgeRepositorySource[];
+    platform?: PlatformType | string;
+    /** The reviewed repository is public: a private rule is not quoted. */
+    reviewedIsPublic?: boolean;
+}
+
+function otherRepositoryOf(
+    file: string,
+    sources: RuleSources | undefined,
+): { source: KnowledgeRepositorySource; url?: string } | undefined {
+    const parsed = parseKnowledgeSourcePath(file);
+    if (!parsed || !sources) return undefined;
+    const source = sources.sources.find(
+        (entry) =>
+            entry.fullName.toLowerCase() === parsed.repository.toLowerCase(),
+    );
+    if (!source) return undefined;
+    return {
+        source,
+        url: repositoryFileUrl(source, parsed.path, sources.platform),
+    };
+}
+
+/** Link to a file of another repository at the ref it was read on, for the
+ *  providers whose file URLs are known; undefined otherwise. */
+export function repositoryFileUrl(
+    source: Pick<KnowledgeRepositorySource, 'httpUrl' | 'ref'>,
+    path: string,
+    platform: PlatformType | string | undefined,
+): string | undefined {
+    const base = (source.httpUrl ?? '')
+        .replace(/\.git$/, '')
+        .replace(/\/+$/, '');
+    if (!/^https:\/\//.test(base)) return undefined;
+    const ref = encodeURIComponent(source.ref).replace(/%2F/g, '/');
+    const file = path
+        .split('/')
+        .map((segment) => encodeURIComponent(segment))
+        .join('/');
+    switch (platform) {
+        case PlatformType.GITHUB:
+            return `${base}/blob/${ref}/${file}`;
+        case PlatformType.GITLAB:
+            return `${base}/-/blob/${ref}/${file}`;
+        case PlatformType.BITBUCKET:
+            return /^https:\/\/bitbucket\.org\//.test(base)
+                ? `${base}/src/${ref}/${file}`
+                : undefined;
+        case PlatformType.AZURE_REPOS:
+            return `${base}?path=/${file}&version=GB${ref}`;
+        default:
+            return undefined;
+    }
 }
 
 /** Lines of CLI output a finding cites as proof, at most this many per CLI. */
@@ -370,6 +441,7 @@ function fencedOutput(lines: string[]): string {
 export function findingCitation(
     s: Finding,
     runs: readonly CustomAgentCliRun[] = [],
+    sources?: RuleSources,
 ): string {
     const evidence = cliEvidence(s, runs)
         .map(
@@ -378,7 +450,7 @@ export function findingCitation(
         )
         .join('');
     const fromInstructions = isTeamInstructionsSource(s.source?.file ?? '');
-    return `${evidence}${evidence && fromInstructions ? '' : ruleCitation(s)}`;
+    return `${evidence}${evidence && fromInstructions ? '' : ruleCitation(s, sources)}`;
 }
 
 /**

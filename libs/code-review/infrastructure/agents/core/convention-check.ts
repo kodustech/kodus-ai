@@ -20,6 +20,8 @@ import type {
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
+import type { BaseBranchReader } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
+import { parseKnowledgeSourcePath } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 /** Reads a guide file as it is on the PR's target branch. `null` when the
  *  file does not exist there (or cannot be read). */
@@ -206,6 +208,47 @@ export function isProvenByAstGrep(
     );
 }
 
+/**
+ * The linked guide a citation means, spelled as it was linked. A guide of
+ * another repository is linked as `owner/repo:path`, and models cite it
+ * loosely: `repo/path`, `owner/repo/path` or the bare `path`. Each of those
+ * is accepted when it names exactly one linked guide (or a file inside one
+ * linked skill); an ambiguous or unknown citation is returned unchanged, and
+ * the gate then rejects it as before. Only linked guides are ever produced,
+ * so no other file becomes quotable.
+ */
+export function canonicalGuideCitation(
+    file: string,
+    guideFiles: readonly string[],
+): string {
+    const f = stripLeading(file);
+    if (!f || isLinkedGuide(f, guideFiles)) return f;
+    const matches = new Set<string>();
+    for (const raw of guideFiles) {
+        const g = stripLeading(raw);
+        const at = g.indexOf(':');
+        if (at <= 0) continue;
+        const repository = g.slice(0, at);
+        const inner = g.slice(at + 1);
+        const root = /(^|\/)SKILL\.md$/i.test(inner)
+            ? inner.replace(/\/?SKILL\.md$/i, '')
+            : inner;
+        const repoName = repository.split('/').pop() ?? repository;
+        for (const prefix of ['', `${repoName}/`, `${repository}/`]) {
+            const alias = `${prefix}${root}`;
+            if (f === `${prefix}${inner}` || f === alias) {
+                matches.add(g);
+            } else if (root !== inner && f.startsWith(`${alias}/`)) {
+                // A file beside a linked SKILL.md.
+                matches.add(
+                    `${repository}:${root}/${f.slice(alias.length + 1)}`,
+                );
+            }
+        }
+    }
+    return matches.size === 1 ? [...matches][0] : f;
+}
+
 /** Is `file` one of the linked guides (or inside a linked skill/directory)? */
 export function isLinkedGuide(
     file: string,
@@ -263,8 +306,17 @@ export async function checkConventionQuotes(
     const reject = (finding: FinderSuggestion, detail: string) =>
         rejected.push({ finding, reason: QUOTE_NOT_FOUND, detail });
 
-    for (const finding of candidates) {
-        const file = stripLeading(finding.source?.file ?? '');
+    for (const cited of candidates) {
+        const file = canonicalGuideCitation(
+            cited.source?.file ?? '',
+            guideFiles,
+        );
+        // The finding names the guide as it was linked from here on, so the
+        // comment cites the repository the rule came from.
+        const finding =
+            cited.source && file && file !== stripLeading(cited.source.file)
+                ? { ...cited, source: { ...cited.source, file } }
+                : cited;
         const quote = finding.source?.quote ?? '';
         // No source at all from an agent that has instructions: its rules
         // live there, so the verifier judges it against them rather than the
@@ -486,6 +538,53 @@ export function makeTargetBranchGuideLister(
             throw new Error(`git ls-tree exited ${r.exitCode}`);
         }
         return r.stdout.split('\0').filter(Boolean);
+    };
+}
+
+/**
+ * Where the quote gate reads guides from. With no guide of another
+ * repository this is exactly the target-branch reader of the sandbox (and
+ * nothing without one: convention findings then take HV2, as before). When a
+ * linked guide lives in another repository (`owner/repo:path`), its reads go
+ * through the knowledge reader, which reads that repository at its
+ * configured ref or default branch; the reviewed repository's guides keep
+ * the sandbox reader, or the knowledge reader when there is no sandbox.
+ */
+export function guideSourcesFor(
+    guideFiles: readonly string[],
+    knowledgeReader:
+        Pick<BaseBranchReader, 'readFile' | 'listFiles'> | undefined,
+    targetBranchReader: GuideFileReader | undefined,
+    targetBranchLister: GuideDirLister | undefined,
+): { readGuide: GuideFileReader; listGuideDir?: GuideDirLister } | undefined {
+    const hasOtherRepository = guideFiles.some(
+        (file) => parseKnowledgeSourcePath(stripLeading(file)) != null,
+    );
+    if (!hasOtherRepository || !knowledgeReader) {
+        return targetBranchReader
+            ? {
+                  readGuide: targetBranchReader,
+                  listGuideDir: targetBranchLister,
+              }
+            : undefined;
+    }
+    const fromKnowledge: GuideFileReader = async (file) => {
+        const read = await knowledgeReader.readFile(stripLeading(file));
+        return read.status === 'ok' ? read.content : null;
+    };
+    const isOther = (path: string) =>
+        parseKnowledgeSourcePath(stripLeading(path)) != null;
+    return {
+        readGuide: (file) =>
+            isOther(file) || !targetBranchReader
+                ? fromKnowledge(file)
+                : targetBranchReader(file),
+        listGuideDir: (dir) =>
+            isOther(dir) || !targetBranchLister
+                ? knowledgeReader.listFiles(
+                      stripLeading(dir).replace(/\/+$/, ''),
+                  )
+                : targetBranchLister(dir),
     };
 }
 

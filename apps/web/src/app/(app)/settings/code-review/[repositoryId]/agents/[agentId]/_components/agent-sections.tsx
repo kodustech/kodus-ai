@@ -106,6 +106,8 @@ export const FilesAndKnowledge = ({
     onChange,
     onKnowledgeChange,
     skillsHref,
+    teamId,
+    repositoryId,
 }: {
     agent: CustomAgent;
     knowledge: KnowledgeItem[];
@@ -116,6 +118,9 @@ export const FilesAndKnowledge = ({
     onChange: Patch;
     onKnowledgeChange: (next: KnowledgeItem[]) => void;
     skillsHref: string;
+    /** To list skills and docs of another repository. */
+    teamId?: string;
+    repositoryId?: string;
 }) => {
     const bracketed = globsWithBrackets(agent);
     return (
@@ -170,8 +175,10 @@ export const FilesAndKnowledge = ({
                     Skills &amp; docs
                 </span>
                 <span className="text-text-tertiary text-xs">
-                    Read from the target branch: a skill opens when the change
-                    needs it, a doc loads whole.{" "}
+                    A skill opens when the change needs it, a doc loads whole.
+                    From this repository they are read on the pull
+                    request&apos;s target branch; from another repository, on
+                    its default branch or the branch or tag you set.{" "}
                     <Link
                         href={skillsHref}
                         className="text-primary-light hover:underline">
@@ -184,6 +191,9 @@ export const FilesAndKnowledge = ({
                     report={report}
                     canEdit={canEdit}
                     onChange={onKnowledgeChange}
+                    teamId={teamId}
+                    repositoryId={repositoryId}
+                    instructions={agent.instructions}
                 />
             </div>
         </Section>

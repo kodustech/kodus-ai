@@ -1,0 +1,12 @@
+diff --git a/libs/code-review/infrastructure/agents/knowledge/base-branch-reader.ts b/libs/code-review/infrastructure/agents/knowledge/base-branch-reader.ts
+--- a/libs/code-review/infrastructure/agents/knowledge/base-branch-reader.ts
++++ b/libs/code-review/infrastructure/agents/knowledge/base-branch-reader.ts
+@@ -481,7 +481,7 @@
+             missing.push(repository);
+             continue;
+         }
+-        const readAt = ref || repo.default_branch || 'main';
++        const readAt = repo.default_branch || 'main';
+         const source: KnowledgeRepositorySource = {
+             fullName: repository,
+             id: String(repo.id),

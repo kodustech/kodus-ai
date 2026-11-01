@@ -102,7 +102,7 @@ The page has a status line (on/off, the files it runs on and what it posted in t
 | --- | --- |
 | **Files** | Globs the agent reviews, e.g. `src/payments/**`. Empty runs on every pull request. |
 | **Except** | Globs it skips, e.g. `**/*.test.ts`, `**/generated/**`. |
-| **Skills & docs** | The guides this agent follows, read from the pull request's target branch. See [Skills, docs and tools](/en/how_to_use/code_review/custom_agents_knowledge_and_tools). |
+| **Skills & docs** | The guides this agent follows, read from the pull request's target branch, or from another repository at its default branch or a branch or tag you set. See [Skills, docs and tools](/en/how_to_use/code_review/custom_agents_knowledge_and_tools). |
 
 Globs are matched against the path from the repository root, at every level, including at a directory.
 
@@ -229,7 +229,7 @@ Each agent's comments carry its tag, so the pull request shows which agent said 
     No. `customAgents` and `knowledge` in `kodus-config.yml` are not read. The closing comment says: "kodus-config.yml: customAgents is not read from this file; configure custom agents in the app."
   </Accordion>
   <Accordion title="Can a pull request change the rules it is judged by?">
-    No. Skills, docs and ast-grep rule files are read from the pull request's target branch. Edits to them in the pull request apply after it merges.
+    No. Skills, docs and ast-grep rule files are read from the pull request's target branch. Edits to them in the pull request apply after it merges. A skill or doc of another repository is read at that repository's default branch, or the branch or tag the team set, never at a ref the pull request names.
   </Accordion>
   <Accordion title="What happens to past comments when I delete an agent?">
     Its findings stay on past pull requests. The skills and docs stay registered on the Skills & docs page.

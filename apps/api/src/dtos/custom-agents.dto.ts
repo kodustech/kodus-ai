@@ -43,6 +43,19 @@ export class ResolveCustomAgentDto extends CustomAgentScopeDto {
     @IsBoolean()
     @ApiPropertyOptional({ type: Boolean })
     discover?: boolean;
+
+    /** List skills and docs in this other repository (owner/repo), at `ref`
+     *  or its default branch, instead of the reviewed one. */
+    @IsOptional()
+    @IsObject()
+    @ApiPropertyOptional({ type: Object })
+    source?: { repository?: string; ref?: string };
+
+    /** Also list every repository the integration reaches. */
+    @IsOptional()
+    @IsBoolean()
+    @ApiPropertyOptional({ type: Boolean })
+    listConnected?: boolean;
 }
 
 /** Body of `POST /code-review/custom-agents/try` (#2172). */

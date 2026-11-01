@@ -1,0 +1,12 @@
+diff --git a/libs/code-review/infrastructure/agents/core/convention-check.ts b/libs/code-review/infrastructure/agents/core/convention-check.ts
+--- a/libs/code-review/infrastructure/agents/core/convention-check.ts
++++ b/libs/code-review/infrastructure/agents/core/convention-check.ts
+@@ -557,7 +557,7 @@
+     const hasOtherRepository = guideFiles.some(
+         (file) => parseKnowledgeSourcePath(stripLeading(file)) != null,
+     );
+-    if (!hasOtherRepository || !knowledgeReader) {
++    if (!hasOtherRepository || !knowledgeReader || guideFiles) {
+         return targetBranchReader
+             ? { readGuide: targetBranchReader, listGuideDir: targetBranchLister }
+             : undefined;

@@ -40,6 +40,7 @@ every PR.
 | P5 floor → cap → dedup | The agent's severity floor and comment limit apply before dedup, so a finding they drop never takes a native one with it | `agent-review.stage.custom-agents.spec.ts` |
 | P6 quote gate | A convention finding quotes only a guide linked to the agent or the agent's instructions | `convention-check.spec.ts` |
 | P7 disabled | A disabled agent, or one a directory turns off with `enabled: false`, does not run | this eval: 1 dispatch check; `agent-review.stage.custom-agents.spec.ts`, `directory-custom-agents-cascade.spec.ts` |
+| P8 rules repository (#2329) | A guide linked from another repository (`owner/repo:path`) is read at that repository's configured ref or default branch, never one the PR controls, and a finding quoting it passes the quote gate however the model spells the path, when that names one linked guide | `other-repository-knowledge.spec.ts`, `convention-check.other-repository.spec.ts` |
 
 A finding on a file outside the agent's files is also dropped by the mapper
 every agent shares (`finding-mapper.ts`, "relevantFile not in changedFiles";
@@ -75,6 +76,9 @@ clean after each one.
 | P7 | `P7-disabled-agent-runs.patch`: `enabled: false` ignored in the stage and in the dispatch | `custom-agent-scope.spec.ts`, `agent-review.stage.custom-agents.spec.ts` | red: 1 of 70 failed, "dispatches the enabled agents" |
 | P7 | same | this eval, `--model=eval-fake --gate` | red, exit 1: P7 0/1 |
 | P7 | `P7-directory-override-ignored.patch`: a directory agent with an inherited id is added beside it, so `enabled: false` there no longer turns it off | `directory-custom-agents-cascade.spec.ts` | red: 3 of 6 failed |
+| P8 | `P8-other-repository-guides-unread.patch`: the quote gate reads a guide of another repository from the reviewed one | `other-repository-knowledge.spec.ts` | red: 2 of 14 failed (2026-11-01, `feat/custom-agents-rules-repo`) |
+| P8 | `P8-loose-citation-not-matched.patch`: a citation as `repo/path` or the bare path is no longer matched to the linked guide | `convention-check.other-repository.spec.ts` | red: 4 of 8 failed |
+| P8 | `P8-pinned-ref-ignored.patch`: a pinned branch or tag is ignored and the default branch is read | `other-repository-knowledge.spec.ts` | red: 1 of 14 failed |
 
 P5 was not falsifiable at first: with the floor and cap moved after dedup, the
 stage spec stayed green (20 of 20). Its two ordering tests scripted the dedup

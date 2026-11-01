@@ -1633,8 +1633,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // The CLI output that names a custom agent finding's file and the
             // team rule it applies, after formatting so the rewrite cannot
             // paraphrase or drop them (#2172).
+            const ruleSources = reviewKnowledge.sources?.length
+                ? {
+                      sources: reviewKnowledge.sources,
+                      platform: context.platformType,
+                      reviewedIsPublic:
+                          reviewKnowledge.reviewedRepository?.visibility ===
+                          'public',
+                  }
+                : undefined;
             for (const s of deduped) {
-                const citation = findingCitation(s, cliRuns);
+                const citation = findingCitation(s, cliRuns, ruleSources);
                 if (!citation) continue;
                 s.suggestionContent = `${s.suggestionContent || ''}${citation}`;
                 s.fullExplanation = `${s.fullExplanation || ''}${citation}`;

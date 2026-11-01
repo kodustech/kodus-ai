@@ -45,13 +45,75 @@ describe('ExternalReferenceLoaderService', () => {
         });
     });
 
+    describe('loadReferencesForRules — rules that reference no file', () => {
+        it('tells a reference with no file to load apart from a failed load', async () => {
+            const buildContextPack = jest
+                .fn()
+                .mockImplementation(({ contextReferenceId }) =>
+                    Promise.resolve(
+                        contextReferenceId === 'no-files'
+                            ? { sanitizedOverrides: undefined }
+                            : contextReferenceId === 'failed'
+                              ? {
+                                    pack: {
+                                        layers: [],
+                                        dependencies: [{ type: 'knowledge' }],
+                                    },
+                                }
+                              : {
+                                    ...pack([
+                                        { filePath: 'a.md', content: 'x' },
+                                    ]),
+                                    pack: {
+                                        ...pack([
+                                            { filePath: 'a.md', content: 'x' },
+                                        ]).pack,
+                                        dependencies: [{ type: 'knowledge' }],
+                                    },
+                                },
+                    ),
+                );
+            const svc = makeSvc(buildContextPack);
+
+            const result = await svc.loadReferencesForRules(
+                [
+                    { uuid: 'r-none', contextReferenceId: 'no-files' },
+                    { uuid: 'r-failed', contextReferenceId: 'failed' },
+                    { uuid: 'r-ok', contextReferenceId: 'ok' },
+                ] as any,
+                {} as any,
+            );
+
+            expect([...(result.rulesWithoutFileReferences ?? [])]).toEqual([
+                'r-none',
+            ]);
+            expect([...result.referencesMap.keys()]).toEqual(['r-ok']);
+        });
+
+        it('counts a load that threw as expecting files', async () => {
+            const svc = makeSvc(jest.fn().mockRejectedValue(new Error('down')));
+
+            const result = await svc.loadReferencesForRules(
+                [{ uuid: 'r1', contextReferenceId: 'ctx' }] as any,
+                {} as any,
+            );
+
+            expect(result.rulesWithoutFileReferences?.size).toBe(0);
+        });
+    });
+
     describe('loadReferencesForRules', () => {
         it('maps resolved references by rule uuid and skips rules without a uuid', async () => {
             const buildContextPack = jest
                 .fn()
                 .mockImplementation(({ contextReferenceId }) =>
                     Promise.resolve(
-                        pack([{ filePath: `${contextReferenceId}.md`, content: 'x' }]),
+                        pack([
+                            {
+                                filePath: `${contextReferenceId}.md`,
+                                content: 'x',
+                            },
+                        ]),
                     ),
                 );
             const svc = makeSvc(buildContextPack);

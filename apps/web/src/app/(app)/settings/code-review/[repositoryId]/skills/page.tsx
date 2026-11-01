@@ -20,6 +20,8 @@ import {
     isLinked,
     knowledgeBudgetNote,
     knowledgeItemFromPath,
+    knowledgeKey,
+    sameKnowledge,
     setKnowledgeLink,
 } from "@services/custom-agents/drafts";
 import { useResolveCustomAgent } from "@services/custom-agents/hooks";
@@ -27,6 +29,7 @@ import {
     KNOWLEDGE_MAIN_REVIEW_TARGET,
     type KnowledgeItem,
     type KnowledgeLinkTarget,
+    type KnowledgeSource,
 } from "@services/custom-agents/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
@@ -44,7 +47,12 @@ import {
     customAgentsSaveErrorToast,
     logCustomAgentsSaveError,
 } from "../../_utils/settings-save-conflict";
-import { KnowledgeStatusChips } from "../agents/[agentId]/_components/knowledge-card";
+import {
+    KnowledgeSourceBar,
+    KnowledgeSourceChip,
+    KnowledgeStatusChips,
+    useKnowledgeSourceListing,
+} from "../agents/[agentId]/_components/knowledge-card";
 
 function SkillsContent() {
     const {
@@ -66,11 +74,21 @@ function SkillsContent() {
         repositoryId,
     );
     const [path, setPath] = useState("");
+    const [source, setSource] = useState<KnowledgeSource>({});
+    const [pickingOther, setPickingOther] = useState(false);
     const report = useResolveCustomAgent({
         teamId,
         repositoryId,
         knowledge,
         discover: true,
+    });
+    const listing = useKnowledgeSourceListing({
+        teamId,
+        repositoryId,
+        source,
+        report: report.data,
+        enabled: repositoryId !== "global",
+        listConnected: pickingOther,
     });
     const isGlobal = repositoryId === "global";
     const knowledgeReport =
@@ -82,9 +100,9 @@ function SkillsContent() {
           : report.isError
             ? "Couldn't read the repository right now."
             : "";
-    const registered = new Set(knowledge.map((item) => item.path));
-    const candidates = (knowledgeReport?.candidates ?? []).filter(
-        (candidate) => !registered.has(candidate.path),
+    const registered = new Set(knowledge.map(knowledgeKey));
+    const candidates = listing.candidates.filter(
+        (candidate) => !registered.has(knowledgeKey(candidate)),
     );
     // Doc tokens are only known by reading the docs on the branch, so a save
     // keeps a target over its budget and a review cuts its docs to it.
@@ -116,13 +134,42 @@ function SkillsContent() {
     });
 
     // A file with an extension is a doc; a folder or a SKILL.md is a skill.
-    const typedItem = knowledgeItemFromPath(path);
-    const register = (item: Pick<KnowledgeItem, "path" | "kind">) => {
-        if (registered.has(item.path)) return;
+    // It lives in the repository the "From" tabs are on.
+    const parsedItem = knowledgeItemFromPath(path);
+    const typedItem = parsedItem
+        ? {
+              ...parsedItem,
+              ...(source.repository && { repository: source.repository }),
+              ...(source.repository && source.ref && { ref: source.ref }),
+          }
+        : null;
+    const register = (
+        item: Pick<KnowledgeItem, "path" | "kind" | "repository" | "ref">,
+    ) => {
+        if (registered.has(knowledgeKey(item))) return;
         setKnowledge([
             ...knowledge,
-            { path: item.path, kind: item.kind, linkedTo: [] },
+            {
+                path: item.path,
+                kind: item.kind,
+                ...(item.repository && { repository: item.repository }),
+                ...(item.repository && item.ref && { ref: item.ref }),
+                linkedTo: [],
+            },
         ]);
+    };
+    // One ref per repository: changing it moves every item of that repository.
+    const changeRef = (ref: string | undefined) => {
+        if (!source.repository) return;
+        const repository = source.repository.toLowerCase();
+        setSource({ repository: source.repository, ...(ref && { ref }) });
+        setKnowledge(
+            knowledge.map((item) => {
+                if (item.repository?.toLowerCase() !== repository) return item;
+                const { ref: _old, ...rest } = item;
+                return { ...rest, ...(ref && { ref }) };
+            }),
+        );
     };
 
     const onSave = async () => {
@@ -186,11 +233,13 @@ function SkillsContent() {
                     </Breadcrumb>
                     <Page.Title>Skills &amp; docs</Page.Title>
                     <Page.Description>
-                        Guides that live in the repository, linked here to the
-                        main review, with who follows what. Each custom agent
-                        picks its own on its page. Read from each pull
-                        request&apos;s target branch; skills open on demand,
-                        docs load whole, scripts never run.
+                        Guides linked here to the main review, with who follows
+                        what. Each custom agent picks its own on its page.
+                        Guides of this repository are read from each pull
+                        request&apos;s target branch; guides of another
+                        repository (a team&apos;s rules repository), from its
+                        default branch or the branch or tag you set. Skills open
+                        on demand, docs load whole, scripts never run.
                     </Page.Description>
                 </Page.TitleContainer>
                 <Page.SaveActions
@@ -233,11 +282,11 @@ function SkillsContent() {
                     )}
                     {knowledge.map((item) => {
                         const itemReport = knowledgeReport?.items.find(
-                            (entry) => entry.path === item.path,
+                            (entry) => sameKnowledge(entry, item),
                         );
                         return (
                             <div
-                                key={`${item.kind}:${item.path}`}
+                                key={knowledgeKey(item)}
                                 className="border-card-lv3/60 flex flex-col gap-2 border-t pt-3 first:border-t-0 first:pt-0">
                                 <div className="flex items-start gap-2">
                                     {item.kind === "skill" ? (
@@ -258,6 +307,10 @@ function SkillsContent() {
                                             </span>
                                         )}
                                         <span className="flex flex-wrap gap-1">
+                                            <KnowledgeSourceChip
+                                                item={item}
+                                                branch={itemReport?.branch}
+                                            />
                                             <KnowledgeStatusChips
                                                 report={itemReport}
                                             />
@@ -291,7 +344,7 @@ function SkillsContent() {
                                 </div>
                                 <div className="flex flex-wrap gap-x-4 gap-y-1.5 pl-6">
                                     {targets.map(({ target, label, color }) => {
-                                        const id = `link-${item.path}-${typeof target === "string" ? target : target.agentId}`;
+                                        const id = `link-${knowledgeKey(item)}-${typeof target === "string" ? target : target.agentId}`;
                                         return (
                                             <label
                                                 key={id}
@@ -299,7 +352,7 @@ function SkillsContent() {
                                                 className="text-text-secondary flex cursor-pointer items-center gap-1.5 text-xs">
                                                 <Checkbox
                                                     id={id}
-                                                    aria-label={`${itemReport?.name ?? item.path} for ${label}`}
+                                                    aria-label={`${itemReport?.name ?? (item.repository ? `${item.repository}:${item.path}` : item.path)} for ${label}`}
                                                     disabled={!canEdit}
                                                     checked={isLinked(
                                                         item,
@@ -349,18 +402,48 @@ function SkillsContent() {
                         <span className="text-text-primary text-sm font-medium">
                             {isGlobal
                                 ? "Add by path"
-                                : "Found in the repository"}
+                                : source.repository
+                                  ? `Found in ${source.repository}`
+                                  : "Found in the repository"}
                         </span>
                         <span className="text-text-secondary text-xs">
-                            {isGlobal ? "" : `${branchLine} `}Skills are folders
-                            with a SKILL.md; docs are Markdown guides.
+                            {isGlobal || source.repository
+                                ? ""
+                                : `${branchLine} `}
+                            Skills are folders with a SKILL.md; docs are
+                            Markdown guides.
                         </span>
                     </span>
-                    {!isGlobal && report.isLoading && (
+                    {!isGlobal && knowledgeReport && (
+                        <KnowledgeSourceBar
+                            source={source}
+                            onSourceChange={setSource}
+                            linkedRepositories={
+                                knowledgeReport.linkedRepositories ?? []
+                            }
+                            connectedRepositories={
+                                listing.connectedRepositories
+                            }
+                            onPickOther={() => setPickingOther(true)}
+                            knowledge={knowledge}
+                            discoveredIn={listing.discoveredIn}
+                            reviewedVisibility={listing.reviewedVisibility}
+                            canEdit={canEdit}
+                            onRefChange={changeRef}
+                        />
+                    )}
+                    {!isGlobal && listing.unavailable && (
+                        <p className="text-danger text-xs">
+                            {listing.unavailable}
+                        </p>
+                    )}
+                    {!isGlobal && listing.loading && (
                         <Spinner className="size-4" />
                     )}
                     {!isGlobal &&
-                        knowledgeReport &&
+                        !listing.loading &&
+                        (source.repository || knowledgeReport) &&
+                        listing.discoveredIn?.available !== false &&
                         candidates.length === 0 && (
                             <p className="text-text-secondary text-xs">
                                 Nothing new found.
@@ -368,7 +451,7 @@ function SkillsContent() {
                         )}
                     {candidates.map((candidate) => (
                         <div
-                            key={candidate.path}
+                            key={knowledgeKey(candidate)}
                             className="flex items-start gap-2">
                             {candidate.kind === "skill" ? (
                                 <SparklesIcon className="text-text-tertiary mt-0.5 size-4 shrink-0" />
@@ -423,7 +506,7 @@ function SkillsContent() {
                             variant="secondary"
                             aria-label={
                                 typedItem
-                                    ? `Add the ${typedItem.kind} ${typedItem.path}`
+                                    ? `Add the ${typedItem.kind} ${typedItem.repository ? `${typedItem.repository}:` : ""}${typedItem.path}`
                                     : "Add path"
                             }
                             disabled={!canEdit || !typedItem}

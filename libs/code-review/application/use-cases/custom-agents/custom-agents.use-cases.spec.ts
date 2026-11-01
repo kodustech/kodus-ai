@@ -155,6 +155,234 @@ describe('ResolveCustomAgentUseCase', () => {
         ]);
     });
 
+    describe('skills and docs of another repository (#2329)', () => {
+        const RULES = 'acme-ledger/ledger-rules';
+        const listing = [
+            {
+                id: 'repo-1',
+                name: 'ledger',
+                full_name: 'acme-ledger/ledger',
+                default_branch: 'main',
+                visibility: 'public',
+            },
+            {
+                id: 'repo-9',
+                name: 'ledger-rules',
+                full_name: RULES,
+                default_branch: 'trunk',
+                visibility: 'private',
+            },
+        ];
+        const cm = {
+            getDefaultBranch: jest.fn().mockResolvedValue('main'),
+            getRepositories: jest.fn().mockResolvedValue(listing),
+        };
+        const reader = () => ({
+            resolve: jest.fn(async ({ items }) =>
+                items.map((item: { path: string; kind: string }) => ({
+                    ...item,
+                    found: true,
+                    issues: [],
+                    tokens: 10,
+                })),
+            ),
+            discover: jest
+                .fn()
+                .mockResolvedValue([
+                    { path: 'stack/ledger/rules/postings.md', kind: 'doc' },
+                ]),
+        });
+
+        it('checks each repository on its own branch and names where each item lives', async () => {
+            const knowledgeReader = reader();
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(
+                    storedConfig({
+                        linkedRepositories: [
+                            { repository: RULES, ref: 'main' },
+                        ],
+                    }),
+                ) as any,
+                cm as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [
+                    {
+                        path: 'docs/ledger.md',
+                        kind: 'doc',
+                        linkedTo: ['main-review'],
+                    },
+                    {
+                        path: 'stack/ledger/rules/postings.md',
+                        kind: 'doc',
+                        repository: RULES,
+                        linkedTo: ['main-review'],
+                    },
+                    {
+                        path: 'rules.md',
+                        kind: 'doc',
+                        repository: 'someone-else/rules',
+                        linkedTo: ['main-review'],
+                    },
+                ],
+                discover: true,
+                source: { repository: RULES },
+                listConnected: true,
+            });
+
+            expect(knowledgeReader.resolve).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: {
+                        id: 'repo-9',
+                        name: 'ledger-rules',
+                        branch: 'trunk',
+                    },
+                    items: [
+                        { path: 'stack/ledger/rules/postings.md', kind: 'doc' },
+                    ],
+                }),
+            );
+            expect(knowledgeReader.discover).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: {
+                        id: 'repo-9',
+                        name: 'ledger-rules',
+                        branch: 'trunk',
+                    },
+                }),
+            );
+            if (report.knowledge.status !== 'ok')
+                throw new Error('expected ok');
+            expect(
+                report.knowledge.items.map((item) => [
+                    item.repository,
+                    item.path,
+                    item.found,
+                    item.branch,
+                ]),
+            ).toEqual([
+                [undefined, 'docs/ledger.md', true, 'main'],
+                [RULES, 'stack/ledger/rules/postings.md', true, 'trunk'],
+                ['someone-else/rules', 'rules.md', false, undefined],
+            ]);
+            expect(report.knowledge.items[2].issues).toEqual([
+                {
+                    severity: 'error',
+                    message:
+                        "someone-else/rules is not a repository this team's integration can read.",
+                },
+            ]);
+            expect(report.knowledge.discoveredIn).toEqual({
+                repository: RULES,
+                branch: 'trunk',
+                visibility: 'private',
+                available: true,
+            });
+            expect(report.knowledge.candidates).toEqual([
+                {
+                    path: 'stack/ledger/rules/postings.md',
+                    kind: 'doc',
+                    kodyRuleSource: false,
+                },
+            ]);
+            expect(report.knowledge.linkedRepositories).toEqual([RULES]);
+            expect(report.knowledge.connectedRepositories).toEqual([RULES]);
+            expect(report.knowledge.repositoryVisibility).toBe('public');
+        });
+
+        it('does not list the integration repositories on a plain draft check', async () => {
+            const lister = {
+                ...cm,
+                getRepositories: jest.fn().mockResolvedValue(listing),
+            };
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                lister as any,
+                reader(),
+            );
+
+            await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [
+                    {
+                        path: 'docs/ledger.md',
+                        kind: 'doc',
+                        linkedTo: ['main-review'],
+                    },
+                ],
+                discover: true,
+            });
+
+            expect(lister.getRepositories).not.toHaveBeenCalled();
+        });
+
+        it('finds a Bitbucket or Azure repository listed without a full name', async () => {
+            const knowledgeReader = reader();
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                {
+                    ...cm,
+                    getRepositories: jest
+                        .fn()
+                        .mockResolvedValue([
+                            {
+                                id: 'repo-9',
+                                name: 'ledger-rules',
+                                organizationName: 'acme-ledger',
+                                default_branch: 'main',
+                            },
+                        ]),
+                } as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: RULES },
+                listConnected: true,
+            });
+
+            if (report.knowledge.status !== 'ok')
+                throw new Error('expected ok');
+            expect(report.knowledge.discoveredIn?.available).toBe(true);
+            expect(report.knowledge.connectedRepositories).toEqual([RULES]);
+        });
+
+        it('says when the repository to list is not reachable', async () => {
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                cm as any,
+                reader(),
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: 'someone-else/rules', ref: 'v1' },
+            });
+
+            if (report.knowledge.status !== 'ok')
+                throw new Error('expected ok');
+            expect(report.knowledge.discoveredIn).toEqual({
+                repository: 'someone-else/rules',
+                branch: 'v1',
+                available: false,
+                reason: "someone-else/rules is not a repository this team's integration can read.",
+            });
+            expect(report.knowledge.candidates).toEqual([]);
+        });
+    });
+
     describe('ast-grep rule file path', () => {
         const agentWithPath = ledgerAgent({
             tools: { astGrepConfig: 'rules/ledger.yml' },

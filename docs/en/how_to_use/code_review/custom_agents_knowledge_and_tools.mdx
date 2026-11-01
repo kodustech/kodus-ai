@@ -53,6 +53,17 @@ There are two places to link a skill or doc:
 
 At the global level, the Skills & docs page only accepts paths typed by hand. Each repository is read separately, so open a repository's settings to see whether each path exists there.
 
+### From another repository
+
+Teams often keep their rules in one repository and apply them to many. Pick it under **From** when adding a skill or doc: the repository's linked repositories come first, and **Other repository…** lists every repository your Git integration reaches.
+
+- A guide of another repository is read from that repository's **default branch**, or from the branch or tag you set with **Use a branch or tag instead**. One branch or tag per repository. A pull request never changes it.
+- It loads like a guide of the reviewed repository, on every review, with no sandbox and whether or not the change touches the other repository.
+- The agent cites it as `owner/repo:path`, and the comment links the file.
+- When the rules repository is private and the reviewed one is public, the comment names the file without quoting it.
+
+When an agent's instructions name a linked repository it follows nothing from, its page says so and offers **Browse its rules**.
+
 <Warning>
   A file marked **Also a Kody Rules source** already feeds Kody Rules. Linking it to an agent too can make the same rule comment twice.
 </Warning>
@@ -77,6 +88,8 @@ A convention finding must **quote** the rule it applies. Kodus checks the quote 
 **Rule** (`docs/ledger.md`):
 > A reversal is a new entry, never an UPDATE of the original.
 ```
+
+A rule of another repository is cited as `owner/repo:path`, with a link to the file on the branch it was read from.
 
 ## Plugins (MCP)
 

@@ -1,6 +1,7 @@
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
     KNOWLEDGE_MAIN_REVIEW_TARGET,
+    knowledgeSourcePath,
     type CustomAgentConfig,
     type KnowledgeItem,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -12,6 +13,10 @@ import {
     type BaseBranchReader,
     createBaseBranchReader,
     type KnowledgeCodeManagementPort,
+    type KnowledgeRepositoryListing,
+    type KnowledgeRepositorySource,
+    MultiRepositoryKnowledgeReader,
+    resolveKnowledgeRepositories,
 } from './base-branch-reader';
 import {
     KnowledgeResolver,
@@ -25,6 +30,11 @@ export type ReviewKnowledge = {
     byTarget?: Map<string, ResolvedKnowledge>;
     reader?: BaseBranchReader;
     warnings: ReviewWarning[];
+    /** Other repositories the linked skills and docs were read from. */
+    sources?: KnowledgeRepositorySource[];
+    /** The reviewed repository as the integration lists it, when the
+     *  listing was fetched (only when another repository is linked). */
+    reviewedRepository?: KnowledgeRepositoryListing;
 };
 
 /**
@@ -62,7 +72,7 @@ export async function resolveReviewKnowledge(params: {
     };
 
     try {
-        const reader = createBaseBranchReader({
+        const local = createBaseBranchReader({
             sandbox: params.sandbox?.run ? params.sandbox : null,
             baseBranch,
             codeManagement: params.codeManagement,
@@ -72,8 +82,27 @@ export async function resolveReviewKnowledge(params: {
                 name: repository.name,
             },
         });
-        const byTarget = await new KnowledgeResolver(reader).resolveAll({
+        // Skills and docs of other repositories: read through the provider
+        // API at their configured ref or default branch, never a ref the
+        // pull request controls, and only from repositories the team's
+        // integration reaches.
+        const repositories = await resolveKnowledgeRepositories({
             items,
+            codeManagement: params.codeManagement,
+            organizationAndTeamData: params.organizationAndTeamData,
+        });
+        const reader: BaseBranchReader = repositories.sources.length
+            ? new MultiRepositoryKnowledgeReader(local, repositories.sources)
+            : local;
+        const missing = new Set(
+            repositories.missing.map((name) => name.toLowerCase()),
+        );
+        const readable = items.filter(
+            (item) =>
+                !item.repository || !missing.has(item.repository.toLowerCase()),
+        );
+        const byTarget = await new KnowledgeResolver(reader).resolveAll({
+            items: readable,
             agentIds: customAgents.map((agent) => agent.id),
             changedFiles: params.changedFiles
                 .map((file) => file.filename)
@@ -88,6 +117,31 @@ export async function resolveReviewKnowledge(params: {
                     : names.get(target),
             ),
         );
+        for (const item of items) {
+            if (!item.repository || !missing.has(item.repository.toLowerCase()))
+                continue;
+            for (const target of item.linkedTo ?? []) {
+                warnings.push(
+                    ...toReviewWarnings(
+                        [
+                            {
+                                code:
+                                    item.kind === 'skill'
+                                        ? 'SKILL_NOT_FOUND'
+                                        : 'DOC_NOT_FOUND',
+                                path: knowledgeSourcePath(item),
+                                detail: repositories.listingFailed
+                                    ? `the repositories of this team's integration could not be listed, so ${item.repository} was not read`
+                                    : `${item.repository} is not a repository this team's integration can read`,
+                            },
+                        ],
+                        typeof target === 'string'
+                            ? undefined
+                            : names.get(target.agentId),
+                    ),
+                );
+            }
+        }
         // What could not be read or was cut, by target: codes and paths only,
         // never the skill or doc text.
         const problems = [...byTarget.entries()].flatMap(([target, resolved]) =>
@@ -97,14 +151,29 @@ export async function resolveReviewKnowledge(params: {
                 path: w.path,
             })),
         );
-        if (problems.length) {
+        if (problems.length || repositories.missing.length) {
             logger.warn({
                 message: `[AGENT] ${problems.length} linked skill/doc problem(s); the review used what could be read`,
                 context: params.logContext,
-                metadata: { ...ids, problems },
+                metadata: {
+                    ...ids,
+                    problems,
+                    missingRepositories: repositories.missing,
+                },
             });
         }
-        return { byTarget, reader, warnings };
+        const reviewedRepository = repositories.listing.find(
+            (repo) => String(repo.id) === String(repository.id),
+        );
+        return {
+            byTarget,
+            reader,
+            warnings,
+            ...(repositories.sources.length && {
+                sources: repositories.sources.map((entry) => entry.source),
+            }),
+            ...(reviewedRepository && { reviewedRepository }),
+        };
     } catch (err) {
         logger.warn({
             message: `[AGENT] Skills and docs could not be read; reviewing without them`,

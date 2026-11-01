@@ -19,8 +19,15 @@ import {
 } from '@libs/code-review/domain/custom-agents/resolve-report';
 import { CLI_SECRET_MASK } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import {
+    repositoryFullName,
+    repositoryNames,
+} from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
+import {
     astGrepRulesPath,
     customAgentConfigSchema,
+    KNOWLEDGE_REF_PATTERN,
+    KNOWLEDGE_REPOSITORY_PATTERN,
+    knowledgeItemKey,
     type KnowledgeItem,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -50,22 +57,63 @@ export type CustomAgentResolveReport = {
             KnowledgeItemResolution & {
                 linkedTo: KnowledgeItem['linkedTo'];
                 kodyRuleSource: boolean;
+                /** Set for a skill or doc of another repository. */
+                repository?: string;
+                ref?: string;
+                /** The branch it was checked on. */
+                branch?: string;
             }
         >;
         budgets: KnowledgeTargetBudget[];
         candidates?: Array<KnowledgeCandidate & { kodyRuleSource: boolean }>;
+        /** Where `candidates` were listed: the reviewed repository, or the
+         *  other repository the request asked for. */
+        discoveredIn?: KnowledgeSourceReport;
+        /** The repositories linked to the reviewed one, offered first as
+         *  places skills and docs can come from. */
+        linkedRepositories?: string[];
+        /** Every other repository the team's integration reaches, to pick
+         *  one that is not linked. Set when the listing was fetched. */
+        connectedRepositories?: string[];
+        /** The reviewed repository is public: a rule from a private one is
+         *  cited without its quote. */
+        repositoryVisibility?: 'public' | 'private';
     }>;
     mcp: Section<{ integrations: ReadOnlyMcpIntegration[] }>;
 };
 
+/** A repository skills and docs were listed or checked in. */
+export type KnowledgeSourceReport = {
+    /** Unset for the reviewed repository. */
+    repository?: string;
+    /** The branch or tag read. */
+    branch: string;
+    visibility?: 'public' | 'private';
+    /** False when the integration cannot reach the repository or ref. */
+    available: boolean;
+    reason?: string;
+};
+
+type RepositoryListing = {
+    id: string | number;
+    name: string;
+    full_name?: string;
+    default_branch?: string;
+    visibility?: 'public' | 'private';
+    organizationName?: string;
+    project?: { name?: string };
+};
+
 const NOT_BOUND = 'Not available on this server yet.';
+const UNREACHABLE = (repository: string) =>
+    `${repository} is not a repository this team's integration can read.`;
 
 /**
  * Checks a draft agent and the skills and docs it links against the
  * repository's default branch, before anything is saved (#2172).
  */
 const GLOBAL_KNOWLEDGE =
-    'Skills and docs are files of each repository: they are read from the pull request\'s target branch when a review runs there.';
+    "Skills and docs are files of each repository: they are read from the pull request's target branch when a review runs there.";
 
 @Injectable()
 export class ResolveCustomAgentUseCase {
@@ -90,6 +138,12 @@ export class ResolveCustomAgentUseCase {
         knowledge?: KnowledgeItem[];
         /** Also list the skills and docs found on the branch. */
         discover?: boolean;
+        /** List them in this other repository (at `ref`, else its default
+         *  branch) instead of the reviewed one. */
+        source?: { repository?: string; ref?: string };
+        /** Also list every repository the integration reaches (the picker
+         *  for one that is not linked); a provider call, so only on demand. */
+        listConnected?: boolean;
     }): Promise<CustomAgentResolveReport> {
         const { organizationAndTeamData } = params;
         const configValue = await loadCodeReviewConfigValue(
@@ -123,6 +177,9 @@ export class ResolveCustomAgentUseCase {
                       repository,
                       knowledge,
                       params.discover === true,
+                      params.source,
+                      linkedRepositoriesOf(configValue, params.repositoryId),
+                      params.listConnected === true,
                   )
                 : Promise.resolve({
                       status: 'unavailable' as const,
@@ -150,50 +207,193 @@ export class ResolveCustomAgentUseCase {
         repository: CustomAgentRepositoryRef,
         knowledge: KnowledgeItem[],
         discover: boolean,
+        source: { repository?: string; ref?: string } | undefined,
+        linkedRepositories: string[],
+        listConnected: boolean,
     ): Promise<CustomAgentResolveReport['knowledge']> {
-        if (!this.knowledgeReader) {
+        const reader = this.knowledgeReader;
+        if (!reader) {
             return { status: 'unavailable', reason: NOT_BOUND };
         }
         try {
-            const [resolutions, candidates] = await Promise.all([
-                knowledge.length
-                    ? this.knowledgeReader.resolve({
-                          organizationAndTeamData,
-                          repository,
-                          items: knowledge.map(({ path, kind }) => ({
-                              path,
-                              kind,
-                          })),
-                      })
-                    : Promise.resolve([]),
-                discover
-                    ? this.knowledgeReader.discover({
-                          organizationAndTeamData,
-                          repository,
-                      })
-                    : Promise.resolve(undefined),
-            ]);
-            const byPath = new Map(
-                resolutions.map((resolution) => [resolution.path, resolution]),
+            const sourceRepository =
+                source?.repository?.trim() &&
+                KNOWLEDGE_REPOSITORY_PATTERN.test(source.repository.trim())
+                    ? source.repository.trim()
+                    : undefined;
+            const sourceRef =
+                source?.ref?.trim() &&
+                KNOWLEDGE_REF_PATTERN.test(source.ref.trim())
+                    ? source.ref.trim()
+                    : undefined;
+            const others = new Set(
+                [...knowledge.map((item) => item.repository), sourceRepository]
+                    .filter((name): name is string => !!name)
+                    .map((name) => name.toLowerCase()),
+            );
+            // Other repositories are found among the ones the integration
+            // reaches, as a review finds them.
+            // Only when something needs it: listing every repository on
+            // each draft edit would hit the provider for large orgs.
+            const listing = await this.listRepositories(
+                organizationAndTeamData,
+                others.size > 0 || listConnected,
+            );
+            const byName = new Map<string, RepositoryListing>();
+            for (const repo of listing) {
+                for (const name of repositoryNames(repo)) {
+                    if (!byName.has(name)) byName.set(name, repo);
+                }
+            }
+            const listed = (name: string) => byName.get(name.toLowerCase());
+            const refOf = (
+                name: string,
+                ref: string | undefined,
+            ): CustomAgentRepositoryRef | undefined => {
+                const repo = listed(name);
+                return repo
+                    ? {
+                          id: String(repo.id),
+                          name: repo.name,
+                          branch: ref || repo.default_branch || 'main',
+                      }
+                    : undefined;
+            };
+
+            // Each repository's items are checked on its own branch.
+            const groups = new Map<string, KnowledgeItem[]>();
+            for (const item of knowledge) {
+                const key = (item.repository ?? '').toLowerCase();
+                groups.set(key, [...(groups.get(key) ?? []), item]);
+            }
+            const resolutions = new Map<string, KnowledgeItemResolution>();
+            const branches = new Map<string, string>();
+            const unreachable = new Set<string>();
+            await Promise.all(
+                [...groups.values()].map(async (items) => {
+                    const other = items[0].repository;
+                    const ref = other
+                        ? refOf(other, items.find((i) => i.ref)?.ref)
+                        : repository;
+                    if (!ref) {
+                        items.forEach((item) =>
+                            unreachable.add(knowledgeItemKey(item)),
+                        );
+                        return;
+                    }
+                    const read = await reader.resolve({
+                        organizationAndTeamData,
+                        repository: ref,
+                        items: items.map(({ path, kind }) => ({ path, kind })),
+                    });
+                    for (const item of items) {
+                        const resolution = read.find(
+                            (r) => r.path === item.path && r.kind === item.kind,
+                        );
+                        if (resolution) {
+                            resolutions.set(knowledgeItemKey(item), resolution);
+                        }
+                        branches.set(knowledgeItemKey(item), ref.branch);
+                    }
+                }),
             );
 
+            let discoveredIn: KnowledgeSourceReport | undefined;
+            let candidates: KnowledgeCandidate[] | undefined;
+            if (discover) {
+                const ref = sourceRepository
+                    ? refOf(sourceRepository, sourceRef)
+                    : repository;
+                const repo = sourceRepository
+                    ? listed(sourceRepository)
+                    : listing.find((r) => String(r.id) === repository.id);
+                discoveredIn = {
+                    ...(sourceRepository && { repository: sourceRepository }),
+                    branch: ref?.branch ?? sourceRef ?? repository.branch,
+                    visibility: repo?.visibility,
+                    available: !!ref,
+                    ...(!ref && sourceRepository
+                        ? { reason: UNREACHABLE(sourceRepository) }
+                        : {}),
+                };
+                candidates = ref
+                    ? await reader
+                          .discover({
+                              organizationAndTeamData,
+                              repository: ref,
+                          })
+                          .catch(() => {
+                              discoveredIn = {
+                                  ...discoveredIn!,
+                                  available: false,
+                                  reason: `Could not list the files of ${sourceRepository ?? repository.name} on ${ref.branch}.`,
+                              };
+                              return [];
+                          })
+                    : [];
+            }
+
+            const reviewed = listing.find(
+                (r) => String(r.id) === repository.id,
+            );
             return {
                 status: 'ok',
-                items: knowledge.map((item) => ({
-                    ...(byPath.get(item.path) ?? {
-                        path: item.path,
-                        kind: item.kind,
-                        found: false,
-                        issues: [],
+                items: knowledge.map((item) => {
+                    const key = knowledgeItemKey(item);
+                    return {
+                        ...(resolutions.get(key) ?? {
+                            path: item.path,
+                            kind: item.kind,
+                            found: false,
+                            issues: unreachable.has(key)
+                                ? [
+                                      {
+                                          severity: 'error' as const,
+                                          message: UNREACHABLE(
+                                              item.repository!,
+                                          ),
+                                      },
+                                  ]
+                                : [],
+                        }),
+                        linkedTo: item.linkedTo,
+                        kodyRuleSource:
+                            !item.repository && isKodyRuleSource(item.path),
+                        ...(item.repository && {
+                            repository: item.repository,
+                            ...(item.ref && { ref: item.ref }),
+                        }),
+                        ...(branches.has(key) && { branch: branches.get(key) }),
+                    };
+                }),
+                budgets: knowledgeBudgets(
+                    knowledge,
+                    knowledge.flatMap((item) => {
+                        const resolution = resolutions.get(
+                            knowledgeItemKey(item),
+                        );
+                        return resolution
+                            ? [{ ...resolution, repository: item.repository }]
+                            : [];
                     }),
-                    linkedTo: item.linkedTo,
-                    kodyRuleSource: isKodyRuleSource(item.path),
-                })),
-                budgets: knowledgeBudgets(knowledge, resolutions),
+                ),
                 candidates: candidates?.map((candidate) => ({
                     ...candidate,
-                    kodyRuleSource: isKodyRuleSource(candidate.path),
+                    kodyRuleSource:
+                        !sourceRepository && isKodyRuleSource(candidate.path),
                 })),
+                ...(discoveredIn && { discoveredIn }),
+                linkedRepositories,
+                ...(listConnected &&
+                    listing.length && {
+                        connectedRepositories: listing
+                            .filter((repo) => String(repo.id) !== repository.id)
+                            .map(repositoryFullName)
+                            .filter(Boolean),
+                    }),
+                ...(reviewed?.visibility && {
+                    repositoryVisibility: reviewed.visibility,
+                }),
             };
         } catch (error) {
             this.logger.warn({
@@ -209,6 +409,30 @@ export class ResolveCustomAgentUseCase {
                 status: 'unavailable',
                 reason: 'Could not read the repository.',
             };
+        }
+    }
+
+    /** The repositories the team's integration reaches; empty when not
+     *  needed or when the provider cannot list them. */
+    private async listRepositories(
+        organizationAndTeamData: OrganizationAndTeamData,
+        needed: boolean,
+    ): Promise<RepositoryListing[]> {
+        if (!needed) return [];
+        try {
+            return (
+                ((await this.codeManagementService.getRepositories({
+                    organizationAndTeamData,
+                })) as RepositoryListing[]) ?? []
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not list repositories for skills and docs',
+                context: ResolveCustomAgentUseCase.name,
+                error,
+                metadata: { organizationAndTeamData },
+            });
+            return [];
         }
     }
 
@@ -321,4 +545,46 @@ export function validateDraftAgent(agent: unknown): string[] {
             ? `${issue.path.join('.')}: ${issue.message}`
             : issue.message,
     );
+}
+
+/**
+ * The repositories linked to the reviewed one (repository level, else the
+ * team's global level): the first places the screen offers skills and docs
+ * from, since a team's rules usually live in one of them.
+ */
+export function linkedRepositoriesOf(
+    configValue: Awaited<ReturnType<typeof loadCodeReviewConfigValue>>,
+    repositoryId: string,
+): string[] {
+    const config = configValue as
+        | {
+              configs?: {
+                  linkedRepositories?: Array<{ repository?: unknown }>;
+              };
+              repositories?: Array<{
+                  id?: string;
+                  configs?: {
+                      linkedRepositories?: Array<{ repository?: unknown }>;
+                  };
+              }>;
+          }
+        | undefined;
+    const repository = config?.repositories?.find(
+        (candidate) => candidate?.id === repositoryId,
+    );
+    const linked =
+        repository?.configs?.linkedRepositories ??
+        config?.configs?.linkedRepositories ??
+        [];
+    return [
+        ...new Set(
+            linked
+                .map((entry) =>
+                    typeof entry?.repository === 'string'
+                        ? entry.repository.trim()
+                        : '',
+                )
+                .filter(Boolean),
+        ),
+    ];
 }

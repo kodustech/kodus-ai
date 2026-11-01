@@ -727,6 +727,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     ),
                     allowedLabels: this.getAllowedSuggestionLabels(input),
                     conventionGuides: this.getConventionGuides(input),
+                    conventionGuideReader: input.knowledgeReader,
                     teamInstructions: this.getTeamInstructions(),
                     laneFocus: this.getLaneFocus(input),
                     ...(agentTools.teamSystemTools?.length && {

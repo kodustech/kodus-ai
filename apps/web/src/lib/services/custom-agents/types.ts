@@ -71,8 +71,16 @@ export type KnowledgeLinkTarget =
 export type KnowledgeItem = {
     path: string;
     kind: "skill" | "doc";
+    /** Another connected repository (`owner/repo`); unset for the reviewed one. */
+    repository?: string;
+    /** Branch or tag of `repository`; unset reads its default branch. */
+    ref?: string;
     linkedTo: KnowledgeLinkTarget[];
 };
+
+/** Where skills and docs are listed from: the reviewed repository, or
+ *  another one at a branch or tag. */
+export type KnowledgeSource = { repository?: string; ref?: string };
 
 // ── /code-review/custom-agents/resolve ─────────────────────────────────────
 
@@ -95,11 +103,19 @@ export type KnowledgeItemReport = {
     linkedTo: KnowledgeLinkTarget[];
     /** The same file also feeds Kody Rules. */
     kodyRuleSource: boolean;
+    /** Set for a skill or doc of another repository. */
+    repository?: string;
+    ref?: string;
+    /** The branch it was checked on. */
+    branch?: string;
 };
 
 export type KnowledgeCandidate = {
     path: string;
     kind: KnowledgeItem["kind"];
+    /** Set by the screen for a file listed in another repository. */
+    repository?: string;
+    ref?: string;
     name?: string;
     description?: string;
     /** Set when the skill cannot be read as one (e.g. no frontmatter). */
@@ -136,6 +152,19 @@ export type CustomAgentResolveReport = {
         items: KnowledgeItemReport[];
         budgets: KnowledgeTargetBudget[];
         candidates?: KnowledgeCandidate[];
+        /** Where `candidates` were listed. */
+        discoveredIn?: {
+            repository?: string;
+            branch: string;
+            visibility?: "public" | "private";
+            available: boolean;
+            reason?: string;
+        };
+        /** Repositories linked to the reviewed one, offered first. */
+        linkedRepositories?: string[];
+        /** Every other repository the team's integration reaches. */
+        connectedRepositories?: string[];
+        repositoryVisibility?: "public" | "private";
     }>;
     mcp: Section<{ integrations: ReadOnlyMcpIntegration[] }>;
 };

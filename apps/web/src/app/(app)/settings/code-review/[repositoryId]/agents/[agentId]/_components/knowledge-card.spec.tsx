@@ -6,6 +6,15 @@ import { render, screen } from "@testing-library/react";
 
 import { KnowledgeIssues } from "./knowledge-card";
 
+// The knowledge card lists other repositories through the resolve endpoint.
+jest.mock("@services/custom-agents/hooks", () => ({
+    useResolveCustomAgent: () => ({
+        isLoading: false,
+        isFetching: false,
+        data: undefined,
+    }),
+}));
+
 const report = (issues: KnowledgeItemReport["issues"]): KnowledgeItemReport =>
     ({
         path: "skills/money/SKILL.md",

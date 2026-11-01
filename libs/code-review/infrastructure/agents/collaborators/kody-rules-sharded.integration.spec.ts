@@ -25,7 +25,12 @@ const file = (filename: string, patch: string): any => ({
 
 describe('sharded kody-rules — judge → mapAgentFindings wiring (#1449)', () => {
     const rules = [
-        { uuid: 'no-console', title: 'no console', rule: 'no console.log', path: '**/*.ts' },
+        {
+            uuid: 'no-console',
+            title: 'no console',
+            rule: 'no console.log',
+            path: '**/*.ts',
+        },
     ];
     const changedFiles = [file('src/a.ts', '5 +console.log(1)')];
 
@@ -134,7 +139,14 @@ describe('sharded kody-rules — T2 reference-inline (#1449)', () => {
 
     it('degrades gracefully to the rule text when the read throws', async () => {
         const out = await inlineRuleReferences(
-            [{ uuid: 'r1', title: 't', rule: 'plain', sourcePath: 'missing.md' }],
+            [
+                {
+                    uuid: 'r1',
+                    title: 't',
+                    rule: 'plain',
+                    sourcePath: 'missing.md',
+                },
+            ],
             async () => {
                 throw new Error('file not found');
             },
@@ -180,7 +192,8 @@ describe('sharded kody-rules — Context OS references inline into the shard', (
                 [
                     {
                         filePath: 'CLAUDE.md',
-                        content: '# Conventions\nAlways validate input before persisting.',
+                        content:
+                            '# Conventions\nAlways validate input before persisting.',
                     },
                 ],
             ],
@@ -189,7 +202,9 @@ describe('sharded kody-rules — Context OS references inline into the shard', (
         const out = inlineLoadedReferences([rule() as any], map);
 
         // The judge must see the ACTUAL file content, not the "@file:" marker.
-        expect(out[0].rule).toContain('Always validate input before persisting');
+        expect(out[0].rule).toContain(
+            'Always validate input before persisting',
+        );
         expect(out[0].rule).toContain('CLAUDE.md');
         // Original rule text is preserved.
         expect(out[0].rule).toContain('validar os dados');
@@ -200,8 +215,14 @@ describe('sharded kody-rules — Context OS references inline into the shard', (
             [
                 'r-ctx',
                 [
-                    { filePath: 'DESIGN.md', content: 'design conventions here' },
-                    { filePath: 'src/resolver.js', content: 'resolver logic here' },
+                    {
+                        filePath: 'DESIGN.md',
+                        content: 'design conventions here',
+                    },
+                    {
+                        filePath: 'src/resolver.js',
+                        content: 'resolver logic here',
+                    },
                 ],
             ],
         ]);
@@ -259,7 +280,9 @@ describe('sharded kody-rules — Context OS references inline into the shard', (
         const base = { uuid: 'r1', title: 't', rule: 'base' };
         const out = inlineLoadedReferences(
             [base as any],
-            new Map([['r1', [{ filePath: 'big.md', content: 'Z'.repeat(10000) }]]]),
+            new Map([
+                ['r1', [{ filePath: 'big.md', content: 'Z'.repeat(10000) }]],
+            ]),
             undefined,
             100,
         );
@@ -289,6 +312,17 @@ describe('findUnresolvedReferenceRules — surfaces judge-blind rules', () => {
     it('flags a contextReferenceId rule with no map entry', () => {
         const out = findUnresolvedReferenceRules([r() as any], new Map());
         expect(out.map((x) => x.uuid)).toEqual(['r1']);
+    });
+
+    // A rule written with no @file mention still gets a context reference,
+    // with no file to load: nothing was lost, so it is not judged blind.
+    it('does NOT flag a rule whose reference names no file', () => {
+        const out = findUnresolvedReferenceRules(
+            [r() as any, r({ uuid: 'r2' }) as any],
+            new Map(),
+            new Set(['r1']),
+        );
+        expect(out.map((x) => x.uuid)).toEqual(['r2']);
     });
 
     it('does NOT flag a rule whose entry has real content', () => {
@@ -580,7 +614,8 @@ describe('sharded kody-rules — PreviousDecision rule-title resolution (PR #189
                 relevantFile: 'src/a.ts',
                 relevantLinesStart: 5,
                 relevantLinesEnd: 5,
-                suggestionContent: 'This log call needs to follow team logging standards.',
+                suggestionContent:
+                    'This log call needs to follow team logging standards.',
                 label: 'security',
                 // No brokenKodyRulesIds — general finder, not a Kody Rule.
                 outcome: 'implemented',
@@ -608,7 +643,7 @@ describe('sharded kody-rules — PreviousDecision rule-title resolution (PR #189
     // Eval-backed (PR #1895 investigation): dropping a general decision that
     // explained why a helper is already safe made the judge invent a false
     // positive in 3/3 runs; keeping it, labeled, stayed silent in 3/3.
-    it('preserves a general decision\'s full explanatory content, so context that avoided a false positive (safeCompare is already constant-time) is never silently lost', async () => {
+    it("preserves a general decision's full explanatory content, so context that avoided a false positive (safeCompare is already constant-time) is never silently lost", async () => {
         const rules = [
             {
                 uuid: 'rule-crypto-uuid',
@@ -642,7 +677,12 @@ describe('sharded kody-rules — PreviousDecision rule-title resolution (PR #189
             return [];
         };
 
-        await judgeKodyRulesSharded({ changedFiles, rules, runJudge, previousDecisions });
+        await judgeKodyRulesSharded({
+            changedFiles,
+            rules,
+            runJudge,
+            previousDecisions,
+        });
 
         // A "remove general decisions" design would have deleted this
         // Suggestion line entirely — the eval showed that loses the only
