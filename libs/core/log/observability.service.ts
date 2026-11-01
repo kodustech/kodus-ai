@@ -209,9 +209,20 @@ export class ObservabilityService
      * signal listener and this hook share one run.
      */
     async beforeApplicationShutdown(): Promise<void> {
-        await Promise.allSettled(
-            [...this.instances.values()].map((obs) => obs.shutdown()),
+        const entries = [...this.instances.entries()];
+        const results = await Promise.allSettled(
+            entries.map(([, obs]) => obs.shutdown()),
         );
+        results.forEach((result, index) => {
+            if (result.status === 'rejected') {
+                this.logger.error({
+                    message: 'Error shutting down observability',
+                    context: ObservabilityService.name,
+                    error: this.safeErrorForLog(result.reason),
+                    metadata: { instance: entries[index][0] },
+                });
+            }
+        });
     }
 
     /**
