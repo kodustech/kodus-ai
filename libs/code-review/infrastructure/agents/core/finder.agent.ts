@@ -784,6 +784,19 @@ export interface RunFinderWithVerifyParams {
      *  synthesis rescue asks only for missed findings within it. Absent →
      *  both run exactly as before. */
     laneFocus?: string;
+    /** Heavy mode: the M3 lenses, started together with the generalist. Their
+     *  findings join the generalist's before verify. Absent → light mode. */
+    lensPasses?: HeavyLensPass[];
+}
+
+/** One heavy-mode lens, ready to run on the finder's runner. */
+export interface HeavyLensPass {
+    /** Names the pass in the trace and in `producedBy`. */
+    label: string;
+    /** The label every finding of the lens takes, whatever the model wrote. */
+    findingLabel: FinderLabel;
+    prompt: string;
+    spec: AgentSpec;
 }
 
 export interface ConventionCheckParams {
@@ -897,6 +910,11 @@ export async function runFinderWithVerify(
     ctx: ToolContext,
 ): Promise<FinderWithVerifyResult> {
     const baseT0 = Date.now();
+    // The lenses read nothing from the generalist, so they start with it and
+    // run while it and its synthesis rescue do.
+    const lenses = params.lensPasses?.length
+        ? runHeavyLensPasses(params.lensPasses, params, ctx)
+        : null;
     const finderState = await params.runner.run(
         params.finderSpec,
         {
@@ -952,10 +970,22 @@ export async function runFinderWithVerify(
         },
         ctx,
     );
+    const lensResult = lenses ? await lenses : null;
     const reasoning = recall.findings.reasoning;
-    const suggestions = recall.findings.suggestions;
-    const recallUsage = recall.usage;
-    const passStats = [baseStat, ...recall.passStats];
+    const suggestions = lensResult
+        ? mergeSuggestions(recall.findings, {
+              reasoning: '',
+              suggestions: lensResult.suggestions,
+          }).suggestions
+        : recall.findings.suggestions;
+    const recallUsage = lensResult
+        ? sumVerifyUsage(recall.usage, lensResult.usage)
+        : recall.usage;
+    const passStats = [
+        baseStat,
+        ...recall.passStats,
+        ...(lensResult?.passStats ?? []),
+    ];
 
     if (suggestions.length === 0) {
         return {
@@ -1004,6 +1034,7 @@ export async function runFinderWithVerify(
     const investigated = new Set([
         ...strongFilesFromRun(finderState),
         ...(recall.investigatedFiles ?? []),
+        ...(lensResult?.investigatedFiles ?? []),
     ]);
     const hv2 = await verifyFindings(
         {
@@ -1702,6 +1733,95 @@ export async function runRecallPasses(
     }
 
     return { findings, usage, passStats, investigatedFiles };
+}
+
+/**
+ * Heavy mode's lenses, all at once. A lens that fails costs only its own
+ * findings: the review goes on with the generalist's and the other lenses'.
+ * Every finding takes its lens's label (the lens looks for one class only, and
+ * some models write a label of their own) and names the lens in `producedBy`.
+ */
+async function runHeavyLensPasses(
+    passes: HeavyLensPass[],
+    params: Pick<
+        RunFinderWithVerifyParams,
+        'runner' | 'agentName' | 'telemetryMetadata' | 'recoverProse' | 'modelId'
+    >,
+    ctx: ToolContext,
+): Promise<{
+    suggestions: FinderSuggestion[];
+    usage: VerifyUsage;
+    passStats: RecallPassStat[];
+    investigatedFiles: Set<string>;
+}> {
+    const t0 = Date.now();
+    const settled = await Promise.allSettled(
+        passes.map(async (pass) => {
+            const passT0 = Date.now();
+            const state = await params.runner.run(
+                pass.spec,
+                {
+                    prompt: pass.prompt,
+                    ...toAiSdkTelemetryArgs(
+                        buildLangfuseTelemetry(
+                            `${params.agentName ?? 'finder'}-${pass.label}`,
+                            params.telemetryMetadata,
+                        ),
+                    ),
+                },
+                ctx,
+            );
+            const extracted = await extractFindingsWithRecovery(
+                state,
+                params.recoverProse,
+                { ...params.telemetryMetadata, modelId: params.modelId },
+            );
+            const suggestions = (extracted.suggestions ?? [])
+                .filter(Boolean)
+                .map((s) => ({
+                    ...s,
+                    label: pass.findingLabel,
+                    producedBy: pass.label,
+                }));
+            return { pass, state, suggestions, ms: Date.now() - passT0, passT0 };
+        }),
+    );
+
+    const suggestions: FinderSuggestion[] = [];
+    const passStats: RecallPassStat[] = [];
+    const investigatedFiles = new Set<string>();
+    let usage = ZERO_VERIFY_USAGE;
+    settled.forEach((r, i) => {
+        if (r.status === 'rejected') {
+            finderLogger.warn({
+                message: `Heavy lens ${passes[i].label} failed; the review goes on without its findings`,
+                context: 'finder',
+                error: r.reason,
+                metadata: {
+                    organizationId: params.telemetryMetadata?.organizationId,
+                    teamId: params.telemetryMetadata?.teamId,
+                    pullRequestId: params.telemetryMetadata?.pullRequestId,
+                    repositoryId: params.telemetryMetadata?.repositoryId,
+                    lens: passes[i].label,
+                },
+            });
+            return;
+        }
+        const { pass, state, ms, passT0 } = r.value;
+        suggestions.push(...r.value.suggestions);
+        usage = sumVerifyUsage(usage, usageOf(state.usage));
+        for (const f of strongFilesFromRun(state)) investigatedFiles.add(f);
+        passStats.push(
+            passStatOf(state, {
+                label: pass.label,
+                added: r.value.suggestions.length,
+                ms,
+                startMs: passT0 - t0,
+                startEpochMs: passT0,
+            }),
+        );
+    });
+    return { suggestions, usage, passStats, investigatedFiles };
 }
 
 /** Dedup-merge extra findings into the base set (ported from legacy

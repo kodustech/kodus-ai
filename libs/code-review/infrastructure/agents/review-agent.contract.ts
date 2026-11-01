@@ -306,6 +306,10 @@ export interface FitConfig {
      *  passes. Used by very-narrow agents (rule checks in fast mode,
      *  self-contained CLI flow). */
     skipHeavyPasses?: boolean;
+    /** Heavy mode: the M3 lenses run next to the generalist, and their
+     *  findings join its before verify (opt-in per review via CLI `--heavy`
+     *  or PR `@kody review --heavy`). */
+    heavy?: boolean;
     /** When true, run recovery + second-chance but skip ONLY the
      *  synthesis-rescue pass. The rescue pass re-words the same finding
      *  with different language, which is fine for open-ended bug review
@@ -456,6 +460,10 @@ export interface AgentLoopInput {
     contextWindowTokens?: number;
     /** When true, skip recovery/rescue/second-chance passes. Used by rule-checking agents that don't benefit from open-ended exploration. */
     skipHeavyPasses?: boolean;
+    /** Heavy mode: the M3 lenses run next to the generalist, and their
+     *  findings join its before verify (opt-in per review via CLI `--heavy`
+     *  or PR `@kody review --heavy`). */
+    heavy?: boolean;
     /** Gated A/B knob (default off): wrap readFile so a range-less read of a
      *  large file returns a symbol outline + expand hint instead of dumping the
      *  head — fewer model tokens. Off = current behavior. */

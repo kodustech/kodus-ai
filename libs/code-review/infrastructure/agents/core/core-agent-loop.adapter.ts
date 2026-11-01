@@ -36,6 +36,7 @@ import { buildRepoInstructionTool } from '@libs/code-review/infrastructure/agent
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 import {
     FINDER_DONE_TOOL,
+    type HeavyLensPass,
     buildFinderAgentSpec,
     runFinderWithVerify,
     recoverFindingsFromProse,
@@ -46,6 +47,14 @@ import {
     summarizeFunnel,
 } from '@libs/code-review/infrastructure/agents/core/review-finding';
 import { inspectFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
+import {
+    HEAVY_LENS_MAX_STEPS,
+    HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT,
+    HEAVY_LENS_SYSTEM_PROMPT,
+    buildHeavyLensPrompt,
+    heavyLensDiff,
+    heavyLensesFor,
+} from '@libs/code-review/infrastructure/agents/core/heavy-lenses';
 import { createLogger } from '@libs/core/log/logger';
 import {
     type AgentLoopInput,
@@ -321,6 +330,48 @@ export async function runAgentLoopViaCore(
         ? withClaudeOneProblem(input.userPrompt)
         : input.userPrompt;
 
+    // Heavy mode: the M3 lenses of the categories the team has on. Each gets
+    // its own ledger, since the completion gate mutates it per tool call and
+    // the lenses run at the same time.
+    const lensDiff = input.heavy
+        ? heavyLensDiff(input.changedFiles, input.fileTiers)
+        : '';
+    const lensPasses: HeavyLensPass[] = lensDiff
+        ? heavyLensesFor(input.allowedLabels).map((lens) => ({
+              label: `lens-${lens.id}`,
+              findingLabel: lens.label,
+              prompt: buildHeavyLensPrompt(
+                  lens,
+                  lensDiff,
+                  claudeSafeWording,
+                  isSelfContained,
+              ),
+              spec: buildFinderAgentSpec({
+                  systemPrompt: isSelfContained
+                      ? HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT
+                      : HEAVY_LENS_SYSTEM_PROMPT,
+                  modelId: specModelId,
+                  fallbackModelId,
+                  usageRunName: input.usageRunName,
+                  agentName: input.agentName,
+                  tools,
+                  labels: [lens.label],
+                  coverageLedger: new DiffCoverageLedger({
+                      changedFiles: input.changedFiles,
+                      fileTiers: input.fileTiers,
+                  }),
+                  compressor: contextWindowTokens
+                      ? new ContextWindowCompressor(contextWindowTokens, {
+                            overheadTokens,
+                        })
+                      : undefined,
+                  maxSteps: HEAVY_LENS_MAX_STEPS,
+                  providerOptions,
+                  acceptsRevisions: !!input.previousDecisions?.length,
+              }),
+          }))
+        : [];
+
     // Standard agent run context: runId + a signal that aborts on the parent job
     // signal OR after the hard per-agent timeout. Shared with conversation +
     // business so every agent has the same cancellation/timeout guarantee.
@@ -378,6 +429,7 @@ export async function runAgentLoopViaCore(
             skipSynthesisRescue,
             teamSystemTools: input.teamSystemTools,
             laneFocus: input.laneFocus,
+            ...(lensPasses.length && { lensPasses }),
             ...(readGuide && {
                 conventionCheck: {
                     readGuide,

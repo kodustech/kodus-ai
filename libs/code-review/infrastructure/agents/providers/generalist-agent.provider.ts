@@ -93,6 +93,10 @@ export class GeneralistAgentProvider extends BaseCodeReviewAgentProvider {
         return true;
     }
 
+    protected runsHeavyLenses(): boolean {
+        return true;
+    }
+
     protected getAllowedSuggestionLabels(
         input: ReviewAgentInput,
     ): ReviewFindingLabel[] {

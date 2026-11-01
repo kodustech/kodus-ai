@@ -131,6 +131,9 @@ export function buildOrchestratorInput(
         callGraph: computed.callGraph,
         callGraphJson: context.callGraphJson,
         reviewMode: context.codeReviewConfig?.reviewMode || 'normal',
+        // Heavy mode (`@kody review --heavy` / CLI `--heavy`): the M3 lenses
+        // run next to the generalist. Any org, no gate.
+        heavy: context.heavy || undefined,
         // Trial-only forced model (ignored when a BYOK config is present — the
         // resolver prefers BYOK). Both the subscription trial and the anonymous
         // public demo (try.kodus.io) → DeepSeek V4 Flash on Fireworks. The

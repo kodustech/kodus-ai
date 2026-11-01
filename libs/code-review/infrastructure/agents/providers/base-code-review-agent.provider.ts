@@ -150,6 +150,12 @@ export abstract class BaseCodeReviewAgentProvider {
         return false;
     }
 
+    /** Whether heavy mode runs the M3 lenses next to this agent. Only the
+     *  generalist: its findings are the ones the lenses complement. */
+    protected runsHeavyLenses(): boolean {
+        return false;
+    }
+
     protected getAllowedSuggestionLabels(
         _input: ReviewAgentInput,
     ): ReviewFindingLabel[] {
@@ -755,6 +761,9 @@ export abstract class BaseCodeReviewAgentProvider {
                     ...(agentTools.teamSystemTools?.length && {
                         teamSystemTools: agentTools.teamSystemTools,
                     }),
+                    // Heavy mode (`--heavy`) — forwarded explicitly: loopParams is
+                    // built field-by-field, so without this line the lenses never run.
+                    heavy: this.runsHeavyLenses() && input.heavy,
                     outlineFirst: input.outlineFirst,
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,

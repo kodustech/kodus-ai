@@ -566,6 +566,21 @@ describe('request assembly + byokConfig threading', () => {
         expect(loopParams.maxSteps).toBe(33);
     });
 
+    it('forwards heavy only to an agent that runs the lenses', async () => {
+        class LensAgent extends TestReviewAgent {
+            protected runsHeavyLenses(): boolean {
+                return true;
+            }
+        }
+        await new LensAgent({} as any, {} as any).execute(
+            makeInput({ heavy: true }),
+        );
+        await newAgent().execute(makeInput({ heavy: true }));
+        expect(runLoopMock.mock.calls[0][0].heavy).toBe(true);
+        // Kody Rules, custom agents and the rest never run them.
+        expect(runLoopMock.mock.calls[1][0].heavy).toBe(false);
+    });
+
     it('forwards previousDecisions onto loopParams explicitly (issue #1313)', async () => {
         const previousDecisions = [
             {
