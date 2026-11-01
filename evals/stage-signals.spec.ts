@@ -125,7 +125,7 @@ describe('stage-signals: tests.stage rows', () => {
         expect(finder.meta.does).toEqual(expect.stringContaining('looks for bugs'));
         expect(finder.meta.tests.map((t: { kind: string; status: string }) => [t.kind, t.status])).toEqual([['unit', 'pass'], ['contract', 'pass'], ['unit', 'pass'], ['contract', 'pass'], ['contract', 'elsewhere']]);
         expect(finder.meta.tests[4]).toMatchObject({ signal: 'contract.api', spec: 'libs/llm/trial-model-availability.contract.spec.ts' });
-        expect(finder.meta.tests[0]).toMatchObject({ passed: 5, total: 5 });
+        expect(finder.meta.tests[0]).toMatchObject({ passed: 7, total: 7 });
         expect(finder.meta.eval).toMatchObject({ path: 'evals/investigation', metric: 'of known bugs found', question: expect.stringMatching(/\?/) });
         expect(finder.meta.case_catalog.length).toBe(15);
         // A stage tested only: no eval, its note, no catalog.

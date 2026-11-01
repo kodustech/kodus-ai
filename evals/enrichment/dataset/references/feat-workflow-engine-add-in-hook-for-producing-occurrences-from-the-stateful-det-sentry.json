@@ -1,0 +1,19 @@
+{
+ "caseId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+ "items": [
+  {
+   "issueId": "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry#02",
+   "defectStatement": "MetricAlertDetectorHandler inherits four abstract members from StatefulDetectorHandler but implements none, so accessing Detector.detector_handler for metric_alert_fire raises TypeError. This breaks the previously instantiable placeholder handler.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Allow MetricAlertDetectorHandler to be instantiated with a Detector.",
+    "Preserve placeholder evaluation behavior without producing occurrences or changing detector state.",
+    "Return an empty mapping from evaluate, as required by the current detector processing contract."
+   ],
+   "exampleFix": "from sentry.workflow_engine.models import DataPacket\nfrom sentry.workflow_engine.processors.detector import DetectorEvaluationResult, DetectorHandler\nfrom sentry.workflow_engine.types import DetectorGroupKey\n\n\nclass MetricAlertDetectorHandler(DetectorHandler[QuerySubscriptionUpdate]):\n    def evaluate(\n        self, data_packet: DataPacket[QuerySubscriptionUpdate]\n    ) -> dict[DetectorGroupKey, DetectorEvaluationResult]:\n        return {}",
+   "notes": "The frozen input omits the current mapping return contract and abstract method signatures; restoring the old list return would fail at process_detectors' .values() call. Imports can be included within the replacement, making the behavioral fix local. Removing the now-unused StatefulDetectorHandler import is separate cleanup."
+  }
+ ]
+}

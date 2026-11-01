@@ -1,0 +1,19 @@
+{
+ "caseId": "anonymous-add-configurable-device-limit-grafana-codex",
+ "items": [
+  {
+   "issueId": "anonymous-add-configurable-device-limit-grafana-codex#07",
+   "defectStatement": "tagDeviceUI caches a device before CreateOrUpdateDevice succeeds and leaves the entry behind when the store rejects it for exceeding the device limit. Subsequent requests from that device bypass the store check and authenticate until the cache entry expires, up to 29 minutes later.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Remove the failed device's cache entry when tagging returns an error so subsequent requests retry the store check.",
+    "Continue returning the tagging error so authentication rejects ErrDeviceLimitReached.",
+    "Preserve successful tagging and caching behavior."
+   ],
+   "exampleFix": "\terr = a.tagDeviceUI(ctx, httpReq, taggedDevice)\n\tif err != nil {\n\t\ta.localCache.Delete(taggedDevice.CacheKey())\n\t\ta.log.Debug(\"Failed to tag device for UI\", \"error\", err)\n\t\treturn err\n\t}",
+   "notes": "The cited error handler supports local cleanup. The frozen input omits the key derivation via Device.CacheKey() and the cache deletion API, both verified in the repository. Cleanup fixes the retained-entry defect; moving cache insertion after store success would also prevent concurrent requests from observing a provisional entry, but requires edits outside this anchor."
+  }
+ ]
+}

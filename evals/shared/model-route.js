@@ -58,12 +58,21 @@ class NotAProductionRoute extends Error {
     }
 }
 
+// crypto.ts runs `dotenv/config` on its first import, which puts back any .env
+// variable the route has just removed (applyPlatformEnv drops API_LLM_PROVIDER_MODEL).
+function loadEncrypt() {
+    const before = new Set(Object.keys(process.env));
+    const { encrypt } = require('../../libs/common/utils/crypto.ts');
+    for (const name of Object.keys(process.env)) if (!before.has(name)) delete process.env[name];
+    return encrypt;
+}
+
 function storedByokConfig({ provider, model, apiKey, baseURL, reasoningEffort, openrouterProviderOrder }) {
     const byokProvider = openrouterProviderOrder?.length ? 'open_router' : BYOK_PROVIDER[provider];
     if (!byokProvider) {
         throw new NotAProductionRoute(`provider '${provider}' has no BYOK route in production`);
     }
-    const { encrypt } = require('../../libs/common/utils/crypto.ts');
+    const encrypt = loadEncrypt();
     return {
         version: 2,
         credentials: [
@@ -98,7 +107,7 @@ function storedByokConfig({ provider, model, apiKey, baseURL, reasoningEffort, o
  * apiKey, baseURL?, reasoningEffort?, openrouterProviderOrder? }.
  */
 function storedByokConfigOf(models, routing) {
-    const { encrypt } = require('../../libs/common/utils/crypto.ts');
+    const encrypt = loadEncrypt();
     return {
         version: 2,
         credentials: models.map((m) => {
@@ -147,14 +156,10 @@ function resolveRoute(config) {
         const modelId = process.env.RECALL_MODEL || config.model;
         const { applyPlatformEnv, TIER0 } = require('./tier0-models');
         const spec = TIER0[modelId];
-        if (spec && spec.provider === 'codex_subscription') {
-            throw new NotAProductionRoute(
-                `${modelId} runs on a ChatGPT subscription, which production has no route for ` +
-                    '(libs/llm/codex-subscription-model.ts is used only by evals): the finder would run another model',
-            );
-        }
+        // Not a tier-0 id (a typo, a removed route): nothing production would
+        // run under that name, so not measured rather than another model.
+        if (!spec) throw new NotAProductionRoute(`unknown tier-0 model '${modelId}' (evals/shared/tier0-models.js)`);
         applyPlatformEnv();
-        if (!spec) throw new Error(`unknown tier-0 model '${modelId}'`);
         // `kodus-managed`: an org with no model config, which gets Kodus's default
         // model on Kodus's key (libs/llm/managed-slot.ts). No stored config, no effort.
         if (spec.managed) {

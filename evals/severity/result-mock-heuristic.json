@@ -1,0 +1,72 @@
+[
+  {
+    "pr": "regression-proto-pollution-adversarial",
+    "n": 2,
+    "exact": 2,
+    "exact_acc": 1,
+    "off_by_one": 0,
+    "ordinal_mae": 0,
+    "filter_false_drop_high": 0,
+    "filter_false_drop_medium": 0,
+    "filter_false_keep_high": 0,
+    "parse_fail": 0,
+    "parse_fail_rate": 0,
+    "defaulted_all": 0
+  },
+  {
+    "pr": "regression-proto-pollution",
+    "n": 2,
+    "exact": 2,
+    "exact_acc": 1,
+    "off_by_one": 0,
+    "ordinal_mae": 0,
+    "filter_false_drop_high": 0,
+    "filter_false_drop_medium": 0,
+    "filter_false_keep_high": 0,
+    "parse_fail": 0,
+    "parse_fail_rate": 0,
+    "defaulted_all": 0
+  },
+  {
+    "pr": "smoke-async-foreach",
+    "n": 3,
+    "exact": 3,
+    "exact_acc": 1,
+    "off_by_one": 0,
+    "ordinal_mae": 0,
+    "filter_false_drop_high": 0,
+    "filter_false_drop_medium": 0,
+    "filter_false_keep_high": 0,
+    "parse_fail": 0,
+    "parse_fail_rate": 0,
+    "defaulted_all": 0
+  },
+  {
+    "pr": "smoke-denial-cache-dos",
+    "n": 2,
+    "exact": 2,
+    "exact_acc": 1,
+    "off_by_one": 0,
+    "ordinal_mae": 0,
+    "filter_false_drop_high": 0,
+    "filter_false_drop_medium": 0,
+    "filter_false_keep_high": 0,
+    "parse_fail": 0,
+    "parse_fail_rate": 0,
+    "defaulted_all": 0
+  },
+  {
+    "pr": "smoke-token-store-arg-order",
+    "n": 3,
+    "exact": 3,
+    "exact_acc": 1,
+    "off_by_one": 0,
+    "ordinal_mae": 0,
+    "filter_false_drop_high": 0,
+    "filter_false_drop_medium": 0,
+    "filter_false_keep_high": 0,
+    "parse_fail": 0,
+    "parse_fail_rate": 0,
+    "defaulted_all": 0
+  }
+]

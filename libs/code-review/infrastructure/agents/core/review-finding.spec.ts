@@ -35,6 +35,7 @@ function result(over: Partial<FinderWithVerifyResult> = {}): FinderWithVerifyRes
         finderState: { steps: [], usage: {} } as any,
         verifyUsage: {} as any,
         recallUsage: {} as any,
+        passStats: [],
         ...over,
     };
 }

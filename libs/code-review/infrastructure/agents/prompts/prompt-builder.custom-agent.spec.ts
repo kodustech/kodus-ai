@@ -9,6 +9,7 @@ import {
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { CACHE_PREFIX_BOUNDARY } from '@libs/llm/prompt-cache-boundary';
+import { ONE_PROBLEM_RULE } from '@libs/code-review/infrastructure/agents/prompts/one-problem-rule';
 
 const generalist: PromptAgentMeta = {
     identity: {
@@ -138,7 +139,7 @@ describe('custom agent — lane focus', () => {
             'Missing defensive measures (CSRF, rate limiting, input validation)',
         );
         expect(user).toContain('<Diffs>');
-        expect(user).toContain('Assign a confidence score (1-10)');
+        expect(user).toContain(`- ${ONE_PROBLEM_RULE}`);
     });
 
     it('scopes the compact prompt too, and keeps its instructions there', () => {

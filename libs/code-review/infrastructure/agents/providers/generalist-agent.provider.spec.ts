@@ -76,9 +76,9 @@ describe('GeneralistAgentProvider — finding label policy', () => {
         expect(resolve(null)).toBe('bug');
     });
 
-    it('falls back inside the requested categories when the label is outside them', () => {
+    it('keeps a label outside the requested categories; the stage discards it, never moves it (#1821)', () => {
         const narrow = { requestedCategories: ['security', 'performance'] };
-        expect(resolve('bug', narrow)).toBe('security');
+        expect(resolve('bug', narrow)).toBe('bug');
         expect(resolve('performance', narrow)).toBe('performance');
     });
 });

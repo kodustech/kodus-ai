@@ -1,0 +1,26 @@
+{
+    "__doc": [
+        "Floors per model for the share of the checks right on cases.json (run.js --gate), as ratios.",
+        "eval-fake (the wiring smoke, every PR): deterministic. Until the main merge of 2026-10-27 the scripted model's answer yielded no finding (24 of 40). Since then it fills the recovery schema with one 'fake' finding per call (evals/shared/fake-llm-server.js gives an array at least one item): every dismiss case leaks it and no extract case matches, 6 of 40 on two runs of the same commit. It measures nothing; the floor only holds the harness to the number it gives.",
+        "Measured on the prompt #1938 replaced (two runs, 2026-10-26), claude-sonnet-4-6 by its API route: 32/40 and 33/40, all 16 findings extracted, 13 and 12 findings leaked from 8 and 7 of the 18 dismiss cases. That run is the deliberate break of evals/README.md rule 7.",
+        "2026-10-28, the tier-0 models on the BYOK route, two runs each on fae1d3139: deepseek-v4-flash@fireworks, gpt-6-sol and claude-sonnet-5-5 40/40 on both. floor = min(mean - 2 binomial SE, (n - 2) / n) over the 40 checks, rounded down: 0.95. The floors of 2026-10-26 (claude-sonnet-4-6, kimi-k2.7-code, deepseek-v4.1-flash@fireworks) were on ids no eval runs any more and are removed."
+    ],
+    "models": {
+        "eval-fake": {
+            "floor": 0.15,
+            "observed": 0.15
+        },
+        "deepseek-v4-flash@fireworks": {
+            "floor": 0.95,
+            "observed": 1.0
+        },
+        "gpt-6-sol": {
+            "floor": 0.95,
+            "observed": 1.0
+        },
+        "claude-sonnet-5-5": {
+            "floor": 0.95,
+            "observed": 1.0
+        }
+    }
+}

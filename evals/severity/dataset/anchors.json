@@ -1,0 +1,64 @@
+{
+ "anchors": [
+  {
+   "issueId": "fixing-re-authentication-with-passkeys-keycloak#04",
+   "severity": "low",
+   "text": "The comment 'setup webauthn data when passkeys enabled' does not mention that the condition also requires a selected user to own a passkey credential."
+  },
+  {
+   "issueId": "feat-add-calendar-cache-status-and-actions-22532-cal-com#07",
+   "severity": "low",
+   "text": "The webhook test script updates .env with the macOS-only `sed -i ''` syntax, which fails on Linux GNU sed and leaves GOOGLE_WEBHOOK_URL unchanged."
+  },
+  {
+   "issueId": "fix-handle-collective-multiple-host-on-destinationcalendar-cal-com#pf-kimi-C2",
+   "severity": "low",
+   "text": "handleCancelBooking queries prisma.credential.findUnique once per calendar reference inside the loop instead of batching the missing credential ids into one findMany."
+  },
+  {
+   "issueId": "notification-rule-processing-engine-grafana-codex#opa-01",
+   "severity": "low",
+   "text": "RulesTable RBAC tests only mock useGrafanaPromRuleAbilities and leave useRulerRuleAbilities denied, so the ruler-based Delete permission branch of AlertRuleMenu is never tested."
+  },
+  {
+   "issueId": "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor#01",
+   "severity": "medium",
+   "text": "website_name compares hostnames case-sensitively, so an uppercase website host matching the instance domain shows only the host instead of the full path."
+  },
+  {
+   "issueId": "feat-ecosystem-implement-cross-system-issue-synchronization-sentry#01",
+   "severity": "medium",
+   "text": "AssignmentSource.queued defaults to timezone.now() evaluated at class definition, so all instances share the import-time timestamp instead of the time they were queued."
+  },
+  {
+   "issueId": "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry#oph-01",
+   "severity": "medium",
+   "text": "The per-worker queue_depth gauge is tagged only with identifier, so all queues report into one series and the metric shows whichever queue reported last."
+  },
+  {
+   "issueId": "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor#10",
+   "severity": "medium",
+   "text": "Claims the client unsubscribe route never performs the unsubscribe when entered through an in-app transition."
+  },
+  {
+   "issueId": "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com#oph-03",
+   "severity": "high",
+   "text": "With several date-override ranges on the same day, a slot is rejected as soon as it falls outside any one of them, so slots inside the other ranges become unavailable."
+  },
+  {
+   "issueId": "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry#04",
+   "severity": "high",
+   "text": "Segment keys change from Redis sets to sorted sets under the same key names, so keys left by the previous release make ZADD, ZCARD and ZSCAN fail with WRONGTYPE during rollout, crashing span processing and flushing."
+  },
+  {
+   "issueId": "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak#02",
+   "severity": "high",
+   "text": "getGroupIdsWithViewPermission uses the authorization resource id instead of the resource name (the group id) for both the permission check and the returned set, so per-group view-members grants are not resolved and user filtering gets wrong ids."
+  },
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+   "severity": "high",
+   "text": "Claims only bare count() is rewritten, so aliased count, eps(), epm(), count_unique() etc. stay un-upsampled."
+  }
+ ]
+}

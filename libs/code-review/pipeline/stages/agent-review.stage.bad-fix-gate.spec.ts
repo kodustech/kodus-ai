@@ -27,11 +27,14 @@ jest.mock('@libs/llm/managed-slot', () => {
  * `BAD_FIX_DOWNGRADED` review warning is attached to the context.
  */
 
+// Kody Rules: since the lean finder output (#1821) the finder sends no code,
+// so only a Kody Rule finding reaches this gate with an improvedCode.
 const sugg = (over: Record<string, unknown> = {}) => ({
     relevantFile: 'src/user.ts',
     relevantLinesStart: 10,
     relevantLinesEnd: 12,
-    label: 'bug',
+    label: 'kody_rules',
+    brokenKodyRulesIds: ['rule-gate'],
     severity: 'high',
     oneSentenceSummary: 'user object can be null and is dereferenced',
     suggestionContent: 'user object can be null and is dereferenced here',
@@ -254,12 +257,74 @@ describe('AgentReviewStage — improvedCode publication gate (#1833)', () => {
         ).toBeUndefined();
     });
 
+    it('does not count an empty improvedCode the enrichment chose as a bad fix', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([
+                sugg({ improvedCode: '', fixStatus: 'needs-wider-change' }),
+                sugg({
+                    brokenKodyRulesIds: ['rule-gate-2'],
+                    relevantLinesStart: 20,
+                    relevantLinesEnd: 22,
+                    improvedCode: '',
+                    fixStatus: 'local',
+                }),
+            ]),
+        );
+
+        const result = await run(stage, makeContext());
+
+        expect(analyzedSuggestions(result)).toHaveLength(2);
+        const badFixWarning = (result.reviewWarnings ?? []).find(
+            (w: any) => w.kind === 'BAD_FIX_DOWNGRADED',
+        );
+        expect(badFixWarning.detail).toContain('1 suggestion(s)');
+    });
+
+    it('posts a finder finding whose enrichment failed as a plain comment, without the bad-fix warning', async () => {
+        const { stage, reviewOrchestrator } = makeStage();
+        reviewOrchestrator.execute.mockResolvedValue(
+            happyEnvelope([
+                {
+                    relevantFile: 'src/user.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 1,
+                    label: 'bug',
+                    suggestionContent: 'user can be null and is dereferenced',
+                },
+            ]),
+        );
+        const ctx = makeContext({
+            changedFiles: [
+                {
+                    filename: 'src/user.ts',
+                    fileContent: 'const name = user.name;\n',
+                },
+            ],
+        });
+
+        // The mocked LLM answers every call with the dedup's shape, so the
+        // enrichment call fails: cited code, no fix, no fixStatus.
+        const result = await run(stage, ctx);
+
+        const [posted] = analyzedSuggestions(result);
+        expect(posted.existingCode).toBe('const name = user.name;');
+        expect(posted.fixStatus).toBeUndefined();
+        expect(posted.improvedCode ?? '').toBe('');
+        expect(
+            (result.reviewWarnings ?? []).find(
+                (w: any) => w.kind === 'BAD_FIX_DOWNGRADED',
+            ),
+        ).toBeUndefined();
+    });
+
     it('records a BAD_FIX_DOWNGRADED review warning with the count, and publishes both suggestions', async () => {
         const { stage, reviewOrchestrator } = makeStage();
         reviewOrchestrator.execute.mockResolvedValue(
             happyEnvelope([
                 sugg({ relevantLinesStart: 10, relevantLinesEnd: 12 }),
                 sugg({
+                    brokenKodyRulesIds: ['rule-gate-2'],
                     relevantLinesStart: 20,
                     relevantLinesEnd: 22,
                     existingCode: 'const x = compute();',

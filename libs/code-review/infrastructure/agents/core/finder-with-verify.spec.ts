@@ -135,6 +135,26 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
         expect(r.droppedByVerify[0].evidence).toBe('refuted');
     });
 
+    it('reports how long the verify step took', async () => {
+        const tools = new InMemoryToolRegistry([]);
+        const finderSpec = buildFinderAgentSpec({
+            systemPrompt: 'find bugs',
+            modelId: 'mock',
+            tools,
+            coverageLedger: noCriticalLedger,
+        });
+        const runner = new AiSdkAgentRunner(undefined);
+
+        const r = await runFinderWithVerify(
+            { runner, finderSpec, modelId: 'mock', tools },
+            { prompt: 'review' },
+            ctx,
+        );
+
+        expect(typeof r.verifyMs).toBe('number');
+        expect(r.verifyMs).toBeGreaterThanOrEqual(0);
+    });
+
     it('runs the verify pass on its own runner when one is given', async () => {
         const tools = new InMemoryToolRegistry([]);
         const finderSpec = buildFinderAgentSpec({

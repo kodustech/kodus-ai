@@ -1,0 +1,20 @@
+{
+ "caseId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "items": [
+  {
+   "issueId": "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry#14",
+   "defectStatement": "The transformer recognizes only the stripped literal count(), so aliased counts such as count() as total and counts with whitespace inside the parentheses bypass upsampling. Eligible queries using these forms retain unweighted counts.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Rewrite equivalent zero-argument count expressions, including explicit aliases and whitespace inside parentheses.",
+    "Preserve explicit aliases, including their case; retain the default count alias for unaliased counts.",
+    "Preserve case-insensitive count matching and surrounding-whitespace handling.",
+    "Leave unrelated aggregates and expressions unchanged, preserving column order."
+   ],
+   "exampleFix": "def transform_query_columns_for_error_upsampling(\n    query_columns: Sequence[str],\n) -> list[str]:\n    \"\"\"\n    Transform zero-argument counts to weighted counts for error upsampling.\n    Only called when all projects are allowlisted.\n    \"\"\"\n    import re\n\n    count_pattern = re.compile(\n        r\"(?i:count)\\s*\\(\\s*\\)\"\n        r\"(?:\\s+(?i:as)\\s+(?P<alias>(?!\\d+\\Z)\\w+))?\"\n    )\n    transformed_columns = []\n    for column in query_columns:\n        match = count_pattern.fullmatch(column.strip())\n        if match is not None:\n            alias = match.group(\"alias\") or \"count\"\n            transformed_columns.append(f\"upsampled_count() as {alias}\")\n        else:\n            transformed_columns.append(column)\n\n    return transformed_columns",
+   "notes": "The concrete finding concerns equivalent count() forms. The gold description also names rates and distinct counts, which have different semantics and cannot simply become upsampled_count(). Arbitrary enclosing parentheses are not supported by the repository's aggregate parser. Using the existing parser is also valid if whitespace normalization and aliases are preserved."
+  }
+ ]
+}
