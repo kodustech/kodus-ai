@@ -21,6 +21,7 @@ import {
 } from '@libs/llm/structured-output-gate';
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
 import { registerProvider } from '../kernel/registry';
+import { isAnthropicModel } from '../kernel/anthropic-cache';
 import { isOpenAiReasoner, openaiReasoningConfig } from './reasoning';
 import { isOpenAiHost } from './endpoint';
 import { notStoredByOpenAi } from './not-stored';
@@ -97,7 +98,11 @@ export const openaiModule: ProviderModule = {
             toolCalling: 'native',
             usageGranularity: reasoner ? 'reasoning_split' : 'output_only',
             streaming: true,
-            promptCaching: true,
+            // OpenAI-protocol upstreams cache implicitly; a Claude id behind an
+            // openai_compatible shim needs an explicit `cache_control` marker
+            // this transport never sends (#1828). Claude ids never reach native
+            // OpenAI, so the check is transport-safe.
+            promptCaching: !isAnthropicModel(model),
         };
     },
 

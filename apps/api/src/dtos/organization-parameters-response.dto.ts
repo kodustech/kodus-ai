@@ -38,6 +38,9 @@ export class OrganizationProviderDto {
     requiresBaseUrl: boolean;
 
     @ApiProperty()
+    acceptsBaseUrl: boolean;
+
+    @ApiProperty()
     autoListModels: boolean;
 }
 

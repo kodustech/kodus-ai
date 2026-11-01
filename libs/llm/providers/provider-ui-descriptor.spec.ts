@@ -156,6 +156,29 @@ describe('describeProviderId - requiresBaseUrl', () => {
     });
 });
 
+describe('describeProviderId - acceptsBaseUrl', () => {
+    it('is true for a native provider that declares an optional baseURL field', () => {
+        const m = makeModule({
+            uiFields: [{ key: 'baseURL', required: false }],
+        });
+        const d = describeProviderId(m, m.id);
+        expect(d.requiresBaseUrl).toBe(false);
+        expect(d.acceptsBaseUrl).toBe(true);
+    });
+
+    it('is false when the module declares no baseURL field', () => {
+        const m = makeModule({ uiFields: [{ key: 'apiKey', required: true }] });
+        expect(describeProviderId(m, m.id).acceptsBaseUrl).toBe(false);
+    });
+
+    it('is true whenever a base URL is required', () => {
+        const m = makeModule({ uiFields: [] });
+        expect(describeProviderId(m, 'openai_compatible').acceptsBaseUrl).toBe(
+            true,
+        );
+    });
+});
+
 describe('describeProviderId - autoListModels (listingIsAutoListable)', () => {
     it('is false for a custom endpoint even when its listing is static/listable', () => {
         const m = makeModule({ modelListing: () => staticListing() });
@@ -294,6 +317,7 @@ describe('describeProviderId - doc passthrough and full shape', () => {
             label: 'OpenAI',
             requiresApiKey: true,
             requiresBaseUrl: false,
+            acceptsBaseUrl: false,
             autoListModels: true,
             listsModelsLive: true,
             doc: 'https://docs/openai',
@@ -315,6 +339,7 @@ describe('describeProviderId - doc passthrough and full shape', () => {
             label: 'OpenAI Compatible',
             requiresApiKey: true,
             requiresBaseUrl: true,
+            acceptsBaseUrl: true,
             autoListModels: false,
             listsModelsLive: true,
             doc: 'https://docs/openai',
