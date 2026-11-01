@@ -166,3 +166,28 @@ describe('anthropicModule — a Claude id proxied over anthropic_compatible (#21
         );
     });
 });
+
+describe('native anthropic behind a gateway base URL (#1828)', () => {
+    const buildUrl = (baseURL?: string) =>
+        (
+            anthropicModule.build({ ...anthropicNativeCfg, baseURL }) as any
+        ).buildRequestUrl(false);
+
+    it('appends /v1 to a gateway URL pasted without it (the SDK adds /messages)', () => {
+        expect(
+            buildUrl('https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/'),
+        ).toBe(
+            'https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1/messages',
+        );
+    });
+
+    it('keeps a URL that already ends in /v1', () => {
+        expect(buildUrl('https://proxy.example.com/v1')).toBe(
+            'https://proxy.example.com/v1/messages',
+        );
+    });
+
+    it('uses the SDK default when no base URL is set', () => {
+        expect(buildUrl()).toBe('https://api.anthropic.com/v1/messages');
+    });
+});
