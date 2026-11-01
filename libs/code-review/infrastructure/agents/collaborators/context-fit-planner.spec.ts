@@ -104,5 +104,20 @@ describe('context-fit-planner', () => {
             const tiered = estimatePromptTokens({ changedFiles: [f], fileTiers: tiers });
             expect(tiered).toBeLessThan(full);
         });
+
+        it('counts the full diff on the self-contained path', () => {
+            // buildSelfContainedUserPrompt has no tools to fetch a body hidden
+            // behind hunk headers, so it renders optional files in full and the
+            // estimate has to follow.
+            const f = file('a.ts', '@@ -1,1 +1,1 @@\n' + 'x'.repeat(4000));
+            const tiers = new Map([['a.ts', 'optional' as const]]);
+            const full = estimatePromptTokens({ changedFiles: [f] });
+            const selfContained = estimatePromptTokens(
+                { changedFiles: [f], fileTiers: tiers },
+                { selfContained: true },
+            );
+
+            expect(selfContained).toBe(full);
+        });
     });
 });

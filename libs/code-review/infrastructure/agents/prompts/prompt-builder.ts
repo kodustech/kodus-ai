@@ -1010,7 +1010,7 @@ export function buildUserPrompt(input: ReviewAgentInput, meta: PromptAgentMeta):
             input.previousDecisions,
         );
         const commitsSection = formatCommits(input.commits);
-        const diffsSection = formatDiffs(input.changedFiles);
+        const diffsSection = formatDiffs(input.changedFiles, input.fileTiers);
         // The callGraph string from kodus-graph already starts with <CallGraph>
         // and ends with </CallGraph> — wrapping it again produced nested duplicate
         // tags in the prompt.
@@ -1181,7 +1181,7 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
             input.previousDecisions,
         );
         const commitsSection = formatCommits(input.commits);
-        const diffsSection = formatDiffs(input.changedFiles);
+        const diffsSection = formatDiffs(input.changedFiles, input.fileTiers);
         const callGraphSection = input.callGraph
             ? `\n  ${input.callGraph}`
             : '';
@@ -1329,7 +1329,19 @@ export function buildSelfContainedUserPrompt(input: ReviewAgentInput, meta: Prom
             input.previousDecisions,
         );
         const commitsSection = formatCommits(input.commits);
-        const diffsSection = formatDiffs(input.changedFiles);
+        // A self-contained review has no tools, so an optional file rendered
+        // as hunk headers alone would leave the reviewer nothing to inspect
+        // and no readFile to recover the body: formatDiffs documents that
+        // shortcut as "the agent can still readFile on demand", which is
+        // false on this path. Keep the priority labels, drop the truncation.
+        const labelOnlyTiers = input.fileTiers
+            ? new Map(
+                  [...input.fileTiers].filter(
+                      ([, tier]) => tier !== 'optional',
+                  ),
+              )
+            : undefined;
+        const diffsSection = formatDiffs(input.changedFiles, labelOnlyTiers);
         const fileContentsSection = formatInlineFileContents(
             input.changedFiles,
         );
