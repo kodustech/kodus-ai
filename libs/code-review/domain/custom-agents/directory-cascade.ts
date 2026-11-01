@@ -34,7 +34,14 @@ export function withDirectoryAgentLists<T extends object>(
         result.knowledge = addOrReplace(
             inherited.knowledge,
             directory.knowledge,
-            (item) => (item as { path?: string } | undefined)?.path,
+            // The same path in another repository is another item.
+            (item) => {
+                const entry = item as
+                    { path?: string; repository?: string } | undefined;
+                return entry?.path === undefined
+                    ? undefined
+                    : `${(entry.repository ?? '').toLowerCase()}:${entry.path}`;
+            },
         );
     }
     return result;

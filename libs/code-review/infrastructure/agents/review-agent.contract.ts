@@ -490,6 +490,10 @@ export interface AgentLoopInput {
      *  take the quote check (target branch, via the sandbox) and the
      *  convention verifier instead of HV2. Unset for every other agent. */
     conventionGuides?: string[];
+    /** Custom agents only: the knowledge reader, which also reads the
+     *  guides of other repositories (`owner/repo:path`) for the quote check,
+     *  and the reviewed repository's guides when there is no sandbox. */
+    conventionGuideReader?: BaseBranchReader;
     /** Custom agents only: the team's instructions, the text a rule cited
      *  from `TeamInstructions` is quote-checked against. */
     teamInstructions?: string;

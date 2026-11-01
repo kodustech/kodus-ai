@@ -32,6 +32,8 @@ import {
     CUSTOM_AGENT_LIMITS,
     GroupingModeSuggestions,
     KNOWLEDGE_MAIN_REVIEW_TARGET,
+    KNOWLEDGE_REF_PATTERN,
+    KNOWLEDGE_REPOSITORY_PATTERN,
     KnowledgeItem,
     customAgentSlugClashMessage,
     firstDuplicate,
@@ -789,6 +791,23 @@ class KnowledgeItemDto {
 
     @IsIn(['skill', 'doc'])
     kind: 'skill' | 'doc';
+
+    /** Another connected repository (`owner/repo`); unset for the reviewed one. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    @Matches(KNOWLEDGE_REPOSITORY_PATTERN, {
+        message: 'repository must be owner/repo',
+    })
+    repository?: string;
+
+    /** Branch or tag of `repository`; unset reads its default branch. */
+    @IsOptional()
+    @IsString()
+    @Matches(KNOWLEDGE_REF_PATTERN, {
+        message: 'ref must be a branch or tag name',
+    })
+    ref?: string;
 
     @IsArray()
     @ValidateBy(

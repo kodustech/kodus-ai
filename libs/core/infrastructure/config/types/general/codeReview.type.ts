@@ -563,10 +563,33 @@ export const customAgentsSchema = z
         }
     });
 
+/**
+ * `owner/repo` (GitLab subgroups and Azure projects add segments) of the
+ * repository a skill or doc lives in, when it is not the reviewed one. No
+ * `:`, which separates it from the path in a qualified path.
+ */
+export const KNOWLEDGE_REPOSITORY_PATTERN =
+    // eslint-disable-next-line no-control-regex
+    /^(?![-\s])(?!.*\s$)[^:\\/\u0000-\u001f]+(?:\/[^:\\/\u0000-\u001f]+)+$/;
+
+/** A branch or tag name a skill or doc of another repository is read at. */
+export const KNOWLEDGE_REF_PATTERN = /^(?!-)[A-Za-z0-9._\-/@+]{1,200}$/;
+
 export const knowledgeItemSchema = z.object({
-    /** Path in the repository, read from the PR's target branch. */
+    /** Path in its repository. In the reviewed repository it is read from
+     *  the PR's target branch; in another one, at `ref` or that
+     *  repository's default branch. Never at a ref the PR controls. */
     path: z.string().min(1),
     kind: z.enum(['skill', 'doc']),
+    /** Another repository connected on the reviewed repository's
+     *  integration (`owner/repo`); unset for the reviewed repository. */
+    repository: z
+        .string()
+        .max(200)
+        .regex(KNOWLEDGE_REPOSITORY_PATTERN)
+        .optional(),
+    /** Branch or tag of `repository`; unset reads its default branch. */
+    ref: z.string().regex(KNOWLEDGE_REF_PATTERN).optional(),
     linkedTo: z.array(
         z.union([
             z.literal(KNOWLEDGE_MAIN_REVIEW_TARGET),
@@ -574,6 +597,41 @@ export const knowledgeItemSchema = z.object({
         ]),
     ),
 });
+
+/**
+ * How a skill or doc is named everywhere after it is read: its path in the
+ * reviewed repository, or `owner/repo:path` in another one. The prompt shows
+ * it, the agent cites it, and the quote gate reads it back by it.
+ */
+export function knowledgeSourcePath(item: {
+    path: string;
+    repository?: string;
+}): string {
+    return item.repository ? `${item.repository}:${item.path}` : item.path;
+}
+
+/** `owner/repo:path` split back into its repository and path; null for a
+ *  path in the reviewed repository. */
+export function parseKnowledgeSourcePath(
+    qualified: string,
+): { repository: string; path: string } | null {
+    const at = (qualified ?? '').indexOf(':');
+    if (at <= 0) return null;
+    const repository = qualified.slice(0, at);
+    const path = qualified.slice(at + 1);
+    if (!path || !KNOWLEDGE_REPOSITORY_PATTERN.test(repository)) return null;
+    return { repository, path };
+}
+
+/** One skill or doc is the same entry when its repository, path and kind
+ *  match; the same path in two repositories is two entries. */
+export function knowledgeItemKey(item: {
+    path: string;
+    kind: string;
+    repository?: string;
+}): string {
+    return `${item.kind}|${(item.repository ?? '').toLowerCase()}|${item.path}`;
+}
 
 /** The first value that appears twice, if any. */
 export function firstDuplicate<T>(values: readonly T[]): T | undefined {
@@ -610,6 +668,60 @@ export function knowledgeLinkProblems(
                 );
             }
         }
+    }
+    return problems;
+}
+
+/**
+ * Skills and docs that name their source wrongly: a `ref` without a
+ * `repository` (the reviewed repository is always read on the PR's target
+ * branch), two refs for one repository, or the same entry twice.
+ */
+export function knowledgeSourceProblems(
+    knowledge:
+        | ReadonlyArray<{
+              path?: string;
+              kind?: string;
+              repository?: string;
+              ref?: string;
+          }>
+        | undefined,
+): string[] {
+    const problems: string[] = [];
+    const seen = new Set<string>();
+    // One ref per repository: a review reads each repository at one branch,
+    // and a citation names the repository, not the ref.
+    const refs = new Map<string, { name: string; ref: string }>();
+    for (const item of knowledge ?? []) {
+        if (!item?.path || !item.kind) continue;
+        if (item.repository) {
+            const key = item.repository.toLowerCase();
+            const ref = item.ref ?? '';
+            const first = refs.get(key);
+            if (!first) {
+                refs.set(key, { name: item.repository, ref });
+            } else if (first.ref !== ref) {
+                problems.push(
+                    `${item.repository} is read at both "${first.ref || 'its default branch'}" and "${ref || 'its default branch'}"; use one branch or tag per repository`,
+                );
+            }
+        }
+        if (item.ref && !item.repository) {
+            problems.push(
+                `${item.path} sets a ref but no repository; the reviewed repository is read on the pull request's target branch`,
+            );
+        }
+        const key = knowledgeItemKey({
+            path: item.path,
+            kind: item.kind,
+            repository: item.repository,
+        });
+        if (seen.has(key)) {
+            problems.push(
+                `${knowledgeSourcePath({ path: item.path, repository: item.repository })} is listed twice`,
+            );
+        }
+        seen.add(key);
     }
     return problems;
 }

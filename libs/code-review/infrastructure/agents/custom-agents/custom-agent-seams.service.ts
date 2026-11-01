@@ -74,7 +74,7 @@ import {
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
-import { findingCitation } from './custom-agent-presentation';
+import { findingCitation, type RuleSources } from './custom-agent-presentation';
 import { customAgentSlug, filesInAgentScope } from './custom-agent-scope';
 
 const logger = createLogger('CustomAgentSeams');
@@ -370,6 +370,9 @@ export function buildTryTrace(params: {
     /** The team's "Minimum severity to post", from the review config: the
      *  floor when the agent sets none ("Team minimum"), as in the review. */
     teamMinSeverity?: string;
+    /** Other repositories skills and docs were read from, to cite a rule of
+     *  one of them as the review does. */
+    ruleSources?: RuleSources;
 }): CustomAgentTryTrace {
     const { agent, output, events } = params;
     const toolCalls = events.flatMap((event) => event.toolCalls ?? []);
@@ -446,7 +449,7 @@ export function buildTryTrace(params: {
         // The comment as the review appends to it; the review's formatter,
         // which rewrites the body, does not run here.
         ...(verdict === 'kept' && {
-            comment: `${s.suggestionContent ?? ''}${findingCitation(s, params.cliRuns)}`,
+            comment: `${s.suggestionContent ?? ''}${findingCitation(s, params.cliRuns, params.ruleSources)}`,
         }),
     });
 
@@ -843,6 +846,15 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                     skills: knowledge.byTarget?.get(agent.id)?.skills,
                     teamMinSeverity:
                         config?.suggestionControl?.severityLevelFilter,
+                    ...(knowledge.sources?.length && {
+                        ruleSources: {
+                            sources: knowledge.sources,
+                            platform: context.platformType,
+                            reviewedIsPublic:
+                                knowledge.reviewedRepository?.visibility ===
+                                'public',
+                        },
+                    }),
                 }),
                 warnings: runWarnings,
             };
