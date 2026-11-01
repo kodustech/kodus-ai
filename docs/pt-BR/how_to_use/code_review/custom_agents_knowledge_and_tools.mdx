@@ -54,6 +54,17 @@ Há dois lugares para vincular uma skill ou doc:
 
 No nível global, a página Skills & docs só aceita caminhos digitados à mão. Cada repositório é lido separadamente; abra as configurações de um repositório para ver se cada caminho existe nele.
 
+### De outro repositório
+
+É comum o time manter as regras em um repositório e aplicá-las em vários. Escolha esse repositório em **From** ao adicionar um skill ou doc: os repositórios linkados aparecem primeiro, e **Other repository…** lista todos os repositórios que a sua integração Git alcança.
+
+- Um guia de outro repositório é lido na **branch padrão** desse repositório, ou na branch ou tag que você definir em **Use a branch or tag instead**. Uma branch ou tag por repositório. Um pull request nunca muda isso.
+- Ele carrega como um guia do repositório revisado, em toda review, sem sandbox e mesmo que a mudança não toque o outro repositório.
+- O agente cita o guia como `owner/repo:caminho`, e o comentário traz o link do arquivo.
+- Quando o repositório de regras é privado e o revisado é público, o comentário cita o arquivo sem copiar o trecho.
+
+Quando as instruções de um agente citam um repositório linkado do qual ele não segue nada, a página do agente avisa e oferece **Browse its rules**.
+
 <Warning>
   Um arquivo marcado como **Also a Kody Rules source** já alimenta as Kody Rules. Vinculá-lo também a um agente pode fazer a mesma regra comentar duas vezes.
 </Warning>
@@ -78,6 +89,8 @@ Um apontamento de convenção precisa **citar** a regra que aplica. A Kodus conf
 **Rule** (`docs/ledger.md`):
 > A reversal is a new entry, never an UPDATE of the original.
 ```
+
+Uma regra de outro repositório é citada como `owner/repo:caminho`, com link para o arquivo na branch de onde foi lida.
 
 ## Plugins (MCP)
 

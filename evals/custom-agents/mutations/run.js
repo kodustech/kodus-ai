@@ -42,6 +42,10 @@ const SPEC = {
     quote: 'libs/code-review/infrastructure/agents/core/convention-check.spec.ts',
     cascade:
         'libs/ee/codeBase/__tests__/directory-custom-agents-cascade.spec.ts',
+    otherRepoQuote:
+        'libs/code-review/infrastructure/agents/core/convention-check.other-repository.spec.ts',
+    otherRepoKnowledge:
+        'libs/code-review/infrastructure/agents/knowledge/other-repository-knowledge.spec.ts',
 };
 
 // The cases whose checks a model-judged property owns, so its run pays only for them.
@@ -101,6 +105,24 @@ const MUTATIONS = [
         patch: 'P7-directory-override-ignored.patch',
         break: "a directory's agent with an inherited id is added beside it instead of replacing it (enabled:false at a directory no longer turns it off)",
         checks: [{ jest: [SPEC.cascade] }],
+    },
+    {
+        property: 'P8',
+        patch: 'P8-other-repository-guides-unread.patch',
+        break: 'the quote gate reads a guide of another repository from the reviewed one, where it is not',
+        checks: [{ jest: [SPEC.otherRepoKnowledge] }],
+    },
+    {
+        property: 'P8',
+        patch: 'P8-loose-citation-not-matched.patch',
+        break: 'a finding citing a rules-repository guide as repo/path or the bare path is no longer matched to it',
+        checks: [{ jest: [SPEC.otherRepoQuote] }],
+    },
+    {
+        property: 'P8',
+        patch: 'P8-pinned-ref-ignored.patch',
+        break: 'a skill or doc of another repository is read on its default branch even when the team pinned a branch or tag',
+        checks: [{ jest: [SPEC.otherRepoKnowledge] }],
     },
 ];
 

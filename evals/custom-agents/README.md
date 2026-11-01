@@ -40,6 +40,7 @@ every PR.
 | P5 floor → cap → dedup | The agent's severity floor and comment limit apply before dedup, so a finding they drop never takes a native one with it | `agent-review.stage.custom-agents.spec.ts` |
 | P6 quote gate | A convention finding quotes only a guide linked to the agent or the agent's instructions | `convention-check.spec.ts` |
 | P7 disabled | A disabled agent, or one a directory turns off with `enabled: false`, does not run | this eval: 1 dispatch check; `agent-review.stage.custom-agents.spec.ts`, `directory-custom-agents-cascade.spec.ts` |
+| P8 rules repository (#2329) | A guide linked from another repository (`owner/repo:path`) is read at that repository's configured ref or default branch, never one the PR controls, and a finding quoting it passes the quote gate however the model spells the path, when that names one linked guide | `other-repository-knowledge.spec.ts`, `convention-check.other-repository.spec.ts` |
 
 A finding on a file outside the agent's files is also dropped by the mapper
 every agent shares (`finding-mapper.ts`, "relevantFile not in changedFiles";
