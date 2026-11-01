@@ -287,6 +287,48 @@ describe('FetchChangedFilesStage', () => {
             ]);
         });
 
+        it('records the cut of an ignored file a custom agent names', async () => {
+            const files = [
+                { filename: 'data/big.sql', status: 'added', patch: bigPatch },
+                {
+                    filename: 'data/seed.sql',
+                    status: 'added',
+                    patch: bigPatch,
+                },
+                smallFile,
+            ];
+            context.codeReviewConfig.ignorePaths = ['data/**'];
+            context.codeReviewConfig.customAgents = [
+                {
+                    id: 'agent-1',
+                    name: 'Seeds',
+                    enabled: true,
+                    instructions: 'Check the seed.',
+                    scope: { include: ['data/seed.sql'] },
+                },
+            ] as any;
+            mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
+                files,
+            );
+            mockPullRequestManagerService.enrichFilesWithContent.mockImplementation(
+                async (_o: any, _r: any, _p: any, list: any[]) => list,
+            );
+
+            const result = await stage.execute(context);
+
+            const seed = result.ignoredFileChanges.find(
+                (f) => f.filename === 'data/seed.sql',
+            );
+            expect(seed.patchWithLinesStr).toContain('diff truncated');
+            expect(result.reviewWarnings).toEqual([
+                expect.objectContaining({
+                    kind: 'DIFF_TRUNCATED',
+                    reason: 'patch_line_limit',
+                    detail: '1 file diff(s) cut at 50000 lines, the rest was not reviewed: data/seed.sql',
+                }),
+            ]);
+        });
+
         it('records no warning when every patch fits', async () => {
             const files = [smallFile];
             mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(

@@ -192,6 +192,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             context,
             ignoredList?.filter((f) => f.status !== 'removed') || [],
             filesForCustomAgents,
+            cutAtLineLimit,
         );
 
         if (cutAtLineLimit.length > 0) {
@@ -233,6 +234,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
         context: CodeReviewPipelineContext,
         ignoredFileChanges: FileChange[],
         named: FileChange[],
+        cutAtLineLimit: string[],
     ): Promise<FileChange[]> {
         if (!named.length) {
             return ignoredFileChanges;
@@ -245,6 +247,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
                     context.pullRequest,
                     named,
                 ),
+                cutAtLineLimit,
             ).map((file) => [file.filename, file]),
         );
         return ignoredFileChanges.map(
@@ -316,7 +319,7 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
      *  to `cutAtLineLimit`. */
     private prepareFilesWithLineNumbers(
         files: FileChange[],
-        cutAtLineLimit: string[] = [],
+        cutAtLineLimit: string[],
     ): FileChange[] {
         if (!files?.length || files?.length === 0) {
             return [];
