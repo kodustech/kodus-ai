@@ -201,6 +201,43 @@ function stripRegexLiterals(code: string): string {
 }
 
 /**
+ * The brackets `code` leaves open or unmatched. `signature` is `null` when
+ * they balance, otherwise "<closers with no opener>|<unclosed openers>" ("|{("
+ * for an open block holding an open call, "}|" for a lone "}"). Two texts with
+ * the same signature are cut in the same place. `mismatched` is true when a
+ * closer meets a NON-empty stack whose top is a different bracket
+ * (`x(})`): that is broken whatever the quoted lines look like, whereas a
+ * closer met with an empty stack is only an orphan the original can share.
+ */
+function bracketImbalance(nonLiteral: string): {
+    signature: string | null;
+    mismatched: boolean;
+} {
+    const closers: Record<string, string> = { '}': '{', ')': '(', ']': '[' };
+    const stack: string[] = [];
+    let orphans = '';
+    let mismatched = false;
+    for (const ch of nonLiteral) {
+        if (ch === '{' || ch === '(' || ch === '[') {
+            stack.push(ch);
+        } else if (ch in closers) {
+            if (stack[stack.length - 1] === closers[ch]) {
+                stack.pop();
+            } else {
+                if (stack.length > 0) {
+                    mismatched = true;
+                }
+                orphans += ch;
+            }
+        }
+    }
+    return {
+        signature: orphans || stack.length > 0 ? `${orphans}|${stack.join('')}` : null,
+        mismatched,
+    };
+}
+
+/**
  * Is `code` structurally broken — brackets that don't close, a string
  * literal that never does, or a tail that cannot end a statement in any
  * supported language? All three are strong, language-agnostic truncation
@@ -219,13 +256,27 @@ function stripRegexLiterals(code: string): string {
  * character is legitimately part of a lifetime marker there and never closes
  * by design (see `STRING_LITERAL_RE_RUST`), so it carries no truncation
  * signal for that language the way it does everywhere else.
+ *
+ * `reference` (the code the fix replaces) only relaxes the bracket check: when
+ * the quoted lines cut a block, the fix inherits that same imbalance, so an
+ * identical signature in `reference` is not a truncation signal. A closer that
+ * mismatches an open bracket (`x(})`) is never excused by `reference`.
  */
-function isStructurallyBroken(code: string, language: string | undefined): boolean {
+function isStructurallyBroken(
+    code: string,
+    language: string | undefined,
+    reference?: string,
+): boolean {
+    const nonLiteralOf = (text: string) =>
+        stripRegexLiterals(
+            stripStringLiterals(
+                outsideStringLiterals(text, language, stripComments),
+                language,
+            ),
+        );
     const withoutComments = outsideStringLiterals(code, language, stripComments);
     // Everything left over after every COMPLETE literal is removed.
-    const nonLiteral = stripRegexLiterals(
-        stripStringLiterals(withoutComments, language),
-    );
+    const nonLiteral = nonLiteralOf(code);
 
     // A tail that cannot end a statement in ANY supported language — a bare
     // binary/assignment operator, a dangling "?"/":"/",", or an arrow with
@@ -281,18 +332,17 @@ function isStructurallyBroken(code: string, language: string | undefined): boole
         }
     }
 
-    const closers: Record<string, string> = { '}': '{', ')': '(', ']': '[' };
-    const stack: string[] = [];
-    for (const ch of nonLiteral) {
-        if (ch === '{' || ch === '(' || ch === '[') {
-            stack.push(ch);
-        } else if (ch in closers) {
-            if (stack.pop() !== closers[ch]) {
-                return true;
-            }
-        }
+    const imbalance = bracketImbalance(nonLiteral);
+    if (imbalance.mismatched) {
+        return true;
     }
-    return stack.length > 0;
+    return (
+        imbalance.signature !== null &&
+        imbalance.signature !==
+            (reference === undefined
+                ? null
+                : bracketImbalance(nonLiteralOf(reference)).signature)
+    );
 }
 
 /**
@@ -379,7 +429,7 @@ export function checkFix(
     }
 
     if (
-        isStructurallyBroken(fix, lang) ||
+        isStructurallyBroken(fix, lang, existing) ||
         looksLikeDiffHunk(fix) ||
         startsWithListMarker(fix)
     ) {

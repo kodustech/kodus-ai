@@ -71,6 +71,56 @@ describe('checkFix', () => {
     // no longer this gate's job to guess whether a string "reads like" code.
 
     describe('truncated', () => {
+        // Quoted lines that cut a block leave the fix with the same open
+        // brackets as the code it replaces (#2295): that is not truncation.
+        it('does not flag a fix that inherits the imbalance of the lines it replaces', () => {
+            const existingCode = 'if (a) {\n  foo();';
+            const improvedCode = 'if (a) {\n  foo();\n  bar();';
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it('does not flag a fix that inherits an orphan closer', () => {
+            const existingCode = "}.property('a')";
+            const improvedCode = "}.property('b')";
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it('flags a fix cut after an orphan closer the original also had', () => {
+            const existingCode = "}.property('a')";
+            const improvedCode = '}.property(x';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('flags a closer that mismatches an open bracket even when the original has an orphan closer', () => {
+            const existingCode = "}.property('a')";
+            const improvedCode = "x(}).property('b')";
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('still accepts an orphan closer met with an empty stack (positive control)', () => {
+            const existingCode = "}.property('a')";
+            const improvedCode = "}.property('b').other()";
+            expect(checkFix(existingCode, improvedCode)).toBeNull();
+        });
+
+        it('flags a fix cut inside a block when the original was balanced', () => {
+            const existingCode = 'foo();';
+            const improvedCode = 'if (a) {\n  foo();';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('flags a fix that opens more than the lines it replaces', () => {
+            const existingCode = 'if (a) {';
+            const improvedCode = 'if (a) {\n  call(';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
+        it('still flags an unclosed string when the original was cut the same way', () => {
+            const existingCode = 'if (a) {';
+            const improvedCode = 'if (a) {\n  s = "abc';
+            expect(checkFix(existingCode, improvedCode)).toBe('truncated');
+        });
+
         it('flags unbalanced brackets', () => {
             const existingCode = 'function parseConfig(raw) {\n  return JSON.parse(raw);\n}';
             const improvedCode =
