@@ -205,8 +205,8 @@ function runMetaOf(args) {
         },
         // Production's tools over the repository at the PR's head.
         executionMode: 'live',
-        // heavy = passadas de resample ativadas. Eixo de regime: não comparar
-        // entrada heavy com entrada normal sem rotular.
+        // heavy = generalist plus the M3 lenses. A regime axis: never compare a
+        // heavy entry with a normal one unlabelled.
         heavy: process.env.RECALL_HEAVY === '1',
         // RECALL_REASONING_EFFORT reaches the finder as the BYOK model's
         // reasoningEffort (agent-provider.js resolveRoute), which production

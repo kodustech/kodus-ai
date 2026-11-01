@@ -176,9 +176,12 @@ describe('finder input data', () => {
         expect(internals.teamOf({}, { newKey: true }).codeReviewConfig.configs).toEqual({ newKey: true });
     });
 
-    it('refuses a mode production gates behind a release the eval has no org for', () => {
+    it('asks for heavy mode as a `--heavy` comment does', () => {
+        const files = [{ filename: 'a.ts', patch: '@@ -1 +1 @@\n+x', status: 'modified' }];
+        delete process.env.RECALL_HEAVY;
+        expect(internals.prOf({ caseId: 'c', prFiles: files }).heavy).toBe(false);
         process.env.RECALL_HEAVY = '1';
-        expect(() => internals.teamOf({})).toThrow(internals.NotAProductionRoute);
+        expect(internals.prOf({ caseId: 'c', prFiles: files }).heavy).toBe(true);
     });
 
     it("needs the platform's recorded files for a case, and hands them over as they are", () => {
