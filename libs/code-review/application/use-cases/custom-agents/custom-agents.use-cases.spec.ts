@@ -231,6 +231,7 @@ describe('ResolveCustomAgentUseCase', () => {
                 ],
                 discover: true,
                 source: { repository: RULES },
+                listConnected: true,
             });
 
             expect(knowledgeReader.resolve).toHaveBeenCalledWith(
@@ -291,6 +292,68 @@ describe('ResolveCustomAgentUseCase', () => {
             expect(report.knowledge.linkedRepositories).toEqual([RULES]);
             expect(report.knowledge.connectedRepositories).toEqual([RULES]);
             expect(report.knowledge.repositoryVisibility).toBe('public');
+        });
+
+        it('does not list the integration repositories on a plain draft check', async () => {
+            const lister = {
+                ...cm,
+                getRepositories: jest.fn().mockResolvedValue(listing),
+            };
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                lister as any,
+                reader(),
+            );
+
+            await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [
+                    {
+                        path: 'docs/ledger.md',
+                        kind: 'doc',
+                        linkedTo: ['main-review'],
+                    },
+                ],
+                discover: true,
+            });
+
+            expect(lister.getRepositories).not.toHaveBeenCalled();
+        });
+
+        it('finds a Bitbucket or Azure repository listed without a full name', async () => {
+            const knowledgeReader = reader();
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                {
+                    ...cm,
+                    getRepositories: jest
+                        .fn()
+                        .mockResolvedValue([
+                            {
+                                id: 'repo-9',
+                                name: 'ledger-rules',
+                                organizationName: 'acme-ledger',
+                                default_branch: 'main',
+                            },
+                        ]),
+                } as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: RULES },
+                listConnected: true,
+            });
+
+            if (report.knowledge.status !== 'ok')
+                throw new Error('expected ok');
+            expect(report.knowledge.discoveredIn?.available).toBe(true);
+            expect(report.knowledge.connectedRepositories).toEqual([RULES]);
         });
 
         it('says when the repository to list is not reachable', async () => {

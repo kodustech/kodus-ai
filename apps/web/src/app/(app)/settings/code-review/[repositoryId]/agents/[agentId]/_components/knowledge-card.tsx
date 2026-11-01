@@ -147,7 +147,16 @@ export const useKnowledgeSourceListing = (params: {
     /** The page-level check, which lists the reviewed repository. */
     report?: CustomAgentResolveReport;
     enabled: boolean;
+    /** The "Other repository…" picker is open: list every repository. */
+    listConnected?: boolean;
 }) => {
+    const connected = useResolveCustomAgent({
+        teamId: params.teamId,
+        repositoryId: params.repositoryId,
+        knowledge: [],
+        listConnected: true,
+        enabled: params.enabled && params.listConnected === true,
+    });
     const remote = useResolveCustomAgent({
         teamId: params.teamId,
         repositoryId: params.repositoryId,
@@ -175,9 +184,17 @@ export const useKnowledgeSourceListing = (params: {
                   }
                 : candidate,
     );
+    const connectedKnowledge =
+        connected.data?.knowledge.status === "ok"
+            ? connected.data.knowledge
+            : null;
     return {
         candidates,
         discoveredIn: listing?.discoveredIn,
+        connectedRepositories: connectedKnowledge?.connectedRepositories,
+        reviewedVisibility:
+            listing?.repositoryVisibility ??
+            connectedKnowledge?.repositoryVisibility,
         loading: params.source.repository
             ? remote.isLoading || remote.isFetching
             : !local,
@@ -205,6 +222,7 @@ export const KnowledgeSourceBar = ({
     reviewedVisibility,
     canEdit,
     onRefChange,
+    onPickOther,
 }: {
     source: KnowledgeSource;
     onSourceChange: (source: KnowledgeSource) => void;
@@ -222,6 +240,8 @@ export const KnowledgeSourceBar = ({
     canEdit: boolean;
     /** A new ref for every item of the current repository. */
     onRefChange: (ref: string | undefined) => void;
+    /** The picker of every connected repository opened. */
+    onPickOther?: () => void;
 }) => {
     const [picking, setPicking] = useState(false);
     const [editingRef, setEditingRef] = useState(false);
@@ -263,11 +283,12 @@ export const KnowledgeSourceBar = ({
                         ? OTHER_REPOSITORY
                         : (source.repository ?? THIS_REPOSITORY)
                 }
-                onChange={(value) =>
-                    value === OTHER_REPOSITORY
-                        ? setPicking(true)
-                        : open(value || undefined)
-                }
+                onChange={(value) => {
+                    if (value !== OTHER_REPOSITORY)
+                        return open(value || undefined);
+                    setPicking(true);
+                    onPickOther?.();
+                }}
                 options={[
                     { value: THIS_REPOSITORY, label: "This repository" },
                     ...tabs.map((name) => ({
@@ -463,6 +484,7 @@ export const AgentKnowledgeField = ({
 }) => {
     const [adding, setAdding] = useState(false);
     const [source, setSource] = useState<KnowledgeSource>({});
+    const [pickingOther, setPickingOther] = useState(false);
     const resolved =
         report?.knowledge.status === "ok" ? report.knowledge : null;
     const unavailable =
@@ -475,6 +497,7 @@ export const AgentKnowledgeField = ({
         source,
         report,
         enabled: adding,
+        listConnected: pickingOther,
     });
     const candidates = listing.candidates;
     const reportOf = (
@@ -668,12 +691,13 @@ export const AgentKnowledgeField = ({
                         source={source}
                         onSourceChange={setSource}
                         linkedRepositories={linkedRepositories}
-                        connectedRepositories={resolved?.connectedRepositories}
+                        connectedRepositories={listing.connectedRepositories}
                         knowledge={knowledge}
                         discoveredIn={listing.discoveredIn}
-                        reviewedVisibility={resolved?.repositoryVisibility}
+                        reviewedVisibility={listing.reviewedVisibility}
                         canEdit={canEdit}
                         onRefChange={changeRef}
+                        onPickOther={() => setPickingOther(true)}
                     />
                     {listing.unavailable ? (
                         <p className="text-danger text-xs">

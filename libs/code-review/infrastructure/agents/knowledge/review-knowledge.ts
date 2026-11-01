@@ -130,7 +130,9 @@ export async function resolveReviewKnowledge(params: {
                                         ? 'SKILL_NOT_FOUND'
                                         : 'DOC_NOT_FOUND',
                                 path: knowledgeSourcePath(item),
-                                detail: `${item.repository} is not a repository this team's integration can read`,
+                                detail: repositories.listingFailed
+                                    ? `the repositories of this team's integration could not be listed, so ${item.repository} was not read`
+                                    : `${item.repository} is not a repository this team's integration can read`,
                             },
                         ],
                         typeof target === 'string'

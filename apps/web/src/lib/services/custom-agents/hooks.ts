@@ -67,6 +67,8 @@ export const useResolveCustomAgent = (params: {
     discover?: boolean;
     /** List skills and docs in this other repository instead. */
     source?: KnowledgeSource;
+    /** Also list every repository the integration reaches. */
+    listConnected?: boolean;
     enabled?: boolean;
 }) =>
     useQuery({
@@ -78,6 +80,7 @@ export const useResolveCustomAgent = (params: {
             params.knowledge ?? null,
             params.discover === true,
             params.source ?? null,
+            params.listConnected === true,
         ],
         queryFn: () =>
             resolveCustomAgent({
@@ -87,6 +90,7 @@ export const useResolveCustomAgent = (params: {
                 knowledge: params.knowledge,
                 discover: params.discover,
                 ...(params.source?.repository && { source: params.source }),
+                ...(params.listConnected && { listConnected: true }),
             }),
         enabled:
             !!params.teamId &&

@@ -50,6 +50,12 @@ export class ResolveCustomAgentDto extends CustomAgentScopeDto {
     @IsObject()
     @ApiPropertyOptional({ type: Object })
     source?: { repository?: string; ref?: string };
+
+    /** Also list every repository the integration reaches. */
+    @IsOptional()
+    @IsBoolean()
+    @ApiPropertyOptional({ type: Boolean })
+    listConnected?: boolean;
 }
 
 /** Body of `POST /code-review/custom-agents/try` (#2172). */

@@ -19,6 +19,10 @@ import {
 } from '@libs/code-review/domain/custom-agents/resolve-report';
 import { CLI_SECRET_MASK } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import {
+    repositoryFullName,
+    repositoryNames,
+} from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
+import {
     astGrepRulesPath,
     customAgentConfigSchema,
     KNOWLEDGE_REF_PATTERN,
@@ -96,6 +100,8 @@ type RepositoryListing = {
     full_name?: string;
     default_branch?: string;
     visibility?: 'public' | 'private';
+    organizationName?: string;
+    project?: { name?: string };
 };
 
 const NOT_BOUND = 'Not available on this server yet.';
@@ -135,6 +141,9 @@ export class ResolveCustomAgentUseCase {
         /** List them in this other repository (at `ref`, else its default
          *  branch) instead of the reviewed one. */
         source?: { repository?: string; ref?: string };
+        /** Also list every repository the integration reaches (the picker
+         *  for one that is not linked); a provider call, so only on demand. */
+        listConnected?: boolean;
     }): Promise<CustomAgentResolveReport> {
         const { organizationAndTeamData } = params;
         const configValue = await loadCodeReviewConfigValue(
@@ -170,6 +179,7 @@ export class ResolveCustomAgentUseCase {
                       params.discover === true,
                       params.source,
                       linkedRepositoriesOf(configValue, params.repositoryId),
+                      params.listConnected === true,
                   )
                 : Promise.resolve({
                       status: 'unavailable' as const,
@@ -199,6 +209,7 @@ export class ResolveCustomAgentUseCase {
         discover: boolean,
         source: { repository?: string; ref?: string } | undefined,
         linkedRepositories: string[],
+        listConnected: boolean,
     ): Promise<CustomAgentResolveReport['knowledge']> {
         const reader = this.knowledgeReader;
         if (!reader) {
@@ -222,16 +233,19 @@ export class ResolveCustomAgentUseCase {
             );
             // Other repositories are found among the ones the integration
             // reaches, as a review finds them.
+            // Only when something needs it: listing every repository on
+            // each draft edit would hit the provider for large orgs.
             const listing = await this.listRepositories(
                 organizationAndTeamData,
-                others.size > 0 || discover,
+                others.size > 0 || listConnected,
             );
-            const listed = (name: string) =>
-                listing.find(
-                    (repo) =>
-                        (repo.full_name || repo.name).toLowerCase() ===
-                        name.toLowerCase(),
-                );
+            const byName = new Map<string, RepositoryListing>();
+            for (const repo of listing) {
+                for (const name of repositoryNames(repo)) {
+                    if (!byName.has(name)) byName.set(name, repo);
+                }
+            }
+            const listed = (name: string) => byName.get(name.toLowerCase());
             const refOf = (
                 name: string,
                 ref: string | undefined,
@@ -370,12 +384,13 @@ export class ResolveCustomAgentUseCase {
                 })),
                 ...(discoveredIn && { discoveredIn }),
                 linkedRepositories,
-                ...(listing.length && {
-                    connectedRepositories: listing
-                        .filter((repo) => String(repo.id) !== repository.id)
-                        .map((repo) => repo.full_name || repo.name)
-                        .filter(Boolean),
-                }),
+                ...(listConnected &&
+                    listing.length && {
+                        connectedRepositories: listing
+                            .filter((repo) => String(repo.id) !== repository.id)
+                            .map(repositoryFullName)
+                            .filter(Boolean),
+                    }),
                 ...(reviewed?.visibility && {
                     repositoryVisibility: reviewed.visibility,
                 }),

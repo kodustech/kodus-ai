@@ -104,6 +104,41 @@ describe('resolveKnowledgeRepositories', () => {
         expect(result.missing).toEqual(['someone-else/rules']);
     });
 
+    it('finds a repository a provider lists without a full name (Bitbucket, Azure)', async () => {
+        const cm = provider({}, [
+            {
+                id: '30',
+                name: 'irrigation-rules',
+                organizationName: 'greenhouse',
+                default_branch: 'trunk',
+            } as any,
+        ]);
+        const result = await resolveKnowledgeRepositories({
+            items: [{ repository: RULES }],
+            codeManagement: cm,
+            organizationAndTeamData: ORG,
+        });
+
+        expect(result.sources[0].source).toMatchObject({
+            id: '30',
+            ref: 'trunk',
+        });
+    });
+
+    it('tells a listing that failed apart from a repository that is not there', async () => {
+        const cm = provider({});
+        (cm.getRepositories as jest.Mock).mockRejectedValueOnce(
+            new Error('503'),
+        );
+        const result = await resolveKnowledgeRepositories({
+            items: [{ repository: RULES }],
+            codeManagement: cm,
+            organizationAndTeamData: ORG,
+        });
+
+        expect(result).toMatchObject({ missing: [RULES], listingFailed: true });
+    });
+
     it('lists nothing when no item names another repository', async () => {
         const cm = provider({});
         const result = await resolveKnowledgeRepositories({

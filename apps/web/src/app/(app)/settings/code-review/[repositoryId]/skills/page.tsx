@@ -75,6 +75,7 @@ function SkillsContent() {
     );
     const [path, setPath] = useState("");
     const [source, setSource] = useState<KnowledgeSource>({});
+    const [pickingOther, setPickingOther] = useState(false);
     const report = useResolveCustomAgent({
         teamId,
         repositoryId,
@@ -87,6 +88,7 @@ function SkillsContent() {
         source,
         report: report.data,
         enabled: repositoryId !== "global",
+        listConnected: pickingOther,
     });
     const isGlobal = repositoryId === "global";
     const knowledgeReport =
@@ -420,13 +422,12 @@ function SkillsContent() {
                                 knowledgeReport.linkedRepositories ?? []
                             }
                             connectedRepositories={
-                                knowledgeReport.connectedRepositories
+                                listing.connectedRepositories
                             }
+                            onPickOther={() => setPickingOther(true)}
                             knowledge={knowledge}
                             discoveredIn={listing.discoveredIn}
-                            reviewedVisibility={
-                                knowledgeReport.repositoryVisibility
-                            }
+                            reviewedVisibility={listing.reviewedVisibility}
                             canEdit={canEdit}
                             onRefChange={changeRef}
                         />

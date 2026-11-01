@@ -35,7 +35,6 @@ const report = (
         budgets: [],
         candidates: [],
         linkedRepositories: [RULES],
-        connectedRepositories: [RULES, "greenhouse/dashboard"],
         repositoryVisibility: "public",
         ...over,
     },
@@ -63,9 +62,17 @@ const remoteListing = {
 
 beforeEach(() => {
     mockResolve.mockImplementation((params) =>
-        params?.source?.repository && params.enabled !== false
-            ? remoteListing
-            : { isLoading: false, isFetching: false, data: undefined },
+        params?.listConnected && params.enabled !== false
+            ? {
+                  isLoading: false,
+                  isFetching: false,
+                  data: report({
+                      connectedRepositories: [RULES, "greenhouse/dashboard"],
+                  }),
+              }
+            : params?.source?.repository && params.enabled !== false
+              ? remoteListing
+              : { isLoading: false, isFetching: false, data: undefined },
     );
 });
 

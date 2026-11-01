@@ -943,6 +943,11 @@ export const mentionedButNotFollowed = (
     agentId: string,
 ): string[] => {
     const text = instructions.toLowerCase();
+    const followed = new Set(
+        knowledge
+            .filter((item) => item.repository && isLinked(item, { agentId }))
+            .map((item) => item.repository!.toLowerCase()),
+    );
     return repositories.filter((repository) => {
         const full = repository.toLowerCase();
         const name = full.split("/").pop() ?? full;
@@ -951,12 +956,7 @@ export const mentionedButNotFollowed = (
             new RegExp(
                 `(^|[^a-z0-9_.-])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z0-9_-])`,
             ).test(text);
-        if (!named) return false;
-        return !knowledge.some(
-            (item) =>
-                (item.repository ?? "").toLowerCase() === full &&
-                isLinked(item, { agentId }),
-        );
+        return named && !followed.has(full);
     });
 };
 

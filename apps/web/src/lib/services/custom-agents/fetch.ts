@@ -29,6 +29,8 @@ export const resolveCustomAgent = (body: {
     discover?: boolean;
     /** List skills and docs in this other repository instead. */
     source?: KnowledgeSource;
+    /** Also list every repository the integration reaches. */
+    listConnected?: boolean;
 }) =>
     authorizedFetch<CustomAgentResolveReport>(CUSTOM_AGENTS_PATHS.RESOLVE, {
         method: "POST",

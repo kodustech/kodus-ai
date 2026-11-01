@@ -76,6 +76,9 @@ clean after each one.
 | P7 | `P7-disabled-agent-runs.patch`: `enabled: false` ignored in the stage and in the dispatch | `custom-agent-scope.spec.ts`, `agent-review.stage.custom-agents.spec.ts` | red: 1 of 70 failed, "dispatches the enabled agents" |
 | P7 | same | this eval, `--model=eval-fake --gate` | red, exit 1: P7 0/1 |
 | P7 | `P7-directory-override-ignored.patch`: a directory agent with an inherited id is added beside it, so `enabled: false` there no longer turns it off | `directory-custom-agents-cascade.spec.ts` | red: 3 of 6 failed |
+| P8 | `P8-other-repository-guides-unread.patch`: the quote gate reads a guide of another repository from the reviewed one | `other-repository-knowledge.spec.ts` | red: 2 of 14 failed (2026-11-01, `feat/custom-agents-rules-repo`) |
+| P8 | `P8-loose-citation-not-matched.patch`: a citation as `repo/path` or the bare path is no longer matched to the linked guide | `convention-check.other-repository.spec.ts` | red: 4 of 8 failed |
+| P8 | `P8-pinned-ref-ignored.patch`: a pinned branch or tag is ignored and the default branch is read | `other-repository-knowledge.spec.ts` | red: 1 of 14 failed |
 
 P5 was not falsifiable at first: with the floor and cap moved after dedup, the
 stage spec stayed green (20 of 20). Its two ordering tests scripted the dedup

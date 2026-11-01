@@ -210,6 +210,33 @@ export interface KnowledgeRepositoryListing {
     default_branch?: string;
     visibility?: 'public' | 'private';
     http_url?: string;
+    organizationName?: string;
+    project?: { name?: string };
+}
+
+/**
+ * Every name a listed repository answers to, lowercased. Bitbucket and Azure
+ * list a bare `name` with no `full_name`, so `owner/repo` (and Azure's
+ * `org/project/repo`) is rebuilt from the organization and project.
+ */
+export function repositoryNames(repo: KnowledgeRepositoryListing): string[] {
+    const owner = repo.organizationName?.trim();
+    const project = repo.project?.name?.trim();
+    return [
+        repo.full_name,
+        owner ? `${owner}/${repo.name}` : undefined,
+        owner && project ? `${owner}/${project}/${repo.name}` : undefined,
+        project ? `${project}/${repo.name}` : undefined,
+        repo.name,
+    ]
+        .filter((name): name is string => !!name)
+        .map((name) => name.toLowerCase());
+}
+
+/** The name a listed repository is offered and saved under (`owner/repo`). */
+export function repositoryFullName(repo: KnowledgeRepositoryListing): string {
+    const owner = repo.organizationName?.trim();
+    return repo.full_name || (owner ? `${owner}/${repo.name}` : repo.name);
 }
 
 /** Another repository skills or docs are read from, at one ref. */
@@ -446,6 +473,9 @@ export async function resolveKnowledgeRepositories(params: {
     }>;
     missing: string[];
     listing: KnowledgeRepositoryListing[];
+    /** The provider could not list repositories: `missing` then means
+     *  "not checked", not "not reachable". */
+    listingFailed?: boolean;
 }> {
     const wanted = new Map<string, { repository: string; ref?: string }>();
     for (const item of params.items) {
@@ -458,16 +488,21 @@ export async function resolveKnowledgeRepositories(params: {
     }
     if (!wanted.size) return { sources: [], missing: [], listing: [] };
 
+    let listingFailed = false;
     const listing: KnowledgeRepositoryListing[] =
         (await params.codeManagement
             .getRepositories?.({
                 organizationAndTeamData: params.organizationAndTeamData,
             })
-            .catch(() => undefined)) ?? [];
+            .catch(() => {
+                listingFailed = true;
+                return undefined;
+            })) ?? [];
     const byName = new Map<string, KnowledgeRepositoryListing>();
     for (const repo of listing) {
-        const fullName = repo.full_name || repo.name;
-        if (fullName) byName.set(fullName.toLowerCase(), repo);
+        for (const name of repositoryNames(repo)) {
+            if (!byName.has(name)) byName.set(name, repo);
+        }
     }
 
     const sources: Array<{
@@ -499,5 +534,5 @@ export async function resolveKnowledgeRepositories(params: {
             }),
         });
     }
-    return { sources, missing, listing };
+    return { sources, missing, listing, listingFailed };
 }
