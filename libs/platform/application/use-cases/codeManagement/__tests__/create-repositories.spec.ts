@@ -283,4 +283,67 @@ describe('CreateRepositoriesUseCase', () => {
 
         expect(backfill.execute).not.toHaveBeenCalled();
     });
+
+    it('links the repository row to the repositories integration config, not the team', async () => {
+        const repositoryService = {
+            findOrCreate: jest.fn().mockResolvedValue({
+                uuid: 'r',
+                astGraphStatus: 'ready',
+                platform: 'gitlab',
+            }),
+        };
+
+        const useCase = new CreateRepositoriesUseCase(
+            {
+                findById: jest.fn().mockResolvedValue({
+                    uuid: 'team-ic',
+                    status: STATUS.ACTIVE,
+                }),
+                find: jest.fn().mockResolvedValue([]),
+                update: jest.fn(),
+            } as any,
+            { enqueue: jest.fn() } as any,
+            {} as any,
+            { execute: jest.fn().mockResolvedValue([]) } as any,
+            { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            {
+                createOrUpdateIntegrationConfig: jest
+                    .fn()
+                    .mockResolvedValue(undefined),
+                getTypeIntegration: jest.fn().mockResolvedValue('gitlab'),
+            } as any,
+            { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            {
+                findIntegrationConfigFormatted: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'repo-1' }]),
+                findOneIntegrationConfigWithIntegrations: jest
+                    .fn()
+                    .mockResolvedValue({ uuid: 'config-1' }),
+            } as any,
+            repositoryService as any,
+            undefined as any,
+            {
+                repositoryConnected: jest.fn(),
+                repositoriesSelected: jest.fn(),
+            } as any,
+        );
+
+        await useCase.execute({
+            organizationId: 'org-1',
+            teamId: 'team-ic',
+            type: 'replace',
+            repositories: [
+                { id: 'repo-1', name: 'alpha', organizationName: 'kodus' },
+            ],
+        });
+
+        await flushSetImmediate();
+        await flushSetImmediate();
+
+        expect(repositoryService.findOrCreate).toHaveBeenCalledWith(
+            expect.objectContaining({ integrationConfigId: 'config-1' }),
+        );
+    });
 });
