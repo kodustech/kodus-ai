@@ -7,6 +7,7 @@ import {
     isKodyMentionNonReview,
     isReviewCommand,
     parseReviewDirective,
+    isHeavyReviewCommand,
     parseCustomAgentCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
@@ -578,6 +579,7 @@ export class GitHubPullRequestHandler implements IWebhookEventHandler {
                             origin: isForceCommand ? 'command-force' : 'command',
                             triggerCommentId: comment?.id,
                             reviewDirective: parseReviewDirective(comment.body),
+                            heavy: isHeavyReviewCommand(comment.body),
                             onlyCustomAgent: customAgentSlug,
                             pull_request:
                                 pullRequestData ||

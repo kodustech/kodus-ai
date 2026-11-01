@@ -53,6 +53,7 @@ class ReviewService {
             commit?: string;
             branch?: string;
             focus?: string;
+            heavy?: boolean;
             quiet?: boolean;
             onProgress?: (status: string) => void;
         },

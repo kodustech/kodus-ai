@@ -227,6 +227,8 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 // CLI equivalent of `@kody review focus on X` — same sanitize +
                 // cap as the PR-comment path. Steers the finder when set.
                 reviewDirective: normalizeReviewDirective(input.config?.focus),
+                // Heavy mode: the M3 lenses run next to the generalist.
+                heavy: input.config?.heavy === true,
                 validSuggestions: [],
                 discardedSuggestions: [],
                 preparedFileContexts: [],

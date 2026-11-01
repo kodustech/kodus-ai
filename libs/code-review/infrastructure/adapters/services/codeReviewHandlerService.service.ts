@@ -201,6 +201,8 @@ export class CodeReviewHandlerService {
         parentSignal?: AbortSignal,
         // Free-text steering directive from `@kody review <directive>`.
         reviewDirective?: string,
+        // `@kody review --heavy` — the M3 lenses next to the generalist.
+        heavy?: boolean,
         // `@kody -v <slug>` — run only that custom agent (#2172).
         onlyCustomAgent?: string,
     ) {
@@ -228,6 +230,7 @@ export class CodeReviewHandlerService {
                 triggerCommentId,
                 userGitId,
                 reviewDirective,
+                heavy,
                 ...(onlyCustomAgent ? { onlyCustomAgent } : {}),
                 pipelineMetadata: {
                     lastExecution: {

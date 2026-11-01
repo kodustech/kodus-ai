@@ -15,6 +15,7 @@ export async function buildReviewConfig({
         commit?: string;
         branch?: string;
         focus?: string;
+        heavy?: boolean;
         quiet?: boolean;
     };
     getFullFileContents: (
@@ -32,6 +33,8 @@ export async function buildReviewConfig({
         fast,
         // Steering directive (the backend sanitizes + caps it before use).
         focus: options?.focus,
+        // Heavy mode: the M3 lenses run next to the generalist.
+        heavy: options?.heavy,
     };
 
     // Skip inlining file contents when:

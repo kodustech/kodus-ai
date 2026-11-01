@@ -132,6 +132,7 @@ export class AutomationCodeReviewService implements Omit<
             action,
             triggerCommentId,
             reviewDirective,
+            heavy,
             onlyCustomAgent,
             userGitId,
             signal,
@@ -331,6 +332,7 @@ export class AutomationCodeReviewService implements Omit<
                     correlationId,
                     signal, // parentSignal — forwarded to pipeline context
                     reviewDirective, // @kody review <directive> steering text
+                    heavy, // @kody review --heavy — the M3 lenses next to the generalist
                     onlyCustomAgent, // @kody -v <slug> — that custom agent only
                 );
 

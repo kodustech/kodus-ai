@@ -87,6 +87,13 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      */
     reviewDirective?: string;
 
+    /**
+     * Heavy mode — opt-in per review (CLI `--heavy` or PR `@kody review
+     * --heavy`). The M3 lenses run next to the generalist for higher recall,
+     * at the cost of up to nine short lens runs. Off by default.
+     */
+    heavy?: boolean;
+
     codeReviewConfig?: CodeReviewConfig;
     automaticReviewStatus?: AutomaticReviewStatus;
 

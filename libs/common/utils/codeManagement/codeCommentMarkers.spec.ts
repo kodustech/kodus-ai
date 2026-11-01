@@ -13,6 +13,7 @@ import {
     normalizeReviewDirective,
     isReviewCommand,
     isForceReviewCommand,
+    isHeavyReviewCommand,
     isKodyMentionNonReview,
 } from './codeCommentMarkers';
 
@@ -358,6 +359,39 @@ describe('normalizeReviewDirective (shared by the CLI --focus path)', () => {
     it('keeps a legit focus untouched', () => {
         expect(normalizeReviewDirective('the `topCodes` sort logic')).toBe(
             'the `topCodes` sort logic',
+        );
+    });
+});
+
+describe('isHeavyReviewCommand', () => {
+    it('matches --heavy in any position of a review command', () => {
+        expect(isHeavyReviewCommand('@kody review --heavy')).toBe(true);
+        expect(isHeavyReviewCommand('@kody review auth --heavy')).toBe(true);
+        expect(isHeavyReviewCommand('@kody review --heavy --force')).toBe(true);
+        expect(isHeavyReviewCommand('@kody start-review --heavy')).toBe(true);
+    });
+
+    it('does not match a bare `heavy`, a plain review or a non-command', () => {
+        expect(isHeavyReviewCommand('@kody review heavy checkout path')).toBe(
+            false,
+        );
+        expect(isHeavyReviewCommand('@kody review')).toBe(false);
+        expect(isHeavyReviewCommand('please run --heavy')).toBe(false);
+        expect(isHeavyReviewCommand(undefined)).toBe(false);
+    });
+
+    it('matches a custom bot username, keeping @kody as fallback', () => {
+        expect(isHeavyReviewCommand('@mybot review --heavy', 'mybot')).toBe(
+            true,
+        );
+        expect(isHeavyReviewCommand('@kody review --heavy', 'mybot')).toBe(
+            true,
+        );
+    });
+
+    it('leaves --heavy out of the review directive', () => {
+        expect(parseReviewDirective('@kody review --heavy the auth flow')).toBe(
+            'the auth flow',
         );
     });
 });

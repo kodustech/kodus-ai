@@ -64,6 +64,8 @@ export interface CliReviewConfig {
      * before it reaches the prompt.
      */
     focus?: string;
+    /** Heavy mode: the M3 lenses run next to the generalist. */
+    heavy?: boolean;
     files?: CliFileInput[];
 }
 

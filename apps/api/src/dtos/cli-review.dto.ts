@@ -85,11 +85,9 @@ class CliConfigDto {
     @ApiPropertyOptional({ type: Boolean, example: true })
     fast?: boolean;
 
-    // Heavy mode was removed. Still accepted, and ignored, because the API
-    // rejects unknown fields and older CLIs send it with `--heavy`.
     @IsOptional()
     @IsBoolean()
-    @ApiPropertyOptional({ type: Boolean, deprecated: true })
+    @ApiPropertyOptional({ type: Boolean, example: false })
     heavy?: boolean;
 
     @IsOptional()

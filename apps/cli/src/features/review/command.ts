@@ -1,4 +1,4 @@
-import { Command, Option } from 'commander';
+import { Command } from 'commander';
 import ora, { type Ora } from 'ora';
 import chalk from 'chalk';
 import fs from 'fs/promises';
@@ -12,7 +12,7 @@ import {
     checkTrialStatus,
 } from '../../utils/rate-limit.js';
 import { exitWithCode } from '../../utils/cli-exit.js';
-import { cliDebug, cliError, cliInfo, cliWarn } from '../../utils/logger.js';
+import { cliDebug, cliError, cliInfo } from '../../utils/logger.js';
 import { createCommandContext } from '../../utils/command-context.js';
 import {
     buildAgentErrorEnvelope,
@@ -54,7 +54,6 @@ type ReviewCommandOptions = {
     rulesOnly?: boolean;
     fast?: boolean;
     focus?: string;
-    /** Removed; accepted and ignored with a warning. */
     heavy?: boolean;
     interactive?: boolean;
     fix?: boolean;
@@ -112,9 +111,10 @@ Examples:
             '--focus <text>',
             'Steer the review at a specific area, e.g. --focus "the auth and session logic"',
         )
-        // Heavy mode was removed. The flag stays, hidden, so a script that
-        // still passes it runs a normal review instead of failing.
-        .addOption(new Option('--heavy').hideHelp())
+        .option(
+            '--heavy',
+            'Heavy mode: specialist lenses run next to the main review for higher recall (slower, costs more)',
+        )
         .option(
             '-i, --interactive',
             'Interactive mode: navigate and apply fixes',
@@ -159,12 +159,6 @@ async function reviewAction(
 
     try {
         validateReviewOptions(options);
-
-        if (options.heavy) {
-            cliWarn(
-                '--heavy was removed and has no effect; running a normal review.',
-            );
-        }
 
         assertStructuredOutputForFields({
             fields: options.fields,
@@ -238,6 +232,7 @@ async function reviewAction(
                         commit: options.commit,
                         branch: options.branch,
                         focus: options.focus,
+                        heavy: options.heavy,
                         quiet: globalOpts.quiet,
                         onProgress: (status) => {
                             if (globalOpts.quiet || ctx.isAgent) {

@@ -131,6 +131,8 @@ export interface ReviewConfig {
     fast?: boolean;
     /** Free-text steering directive (`--focus`); sanitized + capped server-side. */
     focus?: string;
+    /** Heavy mode (`--heavy`): the M3 lenses run next to the generalist. */
+    heavy?: boolean;
     files?: FileContent[];
 }
 
