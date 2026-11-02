@@ -251,7 +251,7 @@ export interface ReviewRuleConfig {
      * instructions to the reviewer.
      */
     repoInstructions?: RepoInstructionsContext;
-    /** Review mode: 'fast' skips heavy passes (verify, coverage recovery, synthesis rescue) and caps agent steps; 'normal' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
+    /** Review mode: 'fast' skips the synthesis rescue and caps agent steps, and still verifies; 'normal' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
     reviewMode?: 'fast' | 'normal' | 'deep';
 }
 
@@ -454,7 +454,7 @@ export interface AgentLoopInput {
      *  files must be covered; warm/optional count toward the 70% total
      *  floor. When absent, coverage stays flat (legacy 100%-all-files). */
     fileTiers?: Map<string, CoverageTier>;
-    /** Review mode: 'fast' skips heavy passes and caps steps; 'normal' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
+    /** Review mode: 'fast' skips the synthesis rescue and caps steps, and still verifies; 'normal' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
     reviewMode?: 'fast' | 'normal' | 'deep';
     /** Model context window in tokens. Used to trigger context compression when the message history grows too large. */
     contextWindowTokens?: number;
