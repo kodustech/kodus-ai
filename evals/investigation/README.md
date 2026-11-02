@@ -66,7 +66,8 @@ PR, which trip when the engine breaks rather than when recall wobbles.
   `rejudge.js` or `evals/scorer`.
 
 `RECALL_HEAVY=1` reviews each case as `@kody review --heavy` does: the
-generalist plus the M3 lenses.
+generalist plus the M3 lenses. `RECALL_SANDBOX=none` reviews it with no
+sandbox, as production does when none could be created: no tools, the diff only.
 
 Refused with exit 2: a subscription model (`@sub`) and a model not in
 `evals/shared/tier0-models.js`.

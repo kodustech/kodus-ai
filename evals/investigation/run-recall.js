@@ -205,6 +205,8 @@ function runMetaOf(args) {
         },
         // Production's tools over the repository at the PR's head.
         executionMode: 'live',
+        // RECALL_SANDBOX=none: no sandbox, so no tools (self-contained).
+        sandbox: process.env.RECALL_SANDBOX === 'none' ? 'none' : 'alive',
         // heavy = generalist plus the M3 lenses. A regime axis: never compare a
         // heavy entry with a normal one unlabelled.
         heavy: process.env.RECALL_HEAVY === '1',

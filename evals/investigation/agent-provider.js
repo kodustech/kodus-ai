@@ -224,7 +224,9 @@ class InvestigationAgentProvider {
             const permissionService = evalPermissionService(route.storedConfig);
 
             stage = 'run-review';
-            const review = await reviewPullRequest({ pr: prOf(caseData), team: teamOf(caseData, this.teamConfig), route, permissionService });
+            // RECALL_SANDBOX=none: the review production runs when no sandbox could be created.
+            const sandbox = process.env.RECALL_SANDBOX === 'none' ? 'none' : undefined;
+            const review = await reviewPullRequest({ pr: prOf(caseData), team: teamOf(caseData, this.teamConfig), route, permissionService, ...(sandbox && { sandbox }) });
             if (review.skipped) throw new Error(`production skipped the review: ${review.skipped}`);
             // The stage records a failed agent or step and goes on with what it has:
             // a review that failed measured the failure, not the finder.
