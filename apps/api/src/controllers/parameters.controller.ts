@@ -483,9 +483,10 @@ export class ParametersController {
     @Post('/preview-pr-summary')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
-        checkPermissions({
+        checkRepoPermissions({
             action: Action.Read,
             resource: ResourceType.CodeReviewSettings,
+            repo: { key: { body: 'repository.id' } },
         }),
     )
     @ApiOperation({
