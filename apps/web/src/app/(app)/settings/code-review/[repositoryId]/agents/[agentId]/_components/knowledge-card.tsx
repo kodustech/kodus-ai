@@ -222,7 +222,7 @@ export const KnowledgeSourceBar = ({
     reviewedVisibility,
     canEdit,
     onRefChange,
-    onPickOther,
+    onPickingChange,
 }: {
     source: KnowledgeSource;
     onSourceChange: (source: KnowledgeSource) => void;
@@ -240,10 +240,14 @@ export const KnowledgeSourceBar = ({
     canEdit: boolean;
     /** A new ref for every item of the current repository. */
     onRefChange: (ref: string | undefined) => void;
-    /** The picker of every connected repository opened. */
-    onPickOther?: () => void;
+    /** The picker of every connected repository opened or closed. */
+    onPickingChange?: (picking: boolean) => void;
 }) => {
-    const [picking, setPicking] = useState(false);
+    const [picking, setPickingState] = useState(false);
+    const setPicking = (next: boolean) => {
+        setPickingState(next);
+        onPickingChange?.(next);
+    };
     const [editingRef, setEditingRef] = useState(false);
     const [refDraft, setRefDraft] = useState("");
     // Linked repositories first, then any other repository already in use.
@@ -287,7 +291,6 @@ export const KnowledgeSourceBar = ({
                     if (value !== OTHER_REPOSITORY)
                         return open(value || undefined);
                     setPicking(true);
-                    onPickOther?.();
                 }}
                 options={[
                     { value: THIS_REPOSITORY, label: "This repository" },
@@ -436,7 +439,7 @@ const OtherRepositoryPicker = ({
                                 key={name}
                                 value={name}
                                 onSelect={() => onSelect(name)}
-                                className="cursor-pointer gap-2 py-2">
+                                className="cursor-pointer justify-start gap-2 py-2">
                                 <BookMarkedIcon className="text-text-secondary size-3.5 shrink-0" />
                                 <span className="truncate text-sm">{name}</span>
                             </CommandItem>
@@ -485,6 +488,7 @@ export const AgentKnowledgeField = ({
     const [adding, setAdding] = useState(false);
     const [source, setSource] = useState<KnowledgeSource>({});
     const [pickingOther, setPickingOther] = useState(false);
+    const [pickerOpen, setPickerOpen] = useState(false);
     const resolved =
         report?.knowledge.status === "ok" ? report.knowledge : null;
     const unavailable =
@@ -511,6 +515,7 @@ export const AgentKnowledgeField = ({
     const fromSource = (choice: { repository?: string }) =>
         (choice.repository ?? "").toLowerCase() ===
         (source.repository ?? "").toLowerCase();
+    const followsFromSource = [...skills, ...docs].some(fromSource);
     const available = knowledgeChoices(knowledge, candidates, agentId).filter(
         (choice) => !choice.linked && fromSource(choice),
     );
@@ -697,100 +702,112 @@ export const AgentKnowledgeField = ({
                         reviewedVisibility={listing.reviewedVisibility}
                         canEdit={canEdit}
                         onRefChange={changeRef}
-                        onPickOther={() => setPickingOther(true)}
+                        onPickingChange={(picking) => {
+                            setPickerOpen(picking);
+                            if (picking) setPickingOther(true);
+                        }}
                     />
-                    {listing.unavailable ? (
-                        <p className="text-danger text-xs">
-                            {listing.unavailable}
-                        </p>
-                    ) : listing.loading ? (
-                        <p className="text-text-secondary text-xs">
-                            Reading{" "}
-                            {source.repository
-                                ? source.repository
-                                : "the branch"}
-                            …
-                        </p>
-                    ) : listing.discoveredIn?.available ===
-                      false ? null : available.length === 0 ? (
-                        <p className="text-text-secondary text-xs">
-                            {source.repository
-                                ? `Nothing else found in ${source.repository}. Add one by path.`
-                                : "Nothing else found on the branch. Add one by path."}
-                        </p>
-                    ) : (
-                        <ul className="flex flex-col gap-1">
-                            {available.map((choice) => {
-                                const name =
-                                    choice.kind === "skill"
-                                        ? (reportOf(choice)?.name ??
-                                          choice.name ??
-                                          skillFolderName(choice.path))
-                                        : choice.path;
-                                const description = descriptionOf(choice);
-                                return (
-                                    <li key={knowledgeKey(choice)}>
-                                        <button
-                                            type="button"
-                                            aria-label={`Follow ${name}`}
-                                            disabled={!canEdit}
-                                            onClick={() => follow(choice, true)}
-                                            className="hover:bg-card-lv2 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left disabled:opacity-60">
-                                            {choice.kind === "skill" ? (
-                                                <SparklesIcon
-                                                    aria-hidden
-                                                    className="text-text-tertiary mt-0.5 size-4 shrink-0"
-                                                />
-                                            ) : (
-                                                <BookOpenIcon
-                                                    aria-hidden
-                                                    className="text-text-tertiary mt-0.5 size-4 shrink-0"
-                                                />
-                                            )}
-                                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                                <span
-                                                    className={cn(
-                                                        "text-text-primary text-xs font-medium",
-                                                        choice.kind === "doc" &&
-                                                            "font-mono",
-                                                    )}>
-                                                    {name}
-                                                </span>
-                                                {description && (
-                                                    <span className="text-text-secondary text-xs">
-                                                        {description}
+                    {!pickerOpen && (
+                        <>
+                            {listing.unavailable ? (
+                                <p className="text-danger text-xs">
+                                    {listing.unavailable}
+                                </p>
+                            ) : listing.loading ? (
+                                <p className="text-text-secondary text-xs">
+                                    Reading{" "}
+                                    {source.repository
+                                        ? source.repository
+                                        : "the branch"}
+                                    …
+                                </p>
+                            ) : listing.discoveredIn?.available ===
+                              false ? null : available.length === 0 ? (
+                                <p className="text-text-secondary text-xs">
+                                    {source.repository
+                                        ? `${followsFromSource ? "Nothing else" : "No skills or docs"} found in ${source.repository}. Add one by path.`
+                                        : `${followsFromSource ? "Nothing else" : "No skills or docs"} found on the branch. Add one by path.`}
+                                </p>
+                            ) : (
+                                <ul className="flex flex-col gap-1">
+                                    {available.map((choice) => {
+                                        const name =
+                                            choice.kind === "skill"
+                                                ? (reportOf(choice)?.name ??
+                                                  choice.name ??
+                                                  skillFolderName(choice.path))
+                                                : choice.path;
+                                        const description =
+                                            descriptionOf(choice);
+                                        return (
+                                            <li key={knowledgeKey(choice)}>
+                                                <button
+                                                    type="button"
+                                                    aria-label={`Follow ${name}`}
+                                                    disabled={!canEdit}
+                                                    onClick={() =>
+                                                        follow(choice, true)
+                                                    }
+                                                    className="hover:bg-card-lv2 flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left disabled:opacity-60">
+                                                    {choice.kind === "skill" ? (
+                                                        <SparklesIcon
+                                                            aria-hidden
+                                                            className="text-text-tertiary mt-0.5 size-4 shrink-0"
+                                                        />
+                                                    ) : (
+                                                        <BookOpenIcon
+                                                            aria-hidden
+                                                            className="text-text-tertiary mt-0.5 size-4 shrink-0"
+                                                        />
+                                                    )}
+                                                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                                        <span
+                                                            className={cn(
+                                                                "text-text-primary text-xs font-medium",
+                                                                choice.kind ===
+                                                                    "doc" &&
+                                                                    "font-mono",
+                                                            )}>
+                                                            {name}
+                                                        </span>
+                                                        {description && (
+                                                            <span className="text-text-secondary text-xs">
+                                                                {description}
+                                                            </span>
+                                                        )}
+                                                        {choice.kodyRuleSource && (
+                                                            <span className="text-warning text-xs">
+                                                                Also a Kody
+                                                                Rules source
+                                                            </span>
+                                                        )}
                                                     </span>
-                                                )}
-                                                {choice.kodyRuleSource && (
-                                                    <span className="text-warning text-xs">
-                                                        Also a Kody Rules source
-                                                    </span>
-                                                )}
-                                            </span>
-                                            <PlusIcon
-                                                aria-hidden
-                                                className="text-text-secondary mt-0.5 size-4 shrink-0"
-                                            />
-                                        </button>
-                                    </li>
-                                );
-                            })}
-                        </ul>
+                                                    <PlusIcon
+                                                        aria-hidden
+                                                        className="text-text-secondary mt-0.5 size-4 shrink-0"
+                                                    />
+                                                </button>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            )}
+                            <AddByPath
+                                agentId={agentId}
+                                disabled={!canEdit}
+                                source={source}
+                                sourceLabel={sourceLabel}
+                                onAdd={(item) => follow(item, true)}
+                            />
+                            <Button
+                                size="xs"
+                                variant="helper"
+                                className="w-fit"
+                                onClick={() => setAdding(false)}>
+                                Done
+                            </Button>
+                        </>
                     )}
-                    <AddByPath
-                        agentId={agentId}
-                        disabled={!canEdit}
-                        source={source}
-                        sourceLabel={sourceLabel}
-                        onAdd={(item) => follow(item, true)}
-                    />
-                    <Button
-                        size="xs"
-                        variant="helper"
-                        className="w-fit"
-                        onClick={() => setAdding(false)}>
-                        Done
-                    </Button>
                 </div>
             ) : (
                 canEdit && (

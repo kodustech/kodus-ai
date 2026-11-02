@@ -76,6 +76,7 @@ function SkillsContent() {
     const [path, setPath] = useState("");
     const [source, setSource] = useState<KnowledgeSource>({});
     const [pickingOther, setPickingOther] = useState(false);
+    const [pickerOpen, setPickerOpen] = useState(false);
     const report = useResolveCustomAgent({
         teamId,
         repositoryId,
@@ -424,7 +425,10 @@ function SkillsContent() {
                             connectedRepositories={
                                 listing.connectedRepositories
                             }
-                            onPickOther={() => setPickingOther(true)}
+                            onPickingChange={(picking) => {
+                                setPickerOpen(picking);
+                                if (picking) setPickingOther(true);
+                            }}
                             knowledge={knowledge}
                             discoveredIn={listing.discoveredIn}
                             reviewedVisibility={listing.reviewedVisibility}
@@ -432,92 +436,98 @@ function SkillsContent() {
                             onRefChange={changeRef}
                         />
                     )}
-                    {!isGlobal && listing.unavailable && (
-                        <p className="text-danger text-xs">
-                            {listing.unavailable}
-                        </p>
-                    )}
-                    {!isGlobal && listing.loading && (
-                        <Spinner className="size-4" />
-                    )}
-                    {!isGlobal &&
-                        !listing.loading &&
-                        (source.repository || knowledgeReport) &&
-                        listing.discoveredIn?.available !== false &&
-                        candidates.length === 0 && (
-                            <p className="text-text-secondary text-xs">
-                                Nothing new found.
-                            </p>
-                        )}
-                    {candidates.map((candidate) => (
-                        <div
-                            key={knowledgeKey(candidate)}
-                            className="flex items-start gap-2">
-                            {candidate.kind === "skill" ? (
-                                <SparklesIcon className="text-text-tertiary mt-0.5 size-4 shrink-0" />
-                            ) : (
-                                <BookOpenIcon className="text-text-tertiary mt-0.5 size-4 shrink-0" />
+                    {!pickerOpen && (
+                        <>
+                            {!isGlobal && listing.unavailable && (
+                                <p className="text-danger text-xs">
+                                    {listing.unavailable}
+                                </p>
                             )}
-                            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                <span className="text-text-primary text-xs font-medium">
-                                    {candidate.name ?? candidate.path}
-                                </span>
-                                <span className="text-text-tertiary truncate font-mono text-xs">
-                                    {candidate.path}
-                                </span>
-                                {candidate.kodyRuleSource && (
-                                    <span className="text-warning text-xs">
-                                        Also a Kody Rules source: linking it
-                                        here can make the same rule comment
-                                        twice.
-                                    </span>
+                            {!isGlobal && listing.loading && (
+                                <Spinner className="size-4" />
+                            )}
+                            {!isGlobal &&
+                                !listing.loading &&
+                                (source.repository || knowledgeReport) &&
+                                listing.discoveredIn?.available !== false &&
+                                candidates.length === 0 && (
+                                    <p className="text-text-secondary text-xs">
+                                        Nothing new found.
+                                    </p>
                                 )}
+                            {candidates.map((candidate) => (
+                                <div
+                                    key={knowledgeKey(candidate)}
+                                    className="flex items-start gap-2">
+                                    {candidate.kind === "skill" ? (
+                                        <SparklesIcon className="text-text-tertiary mt-0.5 size-4 shrink-0" />
+                                    ) : (
+                                        <BookOpenIcon className="text-text-tertiary mt-0.5 size-4 shrink-0" />
+                                    )}
+                                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                        <span className="text-text-primary text-xs font-medium">
+                                            {candidate.name ?? candidate.path}
+                                        </span>
+                                        <span className="text-text-tertiary truncate font-mono text-xs">
+                                            {candidate.path}
+                                        </span>
+                                        {candidate.kodyRuleSource && (
+                                            <span className="text-warning text-xs">
+                                                Also a Kody Rules source:
+                                                linking it here can make the
+                                                same rule comment twice.
+                                            </span>
+                                        )}
+                                    </div>
+                                    <Button
+                                        size="xs"
+                                        variant="helper"
+                                        leftIcon={<PlusIcon />}
+                                        aria-label={`Add ${candidate.name ?? candidate.path}`}
+                                        disabled={!canEdit}
+                                        onClick={() => register(candidate)}>
+                                        Add
+                                    </Button>
+                                </div>
+                            ))}
+                        </>
+                    )}
+
+                    {!pickerOpen && (
+                        <div
+                            className={
+                                isGlobal
+                                    ? "flex items-center gap-2"
+                                    : "border-card-lv3/60 flex items-center gap-2 border-t pt-3"
+                            }>
+                            <div className="min-w-0 flex-1">
+                                <Input
+                                    size="md"
+                                    aria-label="Path of a doc or skill"
+                                    placeholder="Path, e.g. docs/payments.md or .claude/skills/ledger"
+                                    value={path}
+                                    disabled={!canEdit}
+                                    onChange={(e) => setPath(e.target.value)}
+                                />
                             </div>
                             <Button
-                                size="xs"
-                                variant="helper"
-                                leftIcon={<PlusIcon />}
-                                aria-label={`Add ${candidate.name ?? candidate.path}`}
-                                disabled={!canEdit}
-                                onClick={() => register(candidate)}>
+                                size="sm"
+                                variant="secondary"
+                                aria-label={
+                                    typedItem
+                                        ? `Add the ${typedItem.kind} ${typedItem.repository ? `${typedItem.repository}:` : ""}${typedItem.path}`
+                                        : "Add path"
+                                }
+                                disabled={!canEdit || !typedItem}
+                                onClick={() => {
+                                    if (!typedItem) return;
+                                    register(typedItem);
+                                    setPath("");
+                                }}>
                                 Add
                             </Button>
                         </div>
-                    ))}
-
-                    <div
-                        className={
-                            isGlobal
-                                ? "flex items-center gap-2"
-                                : "border-card-lv3/60 flex items-center gap-2 border-t pt-3"
-                        }>
-                        <div className="min-w-0 flex-1">
-                            <Input
-                                size="md"
-                                aria-label="Path of a doc or skill"
-                                placeholder="Path, e.g. docs/payments.md or .claude/skills/ledger"
-                                value={path}
-                                disabled={!canEdit}
-                                onChange={(e) => setPath(e.target.value)}
-                            />
-                        </div>
-                        <Button
-                            size="sm"
-                            variant="secondary"
-                            aria-label={
-                                typedItem
-                                    ? `Add the ${typedItem.kind} ${typedItem.repository ? `${typedItem.repository}:` : ""}${typedItem.path}`
-                                    : "Add path"
-                            }
-                            disabled={!canEdit || !typedItem}
-                            onClick={() => {
-                                if (!typedItem) return;
-                                register(typedItem);
-                                setPath("");
-                            }}>
-                            Add
-                        </Button>
-                    </div>
+                    )}
                 </Card>
             </Page.Content>
         </Page.Root>

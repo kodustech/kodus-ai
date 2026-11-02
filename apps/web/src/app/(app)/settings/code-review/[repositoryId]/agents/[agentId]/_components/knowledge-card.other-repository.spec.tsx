@@ -230,5 +230,60 @@ describe("AgentKnowledgeField with another repository", () => {
         );
 
         expect(screen.getByText("greenhouse/dashboard")).toBeInTheDocument();
+        // While picking, what the previous source offers is out of the way.
+        expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
+
+        fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+        expect(
+            screen.getByRole("button", { name: "Done" }),
+        ).toBeInTheDocument();
     });
+
+    it.each([
+        ["follows nothing from it", [], "No skills or docs found"],
+        [
+            "already follows a doc of it",
+            [
+                {
+                    path: "stack/node/rules/valves.md",
+                    kind: "doc" as const,
+                    repository: RULES,
+                    linkedTo: [{ agentId: "valves" }],
+                },
+            ],
+            "Nothing else found",
+        ],
+    ])(
+        "says what an empty repository offers when the agent %s",
+        (_case, knowledge: KnowledgeItem[], start) => {
+            mockResolve.mockImplementation((params) =>
+                params?.source?.repository && params.enabled !== false
+                    ? {
+                          isLoading: false,
+                          isFetching: false,
+                          data: report({
+                              candidates: [],
+                              discoveredIn: {
+                                  repository: RULES,
+                                  branch: "trunk",
+                                  available: true,
+                              },
+                          }),
+                      }
+                    : { isLoading: false, isFetching: false, data: undefined },
+            );
+            field(knowledge);
+
+            fireEvent.click(
+                screen.getByRole("button", { name: "Add skill or doc" }),
+            );
+            fireEvent.click(
+                screen.getByRole("button", { name: "irrigation-rules" }),
+            );
+
+            expect(
+                screen.getByText(`${start} in ${RULES}. Add one by path.`),
+            ).toBeInTheDocument();
+        },
+    );
 });
