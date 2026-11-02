@@ -316,7 +316,8 @@ export class CodeManagementBaseBranchReader implements BaseBranchReader {
             return { status: 'missing' };
         }
 
-        const data = response?.data;
+        // Most providers wrap the file in `data`; Forgejo returns it flat.
+        const data = response?.data ?? response;
         if (data?.type === 'symlink') {
             return { status: 'refused', reason: 'symbolic links are not read' };
         }
@@ -527,8 +528,20 @@ export async function resolveKnowledgeRepositories(params: {
             .getRepositories?.({
                 organizationAndTeamData: params.organizationAndTeamData,
             })
-            .catch(() => {
+            .catch((error: Error) => {
                 listingFailed = true;
+                logger.warn({
+                    message:
+                        "[AGENT] The integration's repositories could not be listed; skills and docs of other repositories were not read",
+                    context: 'resolveKnowledgeRepositories',
+                    error,
+                    metadata: {
+                        organizationAndTeamData: params.organizationAndTeamData,
+                        repositories: [...wanted.values()].map(
+                            (entry) => entry.repository,
+                        ),
+                    },
+                });
                 return undefined;
             })) ?? [];
     const byName = new Map<string, KnowledgeRepositoryListing>();

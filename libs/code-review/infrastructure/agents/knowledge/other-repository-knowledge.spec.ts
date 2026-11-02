@@ -245,6 +245,14 @@ describe('resolveKnowledgeRepositories', () => {
         });
 
         expect(result).toMatchObject({ missing: [RULES], listingFailed: true });
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: {
+                    organizationAndTeamData: ORG,
+                    repositories: [RULES],
+                },
+            }),
+        );
     });
 
     it('does not read a repository the integration lists but the team did not connect', async () => {

@@ -335,6 +335,7 @@ function AgentContent() {
                                     agent={agent}
                                     knowledge={knowledge}
                                     report={resolve.data}
+                                    reportFailed={resolve.isError}
                                     canEdit={canEdit}
                                     canEditFiles={canEditAgent}
                                     onChange={patch}

@@ -146,6 +146,8 @@ export const useKnowledgeSourceListing = (params: {
     source: KnowledgeSource;
     /** The page-level check, which lists the reviewed repository. */
     report?: CustomAgentResolveReport;
+    /** That check failed: this repository's list is not coming. */
+    reportFailed?: boolean;
     enabled: boolean;
     /** The "Other repository…" picker is open: list every repository. */
     listConnected?: boolean;
@@ -204,14 +206,18 @@ export const useKnowledgeSourceListing = (params: {
             connectedKnowledge?.repositoryVisibility,
         // This repository is listed by the page's check: loading only until
         // it answers, whatever it answered.
-        loading: params.source.repository ? remoteLoading : !params.report,
+        loading: params.source.repository
+            ? remoteLoading
+            : !params.report && !params.reportFailed,
         // A request that failed is not an empty repository: say so. While
         // the picked repository loads, the previous answer is a placeholder
         // and names another repository: say nothing until this one answers.
         unavailable: !params.source.repository
             ? params.report?.knowledge.status === "unavailable"
                 ? params.report.knowledge.reason
-                : undefined
+                : !params.report && params.reportFailed
+                  ? "Could not read this repository. Try again."
+                  : undefined
             : remoteLoading
               ? undefined
               : remote.data?.knowledge.status === "unavailable"
@@ -499,6 +505,7 @@ export const AgentKnowledgeField = ({
     agentId,
     knowledge,
     report,
+    reportFailed,
     canEdit,
     onChange,
     teamId,
@@ -508,6 +515,8 @@ export const AgentKnowledgeField = ({
     agentId: string;
     knowledge: KnowledgeItem[];
     report?: CustomAgentResolveReport;
+    /** The page's check failed. */
+    reportFailed?: boolean;
     canEdit: boolean;
     onChange: (next: KnowledgeItem[]) => void;
     teamId?: string;
@@ -530,6 +539,7 @@ export const AgentKnowledgeField = ({
         repositoryId,
         source,
         report,
+        reportFailed,
         enabled: adding,
         listConnected: pickerOpen,
     });

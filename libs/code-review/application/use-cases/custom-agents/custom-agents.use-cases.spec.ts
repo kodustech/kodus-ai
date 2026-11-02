@@ -364,6 +364,42 @@ describe('ResolveCustomAgentUseCase', () => {
             expect(lister.getRepositories).not.toHaveBeenCalled();
         });
 
+        it('lists the repositories once for edits in a row, and again after a failure', async () => {
+            const lister = {
+                ...cm,
+                getRepositories: jest
+                    .fn()
+                    .mockRejectedValueOnce(new Error('503'))
+                    .mockResolvedValue(listing),
+            };
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                lister as any,
+                reader(),
+            );
+            const check = () =>
+                useCase.execute({
+                    organizationAndTeamData,
+                    repositoryId: 'repo-1',
+                    knowledge: [
+                        {
+                            path: 'stack/ledger/rules/postings.md',
+                            kind: 'doc',
+                            repository: RULES,
+                            linkedTo: [],
+                        },
+                    ],
+                });
+
+            await check();
+            await check();
+            await check();
+
+            // The failed listing is not kept; the next one is, for the edit
+            // after it.
+            expect(lister.getRepositories).toHaveBeenCalledTimes(2);
+        });
+
         it('finds a Bitbucket or Azure repository listed without a full name', async () => {
             const knowledgeReader = reader();
             const useCase = new ResolveCustomAgentUseCase(

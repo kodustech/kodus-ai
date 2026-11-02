@@ -53,8 +53,13 @@ jest.mock("../_custom-agents/use-custom-agents-form", () => ({
     }),
 }));
 
+let mockReportFailed = false;
 jest.mock("@services/custom-agents/hooks", () => ({
-    useResolveCustomAgent: () => ({ isLoading: false, data: mockReport }),
+    useResolveCustomAgent: () => ({
+        isLoading: false,
+        isError: mockReportFailed,
+        data: mockReport,
+    }),
 }));
 
 jest.mock("@services/permissions/hooks", () => ({
@@ -261,5 +266,21 @@ describe("Skills & docs page with a guide of another repository", () => {
         expect(setKnowledge).toHaveBeenCalledWith([
             pumps([{ agentId: "valves" }]),
         ]);
+    });
+});
+
+describe("Skills & docs page when the check fails", () => {
+    afterEach(() => {
+        mockReportFailed = false;
+    });
+
+    it("says the repository could not be read instead of loading forever", () => {
+        mockReportFailed = true;
+        const { container } = render(<SkillsAndDocsPage />);
+
+        expect(
+            screen.getByText("Could not read this repository. Try again."),
+        ).toBeInTheDocument();
+        expect(container.querySelector(".animate-spin")).toBeNull();
     });
 });

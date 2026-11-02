@@ -507,4 +507,24 @@ describe("AgentKnowledgeField with another repository", () => {
             unavailable: "Could not read the repository.",
         });
     });
+
+    it("stops loading this repository's list when the page check fails, and says so", () => {
+        mockResolve.mockReturnValue({
+            isLoading: false,
+            isFetching: false,
+            data: undefined,
+        });
+        const failed = renderHook(() =>
+            useKnowledgeSourceListing({
+                source: {},
+                enabled: true,
+                reportFailed: true,
+            }),
+        );
+
+        expect(failed.result.current).toMatchObject({
+            loading: false,
+            unavailable: "Could not read this repository. Try again.",
+        });
+    });
 });

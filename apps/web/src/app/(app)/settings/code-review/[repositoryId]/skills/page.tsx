@@ -89,6 +89,7 @@ function SkillsContent() {
         repositoryId,
         source: THIS_REPOSITORY,
         report: report.data,
+        reportFailed: report.isError,
         enabled: repositoryId !== "global",
     });
     const isGlobal = repositoryId === "global";
@@ -98,9 +99,8 @@ function SkillsContent() {
         ? `On ${report.data?.repository.branch}.`
         : report.isLoading
           ? "Reading the default branch…"
-          : report.isError
-            ? "Couldn't read the repository right now."
-            : "";
+          : // A failed check is said below, where the list would be.
+            "";
     const registered = new Set(knowledge.map(knowledgeKey));
     const candidates = listing.candidates.filter(
         (candidate) => !registered.has(knowledgeKey(candidate)),
