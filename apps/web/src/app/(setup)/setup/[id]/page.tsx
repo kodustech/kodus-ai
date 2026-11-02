@@ -24,6 +24,7 @@ import { SaveIcon } from "lucide-react";
 import {
     GITHUB_CODE_PARAM,
     GITHUB_STATE_PARAM,
+    needsGithubInstallationAuthorization,
     startGithubInstallationAuthorization,
 } from "src/core/integrations/github-installation-authorization";
 import { useAuth } from "src/core/providers/auth.provider";
@@ -65,24 +66,40 @@ export default function Redirect() {
         [],
     );
 
-    useEffectOnce(() => {
-        ClientSideCookieHelpers("started-setup-from-new-setup-page").delete();
-    });
-
-    useEffect(() => {
-        setHasMounted(true);
-    }, []);
-
     const code = searchParams.get("code");
     const installationId = searchParams.get("installation_id");
     const githubCode = searchParams.get(GITHUB_CODE_PARAM);
     const githubState = searchParams.get(GITHUB_STATE_PARAM);
     // A GitHub installation is linked only with GitHub's authorization of
     // the user (see github-installation-authorization); get it first.
-    const needsGithubAuthorization =
-        integration === INTEGRATIONS_KEY.GITHUB &&
-        !!installationId &&
-        (!githubCode || !githubState);
+    const needsGithubAuthorization = needsGithubInstallationAuthorization({
+        integration,
+        installationId,
+        githubCode,
+        githubState,
+    });
+
+    useEffectOnce(() => {
+        // This page mounts twice when it goes to GitHub's authorization and
+        // back. Keep the setup marker for the mount that links, or the user
+        // leaves the setup for the settings page.
+        if (
+            !needsGithubInstallationAuthorization({
+                integration: params.id,
+                installationId,
+                githubCode,
+                githubState,
+            })
+        ) {
+            ClientSideCookieHelpers(
+                "started-setup-from-new-setup-page",
+            ).delete();
+        }
+    });
+
+    useEffect(() => {
+        setHasMounted(true);
+    }, []);
     const authorizingRef = useRef(false);
 
     useEffect(() => {
@@ -190,14 +207,40 @@ export default function Redirect() {
 
         if (integration === INTEGRATIONS_KEY.GITHUB) {
             if (organizationId) {
-                integrationResponse = await createCodeManagementIntegration({
-                    integrationType: PlatformType.GITHUB,
-                    code,
-                    organizationAndTeamData,
-                    installationId,
-                    githubCode: githubCode ?? undefined,
-                    githubState: githubState ?? undefined,
-                });
+                try {
+                    integrationResponse = await createCodeManagementIntegration(
+                        {
+                            integrationType: PlatformType.GITHUB,
+                            code,
+                            organizationAndTeamData,
+                            installationId,
+                            githubCode: githubCode ?? undefined,
+                            githubState: githubState ?? undefined,
+                        },
+                    );
+                } catch (err) {
+                    // A refused link (the installation belongs to another
+                    // organization, the authorization expired) is a 4xx:
+                    // say why and go back to where it started, instead of
+                    // leaving the user on "Connecting…".
+                    const message = (
+                        err as { response?: { data?: { message?: string } } }
+                    )?.response?.data?.message;
+                    toast({
+                        title: "Integration with GitHub failed",
+                        description:
+                            message ??
+                            "GitHub could not be connected. Try again.",
+                        variant: "warning",
+                    });
+                    setIsIntegrating(false);
+                    if (isSetup) {
+                        router.replace("/setup/connecting-git-tool");
+                    } else {
+                        cancelIntegration();
+                    }
+                    return;
+                }
             }
         } else if (integration === INTEGRATIONS_KEY.GITLAB) {
             if (organizationId) {
