@@ -283,13 +283,15 @@ describe('SignUpUseCase — user status when joining an existing org', () => {
         it('never writes attribution when joining an existing organization', async () => {
             const deps = buildDeps();
 
-            await buildUseCase(deps).execute({
-                email: 'invitee@acme.com',
-                name: 'Invitee',
-                password: 'x',
-                organizationId: 'org-1',
-                firstTouch,
-            } as any);
+            await buildUseCase(deps).execute(
+                {
+                    email: 'invitee@acme.com',
+                    name: 'Invitee',
+                    password: 'x',
+                    firstTouch,
+                } as any,
+                { organizationId: 'org-1' },
+            );
 
             expect(
                 deps.organizationService.createOrganizationWithTenant,

@@ -42,8 +42,10 @@ describe('agent tools — readFile on a linked repository', () => {
         });
 
         expect(out).toContain('body');
-        expect(exec).toHaveBeenCalledTimes(1);
-        expect(exec.mock.calls[0][0]).toContain(
+        // The symlink probe, then the guarded read.
+        expect(exec).toHaveBeenCalledTimes(2);
+        expect(exec.mock.calls[0][0]).toMatch(/^find .* -maxdepth 0 -type l$/);
+        expect(exec.mock.calls[1][0]).toContain(
             'Symlink detected, refusing to follow',
         );
     });
@@ -65,7 +67,7 @@ describe('agent tools — readFile on a linked repository', () => {
         });
 
         expect(out).toContain('body');
-        expect(exec.mock.calls[1][0]).toBe(
+        expect(exec.mock.calls.at(-1)?.[0]).toBe(
             "cat '/home/user/linked/acme-shared/src/a.ts'",
         );
     });
