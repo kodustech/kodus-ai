@@ -62,7 +62,7 @@ function withScopeOptions(command: Command): Command {
 }
 
 export const REPOSITORY_CONFIG_DESCRIPTION =
-    "Inspect and update code review settings in Kodus: global, per repository and per directory. show, set, unset and model reach every setting when logged in (kodus auth login); with a team key they cover the six legacy repository settings, and add, list, setup and open use a team key. Use 'kodus config -r [repository]' as a shortcut for 'kodus config remote add [repository]'.";
+    "Inspect and update code review settings in Kodus: global, per repository and per directory. Logged in (kodus auth login), show and set reach every setting, and unset, keys, model, messages, language and skills are available. With a team key, show and set cover the six legacy repository settings, and add, setup and open need one. list works with either. Use 'kodus config -r [repository]' as a shortcut for 'kodus config remote add [repository]'.";
 
 type RepositoryConfigHandlers = {
     action: (

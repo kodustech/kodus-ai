@@ -1149,8 +1149,9 @@ describe('config repo command', () => {
             'Inspect and update code review settings in Kodus',
         );
         const flatRemoteHelp = remoteHelp?.replace(/\s+/g, ' ');
-        expect(flatRemoteHelp).toContain('when logged in (kodus auth login)');
-        expect(flatRemoteHelp).toContain('with a team key');
+        expect(flatRemoteHelp).toContain('Logged in (kodus auth login)');
+        expect(flatRemoteHelp).toContain('With a team key');
+        expect(flatRemoteHelp).toContain('list works with either');
         expect(remoteHelp).toContain('shortcut for');
         expect(remoteHelp).toContain("'kodus config remote");
         expect(remoteHelp).toContain('add [options] [repository]');
