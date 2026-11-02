@@ -6,7 +6,10 @@
  * Fixture domain: an invented greenhouse-irrigation team and its rules repo.
  */
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
-import { checkConventionQuotes } from '@libs/code-review/infrastructure/agents/core/convention-check';
+import {
+    checkConventionQuotes,
+    guideSourcesFor,
+} from '@libs/code-review/infrastructure/agents/core/convention-check';
 
 const RULES_DOC = 'greenhouse/irrigation-rules:stack/node/rules/valves.md';
 const RULES_SKILL =
@@ -94,6 +97,18 @@ describe('quote gate with a guide of another repository', () => {
 
         expect(result.passed).toEqual([]);
         expect(result.rejected).toHaveLength(1);
+    });
+
+    it('never reads another repository through the target branch when nothing can read it', () => {
+        const target = jest.fn(async () => RULES_TEXT);
+        const sources = guideSourcesFor(guides, undefined, target, undefined);
+
+        return Promise.all([
+            expect(sources?.readGuide(RULES_DOC)).resolves.toBeNull(),
+            expect(sources?.readGuide('docs/local.md')).resolves.toBe(
+                RULES_TEXT,
+            ),
+        ]).then(() => expect(target).toHaveBeenCalledTimes(1));
     });
 
     it('still rejects a quote that is not in the linked guide', async () => {
