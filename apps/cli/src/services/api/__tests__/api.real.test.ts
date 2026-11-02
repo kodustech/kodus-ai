@@ -632,6 +632,17 @@ describe('RealApi config repository methods', () => {
         );
     });
 
+    it('treats a 2xx with an empty body as success, without retrying', async () => {
+        fetchMock.mockResolvedValue(new Response(null, { status: 201 }));
+
+        const api = new RealApi();
+
+        await expect(
+            api.config.addRepositories('kodus_team_key', ['repo-1']),
+        ).resolves.toBeUndefined();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps every validation message of a 400', async () => {
         fetchMock.mockResolvedValue(
             new Response(

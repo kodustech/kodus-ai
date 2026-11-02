@@ -399,6 +399,12 @@ export async function request<T>(
 
     if (!isJson) {
         const text = await response.text();
+        // A handler that returns nothing (e.g. POST /pull-request-messages)
+        // answers 2xx with an empty body. That is a success; treating it as
+        // an invalid response also made requestWithRetry repeat the write.
+        if (text.trim() === '') {
+            return undefined as T;
+        }
         const preview = text.substring(0, 100);
         cliError(
             `[API] Expected JSON but received ${contentType || 'unknown content-type'}`,

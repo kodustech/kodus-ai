@@ -28,6 +28,12 @@ export interface PullRequestReviewRun {
         updatedAt: string;
         origin: string;
     };
+    codeReviewTimeline?: Array<{
+        status: string;
+        stageName?: string;
+        stageLabel?: string;
+        message?: string | null;
+    }>;
     [key: string]: unknown;
 }
 

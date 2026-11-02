@@ -72,7 +72,15 @@ function formatValue(value: unknown): string {
         }
         return oneLine.length > 80 ? `${oneLine.slice(0, 77)}...` : oneLine;
     }
-    return JSON.stringify(value);
+    // The default ignorePaths alone holds over a thousand patterns.
+    if (Array.isArray(value) && value.length > 5) {
+        const head = JSON.stringify(value.slice(0, 5)).slice(0, -1);
+        return `${head}, ...] ${chalk.gray(`(${value.length} items, --json for all)`)}`;
+    }
+    const serialized = JSON.stringify(value);
+    return serialized.length > 200
+        ? `${serialized.slice(0, 197)}... ${chalk.gray('(--json for all)')}`
+        : serialized;
 }
 
 function formatOrigin(

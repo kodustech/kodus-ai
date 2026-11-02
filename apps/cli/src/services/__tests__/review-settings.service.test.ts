@@ -28,7 +28,7 @@ vi.mock('../git.service.js', () => ({
 
 import { api } from '../api/index.js';
 import { gitService } from '../git.service.js';
-import { reviewSettingsService } from '../review-settings.service.js';
+import { readLeaf, reviewSettingsService } from '../review-settings.service.js';
 import { userContextService } from '../user-context.service.js';
 
 const configApi = vi.mocked(api.config);
@@ -170,10 +170,22 @@ describe('reviewSettingsService', () => {
             expect(scope.repositoryId).toBe('repo-2');
         });
 
-        it('refuses a repository the team did not select', async () => {
+        it('resolves a repository that still inherits global settings', async () => {
+            // isSelected: false is "Inherits Global" in the settings sidebar;
+            // the repository is still listed and editable there.
             await expect(
                 reviewSettingsService.resolveScope(CTX, {
                     repository: 'archived',
+                }),
+            ).resolves.toEqual(
+                expect.objectContaining({ level: 'repository' }),
+            );
+        });
+
+        it('refuses a repository the team does not review', async () => {
+            await expect(
+                reviewSettingsService.resolveScope(CTX, {
+                    repository: 'unknown-repo',
                 }),
             ).rejects.toThrow(/not configured in Kodus/);
         });
@@ -544,5 +556,47 @@ describe('reviewSettingsService', () => {
                 { provider: 'anthropic', model: 'claude-b' },
             );
         });
+    });
+});
+
+describe('readLeaf', () => {
+    it('reads a field inside a key the default config lacks', () => {
+        // The API formats suggestionControl.severityLimits as one leaf when
+        // the default has no node for it.
+        const configs = {
+            suggestionControl: {
+                severityLimits: {
+                    value: { high: 2 },
+                    level: 'repository',
+                    overriddenValue: { high: 3 },
+                    overriddenLevel: 'global',
+                },
+            },
+        };
+
+        expect(
+            readLeaf(configs, 'suggestionControl.severityLimits.high'),
+        ).toEqual({
+            value: 2,
+            level: 'repository',
+            overriddenValue: 3,
+            overriddenLevel: 'global',
+        });
+        expect(
+            readLeaf(configs, 'suggestionControl.severityLimits.low'),
+        ).toBeUndefined();
+    });
+
+    it('reads a regular leaf', () => {
+        expect(
+            readLeaf(
+                {
+                    summary: {
+                        generatePRSummary: { value: false, level: 'directory' },
+                    },
+                },
+                'summary.generatePRSummary',
+            ),
+        ).toEqual({ value: false, level: 'directory' });
     });
 });

@@ -299,8 +299,19 @@ function printReviewRuns(result: PullRequestReviewsResult): void {
         cliInfo(
             `${when} · ${execution?.status ?? 'unknown'} · ${sent} sent, ${filtered} filtered${commit}`,
         );
-        if (execution?.errorMessage) {
-            cliInfo(chalk.red(`  ${execution.errorMessage}`));
+        // The run's own errorMessage is often empty; the failing stage of
+        // the timeline says why, as the PR page's timeline does.
+        const failedStage = run.codeReviewTimeline?.find(
+            (stage) => stage.status === 'error' && stage.message,
+        );
+        const reason = execution?.errorMessage || failedStage?.message;
+        if (reason) {
+            const stage = failedStage?.stageLabel
+                ? `${failedStage.stageLabel}: `
+                : '';
+            cliInfo(
+                chalk.red(`  ${execution?.errorMessage ? '' : stage}${reason}`),
+            );
         }
     }
 

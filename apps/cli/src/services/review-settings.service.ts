@@ -105,16 +105,50 @@ function isLeaf(node: unknown): node is FormattedConfigLeaf {
     );
 }
 
-export function readLeaf(
-    configs: FormattedConfigNode | undefined,
-    key: string,
-): FormattedConfigLeaf | undefined {
-    let cursor: unknown = configs;
-    for (const segment of key.split('.')) {
+function readInside(value: unknown, segments: string[]): unknown {
+    let cursor = value;
+    for (const segment of segments) {
         if (typeof cursor !== 'object' || cursor === null) {
             return undefined;
         }
         cursor = (cursor as Record<string, unknown>)[segment];
+    }
+    return cursor;
+}
+
+export function readLeaf(
+    configs: FormattedConfigNode | undefined,
+    key: string,
+): FormattedConfigLeaf | undefined {
+    const segments = key.split('.');
+    let cursor: unknown = configs;
+    for (let index = 0; index < segments.length; index += 1) {
+        if (typeof cursor !== 'object' || cursor === null) {
+            return undefined;
+        }
+        // A key the default config lacks (suggestionControl.severityLimits)
+        // comes back as ONE leaf holding the whole object, not one leaf per
+        // field (formatLevel in get-code-review-parameter.use-case.ts only
+        // recurses where the default has a node). Its fields share its level.
+        if (isLeaf(cursor)) {
+            const rest = segments.slice(index);
+            const value = readInside(cursor.value, rest);
+            if (value === undefined) {
+                return undefined;
+            }
+            const overridden = readInside(cursor.overriddenValue, rest);
+            return {
+                value,
+                level: cursor.level,
+                ...(overridden !== undefined
+                    ? {
+                          overriddenValue: overridden,
+                          overriddenLevel: cursor.overriddenLevel,
+                      }
+                    : {}),
+            };
+        }
+        cursor = (cursor as Record<string, unknown>)[segments[index]];
     }
     return isLeaf(cursor) ? cursor : undefined;
 }
@@ -163,14 +197,18 @@ class ReviewSettingsService {
         return `${orgRepo.org}/${orgRepo.repo}`;
     }
 
-    /** Matches the way the settings sidebar lists them: selected repositories, by id or name. */
+    /**
+     * Matches the way the settings sidebar lists them, by id or name. Every
+     * scope is a repository the team reviews; `isSelected: false` only means
+     * it has no settings of its own yet ("Inherits Global" in the sidebar).
+     */
     findRepositoryScope(
         reference: string,
         scopes: CodeReviewScope[],
     ): CodeReviewScope {
         const wanted = reference.toLowerCase();
         const lastSegment = wanted.split('/').pop() ?? wanted;
-        const selected = scopes.filter((scope) => scope.isSelected);
+        const selected = scopes;
 
         const byId = selected.find(
             (scope) => scope.id.toLowerCase() === wanted,

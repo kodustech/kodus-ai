@@ -37,7 +37,9 @@ type AgentFieldOptions = {
     include?: string[];
     exclude?: string[];
     color?: string;
-    format?: string;
+    // Not --format: that is the CLI's global output-format option, which
+    // would swallow it.
+    commentFormat?: string;
     minSeverity?: string;
     maxComments?: string;
     suggestedFix?: string;
@@ -127,7 +129,7 @@ export async function toAgentInput(
         include: options.include,
         exclude: options.exclude,
         color: options.color,
-        format: options.format,
+        format: options.commentFormat,
         minSeverity: options.minSeverity,
         maxComments: options.maxComments,
         suggestedFix: options.suggestedFix,
@@ -178,7 +180,10 @@ function withAgentFieldOptions(command: Command): Command {
             collect,
         )
         .option('--color <hex>', 'Tag color of its comments')
-        .option('--format <format>', 'Comment format: inline or single-comment')
+        .option(
+            '--comment-format <format>',
+            'Comment format: inline or single-comment',
+        )
         .option(
             '--min-severity <severity>',
             'Lowest severity it posts: low, medium, high, critical, or none',

@@ -325,7 +325,7 @@ function printKnowledgeSave(result: KnowledgeSaveResult, verb: string): void {
     }
     cliInfo(
         chalk.green(
-            `Skills and docs ${verb} at ${describeLevel(result)} (${result.items.length} added).`,
+            `Skills and docs ${verb} at ${describeLevel(result)} (${result.items.length} ${result.items.length === 1 ? 'item' : 'items'} now).`,
         ),
     );
     if (result.note) {

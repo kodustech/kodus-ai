@@ -725,7 +725,7 @@ export function applyAgentInput(
     const format = oneOf(
         input.format,
         ['inline', 'single-comment'] as const,
-        '--format',
+        '--comment-format',
     );
     if (format) {
         presentation.format = format;
