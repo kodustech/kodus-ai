@@ -24,6 +24,7 @@ import { UpdateIssuePropertyUseCase } from '@libs/issues/application/use-cases/u
 import { IssuesEntity } from '@libs/issues/domain/entities/issues.entity';
 
 import { GetIssuesByFiltersDto } from '../dtos/get-issues-by-filters.dto';
+import { TenantScopeGuard } from '../guards/tenant-scope.guard';
 import {
     ApiBearerAuth,
     ApiOkResponse,
@@ -40,6 +41,7 @@ import {
 @ApiTags('Issues')
 @ApiBearerAuth('jwt')
 @ApiStandardResponses()
+@UseGuards(TenantScopeGuard)
 @Controller('issues')
 export class IssuesController {
     constructor(
