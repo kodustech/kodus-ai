@@ -49,6 +49,11 @@ export default function GithubIntegrationClient() {
     const [organizationName, setOrganizationName] = useState<string | undefined>();
     const [failureMessage, setFailureMessage] = useState<string | undefined>();
     const creatingRef = useRef(false);
+    // githubAuthorizationReturnPath consumes the saved return path, and the
+    // effect below runs again whenever the lookup settles before the
+    // navigation lands: send the user back once, or the second run loses
+    // the return path and the installation id.
+    const returningRef = useRef(false);
 
     function loginToDoIntegration() {
         router.push(`/setup/github?installation_id=${installationId}`);
@@ -67,9 +72,12 @@ export default function GithubIntegrationClient() {
 
     useEffect(() => {
         if (returnedCode && returnedState && !githubCode) {
-            router.replace(
-                githubAuthorizationReturnPath(returnedCode, returnedState),
-            );
+            if (!returningRef.current) {
+                returningRef.current = true;
+                router.replace(
+                    githubAuthorizationReturnPath(returnedCode, returnedState),
+                );
+            }
             return;
         }
 

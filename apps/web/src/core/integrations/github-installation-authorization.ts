@@ -41,6 +41,24 @@ export async function startGithubInstallationAuthorization(
 }
 
 /** The installation id a state was issued for (the state is signed by the API). */
+/**
+ * Whether the setup page for `integration` still has to send the user to
+ * GitHub's authorization before it can link `installationId`: a GitHub
+ * installation without the code and state that authorization returns.
+ */
+export function needsGithubInstallationAuthorization(params: {
+    integration: string | null | undefined;
+    installationId: string | null;
+    githubCode: string | null;
+    githubState: string | null;
+}): boolean {
+    return (
+        params.integration === "github" &&
+        !!params.installationId &&
+        (!params.githubCode || !params.githubState)
+    );
+}
+
 export function installationIdFromState(state: string): string | null {
     try {
         const payload = JSON.parse(
