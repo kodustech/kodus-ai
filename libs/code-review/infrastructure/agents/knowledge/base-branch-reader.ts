@@ -510,7 +510,9 @@ export async function resolveKnowledgeRepositories(params: {
         const seen = wanted.get(key);
         if (!seen)
             wanted.set(key, { repository: item.repository, ref: item.ref });
-        else if (!seen.ref && item.ref) seen.ref = item.ref;
+        // The last ref wins: a directory's items come after the levels it
+        // inherits, so its pin is the one read.
+        else if (item.ref) seen.ref = item.ref;
     }
     if (!wanted.size) return { sources: [], missing: [], listing: [] };
 

@@ -1638,9 +1638,10 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 ? {
                       sources: knowledgeSources,
                       platform: context.platformType,
+                      // Unknown visibility counts as public.
                       reviewedIsPublic:
-                          reviewKnowledge.reviewedRepository?.visibility ===
-                          'public',
+                          reviewKnowledge.reviewedRepository?.visibility !==
+                          'private',
                   }
                 : undefined;
             for (const s of deduped) {

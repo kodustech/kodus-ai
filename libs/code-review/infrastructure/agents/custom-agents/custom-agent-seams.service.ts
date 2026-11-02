@@ -850,9 +850,10 @@ export class CustomAgentTryRunnerService implements ICustomAgentTryRunner {
                         ruleSources: {
                             sources: knowledge.sources,
                             platform: context.platformType,
+                            // Unknown visibility counts as public.
                             reviewedIsPublic:
-                                knowledge.reviewedRepository?.visibility ===
-                                'public',
+                                knowledge.reviewedRepository?.visibility !==
+                                'private',
                         },
                     }),
                 }),

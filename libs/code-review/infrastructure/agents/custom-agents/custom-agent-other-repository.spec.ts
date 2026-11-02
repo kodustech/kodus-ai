@@ -85,6 +85,28 @@ describe('citing a rule of another repository', () => {
         ).toContain('> Every valve handler must log the zone id.');
     });
 
+    it('does not quote a rule whose repository or reviewed repository has no known visibility', () => {
+        for (const sources of [
+            {
+                sources: [{ ...source }],
+                platform: PlatformType.GITHUB,
+                reviewedIsPublic: true,
+            },
+            {
+                sources: [{ ...source, visibility: 'private' as const }],
+                platform: PlatformType.GITHUB,
+            },
+        ]) {
+            const citation = findingCitation(
+                finding(`${RULES}:stack/node/rules/valves.md`),
+                [],
+                sources,
+            );
+            expect(citation).not.toContain('zone id');
+            expect(citation).toContain('**Rule**:');
+        }
+    });
+
     it('cites a rule of the reviewed repository exactly as before', () => {
         expect(findingCitation(finding('docs/valves.md'))).toBe(
             '\n\n**Rule** (`docs/valves.md`):\n> Every valve handler must log the zone id.',
@@ -173,14 +195,25 @@ describe('saving a skill or doc of another repository', () => {
         ).toBe(false);
     });
 
-    it('rejects every control and format character, not a list of spellings', () => {
+    it('rejects every invisible character by class, across all of Unicode', () => {
         const invisible: string[] = [];
-        for (let code = 0; code <= 0xffff; code++) {
-            const char = String.fromCharCode(code);
-            if (/[\p{Cc}\p{Cf}]/u.test(char)) invisible.push(char);
+        for (let code = 0; code <= 0x10ffff; code++) {
+            if (code >= 0xd800 && code <= 0xdfff) continue;
+            const char = String.fromCodePoint(code);
+            if (/[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/u.test(char)) {
+                invisible.push(char);
+            }
         }
-        // C0, C1, bidi controls and isolates, zero-width, BOM, and the rest.
-        expect(invisible.length).toBeGreaterThan(100);
+        // C0, C1, bidi controls, zero-width, BOM, tag characters (U+E0000
+        // block) and variation selectors (U+E0100 block) among them.
+        expect(invisible).toEqual(
+            expect.arrayContaining([
+                '\u202e',
+                '\ufeff',
+                String.fromCodePoint(0xe0041),
+                String.fromCodePoint(0xe0100),
+            ]),
+        );
         for (const char of invisible) {
             expect(
                 knowledgeItemSchema.safeParse(

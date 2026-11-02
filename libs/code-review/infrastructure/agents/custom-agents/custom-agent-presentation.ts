@@ -294,8 +294,14 @@ export function ruleCitation(s: Finding, sources?: RuleSources): string {
           : named;
     // A rule kept in a private repository is not copied into a comment on a
     // public one: the comment names the file, and whoever can read it opens
-    // it. The quote was still checked against it.
-    if (other?.source.visibility === 'private' && sources?.reviewedIsPublic) {
+    // it. The quote was still checked against it. Fails closed: the quote is
+    // kept only when the rules repository is known public or the reviewed
+    // one is known private.
+    if (
+        other &&
+        other.source.visibility !== 'public' &&
+        sources?.reviewedIsPublic !== false
+    ) {
         return `\n\n**Rule**: ${where}`;
     }
     const quoted = quote

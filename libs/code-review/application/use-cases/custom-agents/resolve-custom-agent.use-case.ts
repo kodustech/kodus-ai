@@ -274,7 +274,19 @@ export class ResolveCustomAgentUseCase {
                                 name: repo.name,
                             },
                         }),
-                    ).catch(() => undefined)) ||
+                    ).catch((error) => {
+                        this.logger.warn({
+                            message:
+                                "Could not read a repository's default branch; using the listing's",
+                            context: ResolveCustomAgentUseCase.name,
+                            error,
+                            metadata: {
+                                organizationAndTeamData,
+                                repository: String(repo.id),
+                            },
+                        });
+                        return undefined;
+                    })) ||
                     repo.default_branch ||
                     'main';
                 return { id: String(repo.id), name: repo.name, branch };
@@ -295,7 +307,11 @@ export class ResolveCustomAgentUseCase {
                 {
                     const other = items[0].repository;
                     const ref = other
-                        ? await refOf(other, items.find((i) => i.ref)?.ref)
+                        ? // The last ref wins, as in the review.
+                          await refOf(
+                              other,
+                              [...items].reverse().find((i) => i.ref)?.ref,
+                          )
                         : repository;
                     if (!ref) {
                         items.forEach((item) =>
