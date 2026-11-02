@@ -48,11 +48,13 @@ import {
     logCustomAgentsSaveError,
 } from "../../_utils/settings-save-conflict";
 import {
-    KnowledgeSourceBar,
     KnowledgeSourceChip,
     KnowledgeStatusChips,
     useKnowledgeSourceListing,
 } from "../agents/[agentId]/_components/knowledge-card";
+
+/** The listing source of this page: the reviewed repository. */
+const THIS_REPOSITORY: KnowledgeSource = {};
 
 function SkillsContent() {
     const {
@@ -74,21 +76,20 @@ function SkillsContent() {
         repositoryId,
     );
     const [path, setPath] = useState("");
-    const [source, setSource] = useState<KnowledgeSource>({});
-    const [pickerOpen, setPickerOpen] = useState(false);
     const report = useResolveCustomAgent({
         teamId,
         repositoryId,
         knowledge,
         discover: true,
     });
+    // Guides of another repository are for custom agents only, picked on
+    // each agent's page: this page adds from this repository.
     const listing = useKnowledgeSourceListing({
         teamId,
         repositoryId,
-        source,
+        source: THIS_REPOSITORY,
         report: report.data,
         enabled: repositoryId !== "global",
-        listConnected: pickerOpen,
     });
     const isGlobal = repositoryId === "global";
     const knowledgeReport =
@@ -121,6 +122,13 @@ function SkillsContent() {
             color: agent.presentation.tag.color,
         })),
     ];
+    // A guide of another repository is for custom agents only: the main
+    // review has no quote gate to check a rule it cites. A link saved before
+    // stays visible so it can be unchecked; saving refuses it.
+    const offersTarget = (item: KnowledgeItem, target: KnowledgeLinkTarget) =>
+        !item.repository ||
+        target !== KNOWLEDGE_MAIN_REVIEW_TARGET ||
+        isLinked(item, target);
     const backHref = reviewScopeHref(repositoryId, directoryId);
 
     useUnsavedChangesGuard({
@@ -134,15 +142,7 @@ function SkillsContent() {
     });
 
     // A file with an extension is a doc; a folder or a SKILL.md is a skill.
-    // It lives in the repository the "From" tabs are on.
-    const parsedItem = knowledgeItemFromPath(path);
-    const typedItem = parsedItem
-        ? {
-              ...parsedItem,
-              ...(source.repository && { repository: source.repository }),
-              ...(source.repository && source.ref && { ref: source.ref }),
-          }
-        : null;
+    const typedItem = knowledgeItemFromPath(path);
     const register = (
         item: Pick<KnowledgeItem, "path" | "kind" | "repository" | "ref">,
     ) => {
@@ -158,20 +158,6 @@ function SkillsContent() {
             },
         ]);
     };
-    // One ref per repository: changing it moves every item of that repository.
-    const changeRef = (ref: string | undefined) => {
-        if (!source.repository) return;
-        const repository = source.repository.toLowerCase();
-        setSource({ repository: source.repository, ...(ref && { ref }) });
-        setKnowledge(
-            knowledge.map((item) => {
-                if (item.repository?.toLowerCase() !== repository) return item;
-                const { ref: _old, ...rest } = item;
-                return { ...rest, ...(ref && { ref }) };
-            }),
-        );
-    };
-
     const onSave = async () => {
         try {
             const result = await save();
@@ -234,12 +220,11 @@ function SkillsContent() {
                     <Page.Title>Skills &amp; docs</Page.Title>
                     <Page.Description>
                         Guides linked here to the main review, with who follows
-                        what. Each custom agent picks its own on its page.
-                        Guides of this repository are read from each pull
-                        request&apos;s target branch; guides of another
-                        repository (a team&apos;s rules repository), from its
-                        default branch or the branch or tag you set. Skills open
-                        on demand, docs load whole, scripts never run.
+                        what, read from each pull request&apos;s target branch.
+                        Each custom agent picks its own on its page, including
+                        guides of another repository (a team&apos;s rules
+                        repository). Skills open on demand, docs load whole,
+                        scripts never run.
                     </Page.Description>
                 </Page.TitleContainer>
                 <Page.SaveActions
@@ -344,6 +329,8 @@ function SkillsContent() {
                                 </div>
                                 <div className="flex flex-wrap gap-x-4 gap-y-1.5 pl-6">
                                     {targets.map(({ target, label, color }) => {
+                                        if (!offersTarget(item, target))
+                                            return null;
                                         const id = `link-${knowledgeKey(item)}-${typeof target === "string" ? target : target.agentId}`;
                                         return (
                                             <label
@@ -387,6 +374,17 @@ function SkillsContent() {
                                         );
                                     })}
                                 </div>
+                                {item.repository &&
+                                    isLinked(
+                                        item,
+                                        KNOWLEDGE_MAIN_REVIEW_TARGET,
+                                    ) && (
+                                        <p className="text-warning pl-6 text-xs">
+                                            Guides of another repository are for
+                                            custom agents only. Uncheck Main
+                                            review to save.
+                                        </p>
+                                    )}
                             </div>
                         );
                     })}
@@ -402,132 +400,101 @@ function SkillsContent() {
                         <span className="text-text-primary text-sm font-medium">
                             {isGlobal
                                 ? "Add by path"
-                                : source.repository
-                                  ? `Found in ${source.repository}`
-                                  : "Found in the repository"}
+                                : "Found in the repository"}
                         </span>
                         <span className="text-text-secondary text-xs">
-                            {isGlobal || source.repository
-                                ? ""
-                                : `${branchLine} `}
+                            {isGlobal ? "" : `${branchLine} `}
                             Skills are folders with a SKILL.md; docs are
                             Markdown guides.
                         </span>
                     </span>
-                    {!isGlobal && knowledgeReport && (
-                        <KnowledgeSourceBar
-                            source={source}
-                            onSourceChange={setSource}
-                            linkedRepositories={
-                                knowledgeReport.linkedRepositories ?? []
-                            }
-                            connectedRepositories={
-                                listing.connectedRepositories
-                            }
-                            onPickingChange={setPickerOpen}
-                            connectedListingFailed={
-                                listing.connectedListingFailed
-                            }
-                            knowledge={knowledge}
-                            discoveredIn={listing.discoveredIn}
-                            reviewedVisibility={listing.reviewedVisibility}
-                            canEdit={canEdit}
-                            onRefChange={changeRef}
-                        />
+                    {!isGlobal && listing.unavailable && (
+                        <p className="text-danger text-xs">
+                            {listing.unavailable}
+                        </p>
                     )}
-                    {!pickerOpen && (
-                        <>
-                            {!isGlobal && listing.unavailable && (
-                                <p className="text-danger text-xs">
-                                    {listing.unavailable}
-                                </p>
-                            )}
-                            {!isGlobal && listing.loading && (
-                                <Spinner className="size-4" />
-                            )}
-                            {!isGlobal &&
-                                !listing.loading &&
-                                !listing.unavailable &&
-                                (source.repository || knowledgeReport) &&
-                                listing.discoveredIn?.available !== false &&
-                                candidates.length === 0 && (
-                                    <p className="text-text-secondary text-xs">
-                                        Nothing new found.
-                                    </p>
-                                )}
-                            {candidates.map((candidate) => (
-                                <div
-                                    key={knowledgeKey(candidate)}
-                                    className="flex items-start gap-2">
-                                    {candidate.kind === "skill" ? (
-                                        <SparklesIcon className="text-text-tertiary mt-0.5 size-4 shrink-0" />
-                                    ) : (
-                                        <BookOpenIcon className="text-text-tertiary mt-0.5 size-4 shrink-0" />
-                                    )}
-                                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                        <span className="text-text-primary text-xs font-medium">
-                                            {candidate.name ?? candidate.path}
-                                        </span>
-                                        <span className="text-text-tertiary truncate font-mono text-xs">
-                                            {candidate.path}
-                                        </span>
-                                        {candidate.kodyRuleSource && (
-                                            <span className="text-warning text-xs">
-                                                Also a Kody Rules source:
-                                                linking it here can make the
-                                                same rule comment twice.
-                                            </span>
-                                        )}
-                                    </div>
-                                    <Button
-                                        size="xs"
-                                        variant="helper"
-                                        leftIcon={<PlusIcon />}
-                                        aria-label={`Add ${candidate.name ?? candidate.path}`}
-                                        disabled={!canEdit}
-                                        onClick={() => register(candidate)}>
-                                        Add
-                                    </Button>
-                                </div>
-                            ))}
-                        </>
+                    {!isGlobal && listing.loading && (
+                        <Spinner className="size-4" />
                     )}
-
-                    {!pickerOpen && (
+                    {!isGlobal &&
+                        !listing.loading &&
+                        !listing.unavailable &&
+                        knowledgeReport &&
+                        listing.discoveredIn?.available !== false &&
+                        candidates.length === 0 && (
+                            <p className="text-text-secondary text-xs">
+                                Nothing new found.
+                            </p>
+                        )}
+                    {candidates.map((candidate) => (
                         <div
-                            className={
-                                isGlobal
-                                    ? "flex items-center gap-2"
-                                    : "border-card-lv3/60 flex items-center gap-2 border-t pt-3"
-                            }>
-                            <div className="min-w-0 flex-1">
-                                <Input
-                                    size="md"
-                                    aria-label="Path of a doc or skill"
-                                    placeholder="Path, e.g. docs/payments.md or .claude/skills/ledger"
-                                    value={path}
-                                    disabled={!canEdit}
-                                    onChange={(e) => setPath(e.target.value)}
-                                />
+                            key={knowledgeKey(candidate)}
+                            className="flex items-start gap-2">
+                            {candidate.kind === "skill" ? (
+                                <SparklesIcon className="text-text-tertiary mt-0.5 size-4 shrink-0" />
+                            ) : (
+                                <BookOpenIcon className="text-text-tertiary mt-0.5 size-4 shrink-0" />
+                            )}
+                            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <span className="text-text-primary text-xs font-medium">
+                                    {candidate.name ?? candidate.path}
+                                </span>
+                                <span className="text-text-tertiary truncate font-mono text-xs">
+                                    {candidate.path}
+                                </span>
+                                {candidate.kodyRuleSource && (
+                                    <span className="text-warning text-xs">
+                                        Also a Kody Rules source: linking it
+                                        here can make the same rule comment
+                                        twice.
+                                    </span>
+                                )}
                             </div>
                             <Button
-                                size="sm"
-                                variant="secondary"
-                                aria-label={
-                                    typedItem
-                                        ? `Add the ${typedItem.kind} ${typedItem.repository ? `${typedItem.repository}:` : ""}${typedItem.path}`
-                                        : "Add path"
-                                }
-                                disabled={!canEdit || !typedItem}
-                                onClick={() => {
-                                    if (!typedItem) return;
-                                    register(typedItem);
-                                    setPath("");
-                                }}>
+                                size="xs"
+                                variant="helper"
+                                leftIcon={<PlusIcon />}
+                                aria-label={`Add ${candidate.name ?? candidate.path}`}
+                                disabled={!canEdit}
+                                onClick={() => register(candidate)}>
                                 Add
                             </Button>
                         </div>
-                    )}
+                    ))}
+
+                    <div
+                        className={
+                            isGlobal
+                                ? "flex items-center gap-2"
+                                : "border-card-lv3/60 flex items-center gap-2 border-t pt-3"
+                        }>
+                        <div className="min-w-0 flex-1">
+                            <Input
+                                size="md"
+                                aria-label="Path of a doc or skill"
+                                placeholder="Path, e.g. docs/payments.md or .claude/skills/ledger"
+                                value={path}
+                                disabled={!canEdit}
+                                onChange={(e) => setPath(e.target.value)}
+                            />
+                        </div>
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            aria-label={
+                                typedItem
+                                    ? `Add the ${typedItem.kind} ${typedItem.path}`
+                                    : "Add path"
+                            }
+                            disabled={!canEdit || !typedItem}
+                            onClick={() => {
+                                if (!typedItem) return;
+                                register(typedItem);
+                                setPath("");
+                            }}>
+                            Add
+                        </Button>
+                    </div>
                 </Card>
             </Page.Content>
         </Page.Root>

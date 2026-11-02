@@ -155,7 +155,7 @@ describe('saving a skill or doc of another repository', () => {
     const item = (over: Record<string, unknown>) => ({
         path: 'stack/node/rules/valves.md',
         kind: 'doc',
-        linkedTo: ['main-review'],
+        linkedTo: [{ agentId: 'valves' }],
         ...over,
     });
 
@@ -235,6 +235,24 @@ describe('saving a skill or doc of another repository', () => {
             "stack/node/rules/valves.md sets a ref but no repository; the reviewed repository is read on the pull request's target branch",
             `${RULES} is read at both "its default branch" and "v3"; use one branch or tag per repository`,
             `${RULES}:stack/node/rules/valves.md is listed twice`,
+        ]);
+    });
+
+    it('refuses a guide of another repository linked to the main review, and only that', () => {
+        expect(
+            knowledgeSourceProblems([
+                item({ repository: RULES, linkedTo: ['main-review'] }),
+                item({
+                    repository: RULES,
+                    path: 'stack/node/rules/pumps.md',
+                    linkedTo: [{ agentId: 'valves' }, 'main-review'],
+                }),
+                item({ linkedTo: ['main-review'] }),
+                item({ repository: RULES, path: 'stack/node/rules/drip.md' }),
+            ]),
+        ).toEqual([
+            `${RULES}:stack/node/rules/valves.md is a guide of another repository, which only custom agents follow; unlink it from the main review`,
+            `${RULES}:stack/node/rules/pumps.md is a guide of another repository, which only custom agents follow; unlink it from the main review`,
         ]);
     });
 
