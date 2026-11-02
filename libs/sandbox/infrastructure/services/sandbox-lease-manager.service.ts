@@ -4,6 +4,7 @@ import {
     assertValidPrKey,
     ISandboxLeaseManager,
     SandboxCircuitOpenError,
+    SandboxConcurrencyLimitError,
     SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import {
@@ -14,7 +15,7 @@ import {
     SANDBOX_PROVIDER_TOKEN,
     toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Sandbox } from 'e2b';
 import { randomUUID } from 'crypto';
@@ -27,6 +28,11 @@ import {
     SandboxCircuitTransition,
     SandboxCreateCircuitBreaker,
 } from './sandbox-create-circuit-breaker';
+import { SandboxConcurrencyLimiter } from './sandbox-concurrency-limiter';
+import {
+    DEFAULT_SANDBOX_CONCURRENCY_LIMITS,
+    SandboxConcurrencyConfigService,
+} from './sandbox-concurrency-config.service';
 import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
 import {
@@ -57,6 +63,12 @@ const IDLE_TIMEOUT_MS = 300_000; // 5 minutes — default for conversation flow
  * expiresAt has passed — this guards against crashed-worker leaks.
  */
 const DEFAULT_LEASE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * A concurrency slot whose lease was never released is dropped after this
+ * long. Longer than the 105-min job timeout so a slow review keeps its slot.
+ */
+const CONCURRENCY_SLOT_STALE_MS = 2 * 60 * 60 * 1000;
 
 // Grace window for in-flight tool calls before a detached sandbox is killed.
 const INVALIDATE_DRAIN_MS = 60_000;
@@ -153,12 +165,139 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         (transition) => this.logCircuitTransition(transition),
     );
 
+    /**
+     * Per-process cap on sandboxes held at once, so the fleet stays inside the
+     * E2B plan's concurrent-sandbox limit. Tuned through the
+     * `sandbox_concurrency` global parameter; uncapped when it is absent.
+     */
+    readonly concurrencyLimiter = new SandboxConcurrencyLimiter(
+        CONCURRENCY_SLOT_STALE_MS,
+    );
+    /**
+     * Slots are per sandbox, not per lease: the review, its safeguard pass
+     * and a @kody reply on the same PR share one E2B sandbox, so they share
+     * one slot. `granted` is shared so concurrent acquires on the same prKey
+     * wait on one slot instead of taking two.
+     */
+    private readonly prKeySlots = new Map<
+        string,
+        { slotId: string; refs: number; granted: Promise<boolean> }
+    >();
+    private readonly leaseIdToSlotPrKey = new Map<string, string>();
+
     constructor(
         @Inject(SANDBOX_PROVIDER_TOKEN)
         private readonly sandboxProvider: ISandboxProvider,
         private readonly leaseRepo: SandboxLeaseRepository,
         private readonly configService: ConfigService,
+        // Optional so specs that build the manager by hand stay uncapped.
+        @Optional()
+        private readonly concurrencyConfig?: SandboxConcurrencyConfigService,
     ) {}
+
+    /**
+     * Acquire a lease (see acquireLease) once this worker has a concurrency
+     * slot for the prKey's sandbox. Waits up to the configured `waitMs` for
+     * one, then throws SandboxConcurrencyLimitError so the caller continues
+     * without a sandbox. The slot is held until the last lease this worker
+     * holds on the prKey is released.
+     */
+    async acquire(
+        prKey: string,
+        consumer: string,
+        leaseTtlMs = DEFAULT_LEASE_TTL_MS,
+        cloneParams?: CreateSandboxParams,
+    ): Promise<AcquireResult> {
+        assertValidPrKey(prKey);
+
+        const waitStartedAt = Date.now();
+        const limits = await this.takeSlot(prKey);
+
+        if (!limits.granted) {
+            this.logger.warn({
+                message: `SandboxLeaseManager: no free sandbox slot on this worker after ${limits.waitMs}ms prKey="${prKey}" consumer="${consumer}"`,
+                context: SandboxLeaseManager.name,
+                metadata: {
+                    prKey,
+                    consumer,
+                    maxPerWorker: limits.maxPerWorker,
+                    active: this.concurrencyLimiter.active,
+                    waiting: this.concurrencyLimiter.waiting,
+                },
+            });
+            throw new SandboxConcurrencyLimitError(
+                prKey,
+                limits.maxPerWorker,
+                limits.waitMs,
+            );
+        }
+
+        const waitedMs = Date.now() - waitStartedAt;
+        if (waitedMs >= 1_000) {
+            this.logger.log({
+                message: `SandboxLeaseManager: waited ${waitedMs}ms for a sandbox slot prKey="${prKey}" consumer="${consumer}"`,
+                context: SandboxLeaseManager.name,
+                metadata: {
+                    prKey,
+                    consumer,
+                    waitedMs,
+                    maxPerWorker: limits.maxPerWorker,
+                },
+            });
+        }
+
+        try {
+            const result = await this.acquireLease(
+                prKey,
+                consumer,
+                leaseTtlMs,
+                cloneParams,
+            );
+            this.leaseIdToSlotPrKey.set(result.leaseId, prKey);
+            return result;
+        } catch (err) {
+            this.dropSlot(prKey);
+            throw err;
+        }
+    }
+
+    /** Join this worker's slot for prKey, or take a new one from the limiter. */
+    private async takeSlot(prKey: string): Promise<{
+        granted: boolean;
+        maxPerWorker: number;
+        waitMs: number;
+    }> {
+        const limits =
+            (await this.concurrencyConfig?.getLimits()) ??
+            DEFAULT_SANDBOX_CONCURRENCY_LIMITS;
+
+        let slot = this.prKeySlots.get(prKey);
+        if (slot) {
+            slot.refs++;
+        } else {
+            const slotId = randomUUID();
+            slot = {
+                slotId,
+                refs: 1,
+                granted: this.concurrencyLimiter.acquire(slotId, limits),
+            };
+            this.prKeySlots.set(prKey, slot);
+        }
+
+        const granted = await slot.granted;
+        if (!granted) this.dropSlot(prKey);
+        return { granted, ...limits };
+    }
+
+    /** Drop one reference to prKey's slot; the last one frees the slot. */
+    private dropSlot(prKey: string): void {
+        const slot = this.prKeySlots.get(prKey);
+        if (!slot) return;
+        slot.refs--;
+        if (slot.refs > 0) return;
+        this.prKeySlots.delete(prKey);
+        this.concurrencyLimiter.release(slot.slotId);
+    }
 
     /**
      * Acquire a lease for the given prKey, creating or reusing the sandbox.
@@ -176,7 +315,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      *                    In this plan acquire() calls createSandboxWithRepo only if the
      *                    provider is available; when absent the NULL_SANDBOX_INSTANCE is used.
      */
-    async acquire(
+    private async acquireLease(
         prKey: string,
         consumer: string,
         leaseTtlMs = DEFAULT_LEASE_TTL_MS,
@@ -222,7 +361,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 if (!check) break; // Doc deleted — cleanup complete
             }
             // Retry acquire from scratch
-            return this.acquire(prKey, consumer, leaseTtlMs, cloneParams);
+            return this.acquireLease(prKey, consumer, leaseTtlMs, cloneParams);
         }
 
         if (doc.cleanupStatus === SANDBOX_LEASE_CLEANUP_STATUS.FAILED) {
@@ -296,7 +435,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     context: SandboxLeaseManager.name,
                     metadata: { prKey, consumer },
                 });
-                return this.acquire(prKey, consumer, leaseTtlMs, cloneParams);
+                return this.acquireLease(
+                    prKey,
+                    consumer,
+                    leaseTtlMs,
+                    cloneParams,
+                );
             }
             throw err;
         }
@@ -323,6 +467,14 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * 5min default because the user is interactive.
      */
     async release(leaseId: string, opts?: { idleMs?: number }): Promise<void> {
+        // Free the worker slot first: whatever happens to the lease doc
+        // below, this process no longer holds the sandbox.
+        const slotPrKey = this.leaseIdToSlotPrKey.get(leaseId);
+        if (slotPrKey) {
+            this.leaseIdToSlotPrKey.delete(leaseId);
+            this.dropSlot(slotPrKey);
+        }
+
         const prKey = this.leaseIdToPrKey.get(leaseId);
         if (!prKey) {
             this.logger.warn({

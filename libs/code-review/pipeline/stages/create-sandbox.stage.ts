@@ -17,6 +17,7 @@ import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
     SandboxCircuitOpenError,
+    SandboxConcurrencyLimitError,
     SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -261,6 +262,20 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                         organizationAndTeamData:
                             context.organizationAndTeamData,
                         prNumber: context.pullRequest?.number,
+                    },
+                });
+                return context;
+            }
+            // Worker at its sandbox cap: expected under load, the cap exists
+            // to keep E2B below its concurrency limit.
+            if (err instanceof SandboxConcurrencyLimitError) {
+                this.logger.warn({
+                    message: `No free sandbox slot on this worker for ${label}, continuing without it`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
+                        prNumber: context?.pullRequest?.number,
                     },
                 });
                 return context;

@@ -36,6 +36,20 @@ export class SandboxCircuitOpenError extends Error {
     }
 }
 
+/**
+ * Thrown by acquire() when this worker already holds its maximum number of
+ * sandbox leases and none freed up within the configured wait. The caller
+ * continues without a sandbox.
+ */
+export class SandboxConcurrencyLimitError extends Error {
+    constructor(prKey: string, maxPerWorker: number, waitMs: number) {
+        super(
+            `SandboxLeaseManager: worker sandbox limit (${maxPerWorker}) reached for prKey="${prKey}", no slot freed within ${waitMs}ms`,
+        );
+        this.name = 'SandboxConcurrencyLimitError';
+    }
+}
+
 export interface AcquireResult {
     sandbox: SandboxInstance;
     leaseId: string;

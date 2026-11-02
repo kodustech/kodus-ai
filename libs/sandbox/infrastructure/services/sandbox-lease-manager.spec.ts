@@ -24,7 +24,10 @@ import { Sandbox } from 'e2b';
 import { SandboxLeaseManager } from './sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
-import { SandboxCircuitOpenError } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
+import {
+    SandboxCircuitOpenError,
+    SandboxConcurrencyLimitError,
+} from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import {
     ISandboxProvider,
     SandboxInstance,
@@ -602,6 +605,96 @@ describe('SandboxLeaseManager', () => {
         expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
         // No sandbox to kill — provider never returned one
         expect(Sandbox.kill).not.toHaveBeenCalled();
+    });
+
+    // ─── Per-worker sandbox concurrency cap ──────────────────────────────
+
+    describe('per-worker sandbox cap', () => {
+        const prKeyFor = (pr: number) =>
+            `7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:${pr}`;
+
+        function cappedManager(maxPerWorker: number, waitMs: number) {
+            const concurrencyConfig = {
+                getLimits: jest
+                    .fn()
+                    .mockResolvedValue({ maxPerWorker, waitMs }),
+            };
+            return new SandboxLeaseManager(
+                sandboxProvider as any,
+                leaseRepo,
+                configService,
+                concurrencyConfig as any,
+            );
+        }
+
+        beforeEach(() => {
+            leaseRepo.upsertAcquire.mockImplementation(
+                async (prKey: string) =>
+                    ({
+                        _id: prKey,
+                        leaseCount: 1,
+                        state: 'CREATING',
+                        createdAt: new Date(),
+                        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                    }) as any,
+            );
+            leaseRepo.decrementLease.mockResolvedValue({
+                leaseCount: 1,
+            } as any);
+        });
+
+        it('refuses a second sandbox past the cap without calling the provider', async () => {
+            const capped = cappedManager(1, 0);
+
+            await capped.acquire(prKeyFor(1), 'review');
+            const err = await capped
+                .acquire(prKeyFor(2), 'review')
+                .catch((e) => e);
+
+            expect(err).toBeInstanceOf(SandboxConcurrencyLimitError);
+            expect(leaseRepo.upsertAcquire).toHaveBeenCalledTimes(1);
+        });
+
+        it('shares one slot between leases on the same PR', async () => {
+            const capped = cappedManager(1, 0);
+
+            const review = await capped.acquire(prKeyFor(1), 'review');
+            const safeguard = await capped.acquire(prKeyFor(1), 'safeguard');
+
+            expect(review.leaseId).not.toBe(safeguard.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(1);
+
+            await capped.release(review.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(1);
+            await capped.release(safeguard.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(0);
+        });
+
+        it('frees the slot on release so a waiting review gets it', async () => {
+            const capped = cappedManager(1, 30_000);
+
+            const first = await capped.acquire(prKeyFor(1), 'review');
+            const second = capped.acquire(prKeyFor(2), 'review');
+
+            await capped.release(first.leaseId);
+
+            await expect(second).resolves.toMatchObject({
+                wasCreated: true,
+            });
+            expect(capped.concurrencyLimiter.active).toBe(1);
+        });
+
+        it('frees the slot when the acquire itself fails', async () => {
+            const capped = cappedManager(1, 0);
+            leaseRepo.upsertAcquire.mockRejectedValueOnce(
+                new Error('Mongo down'),
+            );
+
+            await expect(capped.acquire(prKeyFor(1), 'review')).rejects.toThrow(
+                /Mongo down/,
+            );
+            expect(capped.concurrencyLimiter.active).toBe(0);
+        });
     });
 
     // ─── Fail-fast: timeouts, repo errors, circuit breaker ───────────────
