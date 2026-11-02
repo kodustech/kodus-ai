@@ -89,15 +89,15 @@ describe('AzureReposRequestHelper.mapAzureStatusToFileChangeStatus', () => {
         //   - edit is the catch-all for "changed but still here".
 
         it('"add, edit" → "added" (was wrongly "changed" pre-fix)', () => {
-            expect(
-                helper.mapAzureStatusToFileChangeStatus('add, edit'),
-            ).toBe('added');
+            expect(helper.mapAzureStatusToFileChangeStatus('add, edit')).toBe(
+                'added',
+            );
         });
 
         it('"edit, add" → "added" (token order must not matter)', () => {
-            expect(
-                helper.mapAzureStatusToFileChangeStatus('edit, add'),
-            ).toBe('added');
+            expect(helper.mapAzureStatusToFileChangeStatus('edit, add')).toBe(
+                'added',
+            );
         });
 
         it('"edit, rename" → "renamed"', () => {
@@ -114,9 +114,7 @@ describe('AzureReposRequestHelper.mapAzureStatusToFileChangeStatus', () => {
 
         it('"delete, sourceRename" → "removed" (delete dominates)', () => {
             expect(
-                helper.mapAzureStatusToFileChangeStatus(
-                    'delete, sourceRename',
-                ),
+                helper.mapAzureStatusToFileChangeStatus('delete, sourceRename'),
             ).toBe('removed');
         });
 
@@ -124,9 +122,9 @@ describe('AzureReposRequestHelper.mapAzureStatusToFileChangeStatus', () => {
             expect(
                 helper.mapAzureStatusToFileChangeStatus(' Add ,  Edit '),
             ).toBe('added');
-            expect(
-                helper.mapAzureStatusToFileChangeStatus('EDIT,RENAME'),
-            ).toBe('renamed');
+            expect(helper.mapAzureStatusToFileChangeStatus('EDIT,RENAME')).toBe(
+                'renamed',
+            );
         });
 
         it('still returns "changed" when no recognized verb is present', () => {
@@ -225,5 +223,70 @@ describe('AzureReposRequestHelper.getFileContent — 404 wrapper preserves statu
         // as 404 and silently swallowed downstream.
         expect(thrown).toBeDefined();
         expect(thrown.status).not.toBe(404);
+    });
+});
+
+describe('AzureReposRequestHelper.getRepositoryContentFile — branch or tag', () => {
+    let helper: AzureReposRequestHelper;
+    let axiosInstance: { get: jest.Mock };
+    const params = {
+        orgName: 'org',
+        token: 't',
+        projectId: 'p',
+        repositoryId: 'r',
+        filePath: 'rules/valves.md',
+    };
+    const notFound = () =>
+        Object.assign(new Error('404'), { response: { status: 404 } });
+
+    beforeEach(() => {
+        helper = new AzureReposRequestHelper();
+        axiosInstance = { get: jest.fn() };
+        jest.spyOn(helper as any, 'azureRequest').mockResolvedValue(
+            axiosInstance,
+        );
+    });
+
+    it('reads a branch as a branch', async () => {
+        axiosInstance.get.mockResolvedValue({ data: { content: 'x' } });
+
+        await expect(
+            helper.getRepositoryContentFile({ ...params, branch: 'main' }),
+        ).resolves.toEqual({ content: 'x' });
+        expect(axiosInstance.get.mock.calls[0][0]).toContain(
+            'versionDescriptor.version=main&versionDescriptor.versionType=branch',
+        );
+    });
+
+    it('reads a pinned tag as a tag when no branch has that name', async () => {
+        axiosInstance.get
+            .mockRejectedValueOnce(notFound())
+            .mockResolvedValueOnce({ data: { content: 'tagged' } });
+
+        await expect(
+            helper.getRepositoryContentFile({ ...params, branch: 'v3' }),
+        ).resolves.toEqual({ content: 'tagged' });
+        expect(axiosInstance.get.mock.calls[1][0]).toContain(
+            'versionDescriptor.version=v3&versionDescriptor.versionType=tag',
+        );
+    });
+
+    it('reads refs/tags/ directly as a tag, and rethrows other errors', async () => {
+        axiosInstance.get.mockResolvedValueOnce({ data: { content: 't' } });
+        await helper.getRepositoryContentFile({
+            ...params,
+            branch: 'refs/tags/v3',
+        });
+        expect(axiosInstance.get).toHaveBeenCalledTimes(1);
+        expect(axiosInstance.get.mock.calls[0][0]).toContain(
+            'versionDescriptor.version=v3&versionDescriptor.versionType=tag',
+        );
+
+        axiosInstance.get.mockRejectedValueOnce(
+            Object.assign(new Error('500'), { response: { status: 500 } }),
+        );
+        await expect(
+            helper.getRepositoryContentFile({ ...params, branch: 'main' }),
+        ).rejects.toThrow('500');
     });
 });

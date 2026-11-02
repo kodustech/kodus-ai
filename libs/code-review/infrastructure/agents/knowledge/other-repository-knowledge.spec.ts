@@ -469,6 +469,33 @@ describe('resolveReviewKnowledge with another repository', () => {
         ]);
     });
 
+    it('reports an item of a repository it could not list as unavailable, not missing', async () => {
+        const cm = provider({});
+        (cm.getRepositories as jest.Mock).mockRejectedValueOnce(
+            new Error('503'),
+        );
+        const knowledge = await resolveReviewKnowledge({
+            ...base,
+            items: [
+                {
+                    kind: 'doc',
+                    repository: RULES,
+                    path: 'rules.md',
+                    linkedTo: [{ agentId: 'valves' }],
+                },
+            ],
+            codeManagement: cm,
+        });
+
+        expect(knowledge.warnings).toEqual([
+            expect.objectContaining({
+                kind: 'KNOWLEDGE_UNAVAILABLE',
+                agentName: 'Valves',
+                detail: `${RULES}:rules.md: the repositories of this team's integration could not be listed, so ${RULES} was not read`,
+            }),
+        ]);
+    });
+
     it('does not list repositories when every item is in the reviewed repository', async () => {
         const cm = provider({ '10@main': { 'docs/valves.md': '# Valves' } });
 

@@ -334,7 +334,13 @@ export class ResolveCustomAgentUseCase {
                     : listing.find((r) => String(r.id) === repository.id);
                 discoveredIn = {
                     ...(sourceRepository && { repository: sourceRepository }),
-                    branch: ref?.branch ?? sourceRef ?? repository.branch,
+                    // Never the reviewed repository's branch for another one.
+                    branch:
+                        ref?.branch ??
+                        sourceRef ??
+                        (sourceRepository
+                            ? (listed(sourceRepository)?.default_branch ?? '')
+                            : repository.branch),
                     visibility: repo?.visibility,
                     available: !!ref,
                     ...(!ref && sourceRepository
@@ -347,7 +353,18 @@ export class ResolveCustomAgentUseCase {
                               organizationAndTeamData,
                               repository: ref,
                           })
-                          .catch(() => {
+                          .catch((error) => {
+                              this.logger.warn({
+                                  message:
+                                      'Could not list skills and docs of a repository',
+                                  context: ResolveCustomAgentUseCase.name,
+                                  error,
+                                  metadata: {
+                                      organizationAndTeamData,
+                                      repository: ref.id,
+                                      branch: ref.branch,
+                                  },
+                              });
                               discoveredIn = {
                                   ...discoveredIn!,
                                   available: false,

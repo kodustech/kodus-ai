@@ -121,6 +121,23 @@ export async function resolveReviewKnowledge(params: {
             if (!item.repository || !missing.has(item.repository.toLowerCase()))
                 continue;
             for (const target of item.linkedTo ?? []) {
+                const agentName =
+                    typeof target === 'string'
+                        ? undefined
+                        : names.get(target.agentId);
+                // A failed listing never looked the item up: it is
+                // unavailable, not missing.
+                if (repositories.listingFailed) {
+                    warnings.push({
+                        kind: 'KNOWLEDGE_UNAVAILABLE',
+                        reason: 'knowledge',
+                        contextWindowTokens: 0,
+                        modelName: '',
+                        detail: `${knowledgeSourcePath(item)}: the repositories of this team's integration could not be listed, so ${item.repository} was not read`,
+                        ...(agentName ? { agentName } : {}),
+                    });
+                    continue;
+                }
                 warnings.push(
                     ...toReviewWarnings(
                         [
@@ -130,14 +147,10 @@ export async function resolveReviewKnowledge(params: {
                                         ? 'SKILL_NOT_FOUND'
                                         : 'DOC_NOT_FOUND',
                                 path: knowledgeSourcePath(item),
-                                detail: repositories.listingFailed
-                                    ? `the repositories of this team's integration could not be listed, so ${item.repository} was not read`
-                                    : `${item.repository} is not connected to Kodus; select it in Git settings`,
+                                detail: `${item.repository} is not connected to Kodus; select it in Git settings`,
                             },
                         ],
-                        typeof target === 'string'
-                            ? undefined
-                            : names.get(target.agentId),
+                        agentName,
                     ),
                 );
             }

@@ -94,8 +94,11 @@ export class ExternalReferenceLoaderService {
 
             // No pack, or a pack without dependencies: the reference names no
             // file (a rule with no @file mention), so there was nothing to load.
-            const expectsReferences =
-                (result.pack?.dependencies?.length ?? 0) > 0;
+            // A reference that no longer exists is unknown, not "no file": the
+            // rule may still depend on files, so it stays reportable.
+            const expectsReferences = result.referenceMissing
+                ? undefined
+                : (result.pack?.dependencies?.length ?? 0) > 0;
             const layers = result.pack?.layers ?? [];
             const references: LoadedReference[] = [];
             for (const layer of layers) {

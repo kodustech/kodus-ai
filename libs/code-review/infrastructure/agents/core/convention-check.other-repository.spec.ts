@@ -85,6 +85,17 @@ describe('quote gate with a guide of another repository', () => {
         ]);
     });
 
+    it('rejects a quote from a linked guide that could not be read', async () => {
+        const result = await checkConventionQuotes(
+            [cites(RULES_DOC, QUOTE)],
+            async () => null,
+            guides,
+        );
+
+        expect(result.passed).toEqual([]);
+        expect(result.rejected).toHaveLength(1);
+    });
+
     it('still rejects a quote that is not in the linked guide', async () => {
         const result = await checkConventionQuotes(
             [
