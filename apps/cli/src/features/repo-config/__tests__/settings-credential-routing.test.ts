@@ -26,7 +26,8 @@ vi.mock('../../../utils/logger.js', () => ({
     cliError: vi.fn(),
 }));
 
-vi.mock('../../../utils/cli-exit.js', () => ({
+vi.mock('../../../utils/cli-exit.js', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../../../utils/cli-exit.js')>()),
     exitWithCode: vi.fn(),
 }));
 

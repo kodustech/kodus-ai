@@ -104,7 +104,9 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException('organizationId not found in request');
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
         }
 
         const mapped = await this.mapDtoToContract(query, organizationId);
@@ -131,7 +133,9 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException('organizationId not found in request');
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
         }
 
         const mapped = await this.mapDtoToContract(query, organizationId);
@@ -157,7 +161,9 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException('organizationId not found in request');
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
         }
 
         const mapped = await this.mapDtoToContract(query, organizationId);
@@ -176,7 +182,9 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException('organizationId not found in request');
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
         }
 
         const mapped = await this.mapDtoToContract(query, organizationId);
@@ -195,7 +203,9 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException('organizationId not found in request');
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
         }
 
         const mapped = await this.mapDtoToContract(query, organizationId);
@@ -215,7 +225,9 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException('organizationId not found in request');
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
         }
 
         const mapped = await this.mapDtoToContract(query, organizationId);
@@ -235,7 +247,9 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException('organizationId not found in request');
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
         }
 
         const mapped = await this.mapDtoToContract(query, organizationId);
@@ -254,7 +268,9 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException('organizationId not found in request');
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
         }
 
         const mapped = await this.mapDtoToContract(query, organizationId);
@@ -273,7 +289,9 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException('organizationId not found in request');
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
         }
 
         const mapped = await this.mapDtoToContract(query, organizationId);
@@ -290,7 +308,9 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException('organizationId not found in request');
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
         }
 
         return await this.tokenPricingUseCase.execute(
@@ -313,7 +333,9 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException('organizationId not found in request');
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
         }
 
         const list = (models ?? '')
@@ -342,7 +364,9 @@ export class TokenUsageController {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
-            throw new BadRequestException('organizationId not found in request');
+            throw new BadRequestException(
+                'organizationId not found in request',
+            );
         }
 
         return await this.costEstimateUseCase.execute(organizationId);
@@ -390,19 +414,13 @@ export class TokenUsageController {
         query: TokenUsageQueryDto,
         organizationId: string,
     ): Promise<boolean> {
-        if (query.byok === undefined || query.byok === '') {
+        // TokenUsageQueryDto has already normalized and validated it.
+        if (query.byok === undefined) {
             return this.resolveUsageByokViewUseCase.execute({
                 organizationId,
                 teamId: query.teamId,
             });
         }
-
-        const normalized = query.byok.trim().toLowerCase();
-        if (normalized !== 'true' && normalized !== 'false') {
-            throw new BadRequestException(
-                `byok must be a 'true' or 'false' string`,
-            );
-        }
-        return normalized === 'true';
+        return query.byok === 'true';
     }
 }

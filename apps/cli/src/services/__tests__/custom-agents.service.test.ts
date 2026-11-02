@@ -22,6 +22,7 @@ import type {
 import { CommandError } from '../../utils/command-errors.js';
 import { customAgentsApi } from '../api/custom-agents.api.js';
 import {
+    agentStatusLine,
     customAgentsService,
     resolveLevel,
     STALE_AGENTS_MESSAGE,
@@ -275,6 +276,60 @@ describe('customAgentsService', () => {
             id: 'security',
             status: { posted: 5 },
         });
+    });
+
+    it('reports usage as unavailable when the status read fails', async () => {
+        api.getStatus.mockRejectedValue(new Error('503'));
+
+        const result = await customAgentsService.list({ repo: 'kodus-ai' });
+
+        expect(result.usageUnavailable).toBe(true);
+        expect(
+            agentStatusLine(
+                result.agents[0],
+                result.agents[0].status,
+                result.windowDays,
+                true,
+                result.usageUnavailable,
+            ),
+        ).toContain('usage unavailable');
+    });
+
+    it('stops polling a run that never finishes', async () => {
+        api.startTry.mockResolvedValue({ runId: 'run-1', status: 'running' });
+        api.readTry.mockResolvedValue({ runId: 'run-1', status: 'running' });
+        const wait = vi.fn().mockResolvedValue(undefined);
+
+        await expect(
+            customAgentsService.tryAgent(
+                'security',
+                'https://github.com/acme/app/pull/1',
+                { repo: 'kodus-ai' },
+                { wait, pollIntervalMs: 1000, maxWaitMs: 3000 },
+            ),
+        ).rejects.toMatchObject({
+            code: 'API_REQUEST_FAILED',
+            message: expect.stringContaining('did not finish'),
+        });
+        expect(api.readTry).toHaveBeenCalledTimes(3);
+    });
+
+    it('fails a run that is done without a result', async () => {
+        api.startTry.mockResolvedValue({ runId: 'run-1', status: 'running' });
+        api.readTry.mockResolvedValue({ runId: 'run-1', status: 'done' });
+        const wait = vi.fn().mockResolvedValue(undefined);
+
+        await expect(
+            customAgentsService.tryAgent(
+                'security',
+                'https://github.com/acme/app/pull/1',
+                { repo: 'kodus-ai' },
+                { wait },
+            ),
+        ).rejects.toMatchObject({
+            message: expect.stringContaining('without a result'),
+        });
+        expect(api.readTry).toHaveBeenCalledTimes(1);
     });
 
     it('polls a try run until it is done', async () => {

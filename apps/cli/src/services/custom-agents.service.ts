@@ -106,6 +106,9 @@ export type CustomAgentTemplateId =
     (typeof CUSTOM_AGENT_TEMPLATES)[number]['id'];
 
 export const TRY_POLL_INTERVAL_MS = 4000;
+// A run on a large pull request takes minutes; past this the run is lost (its
+// worker died) rather than slow, and the CLI must not poll forever.
+export const MAX_TRY_WAIT_MS = 30 * 60 * 1000;
 
 export const STALE_AGENTS_MESSAGE =
     'Someone else changed these agents since this command read them. Nothing was saved. Run the command again to apply your change on top of theirs.';
@@ -153,6 +156,8 @@ export type ListAgentsResult = {
     repository?: { id: string; name: string };
     directory?: { id: string; label: string };
     windowDays?: number;
+    // The usage read failed: the per-agent counts are unknown, not zero.
+    usageUnavailable?: boolean;
     agents: AgentSummary[];
 };
 
@@ -1061,6 +1066,7 @@ class CustomAgentsService {
         const { ctx, view } = await this.load(target);
         let windowDays: number | undefined;
         let statuses: CustomAgentStatus[] = [];
+        let usageUnavailable = false;
         // Usage is counted per repository, as the web app shows it.
         if (view.repositoryId && view.effectiveAgents.length > 0) {
             const status = await customAgentsApi
@@ -1068,7 +1074,10 @@ class CustomAgentsService {
                     teamId: ctx.teamId,
                     repositoryId: view.repositoryId,
                 })
-                .catch(() => null);
+                .catch(() => {
+                    usageUnavailable = true;
+                    return null;
+                });
             windowDays = status?.windowDays;
             statuses = status?.agents ?? [];
         }
@@ -1077,6 +1086,7 @@ class CustomAgentsService {
             team: ctx.teamName,
             ...this.where(view),
             ...(windowDays !== undefined && { windowDays }),
+            ...(usageUnavailable ? { usageUnavailable: true } : {}),
             agents: view.effectiveAgents.map((agent) => ({
                 ...agent,
                 origin: ownIds.has(agent.id) ? 'own' : 'inherited',
@@ -1093,6 +1103,7 @@ class CustomAgentsService {
         ListAgentsResult['agents'][number] & {
             level: ConfigLevelName;
             windowDays?: number;
+            usageUnavailable?: boolean;
         }
     > {
         const listed = await this.list(target);
@@ -1103,7 +1114,12 @@ class CustomAgentsService {
                 `Agent '${ref}' not found. Agents here: ${listed.agents.map((entry) => entry.name).join(', ') || 'none'}.`,
             );
         }
-        return { ...agent, level: listed.level, windowDays: listed.windowDays };
+        return {
+            ...agent,
+            level: listed.level,
+            windowDays: listed.windowDays,
+            ...(listed.usageUnavailable && { usageUnavailable: true }),
+        };
     }
 
     async create(
@@ -1227,6 +1243,7 @@ class CustomAgentsService {
         options: {
             input?: AgentInput;
             pollIntervalMs?: number;
+            maxWaitMs?: number;
             wait?: (ms: number) => Promise<void>;
             onProgress?: () => void;
         } = {},
@@ -1266,14 +1283,29 @@ class CustomAgentsService {
 
         const wait = options.wait ?? sleep;
         const interval = options.pollIntervalMs ?? TRY_POLL_INTERVAL_MS;
+        const maxWait = options.maxWaitMs ?? MAX_TRY_WAIT_MS;
         let run = started;
-        while (run.status !== 'done' || !run.result) {
+        let waited = 0;
+        while (run.status !== 'done') {
+            if (waited >= maxWait) {
+                throw new CommandError(
+                    'API_REQUEST_FAILED',
+                    `Try run ${started.runId} did not finish in ${Math.round(maxWait / 60000)} minutes. Nothing was posted; run the command again.`,
+                );
+            }
             options.onProgress?.();
             await wait(interval);
+            waited += interval;
             run = await customAgentsApi.readTry(
                 ctx.accessToken,
                 started.runId,
                 scope,
+            );
+        }
+        if (!run.result) {
+            throw new CommandError(
+                'API_REQUEST_FAILED',
+                `Try run ${started.runId} finished without a result. Run the command again.`,
             );
         }
         return { agent, trace: run.result };
@@ -1540,6 +1572,7 @@ export function agentStatusLine(
     status: CustomAgentStatus | undefined,
     windowDays: number | undefined,
     perRepository: boolean,
+    usageUnavailable = false,
 ): string {
     const include = agent.scope?.include?.filter(Boolean) ?? [];
     const exclude = agent.scope?.exclude?.filter(Boolean) ?? [];
@@ -1550,6 +1583,9 @@ export function agentStatusLine(
             : `Runs on ${scope}`;
     if (!perRepository) {
         return where;
+    }
+    if (usageUnavailable) {
+        return `${where} · usage unavailable right now`;
     }
     const days = windowDays ?? 30;
     if (!status || status.pullRequests === 0) {

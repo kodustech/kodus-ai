@@ -431,12 +431,18 @@ class CockpitService {
                           },
                       ];
 
-        const hidden = requests
-            .filter((request) => !isMetricVisible(tab, request.key, visibility))
-            .map((request) => request.key);
+        const visible: MetricRequest[] = [];
+        const hidden: string[] = [];
+        for (const request of requests) {
+            if (isMetricVisible(tab, request.key, visibility)) {
+                visible.push(request);
+            } else {
+                hidden.push(request.key);
+            }
+        }
         const { metrics, errors } = await fetchMetrics(
             context.accessToken,
-            requests.filter((request) => !hidden.includes(request.key)),
+            visible,
         );
 
         return {

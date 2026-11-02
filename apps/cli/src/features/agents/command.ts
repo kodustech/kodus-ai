@@ -227,12 +227,13 @@ function printAgent(
     agent: AgentSummary,
     windowDays: number | undefined,
     perRepository: boolean,
+    usageUnavailable = false,
 ): void {
     cliInfo(
         `${chalk.bold(agent.name)} ${chalk.dim(`(${agent.id})`)}${agent.origin === 'inherited' ? chalk.dim(' · from the repository') : ''}`,
     );
     cliInfo(
-        `  ${agentStatusLine(agent, agent.status, windowDays, perRepository)}`,
+        `  ${agentStatusLine(agent, agent.status, windowDays, perRepository, usageUnavailable)}`,
     );
     cliInfo(
         `  Enabled: ${agent.enabled ? 'yes' : 'no'} · @kody -v ${agent.name}`,
@@ -345,7 +346,12 @@ export function createAgentsCommand(): Command {
             }
             cliInfo(chalk.dim(`Team ${result.team} · ${levelLabel(result)}`));
             result.agents.forEach((agent) =>
-                printAgent(agent, result.windowDays, !!result.repository),
+                printAgent(
+                    agent,
+                    result.windowDays,
+                    !!result.repository,
+                    result.usageUnavailable,
+                ),
             );
         }),
     );
@@ -366,7 +372,12 @@ export function createAgentsCommand(): Command {
                 cliInfo(JSON.stringify(agent, null, 2));
                 return;
             }
-            printAgent(agent, agent.windowDays, agent.level !== 'global');
+            printAgent(
+                agent,
+                agent.windowDays,
+                agent.level !== 'global',
+                agent.usageUnavailable,
+            );
             cliInfo('');
             cliInfo(chalk.bold('Instructions'));
             cliInfo(agent.instructions || chalk.dim('(none)'));

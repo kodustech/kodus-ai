@@ -12,7 +12,7 @@ import {
     type RepositorySettingsMutationResult,
 } from '../../services/repo-settings.service.js';
 import { repositorySettingsWizardService } from '../../services/repo-settings-wizard.service.js';
-import { exitWithCode } from '../../utils/cli-exit.js';
+import { exitWithCode, isCliExitError } from '../../utils/cli-exit.js';
 import { cliError, cliInfo } from '../../utils/logger.js';
 import { normalizeCommandError } from '../../utils/command-errors.js';
 import {
@@ -242,6 +242,10 @@ export async function configRepoListAction(
             cliInfo(`- ${repository.fullName}`);
         }
     } catch (error) {
+        // A nested action already reported its error and exited.
+        if (isCliExitError(error)) {
+            throw error;
+        }
         const normalized = normalizeCommandError(error);
         cliError(chalk.red(normalized.message));
         exitWithCode(normalized.exitCode);
@@ -271,6 +275,10 @@ export async function configRepoShowAction(
             cliInfo(line);
         }
     } catch (error) {
+        // A nested action already reported its error and exited.
+        if (isCliExitError(error)) {
+            throw error;
+        }
         const normalized = normalizeCommandError(error);
         cliError(chalk.red(normalized.message));
         exitWithCode(normalized.exitCode);
@@ -445,6 +453,10 @@ export async function configRepoOpenAction(
             cliInfo(chalk.yellow(`Please visit: ${appUrl}`));
         }
     } catch (error) {
+        // A nested action already reported its error and exited.
+        if (isCliExitError(error)) {
+            throw error;
+        }
         const normalized = normalizeCommandError(error);
         cliError(chalk.red(normalized.message));
         exitWithCode(normalized.exitCode);
@@ -491,6 +503,10 @@ export async function configRepoSetAction(
 
         printRepositoryMutationResult(updated, options);
     } catch (error) {
+        // A nested action already reported its error and exited.
+        if (isCliExitError(error)) {
+            throw error;
+        }
         const normalized = normalizeCommandError(error);
         cliError(chalk.red(normalized.message));
         exitWithCode(normalized.exitCode);
@@ -534,6 +550,10 @@ export async function configRepoPatternAddAction(
 
         printRepositoryMutationResult(updated, options);
     } catch (error) {
+        // A nested action already reported its error and exited.
+        if (isCliExitError(error)) {
+            throw error;
+        }
         const normalized = normalizeCommandError(error);
         cliError(chalk.red(normalized.message));
         exitWithCode(normalized.exitCode);
@@ -575,6 +595,10 @@ export async function configRepoPatternRemoveAction(
 
         printRepositoryMutationResult(updated, options);
     } catch (error) {
+        // A nested action already reported its error and exited.
+        if (isCliExitError(error)) {
+            throw error;
+        }
         const normalized = normalizeCommandError(error);
         cliError(chalk.red(normalized.message));
         exitWithCode(normalized.exitCode);

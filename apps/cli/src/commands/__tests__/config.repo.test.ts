@@ -26,6 +26,20 @@ vi.mock('../../services/repo-settings.service.js', () => ({
     },
 }));
 
+// These cover the team-key path; without this the credential comes from
+// whatever is stored in the machine's ~/.kodus.
+vi.mock('../../services/user-context.service.js', async (importOriginal) => ({
+    ...(await importOriginal<
+        typeof import('../../services/user-context.service.js')
+    >()),
+    userContextService: {
+        resolveCredential: async () => ({
+            kind: 'team-key',
+            accessToken: 'kodus_team_key',
+        }),
+    },
+}));
+
 import * as prompts from '@inquirer/prompts';
 import open from 'open';
 import { repoConfigService } from '../../services/repo-config.service.js';
