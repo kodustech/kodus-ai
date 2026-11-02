@@ -46,6 +46,8 @@ const SPEC = {
         'libs/code-review/infrastructure/agents/core/convention-check.other-repository.spec.ts',
     otherRepoKnowledge:
         'libs/code-review/infrastructure/agents/knowledge/other-repository-knowledge.spec.ts',
+    reviewKnowledge:
+        'libs/code-review/infrastructure/agents/knowledge/review-knowledge.spec.ts',
 };
 
 // The cases whose checks a model-judged property owns, so its run pays only for them.
@@ -123,6 +125,12 @@ const MUTATIONS = [
         patch: 'P8-pinned-ref-ignored.patch',
         break: 'a skill or doc of another repository is read on its default branch even when the team pinned a branch or tag',
         checks: [{ jest: [SPEC.otherRepoKnowledge] }],
+    },
+    {
+        property: 'P8',
+        patch: 'P8-main-review-reads-other-repository.patch',
+        break: 'a guide of another repository linked to the main review reaches the built-in agents, which have no quote gate',
+        checks: [{ jest: [SPEC.reviewKnowledge] }],
     },
 ];
 
