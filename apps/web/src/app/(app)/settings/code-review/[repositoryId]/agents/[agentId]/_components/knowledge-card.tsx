@@ -205,16 +205,20 @@ export const useKnowledgeSourceListing = (params: {
         // This repository is listed by the page's check: loading only until
         // it answers, whatever it answered.
         loading: params.source.repository ? remoteLoading : !params.report,
-        // A request that failed is not an empty repository: say so.
+        // A request that failed is not an empty repository: say so. While
+        // the picked repository loads, the previous answer is a placeholder
+        // and names another repository: say nothing until this one answers.
         unavailable: !params.source.repository
             ? params.report?.knowledge.status === "unavailable"
                 ? params.report.knowledge.reason
                 : undefined
-            : remote.data?.knowledge.status === "unavailable"
-              ? remote.data.knowledge.reason
-              : remote.isError && !remoteLoading
-                ? `Could not read ${params.source.repository}. Try again.`
-                : undefined,
+            : remoteLoading
+              ? undefined
+              : remote.data?.knowledge.status === "unavailable"
+                ? remote.data.knowledge.reason
+                : remote.isError
+                  ? `Could not read ${params.source.repository}. Try again.`
+                  : undefined,
     };
 };
 

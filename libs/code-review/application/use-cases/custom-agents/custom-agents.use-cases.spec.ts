@@ -305,11 +305,10 @@ describe('ResolveCustomAgentUseCase', () => {
 
         it("falls back to the listing's default branch when the provider cannot say", async () => {
             const knowledgeReader = reader();
-            const { getDefaultBranch: _none, ...withoutDefault } = cm;
             const useCase = new ResolveCustomAgentUseCase(
                 parametersService(storedConfig()) as any,
                 {
-                    ...withoutDefault,
+                    ...cm,
                     // The reviewed repository answers; the rules one fails.
                     getDefaultBranch: jest.fn(async ({ repository }) => {
                         if (repository.id === 'repo-9') throw new Error('500');

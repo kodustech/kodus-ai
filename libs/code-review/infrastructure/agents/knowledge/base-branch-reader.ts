@@ -1,6 +1,7 @@
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { createLogger } from '@libs/core/log/logger';
 import {
     toBranchName,
     type SandboxInstance,
@@ -9,6 +10,8 @@ import {
 import { parseKnowledgeSourcePath } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 import { normalizeRepoPath } from './knowledge-path';
+
+const logger = createLogger('KnowledgeRepositories');
 
 /**
  * Read-only view of the PR's TARGET branch. Skills and docs are always read
@@ -553,7 +556,23 @@ export async function resolveKnowledgeRepositories(params: {
                     organizationAndTeamData: params.organizationAndTeamData,
                     repository: { id: String(repo.id), name: repo.name },
                 })
-                .catch(() => undefined)) ||
+                .catch((error: Error) => {
+                    // Knowledge never fails a review: read at the branch the
+                    // listing names, and leave a trace of why.
+                    logger.warn({
+                        message: `[AGENT] Default branch of ${repository} could not be read; using the listing's`,
+                        context: 'resolveKnowledgeRepositories',
+                        error,
+                        metadata: {
+                            organizationAndTeamData:
+                                params.organizationAndTeamData,
+                            repository,
+                            repositoryId: String(repo.id),
+                            fallback: repo.default_branch || 'main',
+                        },
+                    });
+                    return undefined;
+                })) ||
             repo.default_branch ||
             'main';
         const source: KnowledgeRepositorySource = {

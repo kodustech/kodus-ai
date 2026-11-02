@@ -447,6 +447,37 @@ describe("AgentKnowledgeField with another repository", () => {
         expect(screen.queryByText(/No skills or docs found/)).toBeNull();
     });
 
+    it("keeps the previous repository's failure off while the picked one loads", () => {
+        // The hook keeps the last answer as a placeholder while it fetches.
+        mockResolve.mockImplementation((params) =>
+            params?.source?.repository && params.enabled !== false
+                ? {
+                      isLoading: false,
+                      isFetching: true,
+                      data: {
+                          knowledge: {
+                              status: "unavailable",
+                              reason: "Could not read greenhouse/old-rules.",
+                          },
+                      },
+                  }
+                : { isLoading: false, isFetching: false, data: undefined },
+        );
+        field([]);
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Add skill or doc" }),
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "irrigation-rules" }),
+        );
+
+        expect(screen.getByText(`Reading ${RULES}…`)).toBeInTheDocument();
+        expect(
+            screen.queryByText("Could not read greenhouse/old-rules."),
+        ).toBeNull();
+    });
+
     it("stops loading this repository's list once the page check answers, even unavailable", () => {
         mockResolve.mockReturnValue({
             isLoading: false,

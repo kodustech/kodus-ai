@@ -5,6 +5,16 @@
  * repositories the config links.
  * Fixture domain: an invented greenhouse-irrigation team and its rules repo.
  */
+const mockWarn = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        log: jest.fn(),
+        warn: (...args: unknown[]) => mockWarn(...args),
+        error: jest.fn(),
+        debug: jest.fn(),
+    }),
+}));
+
 import { guideSourcesFor } from '@libs/code-review/infrastructure/agents/core/convention-check';
 
 import {
@@ -183,6 +193,33 @@ describe('resolveKnowledgeRepositories', () => {
         });
 
         expect(result.sources[0].source.ref).toBe('v3');
+    });
+
+    it("logs a default branch the provider failed to give, and reads at the listing's", async () => {
+        mockWarn.mockClear();
+        const cm = {
+            ...provider({}),
+            getDefaultBranch: jest.fn(async () => {
+                throw new Error('403 rate limited');
+            }),
+        };
+        const result = await resolveKnowledgeRepositories({
+            items: [{ repository: RULES }],
+            codeManagement: cm,
+            organizationAndTeamData: ORG,
+        });
+
+        expect(result.sources[0].source.ref).toBe('trunk');
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationAndTeamData: ORG,
+                    repository: RULES,
+                    repositoryId: '20',
+                    fallback: 'trunk',
+                }),
+            }),
+        );
     });
 
     it('reads at the listing default branch when the provider has no default-branch call', async () => {

@@ -13,6 +13,7 @@ import {
 import type { KnowledgeItem } from "./types";
 
 const RULES = "greenhouse/irrigation-rules";
+const OTHER_RULES = "greenhouse/pump-rules";
 const local: KnowledgeItem = {
     path: "docs/valves.md",
     kind: "doc",
@@ -29,6 +30,9 @@ describe("knowledge of another repository", () => {
     it("treats the same path in two repositories as two items", () => {
         expect(sameKnowledge(local, remote)).toBe(false);
         expect(
+            sameKnowledge(remote, { ...remote, repository: OTHER_RULES }),
+        ).toBe(false);
+        expect(
             sameKnowledge(remote, {
                 ...remote,
                 repository: RULES.toUpperCase(),
@@ -41,6 +45,9 @@ describe("knowledge of another repository", () => {
             knowledgeKey({ ...remote, repository: RULES.toUpperCase() }),
         );
         expect(knowledgeKey(remote)).not.toBe(knowledgeKey(local));
+        expect(knowledgeKey(remote)).not.toBe(
+            knowledgeKey({ ...remote, repository: OTHER_RULES }),
+        );
     });
 
     it("follows and unfollows a doc of the rules repository without touching the local one", () => {
