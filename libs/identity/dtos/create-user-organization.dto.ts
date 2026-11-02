@@ -32,15 +32,6 @@ export class SignUpDTO {
     public password: string;
 
     @ApiPropertyOptional({
-        format: 'uuid',
-        description:
-            'Existing organization ID. Optional when creating a new organization.',
-    })
-    @IsString()
-    @IsOptional()
-    public organizationId?: string;
-
-    @ApiPropertyOptional({
         type: 'object',
         additionalProperties: true,
         description:
