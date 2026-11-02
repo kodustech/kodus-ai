@@ -56,9 +56,17 @@ vi.mock('../../../utils/logger.js', () => ({
     cliError: vi.fn(),
 }));
 
-vi.mock('../../../utils/cli-exit.js', () => ({
-    exitWithCode: vi.fn(),
-}));
+// Throws like the real helper, so a test sees the command abort.
+vi.mock('../../../utils/cli-exit.js', async (importOriginal) => {
+    const actual =
+        await importOriginal<typeof import('../../../utils/cli-exit.js')>();
+    return {
+        ...actual,
+        exitWithCode: vi.fn((code: number) => {
+            throw new actual.CliExitError(code, true);
+        }),
+    };
+});
 
 import { customAgentsService } from '../../../services/custom-agents.service.js';
 import { reviewLanguageService } from '../../../services/review-language.service.js';
@@ -135,19 +143,21 @@ describe('config remote messages | language | skills', () => {
     });
 
     it('refuses a value together with --from-file', async () => {
-        await run(
-            'messages',
-            'set',
-            '.',
-            'end.content',
-            'x',
-            '--from-file',
-            '/tmp/x',
-        );
+        await expect(
+            run(
+                'messages',
+                'set',
+                '.',
+                'end.content',
+                'x',
+                '--from-file',
+                '/tmp/x',
+            ),
+        ).rejects.toMatchObject({ name: 'CliExitError', exitCode: 1 });
 
         expect(reviewMessagesService.set).not.toHaveBeenCalled();
         expect(vi.mocked(cliError).mock.calls[0][0]).toContain('not both');
-        expect(exitWithCode).toHaveBeenCalled();
+        expect(exitWithCode).toHaveBeenCalledWith(1);
     });
 
     it('sets the team language', async () => {
