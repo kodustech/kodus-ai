@@ -796,6 +796,49 @@ describe('ExecuteCliReviewUseCase', () => {
             mockExecute.mockRestore();
         });
 
+        it('runs a review asked with --fast and --heavy as fast only', async () => {
+            const { useCase } = createMocks();
+            const seen: any[] = [];
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: any) => {
+                    seen.push(context);
+                    return {
+                        cliResponse: {
+                            summary: 'No issues',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 100,
+                        },
+                    };
+                });
+
+            for (const config of [
+                { heavy: true },
+                { fast: true, heavy: true },
+            ]) {
+                await useCase.execute({
+                    organizationAndTeamData: orgAndTeam,
+                    input: { diff: '+ hello', config } as any,
+                    isTrialMode: true,
+                });
+            }
+
+            expect(
+                seen.map((c) => [c.heavy, c.codeReviewConfig?.reviewMode]),
+            ).toEqual([
+                [true, seen[0].codeReviewConfig?.reviewMode],
+                [false, 'fast'],
+            ]);
+            expect(seen[0].codeReviewConfig?.reviewMode).not.toBe('fast');
+
+            mockExecute.mockRestore();
+        });
+
         it('should pass resolved repositoryId to pipeline context', async () => {
             const {
                 useCase,
