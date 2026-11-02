@@ -303,7 +303,7 @@ class ReviewSettingsService {
         );
         throw new CommandError(
             'INVALID_INPUT',
-            `Directory '${target.directory}' has no settings of its own in ${repository.name}. Directories with settings: ${known.join(', ') || 'none'}. Pass --create-directory to add it.`,
+            `Directory '${target.directory}' has no settings of its own in ${repository.name}. Directories with settings: ${known.join(', ') || 'none'}. Add it with 'kodus config remote set ${repository.name} <key> <value> --directory ${target.directory} --create-directory'.`,
         );
     }
 
