@@ -852,10 +852,21 @@ async function runReviewCall<T>(
         // Full-jitter backoff first (shared policy) so N parallel shards hitting
         // the same blip don't re-fire in lockstep — the thundering-herd the
         // immediate re-issue caused. One re-issue only; a re-issue failure
-        // still propagates.
+        // still propagates, and a 429 on it goes to the fallback like the
+        // other re-issues' do.
         if (category === RETRYABLE_CATEGORY) {
             await sleep(jitteredBackoffMs(1));
-            return await call(mainModel, mainModelName, mainSystem);
+            try {
+                return await call(mainModel, mainModelName, mainSystem);
+            } catch (retryErr) {
+                if (
+                    classifyLLMError(retryErr).category ===
+                    LlmErrorCategory.RATE_LIMIT
+                ) {
+                    throw markRetriesExhausted(retryErr);
+                }
+                throw retryErr;
+            }
         }
         throw err;
     }
