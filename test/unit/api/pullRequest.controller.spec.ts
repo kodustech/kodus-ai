@@ -22,6 +22,7 @@ import { CLI_DEVICE_SERVICE_TOKEN } from '@libs/organization/domain/cli-device/c
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adapters/services/automationExecution.service';
 import { PolicyGuard } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
+import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 
@@ -195,6 +196,14 @@ function buildProviders(eventEmitter: any) {
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EventEmitter2, useValue: eventEmitter },
+        // Org-wide member: no repository restriction.
+        {
+            provide: AuthorizationService,
+            useValue: {
+                ensure: jest.fn().mockResolvedValue(undefined),
+                getRepositoryScope: jest.fn().mockResolvedValue(null),
+            },
+        },
     ];
 }
 
