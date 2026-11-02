@@ -113,7 +113,7 @@ Examples:
         )
         .option(
             '--heavy',
-            'Heavy mode: specialist lenses run next to the main review for higher recall (slower, costs more)',
+            'Heavy mode: specialist reviewers run next to the main review for higher recall (more tokens)',
         )
         .option(
             '-i, --interactive',

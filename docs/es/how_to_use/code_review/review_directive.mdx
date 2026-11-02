@@ -63,6 +63,67 @@ Usa una directiva para decir *"mira aquí con más atención"* — no *"mira sol
   </Tab>
 </Tabs>
 
+## Heavy mode
+
+Una directiva de foco le dice a Kody *dónde* mirar con más atención. `--heavy` le dice que mire
+de forma *más amplia*: junto a la revisión de siempre, nueve revisores especialistas leen el diff
+completo, cada uno en busca de un único tipo de defecto:
+
+- código que dice una cosa y hace otra (nombres, mediciones, resultados)
+- texto que llega a una persona — mensajes, comentarios, traducciones — en desacuerdo con el código
+- estado inválido, invariantes rotas y condiciones de carrera
+- suposiciones de límites, índices y orden
+- secretos e identidad: comparaciones, normalización, valores de respaldo
+- un contrato modificado que un llamador no acompañó
+- tests que seguirían pasando si el comportamiento que cubren se rompiera
+- datos que se filtran en respuestas, logs y mensajes de error
+- dos archivos modificados que no concuerdan entre sí
+
+Cada hallazgo de un especialista pasa por la misma verificación que los de la revisión principal
+antes de que se publique nada, y luego por la deduplicación y la severidad habituales, así que una
+suposición que no se sostiene se descarta como cualquier otra.
+
+```text
+@kody review --heavy
+@kody review --heavy focus on the payment reconciliation logic
+kodus review --heavy
+```
+
+`--heavy` puede ir en cualquier posición de la línea — antes o después del texto de foco — y se
+elimina de la directiva en ambos casos, así que `@kody review enfócate en la lógica de retry
+--heavy` se enfoca en "enfócate en la lógica de retry".
+
+<Warning>
+  **Para combinarlo con `--force`, pon `--force` primero.** `--force` solo se reconoce
+  inmediatamente después del comando, así que `@kody review --force --heavy` ejecuta una revisión
+  heavy forzada, mientras que `@kody review --heavy --force` ejecuta una revisión heavy que
+  **no** está forzada.
+</Warning>
+
+El guion es obligatorio: un `heavy` suelto se lee como texto de directiva, así que
+`@kody review heavy flujo de checkout` se enfoca en "heavy flujo de checkout" en vez de activar
+la flag.
+
+### Qué esperar
+
+- **Disponible para todos**, en Cloud y en self-hosted. Sin solicitud de acceso.
+- **Tus categorías siguen aplicando.** Los especialistas de una categoría desactivada no se
+  ejecutan: siete son de Bug y dos de Security. Las Kody Rules y los agentes personalizados se
+  ejecutan como siempre.
+- **Cuesta más llamadas al modelo, no mucho más tiempo.** Los especialistas se ejecutan al mismo
+  tiempo que la revisión principal, así que la revisión tarda más o menos lo mismo, pero usa
+  bastantes más tokens. Con tu propia clave de modelo (BYOK) eso va a la factura de tu proveedor,
+  y un proveedor con un límite de concurrencia bajo puede encolar las llamadas.
+- **Sin acceso al repositorio** (sin sandbox), los especialistas leen solo el diff, como hace la
+  revisión principal en ese caso.
+- La lista de pull requests muestra una insignia **Heavy** en los PRs cuya última revisión se
+  ejecutó en heavy mode.
+
+<Tip>
+  Úsalo en los cambios donde que se escape algo sale caro — una migración, un cambio de auth, un
+  flujo de pago — no por defecto.
+</Tip>
+
 ## Cómo Escribir una Buena Directiva
 
 - **Sé específico sobre el área, no sobre el veredicto.** "enfócate en la concurrencia del consumidor de la cola" funciona mejor que "encuentra bugs".

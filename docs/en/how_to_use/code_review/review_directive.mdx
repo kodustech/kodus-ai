@@ -63,6 +63,64 @@ Use a directive to say *"look here hardest"* — not *"only look here."*
   </Tab>
 </Tabs>
 
+## Heavy mode
+
+A focus directive tells Kody *where* to look hardest. `--heavy` tells it to look *wider*: next
+to the usual review, nine specialist reviewers each read the whole diff for one kind of defect
+only:
+
+- code that says one thing and does another (names, measurements, results)
+- text that reaches a person — messages, comments, translations — disagreeing with the code
+- invalid state, broken invariants and race conditions
+- boundary, index and ordering assumptions
+- secrets and identity: comparisons, normalisation, fallbacks
+- a changed contract that a caller was not updated for
+- tests that would still pass if the behaviour they cover broke
+- data leaking into responses, logs and error messages
+- two changed files that do not agree with each other
+
+Every finding of a specialist goes through the same verification as the main review's before
+anything is posted, then through the usual deduplication and severity, so a guess that does not
+hold up is dropped like any other.
+
+```text
+@kody review --heavy
+@kody review --heavy focus on the payment reconciliation logic
+kodus review --heavy
+```
+
+`--heavy` can sit anywhere on the command line — before or after your focus text — and it is
+stripped from the directive either way, so `@kody review focus on the retry logic --heavy`
+focuses on "the retry logic".
+
+<Warning>
+  **To combine it with `--force`, put `--force` first.** `--force` is only recognized
+  immediately after the command word, so `@kody review --force --heavy` runs a forced heavy
+  review, while `@kody review --heavy --force` runs a heavy review that is **not** forced.
+</Warning>
+
+A dash is required: a bare `heavy` is read as directive text, so `@kody review heavy checkout
+path` focuses on "heavy checkout path" rather than enabling the flag.
+
+### What to expect
+
+- **Available to everyone**, on Cloud and self-hosted. No opt-in.
+- **Your categories still apply.** The specialists of a category you turned off do not run: seven
+  of them are Bug, two are Security. Kody Rules and custom agents run as they always do.
+- **It costs more model calls, not much more time.** The specialists run at the same time as the
+  main review, so the review takes about as long, but it uses noticeably more tokens. On your own
+  model key (BYOK) that is on your provider's bill, and a provider with a low concurrency limit
+  may queue the calls.
+- **Without repository access** (no sandbox), the specialists read the diff alone, as the main
+  review does in that case.
+- The pull request list shows a **Heavy** badge on pull requests whose last review ran in heavy
+  mode.
+
+<Tip>
+  Reach for it on the changes where missing something is expensive — a migration, an auth
+  change, a payment path — not as a default.
+</Tip>
+
 ## Writing a Good Directive
 
 - **Be specific about the area, not the verdict.** "focus on concurrency in the queue consumer" works better than "find bugs".
