@@ -3,6 +3,7 @@ import {
     AcquireResult,
     assertValidPrKey,
     ISandboxLeaseManager,
+    SandboxCircuitOpenError,
     SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import {
@@ -18,8 +19,12 @@ import { ConfigService } from '@nestjs/config';
 import { Sandbox } from 'e2b';
 import { randomUUID } from 'crypto';
 
-import { calculateBackoffInterval } from '@libs/common/utils/polling';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
+import {
+    isRepositorySpecificSandboxFailure,
+    isTimeoutSandboxFailure,
+    SandboxCreateCircuitBreaker,
+} from './sandbox-create-circuit-breaker';
 import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
 import {
@@ -66,25 +71,22 @@ const POLL_INTERVAL_MS = 500;
 const MAX_POLL_WAIT_MS = 30_000; // 30 seconds
 
 /**
- * Sandbox creation retry budget. Three attempts total (initial + 2 retries).
- * Backoff intervals are computed by the project's exponential-backoff lib
- * (`@libs/common/utils/polling`) so this stays consistent with how other
- * services pace retries. Configured to land at exactly 60s → 120s with no
- * jitter (deterministic, easy to reason about under quota outages).
+ * Sandbox creation retry budget: the initial attempt plus ONE retry, 10s
+ * apart. The old budget (3 attempts, 60s/120s backoffs, 5-min clone timeout)
+ * could hold a review for ~18 minutes on a degraded proxy before it fell
+ * back to self-contained mode.
+ *
+ * No retry at all for failures a retry cannot fix:
+ * - repository-specific git errors (bad credentials, missing ref);
+ * - timeouts, which already spent the whole clone budget on a slow network
+ *   path and would spend it again.
  *
  * The provider call is the only thing wrapped — other lease operations
  * (Mongo upsert/update) are atomic and fast, so a retry there would mask
  * real errors instead of fixing them.
- *
- * Total worst-case overhead from backoffs alone: 60 + 120 = 180s.
  */
-const CREATE_MAX_ATTEMPTS = 3;
-const CREATE_BACKOFF_OPTIONS = {
-    baseInterval: 60_000, // 1 min
-    maxInterval: 120_000, // 2 min cap (so attempt-1 → 120s, not 240s)
-    multiplier: 2,
-    jitterFactor: 0,
-} as const;
+const CREATE_MAX_ATTEMPTS = 2;
+const CREATE_RETRY_DELAY_MS = 10_000;
 
 /**
  * Thrown when polling for a CREATING sandbox exceeds MAX_POLL_WAIT_MS.
@@ -138,6 +140,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * of a single review/conversation flow.
      */
     private readonly leaseIdToPrKey = new Map<string, string>();
+
+    /**
+     * Fails sandbox creation fast while the infrastructure is degraded —
+     * see SandboxCreateCircuitBreaker. Per process, like leaseIdToPrKey.
+     */
+    readonly createCircuit = new SandboxCreateCircuitBreaker();
 
     constructor(
         @Inject(SANDBOX_PROVIDER_TOKEN)
@@ -605,7 +613,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
         try {
             if (this.sandboxProvider.isAvailable() && cloneParams) {
-                sandbox = await this.createWithRetry(cloneParams);
+                sandbox = await this.createWithRetry(prKey, cloneParams);
             } else {
                 // No provider configured or no clone params supplied — use null sandbox
                 sandbox = this.buildNullSandboxWithRelease(prKey, leaseId);
@@ -724,36 +732,58 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     }
 
     /**
-     * Create a sandbox with retry + backoff. CREATE_MAX_ATTEMPTS attempts
-     * total; intervals come from the shared polling lib so cadence matches
-     * other services. Only the provider call is wrapped — Mongo lease ops
-     * are atomic and a retry there would hide real bugs (e.g. schema drift,
-     * validation).
+     * Create a sandbox through the circuit breaker, with one retry for
+     * transient failures (see CREATE_MAX_ATTEMPTS). Only the provider call is
+     * wrapped — Mongo lease ops are atomic and a retry there would hide real
+     * bugs (e.g. schema drift, validation).
      */
     private async createWithRetry(
+        prKey: string,
         cloneParams: CreateSandboxParams,
     ): Promise<SandboxInstance> {
+        const repoKey = prKey.split(':').slice(0, 2).join(':');
         let lastErr: unknown;
 
         for (let attempt = 0; attempt < CREATE_MAX_ATTEMPTS; attempt++) {
+            if (!this.createCircuit.tryAcquire()) {
+                const retryInMs = this.createCircuit.remainingOpenMs();
+                this.logger.warn({
+                    message: `SandboxLeaseManager: sandbox creation circuit open, skipping create prKey="${prKey}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey, retryInMs, attempt: attempt + 1 },
+                });
+                throw new SandboxCircuitOpenError(prKey, retryInMs);
+            }
+
             try {
-                return await this.sandboxProvider.createSandboxWithRepo(
-                    cloneParams,
-                );
+                const sandbox =
+                    await this.sandboxProvider.createSandboxWithRepo(
+                        cloneParams,
+                    );
+                this.createCircuit.recordSuccess();
+                return sandbox;
             } catch (err) {
                 lastErr = err;
-                if (attempt === CREATE_MAX_ATTEMPTS - 1) break;
 
-                const waitMs = calculateBackoffInterval(
-                    attempt,
-                    CREATE_BACKOFF_OPTIONS,
-                );
+                const repositorySpecific =
+                    isRepositorySpecificSandboxFailure(err);
+                if (repositorySpecific) {
+                    this.createCircuit.releaseProbe();
+                } else {
+                    this.createCircuit.recordFailure(repoKey);
+                }
+
+                const retryable =
+                    !repositorySpecific && !isTimeoutSandboxFailure(err);
+                if (!retryable || attempt === CREATE_MAX_ATTEMPTS - 1) break;
+
                 this.logger.warn({
-                    message: `SandboxLeaseManager: provider.createSandboxWithRepo failed (attempt ${attempt + 1}/${CREATE_MAX_ATTEMPTS}); retrying in ${waitMs}ms`,
+                    message: `SandboxLeaseManager: provider.createSandboxWithRepo failed (attempt ${attempt + 1}/${CREATE_MAX_ATTEMPTS}); retrying in ${CREATE_RETRY_DELAY_MS}ms`,
                     context: SandboxLeaseManager.name,
                     error: err,
+                    metadata: { prKey },
                 });
-                await sleep(waitMs);
+                await sleep(CREATE_RETRY_DELAY_MS);
             }
         }
 

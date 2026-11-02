@@ -16,6 +16,7 @@ import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/ag
 import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
+    SandboxCircuitOpenError,
     SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -151,8 +152,9 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             });
 
             // The lease manager owns retry+backoff for the underlying provider
-            // call (3 attempts with 60s/120s backoffs). If acquire() throws here
-            // it means all attempts failed — review continues self-contained.
+            // call (one retry, none on timeouts) and a circuit breaker that
+            // fails fast while sandbox infra is degraded. If acquire() throws
+            // here the review continues self-contained.
             const { sandbox, leaseId } = await this.leaseManager.acquire(
                 prKey,
                 'review',
@@ -248,6 +250,20 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 return this.updateContext(context, (draft) => {
                     draft.sandboxSuperseded = true;
                 });
+            }
+            // Breaker open: an outage already reported by the failures that
+            // opened it. One warn per review, not an error per review.
+            if (err instanceof SandboxCircuitOpenError) {
+                this.logger.warn({
+                    message: `Sandbox creation circuit open for ${label}, continuing without it`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
+                        prNumber: context?.pullRequest?.number,
+                    },
+                });
+                return context;
             }
             this.logger.error({
                 message: `Failed to acquire sandbox lease for ${label} (all retries exhausted), continuing without it`,

@@ -24,6 +24,7 @@ import { Sandbox } from 'e2b';
 import { SandboxLeaseManager } from './sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
+import { SandboxCircuitOpenError } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import {
     ISandboxProvider,
     SandboxInstance,
@@ -532,7 +533,7 @@ describe('SandboxLeaseManager', () => {
             cloneParams,
         );
 
-        // Fast-forward through the 60s backoff between attempt 1 and 2
+        // Fast-forward through the 10s delay between attempt 1 and 2
         await jest.runAllTimersAsync();
 
         const result = await acquirePromise;
@@ -547,7 +548,7 @@ describe('SandboxLeaseManager', () => {
 
     // ─── Test 8: retry budget exhausted — error propagates, no orphan ────
 
-    it('throws after 3 failed createSandboxWithRepo attempts and cleans lease doc', async () => {
+    it('throws after 2 failed createSandboxWithRepo attempts and cleans lease doc', async () => {
         const prKey = '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:51';
         const cloneParams = {
             cloneUrl: 'https://github.com/org/repo.git',
@@ -565,7 +566,6 @@ describe('SandboxLeaseManager', () => {
             expiresAt: new Date(Date.now() + 30 * 60 * 1000),
         } as any);
 
-        // All 3 attempts fail
         sandboxProvider.createSandboxWithRepo.mockRejectedValue(
             new Error('E2B quota exceeded'),
         );
@@ -575,20 +575,181 @@ describe('SandboxLeaseManager', () => {
             .acquire(prKey, 'review', undefined, cloneParams)
             .catch((err) => err);
 
-        // Fast-forward through both backoffs (60s + 120s)
         await jest.runAllTimersAsync();
 
         const err = await acquirePromise;
         jest.useRealTimers();
 
-        // 3 attempts (initial + 2 retries) before giving up
-        expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(3);
+        // Initial attempt + one retry before giving up
+        expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(2);
         expect(err).toBeInstanceOf(Error);
         expect(err.message).toMatch(/E2B quota exceeded/);
         // Lease doc cleaned up so polling joiners don't hang forever
         expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
         // No sandbox to kill — provider never returned one
         expect(Sandbox.kill).not.toHaveBeenCalled();
+    });
+
+    // ─── Fail-fast: timeouts, repo errors, circuit breaker ───────────────
+
+    describe('fail-fast on sandbox creation', () => {
+        const cloneParamsFor = (prNumber: number) => ({
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber,
+            platform: 'GITHUB' as any,
+        });
+        const prKeyFor = (repo: string, pr: number) =>
+            `7e2e97b8-aefa-422e-92d4-30b378c0332e:${repo}:${pr}`;
+
+        beforeEach(() => {
+            leaseRepo.upsertAcquire.mockImplementation(
+                async (prKey: string) =>
+                    ({
+                        _id: prKey,
+                        leaseCount: 1,
+                        state: 'CREATING',
+                        createdAt: new Date(),
+                        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                    }) as any,
+            );
+        });
+
+        const timeoutError = () => {
+            const err = new Error('Command timed out after 120000ms');
+            err.name = 'TimeoutError';
+            return err;
+        };
+
+        it('does not retry a clone timeout', async () => {
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                timeoutError(),
+            );
+
+            await expect(
+                manager.acquire(
+                    prKeyFor('repo', 60),
+                    'review',
+                    undefined,
+                    cloneParamsFor(60),
+                ),
+            ).rejects.toThrow(/timed out/);
+
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                1,
+            );
+        });
+
+        it('does not retry a repository-specific git failure', async () => {
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                new Error(
+                    "Git clone failed in E2B sandbox (exit code 128): fatal: couldn't find remote ref refs/pull/61/head",
+                ),
+            );
+
+            await expect(
+                manager.acquire(
+                    prKeyFor('repo', 61),
+                    'review',
+                    undefined,
+                    cloneParamsFor(61),
+                ),
+            ).rejects.toThrow(/couldn't find remote ref/);
+
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                1,
+            );
+        });
+
+        it('opens the circuit after infra failures on 3+ repos and then skips the provider', async () => {
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                timeoutError(),
+            );
+
+            // 5 timeouts across 3 distinct repos open the breaker
+            const repos = ['repo-a', 'repo-b', 'repo-c', 'repo-a', 'repo-b'];
+            for (const [i, repo] of repos.entries()) {
+                await manager
+                    .acquire(
+                        prKeyFor(repo, 100 + i),
+                        'review',
+                        undefined,
+                        cloneParamsFor(100 + i),
+                    )
+                    .catch(() => undefined);
+            }
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                5,
+            );
+            expect(manager.createCircuit.getState()).toBe('OPEN');
+
+            const err = await manager
+                .acquire(
+                    prKeyFor('repo-d', 200),
+                    'review',
+                    undefined,
+                    cloneParamsFor(200),
+                )
+                .catch((e) => e);
+
+            expect(err).toBeInstanceOf(SandboxCircuitOpenError);
+            // Provider never called while open, lease doc still cleaned up
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                5,
+            );
+            expect(leaseRepo.delete).toHaveBeenCalledWith(
+                prKeyFor('repo-d', 200),
+            );
+        });
+
+        it('keeps the circuit closed when only one repository keeps timing out', async () => {
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                timeoutError(),
+            );
+
+            for (let i = 0; i < 8; i++) {
+                await manager
+                    .acquire(
+                        prKeyFor('huge-monorepo', 300 + i),
+                        'review',
+                        undefined,
+                        cloneParamsFor(300 + i),
+                    )
+                    .catch(() => undefined);
+            }
+
+            expect(manager.createCircuit.getState()).toBe('CLOSED');
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                8,
+            );
+        });
+
+        it('does not count repository-specific failures toward the circuit', async () => {
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                new Error('remote: Repository not found.'),
+            );
+
+            for (const [i, repo] of [
+                'r1',
+                'r2',
+                'r3',
+                'r4',
+                'r5',
+                'r6',
+            ].entries()) {
+                await manager
+                    .acquire(
+                        prKeyFor(repo, 400 + i),
+                        'review',
+                        undefined,
+                        cloneParamsFor(400 + i),
+                    )
+                    .catch(() => undefined);
+            }
+
+            expect(manager.createCircuit.getState()).toBe('CLOSED');
+        });
     });
 
     // ─── Test 9c: release writes killAt on the lease doc ──────────────────
@@ -813,7 +974,9 @@ describe('SandboxLeaseManager', () => {
                 "git -c http.extraHeader=\"$GIT_AUTH_HEADER\" fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD",
             ),
             expect.objectContaining({
-                envs: expect.objectContaining({ GIT_AUTH_HEADER: expect.any(String) }),
+                envs: expect.objectContaining({
+                    GIT_AUTH_HEADER: expect.any(String),
+                }),
             }),
         );
     });

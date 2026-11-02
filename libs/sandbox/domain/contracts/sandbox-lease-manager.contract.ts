@@ -21,6 +21,21 @@ export class SandboxInvalidatedError extends Error {
     }
 }
 
+/**
+ * Thrown by acquire() without touching the provider when recent sandbox
+ * creations failed for infrastructure reasons (proxy or E2B degraded). The
+ * caller proceeds without a sandbox right away instead of paying the full
+ * create budget during an outage.
+ */
+export class SandboxCircuitOpenError extends Error {
+    constructor(prKey: string, retryInMs: number) {
+        super(
+            `SandboxLeaseManager: sandbox creation circuit open for prKey="${prKey}", next probe in ${retryInMs}ms`,
+        );
+        this.name = 'SandboxCircuitOpenError';
+    }
+}
+
 export interface AcquireResult {
     sandbox: SandboxInstance;
     leaseId: string;
