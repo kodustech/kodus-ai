@@ -236,8 +236,16 @@ describe('AzureReposRequestHelper.getRepositoryContentFile — branch or tag', (
         repositoryId: 'r',
         filePath: 'rules/valves.md',
     };
-    const notFound = () =>
-        Object.assign(new Error('404'), { response: { status: 404 } });
+    const versionNotFound = () =>
+        Object.assign(new Error('404'), {
+            response: {
+                status: 404,
+                data: {
+                    message:
+                        'TF401175: The version descriptor <Branch: v3> could not be resolved',
+                },
+            },
+        });
 
     beforeEach(() => {
         helper = new AzureReposRequestHelper();
@@ -260,7 +268,7 @@ describe('AzureReposRequestHelper.getRepositoryContentFile — branch or tag', (
 
     it('reads a pinned tag as a tag when no branch has that name', async () => {
         axiosInstance.get
-            .mockRejectedValueOnce(notFound())
+            .mockRejectedValueOnce(versionNotFound())
             .mockResolvedValueOnce({ data: { content: 'tagged' } });
 
         await expect(
@@ -288,5 +296,21 @@ describe('AzureReposRequestHelper.getRepositoryContentFile — branch or tag', (
         await expect(
             helper.getRepositoryContentFile({ ...params, branch: 'main' }),
         ).rejects.toThrow('500');
+    });
+
+    it('does not retry a file that is missing on an existing branch', async () => {
+        axiosInstance.get.mockRejectedValueOnce(
+            Object.assign(new Error('404'), {
+                response: {
+                    status: 404,
+                    data: { message: 'TF401174: The item could not be found' },
+                },
+            }),
+        );
+
+        await expect(
+            helper.getRepositoryContentFile({ ...params, branch: 'main' }),
+        ).rejects.toThrow('404');
+        expect(axiosInstance.get).toHaveBeenCalledTimes(1);
     });
 });

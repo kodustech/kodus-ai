@@ -560,7 +560,21 @@ export function guideSourcesFor(
     const hasOtherRepository = guideFiles.some(
         (file) => parseKnowledgeSourcePath(stripLeading(file)) != null,
     );
-    if (!hasOtherRepository || !knowledgeReader) {
+    if (hasOtherRepository && !knowledgeReader) {
+        // Nothing can read another repository here: its guides read as
+        // unreadable (their quotes are rejected), never through the target
+        // branch, which would look `owner/repo:path` up in this repository.
+        return targetBranchReader
+            ? {
+                  readGuide: (file) =>
+                      parseKnowledgeSourcePath(stripLeading(file)) != null
+                          ? Promise.resolve(null)
+                          : targetBranchReader(file),
+                  listGuideDir: targetBranchLister,
+              }
+            : undefined;
+    }
+    if (!hasOtherRepository) {
         return targetBranchReader
             ? {
                   readGuide: targetBranchReader,

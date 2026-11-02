@@ -823,11 +823,17 @@ export class AzureReposRequestHelper {
         } catch (error) {
             // A plain name may be a tag (a skill or doc pinned with "Use a
             // branch or tag instead"): Azure resolves it only as a tag.
-            const status = (error as { response?: { status?: number } })
-                ?.response?.status;
-            if (!normalizedBranch || (status !== 404 && status !== 400)) {
-                throw error;
-            }
+            // Only when the name is not a branch (TF401175, the version could
+            // not be resolved); a file missing on the branch is not retried.
+            const response = (
+                error as {
+                    response?: { status?: number; data?: { message?: string } };
+                }
+            )?.response;
+            const versionNotFound =
+                (response?.status === 404 || response?.status === 400) &&
+                /TF401175/.test(response?.data?.message ?? '');
+            if (!normalizedBranch || !versionNotFound) throw error;
             return read('tag');
         }
     }
