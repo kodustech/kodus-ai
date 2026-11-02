@@ -1348,6 +1348,69 @@ describe('MATRIX C — unparseable / transport (the fail-safe layer)', () => {
     });
 });
 
+describe('reroute-json — a 429 is re-issued once, then handed to the fallback', () => {
+    const rerouteSlot = {
+        provider: 'moonshot',
+        model: 'kimi-k2.7-code',
+        apiKey: 'enc',
+    } as any;
+    const rateLimited = (message: string) => {
+        const e: any = new Error(message);
+        e.status = 429;
+        return e;
+    };
+
+    it('429 then an answer → the re-issue answers', async () => {
+        mockGenerate
+            .mockRejectedValueOnce(rateLimited('too many requests'))
+            .mockResolvedValueOnce({ text: '{"keep":true}', usage: {} });
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: rerouteSlot,
+        });
+
+        expect(out).toEqual({ keep: true });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(mockGenerate.mock.calls[1][0]).not.toHaveProperty('output');
+        assertNoSecondModelBuilt();
+    });
+
+    it('429 twice → throws the second 429 marked exhausted', async () => {
+        const second = rateLimited('Usage limit reached for 5 hour.');
+        mockGenerate
+            .mockRejectedValueOnce(rateLimited('Usage limit reached for 5 hour.'))
+            .mockRejectedValueOnce(second);
+
+        const thrown = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: rerouteSlot,
+        }).catch((e) => e);
+
+        expect(thrown).toBe(second);
+        expect(retriesWereExhausted(thrown)).toBe(true);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('429 while the slot is in cooldown → no re-issue, marked exhausted', async () => {
+        mockGetLimiter.mockReturnValue({ isInCooldown: () => true });
+        const rateErr = rateLimited('too many requests');
+        mockGenerate.mockRejectedValueOnce(rateErr);
+
+        const thrown = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: rerouteSlot,
+        }).catch((e) => e);
+
+        expect(thrown).toBe(rateErr);
+        expect(retriesWereExhausted(thrown)).toBe(true);
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+    });
+});
+
 describe('MATRIX E — strict json_schema branch (openai/anthropic/google/moonshotai) trusts clean D', () => {
     const openaiSlot = {
         provider: 'openai',

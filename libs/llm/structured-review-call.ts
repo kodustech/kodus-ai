@@ -569,6 +569,35 @@ async function runReviewCall<T>(
     // call after a parse failure (the same prompt formats differently on a
     // non-zero temperature), but it is a retry, not a recovery: the SCHEMA-
     // rejection branch below no longer routes here for them.
+    // A 429 gets one re-issue after a longer wait, never an instant re-fire.
+    // A second 429 means the limit is not a passing burst (a spent plan window
+    // answers 429 for hours), so it is marked exhausted and the model failover
+    // moves the call to the org's fallback. A slot in cooldown is never
+    // re-issued into; its 429 is marked at once, the fallback is its own slot.
+    const slotInCooldown = () =>
+        !!getLimiterForSlot({
+            slot: mainSlot,
+            organizationId,
+        })?.isInCooldown();
+    const reissueAfterRateLimit = async (
+        err: unknown,
+        reissue: () => Promise<T>,
+    ): Promise<T> => {
+        if (slotInCooldown()) throw markRetriesExhausted(err);
+        await sleep(jitteredBackoffMs(1, RATE_LIMIT_RETRY_DELAY_MS));
+        try {
+            return await reissue();
+        } catch (retryErr) {
+            if (
+                classifyLLMError(retryErr).category ===
+                LlmErrorCategory.RATE_LIMIT
+            ) {
+                throw markRetriesExhausted(retryErr);
+            }
+            throw retryErr;
+        }
+    };
+
     const reissueDowngraded = async (reason: string): Promise<T> => {
         const downgraded = buildInvocation(false);
         const downgradedSystem = withJsonContract(system, mode.schemaForPrompt);
@@ -596,6 +625,12 @@ async function runReviewCall<T>(
                 });
                 return repaired;
             }
+            // Already the second request: a 429 here goes to the fallback.
+            if (
+                classifyLLMError(err).category === LlmErrorCategory.RATE_LIMIT
+            ) {
+                throw markRetriesExhausted(err);
+            }
             throw err;
         }
     };
@@ -610,27 +645,39 @@ async function runReviewCall<T>(
     if (structuredPlan === 'reroute-json') {
         const inv = buildInvocation(false);
         const reroutedSystem = withJsonContract(system, mode.schemaForPrompt);
-        return call(
-            inv.model,
-            inv.modelName,
-            reroutedSystem,
-            { structuredReroute: 'thinking-forced-tool_choice' },
-            {
-                outputArgs: {}, // plain generateText — no Output.object, no tool_choice
-                extract: async (r: any) => {
-                    const value = await repairAndValidate<T>(
-                        mode.validatingSchema,
-                        (r?.text ?? '') as string,
-                    );
-                    if (value === undefined) {
-                        throw new Error(
-                            `[structured-output] reroute-json produced no valid object for ${runName}`,
+        const reroute = () =>
+            call(
+                inv.model,
+                inv.modelName,
+                reroutedSystem,
+                { structuredReroute: 'thinking-forced-tool_choice' },
+                {
+                    outputArgs: {}, // plain generateText — no Output.object, no tool_choice
+                    extract: async (r: any) => {
+                        const value = await repairAndValidate<T>(
+                            mode.validatingSchema,
+                            (r?.text ?? '') as string,
                         );
-                    }
-                    return value;
+                        if (value === undefined) {
+                            throw new Error(
+                                `[structured-output] reroute-json produced no valid object for ${runName}`,
+                            );
+                        }
+                        return value;
+                    },
                 },
-            },
-        );
+            );
+        try {
+            return await reroute();
+        } catch (err) {
+            // Single-shot otherwise; only a 429 earns the re-issue.
+            if (
+                classifyLLMError(err).category !== LlmErrorCategory.RATE_LIMIT
+            ) {
+                throw err;
+            }
+            return await reissueAfterRateLimit(err, reroute);
+        }
     }
 
     try {
@@ -783,17 +830,22 @@ async function runReviewCall<T>(
         // Cooldown-aware: after a classified RATE_LIMIT the wrapper armed the
         // slot's limiter with cooldownMs. Never re-issue into a cooling slot
         // (arm-then-honor) — an immediate re-fire would just hammer the
-        // rate-limited provider. A 429 that cannot be retried here counts as
-        // exhausted, so the org's fallback (its own slot) can take the call.
-        if (
-            getLimiterForSlot({
-                slot: mainSlot,
-                organizationId,
-            })?.isInCooldown()
-        ) {
-            throw category === LlmErrorCategory.RATE_LIMIT
-                ? markRetriesExhausted(err)
-                : err;
+        // rate-limited provider.
+        if (category === LlmErrorCategory.RATE_LIMIT) {
+            return await reissueAfterRateLimit(err, () =>
+                call(
+                    mainModel,
+                    mainModelName,
+                    mainSystem,
+                    undefined,
+                    schemaOnlyInPrompt
+                        ? { prompt: withJsonUserHint(user) }
+                        : undefined,
+                ),
+            );
+        }
+        if (slotInCooldown()) {
+            throw err;
         }
 
         // The ONE bounded same-model re-issue: a transient (5xx / network) blip.
@@ -804,33 +856,6 @@ async function runReviewCall<T>(
         if (category === RETRYABLE_CATEGORY) {
             await sleep(jitteredBackoffMs(1));
             return await call(mainModel, mainModelName, mainSystem);
-        }
-
-        // A 429 gets one re-issue after a longer wait, never an instant re-fire.
-        // A second 429 means the limit is not a passing burst (a spent plan
-        // window answers 429 for hours), so it is marked exhausted and the
-        // model failover moves the call to the org's fallback.
-        if (category === LlmErrorCategory.RATE_LIMIT) {
-            await sleep(jitteredBackoffMs(1, RATE_LIMIT_RETRY_DELAY_MS));
-            try {
-                return await call(
-                    mainModel,
-                    mainModelName,
-                    mainSystem,
-                    undefined,
-                    schemaOnlyInPrompt
-                        ? { prompt: withJsonUserHint(user) }
-                        : undefined,
-                );
-            } catch (retryErr) {
-                if (
-                    classifyLLMError(retryErr).category ===
-                    LlmErrorCategory.RATE_LIMIT
-                ) {
-                    throw markRetriesExhausted(retryErr);
-                }
-                throw retryErr;
-            }
         }
         throw err;
     }
