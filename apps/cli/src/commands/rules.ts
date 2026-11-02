@@ -8,7 +8,7 @@ import type {
     KodyRuleSeverity,
     KodyRuleStatus,
 } from '../types/rules.js';
-import { exitWithCode } from '../utils/cli-exit.js';
+import { exitWithCode, isCliExitError } from '../utils/cli-exit.js';
 import { normalizeCommandError } from '../utils/command-errors.js';
 import { cliError, cliInfo } from '../utils/logger.js';
 import { isCentralizedPrResponse as isCentralizedPrResponseTypeGuard } from '../types/rules.js';
@@ -223,13 +223,29 @@ function rulesStatusAction(status: KodyRuleStatus) {
                 return;
             }
 
+            const changed = result.filter((rule) => rule.status === status);
+            const unchanged = result.filter((rule) => rule.status !== status);
             cliInfo(
                 chalk.green(
-                    `${result.length} Kody Rule(s) ${STATUS_LABELS[status]}.`,
+                    `${changed.length} Kody Rule(s) ${STATUS_LABELS[status]}.`,
                 ),
             );
-            printRuleList(result);
+            printRuleList(changed);
+            if (unchanged.length > 0) {
+                const locked = unchanged.some((rule) => rule.lockedByPlan);
+                cliInfo('');
+                cliInfo(
+                    chalk.yellow(
+                        `${unchanged.length} Kody Rule(s) kept their status${locked ? ': the plan allows no more active rules' : ''}.`,
+                    ),
+                );
+                printRuleList(unchanged);
+                exitWithCode(1);
+            }
         } catch (error) {
+            if (isCliExitError(error)) {
+                throw error;
+            }
             const normalized = normalizeCommandError(error);
             cliError(chalk.red(normalized.message));
             exitWithCode(normalized.exitCode);

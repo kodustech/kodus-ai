@@ -174,6 +174,34 @@ describe('rules command actions', () => {
         },
     );
 
+    it('says which rules the plan kept paused on resume, and fails', async () => {
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        mockRulesService.changeStatus.mockResolvedValue([
+            { uuid: 'rule-1', title: 'A', rule: 'a', status: 'active' },
+            {
+                uuid: 'rule-2',
+                title: 'B',
+                rule: 'b',
+                status: 'paused',
+                lockedByPlan: true,
+            },
+        ]);
+
+        await expect(
+            rulesResumeAction({ uuid: ['rule-1', 'rule-2'] }),
+        ).rejects.toBeInstanceOf(CliExitError);
+
+        const output = logSpy.mock.calls
+            .map((call) => call.join(' '))
+            .join('\n');
+        expect(output).toContain('1 Kody Rule(s) resumed.');
+        expect(output).toContain(
+            '1 Kody Rule(s) kept their status: the plan allows no more active rules.',
+        );
+        expect(output).toContain('Rule UUID: rule-2');
+        expect(output).not.toContain('CLI exited with code');
+    });
+
     it('prints the centralized PR when a status change is proposed', async () => {
         const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
         mockRulesService.changeStatus.mockResolvedValue({

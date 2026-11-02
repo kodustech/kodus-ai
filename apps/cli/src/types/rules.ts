@@ -20,6 +20,8 @@ export interface KodyRule {
     status?: string;
     type?: string;
     directoryId?: string;
+    // The plan's active-rule limit kept it paused (create-or-update.use-case.ts).
+    lockedByPlan?: boolean;
 }
 
 export interface CentralizedPrResponse {
