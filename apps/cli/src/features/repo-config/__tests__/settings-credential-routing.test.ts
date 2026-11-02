@@ -26,10 +26,17 @@ vi.mock('../../../utils/logger.js', () => ({
     cliError: vi.fn(),
 }));
 
-vi.mock('../../../utils/cli-exit.js', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('../../../utils/cli-exit.js')>()),
-    exitWithCode: vi.fn(),
-}));
+// Throws like the real helper, so a test sees the command abort.
+vi.mock('../../../utils/cli-exit.js', async (importOriginal) => {
+    const actual =
+        await importOriginal<typeof import('../../../utils/cli-exit.js')>();
+    return {
+        ...actual,
+        exitWithCode: vi.fn((code: number) => {
+            throw new actual.CliExitError(code, true);
+        }),
+    };
+});
 
 import { repositorySettingsService } from '../../../services/repo-settings.service.js';
 import { reviewSettingsService } from '../../../services/review-settings.service.js';
@@ -160,20 +167,29 @@ describe('repository settings: credential routing', () => {
         });
 
         it('asks for a login for any other key', async () => {
-            await configRepoSetAction('.', 'runOnDraft', 'false');
+            await expect(
+                configRepoSetAction('.', 'runOnDraft', 'false'),
+            ).rejects.toMatchObject({ name: 'CliExitError' });
             expect(legacy.updateRepositorySettings).not.toHaveBeenCalled();
             expect(vi.mocked(cliError).mock.calls[0][0]).toMatch(
                 /requires a logged-in user/,
             );
-            expect(exitWithCode).toHaveBeenCalled();
+            expect(exitWithCode).toHaveBeenCalledWith(1);
         });
 
         it('asks for a login for global, directory and --team', async () => {
-            await configRepoShowAction('global');
-            await configRepoShowAction('.', { directory: 'apps' });
-            await configRepoSetAction('.', 'review.enabled', 'true', {
-                team: 'Core',
-            });
+            const aborted = { name: 'CliExitError' };
+            await expect(configRepoShowAction('global')).rejects.toMatchObject(
+                aborted,
+            );
+            await expect(
+                configRepoShowAction('.', { directory: 'apps' }),
+            ).rejects.toMatchObject(aborted);
+            await expect(
+                configRepoSetAction('.', 'review.enabled', 'true', {
+                    team: 'Core',
+                }),
+            ).rejects.toMatchObject(aborted);
             expect(legacy.getRepositorySettings).not.toHaveBeenCalled();
             expect(vi.mocked(cliError)).toHaveBeenCalledTimes(3);
             for (const call of vi.mocked(cliError).mock.calls) {

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { createLogger } from '@libs/core/log/logger';
 import { environment } from '@libs/ee/configs/environment';
 import type { LLMConfigSource } from '@libs/llm/llm-config-status';
 import { GetLLMConfigStatusUseCase } from '@libs/organization/application/use-cases/organizationParameters/get-llm-config-status.use-case';
@@ -46,6 +47,8 @@ export function isByokUsageView(params: {
 
 @Injectable()
 export class ResolveUsageByokViewUseCase {
+    private readonly logger = createLogger(ResolveUsageByokViewUseCase.name);
+
     constructor(
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
@@ -64,7 +67,10 @@ export class ResolveUsageByokViewUseCase {
         if (!environment.API_CLOUD_MODE) {
             const status = await this.getLLMConfigStatusUseCase
                 .execute(organizationAndTeamData)
-                .catch(() => null);
+                .catch((error) => {
+                    this.logUnresolved('LLM config status', error, params);
+                    return null;
+                });
             return isByokUsageView({
                 isCloud: false,
                 license: null,
@@ -74,7 +80,28 @@ export class ResolveUsageByokViewUseCase {
 
         const license = await this.licenseService
             .validateOrganizationLicense(organizationAndTeamData)
-            .catch(() => null);
+            .catch((error) => {
+                this.logUnresolved('license', error, params);
+                return null;
+            });
         return isByokUsageView({ isCloud: true, license, llmSource: null });
+    }
+
+    // The page falls back the same way when its reads fail; log it so a
+    // usage view that reads managed for a BYOK org can be traced.
+    private logUnresolved(
+        what: string,
+        error: unknown,
+        params: { organizationId: string; teamId?: string },
+    ): void {
+        this.logger.warn({
+            message: `Token usage view: ${what} unreadable, showing the managed bucket`,
+            context: ResolveUsageByokViewUseCase.name,
+            error: error instanceof Error ? error : undefined,
+            metadata: {
+                organizationId: params.organizationId,
+                teamId: params.teamId,
+            },
+        });
     }
 }

@@ -522,6 +522,13 @@ export async function configRepoPatternAddAction(
     try {
         const normalizedField = validateRepositoryPatternField(field);
         if (await isUserCredential()) {
+            // Same refusal the team-key path makes (addRepositoryPattern).
+            if (!pattern.trim()) {
+                throw new CommandError(
+                    'INVALID_INPUT',
+                    'Pattern value cannot be empty.',
+                );
+            }
             await updatePatternAsUser(
                 repository,
                 normalizedField,

@@ -226,6 +226,23 @@ describe('customAgentsService skills & docs', () => {
         expect(result.changed).toBe(false);
     });
 
+    it('links an existing path under its stored kind, without a second entry', async () => {
+        await customAgentsService.addKnowledge(
+            [owasp.path],
+            { repo: 'kodus-ai' },
+            { kind: 'doc', link: ['main-review'] },
+        );
+
+        const saved = api.save.mock.calls[0][1].configValue.knowledge ?? [];
+        const entries = saved.filter((entry) => entry.path === owasp.path);
+        expect(entries).toHaveLength(1);
+        expect(entries[0].kind).toBe('skill');
+        expect(entries[0].linkedTo).toEqual(
+            expect.arrayContaining([{ agentId: 'security' }]),
+        );
+        expect(entries[0].linkedTo).toHaveLength(2);
+    });
+
     it('rejects a link target that is not an agent here', async () => {
         await expect(
             customAgentsService.addKnowledge(

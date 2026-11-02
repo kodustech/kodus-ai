@@ -26,6 +26,8 @@ export type PullRequestReviewsResult = {
 
 const PAGE_SIZE = 20;
 const DEFAULT_LIMIT = 20;
+// The API serves at most 100 runs per page (enriched-pull-requests-query.dto.ts).
+const MAX_LIMIT = 100;
 
 function runTime(run: PullRequestReviewRun): number {
     const stamp = run.automationExecution?.createdAt;
@@ -44,10 +46,10 @@ class PullRequestReviewsService {
             );
         }
         const limit = input.limit ?? DEFAULT_LIMIT;
-        if (!Number.isInteger(limit) || limit <= 0) {
+        if (!Number.isInteger(limit) || limit <= 0 || limit > MAX_LIMIT) {
             throw new CommandError(
                 'INVALID_INPUT',
-                '--limit must be a positive integer.',
+                `--limit must be an integer from 1 to ${MAX_LIMIT}.`,
             );
         }
 

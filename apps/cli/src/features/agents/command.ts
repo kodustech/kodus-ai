@@ -16,7 +16,7 @@ import type {
     CustomAgent,
     CustomAgentTryTrace,
 } from '../../types/custom-agents.js';
-import { exitWithCode } from '../../utils/cli-exit.js';
+import { exitWithCode, isCliExitError } from '../../utils/cli-exit.js';
 import {
     CommandError,
     normalizeCommandError,
@@ -314,6 +314,9 @@ async function run(action: () => Promise<void>): Promise<void> {
     try {
         await action();
     } catch (error) {
+        if (isCliExitError(error)) {
+            throw error;
+        }
         const normalized = normalizeCommandError(error);
         cliError(chalk.red(normalized.message));
         exitWithCode(normalized.exitCode);

@@ -1469,9 +1469,15 @@ class CustomAgentsService {
         );
         let next = view.knowledge;
         for (const path of paths) {
-            const item = requireKnowledgeItem(path, options.kind);
-            if (!next.some((entry) => entry.path === item.path)) {
-                next = [...next, { ...item, linkedTo: [] }];
+            const requested = requireKnowledgeItem(path, options.kind);
+            // A path is one item: an existing entry keeps its kind, so the
+            // links land on it instead of on a second entry of another kind.
+            const existing = next.find(
+                (entry) => entry.path === requested.path,
+            );
+            const item = existing ?? { ...requested, linkedTo: [] };
+            if (!existing) {
+                next = [...next, item];
             }
             for (const link of links) {
                 next = setKnowledgeLink(next, item, link, true);

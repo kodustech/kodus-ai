@@ -6,7 +6,7 @@ import {
     type SettingsScope,
     type SettingsShowResult,
 } from '../../services/review-settings.service.js';
-import { exitWithCode } from '../../utils/cli-exit.js';
+import { exitWithCode, isCliExitError } from '../../utils/cli-exit.js';
 import { normalizeCommandError } from '../../utils/command-errors.js';
 import { cliError, cliInfo } from '../../utils/logger.js';
 import {
@@ -46,6 +46,11 @@ const LEVEL_LABEL: Record<FormattedConfigLevel, string> = {
 };
 
 function fail(error: unknown): void {
+    // An exit raised inside the try (e.g. `model test` failing) is already
+    // reported; normalizing it again prints "CLI exited with code 1".
+    if (isCliExitError(error)) {
+        throw error;
+    }
     const normalized = normalizeCommandError(error);
     cliError(chalk.red(normalized.message));
     exitWithCode(normalized.exitCode);

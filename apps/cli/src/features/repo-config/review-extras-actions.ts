@@ -17,7 +17,7 @@ import {
 } from '../../services/review-language.service.js';
 import { reviewSettingsService } from '../../services/review-settings.service.js';
 import type { CentralizedPrResult } from '../../types/custom-agents.js';
-import { exitWithCode } from '../../utils/cli-exit.js';
+import { exitWithCode, isCliExitError } from '../../utils/cli-exit.js';
 import {
     CommandError,
     normalizeCommandError,
@@ -43,6 +43,11 @@ export type SkillsAddOptions = ReviewSettingsTargetOptions & {
 };
 
 function fail(error: unknown): void {
+    // An exit raised inside the try (e.g. `model test` failing) is already
+    // reported; normalizing it again prints "CLI exited with code 1".
+    if (isCliExitError(error)) {
+        throw error;
+    }
     const normalized = normalizeCommandError(error);
     cliError(chalk.red(normalized.message));
     exitWithCode(normalized.exitCode);
