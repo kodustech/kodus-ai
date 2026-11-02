@@ -197,7 +197,16 @@ export function retriesWereExhausted(err: unknown): boolean {
  *  reads it the same as the SDK's own `maxRetriesExceeded`. */
 export function markRetriesExhausted<E>(err: E): E {
     if (err && typeof err === 'object') {
-        Object.defineProperty(err, RETRIES_EXHAUSTED, { value: true });
+        try {
+            Object.defineProperty(err, RETRIES_EXHAUSTED, {
+                value: true,
+                enumerable: false,
+                writable: false,
+                configurable: true,
+            });
+        } catch {
+            // Frozen errors — leave unmarked; the call fails as it did before.
+        }
     }
     return err;
 }

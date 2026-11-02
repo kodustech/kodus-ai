@@ -150,6 +150,17 @@ describe('a one-shot 429 whose app-level retry was spent', () => {
         ).toBe(true);
     });
 
+    it('marking twice or marking a frozen error never throws', () => {
+        const err = apiError(FIVE_HOUR_CAP);
+        markRetriesExhausted(err);
+        expect(() => markRetriesExhausted(err)).not.toThrow();
+        expect(shouldFailoverToNextModel(err)).toBe(true);
+
+        const frozen = Object.freeze(apiError(FIVE_HOUR_CAP));
+        expect(() => markRetriesExhausted(frozen)).not.toThrow();
+        expect(markRetriesExhausted(frozen)).toBe(frozen);
+    });
+
     it('does not cascade before the retry is spent', () => {
         expect(shouldFailoverToNextModel(apiError(FIVE_HOUR_CAP))).toBe(false);
     });
