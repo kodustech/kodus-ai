@@ -4,16 +4,23 @@ import type {
     KodyRule,
     KodyRuleScope,
     KodyRuleSeverity,
+    KodyRuleStatus,
+    KodyRulesStatusResult,
     UpdateKodyRuleRequest,
     ViewKodyRulesRequest,
 } from '../types/rules.js';
 import { CommandError } from '../utils/command-errors.js';
-import { resolveTeamKeyAccess } from '../utils/team-key-auth.js';
 import { api } from './api/index.js';
+import { userContextService } from './user-context.service.js';
 
 export type UpdateKodyRuleInput = {
     ruleId: string;
 } & UpdateKodyRuleRequest;
+
+export type RulesTeamOption = {
+    /** Team name or id; only read for a logged-in user (a team key is bound to its team). */
+    team?: string;
+};
 
 const VALID_SEVERITIES: KodyRuleSeverity[] = [
     'low',
@@ -22,16 +29,22 @@ const VALID_SEVERITIES: KodyRuleSeverity[] = [
     'critical',
 ];
 
-const VALID_SCOPES: KodyRuleScope[] = ['pull request', 'file'];
+// Input spellings → the value the API stores. `'pull request'` is what the
+// CLI documented before; the review pipeline only matches `'pull-request'`.
+const SCOPE_ALIASES: Record<string, KodyRuleScope> = {
+    'pull-request': 'pull-request',
+    'pull request': 'pull-request',
+    'pull_request': 'pull-request',
+    'file': 'file',
+};
 
-const RULES_AUTH_MESSAGE =
-    'Kody Rules commands require team-key auth. Run: kodus auth team-key --key <your-key>.\nGet your key from: https://app.kodus.io/organization/cli-keys';
+const RULES_FEATURE = 'Kody Rules';
 
 class RulesService {
     async createRule(
         input: CreateKodyRuleRequest,
+        options: RulesTeamOption = {},
     ): Promise<KodyRuleMutationResult> {
-        const { teamKey } = await resolveTeamKeyAccess(RULES_AUTH_MESSAGE);
         const payload: CreateKodyRuleRequest = {
             title: this.requireText(input.title, 'title'),
             rule: this.requireText(input.rule, 'rule'),
@@ -42,70 +55,179 @@ class RulesService {
             path: this.normalizeOptionalText(input.path) || '**/*',
         };
 
-        return api.rules.createRule(teamKey, payload);
+        const credential = await userContextService.resolveCredential();
+        if (credential.kind === 'team-key') {
+            return api.rules.createRule(credential.accessToken, payload);
+        }
+
+        const ctx = await userContextService.resolve(RULES_FEATURE, options);
+        // Same defaults the team-key route applies server-side
+        // (cli-kody-rules.controller.ts convertToDTO), so a rule looks the same
+        // whichever credential created it.
+        return api.rules.saveRuleAsUser(ctx.accessToken, {
+            title: payload.title,
+            rule: payload.rule,
+            type: 'standard',
+            severity: payload.severity as KodyRuleSeverity,
+            scope: payload.scope,
+            path: payload.path,
+            repositoryId: payload.repositoryId,
+            origin: 'cli',
+            status: 'active',
+            examples: [],
+            teamId: ctx.teamId,
+        });
     }
 
     async updateRule(
         input: UpdateKodyRuleInput,
+        options: RulesTeamOption = {},
     ): Promise<KodyRuleMutationResult> {
-        const { teamKey } = await resolveTeamKeyAccess(RULES_AUTH_MESSAGE);
         const ruleId = this.requireText(input.ruleId, 'rule-id');
-        let hasRuleChanges = false;
+        const payload = this.buildUpdatePayload(input);
 
+        const credential = await userContextService.resolveCredential();
+        if (credential.kind === 'team-key') {
+            return api.rules.updateRule(
+                credential.accessToken,
+                ruleId,
+                payload,
+            );
+        }
+
+        const ctx = await userContextService.resolve(RULES_FEATURE, options);
+        const existing = await this.findOneAsUser(ctx.accessToken, ruleId);
+
+        // The web endpoint validates a full rule (type/title/rule/severity are
+        // required); the service merges it over the stored one, so fields not
+        // sent here keep their stored values.
+        return api.rules.saveRuleAsUser(ctx.accessToken, {
+            uuid: ruleId,
+            type: existing.type || 'standard',
+            title: payload.title ?? existing.title,
+            rule: payload.rule ?? existing.rule,
+            severity: payload.severity ?? existing.severity ?? 'medium',
+            ...(payload.scope ? { scope: payload.scope } : {}),
+            ...(payload.path ? { path: payload.path } : {}),
+            ...(payload.repositoryId
+                ? { repositoryId: payload.repositoryId }
+                : {}),
+            teamId: ctx.teamId,
+        });
+    }
+
+    async viewRules(
+        input: ViewKodyRulesRequest = {},
+        options: RulesTeamOption = {},
+    ): Promise<KodyRule[]> {
+        const query: ViewKodyRulesRequest = {
+            repositoryId: this.normalizeOptionalText(input.repositoryId),
+            ruleId: this.normalizeOptionalText(input.ruleId),
+        };
+
+        const credential = await userContextService.resolveCredential();
+        if (credential.kind === 'team-key') {
+            return api.rules.viewRules(credential.accessToken, query);
+        }
+
+        const ctx = await userContextService.resolve(RULES_FEATURE, options);
+        return api.rules.findRulesAsUser(ctx.accessToken, query);
+    }
+
+    /**
+     * Delete, pause or resume. Goes through the same status endpoint the web
+     * settings page uses, so under centralized config the change is proposed
+     * as a pull request instead of written directly
+     * (change-status-kody-rules.use-case.ts).
+     */
+    async changeStatus(
+        ruleIds: string[],
+        status: KodyRuleStatus,
+        options: RulesTeamOption = {},
+    ): Promise<KodyRulesStatusResult> {
+        const ids = [
+            ...new Set(
+                ruleIds
+                    .map((id) => this.normalizeOptionalText(id))
+                    .filter((id): id is string => !!id),
+            ),
+        ];
+        if (ids.length === 0) {
+            throw new CommandError(
+                'INVALID_INPUT',
+                'Provide at least one --uuid.',
+            );
+        }
+
+        const ctx = await userContextService.resolve(
+            `Deleting, pausing or resuming ${RULES_FEATURE}`,
+            options,
+        );
+
+        return api.rules.changeStatusAsUser(ctx.accessToken, {
+            ruleIds: ids,
+            status,
+            teamId: ctx.teamId,
+        });
+    }
+
+    private async findOneAsUser(
+        accessToken: string,
+        ruleId: string,
+    ): Promise<KodyRule> {
+        const [existing] = await api.rules.findRulesAsUser(accessToken, {
+            ruleId,
+        });
+        if (!existing) {
+            throw new CommandError(
+                'INVALID_INPUT',
+                `Kody Rule '${ruleId}' not found.`,
+            );
+        }
+        return existing;
+    }
+
+    private buildUpdatePayload(
+        input: UpdateKodyRuleInput,
+    ): UpdateKodyRuleRequest {
         const payload: UpdateKodyRuleRequest = {};
 
         const title = this.normalizeOptionalText(input.title);
         if (title) {
             payload.title = title;
-            hasRuleChanges = true;
         }
 
         const rule = this.normalizeOptionalText(input.rule);
         if (rule) {
             payload.rule = rule;
-            hasRuleChanges = true;
         }
 
         if (input.severity !== undefined) {
             payload.severity = this.normalizeSeverity(input.severity);
-            hasRuleChanges = true;
         }
 
         if (input.scope !== undefined) {
             payload.scope = this.normalizeScope(input.scope);
-            hasRuleChanges = true;
         }
 
         const path = this.normalizeOptionalText(input.path);
         if (path) {
             payload.path = path;
-            hasRuleChanges = true;
         }
 
         const repositoryId = this.normalizeOptionalText(input.repositoryId);
         if (repositoryId) {
             payload.repositoryId = repositoryId;
-            hasRuleChanges = true;
         }
 
-        if (!hasRuleChanges) {
+        if (Object.keys(payload).length === 0) {
             throw new CommandError(
                 'INVALID_INPUT',
                 'Provide at least one field to update: --repo-id, --title, --rule, --severity, --scope, or --path.',
             );
         }
 
-        return api.rules.updateRule(teamKey, ruleId, payload);
-    }
-
-    async viewRules(input: ViewKodyRulesRequest = {}): Promise<KodyRule[]> {
-        const { teamKey } = await resolveTeamKeyAccess(RULES_AUTH_MESSAGE);
-        const query: ViewKodyRulesRequest = {
-            repositoryId: this.normalizeOptionalText(input.repositoryId),
-            ruleId: this.normalizeOptionalText(input.ruleId),
-        };
-
-        return api.rules.viewRules(teamKey, query);
+        return payload;
     }
 
     private normalizeSeverity(value: string): KodyRuleSeverity {
@@ -121,11 +243,11 @@ class RulesService {
     }
 
     private normalizeScope(value: string): KodyRuleScope {
-        const normalized = value.trim().toLowerCase() as KodyRuleScope;
-        if (!VALID_SCOPES.includes(normalized)) {
+        const normalized = SCOPE_ALIASES[value.trim().toLowerCase()];
+        if (!normalized) {
             throw new CommandError(
                 'INVALID_INPUT',
-                `Invalid scope '${value}'. Use one of: ${VALID_SCOPES.join(', ')}.`,
+                `Invalid scope '${value}'. Use one of: pull-request, file.`,
             );
         }
 

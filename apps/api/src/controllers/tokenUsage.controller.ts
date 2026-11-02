@@ -20,6 +20,7 @@ import {
     UsageSummaryReportContract,
 } from '@libs/analytics/domain/token-usage/types/tokenUsage.types';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import { ResolveUsageByokViewUseCase } from '@libs/ee/license/use-cases/resolve-usage-byok-view.use-case';
 import {
     BadRequestException,
     Controller,
@@ -87,6 +88,7 @@ export class TokenUsageController {
         private readonly costEstimateUseCase: CostEstimateUseCase,
         private readonly buildUsageSummaryUseCase: BuildUsageSummaryUseCase,
         private readonly spendLimitConfigService: SpendLimitConfigService,
+        private readonly resolveUsageByokViewUseCase: ResolveUsageByokViewUseCase,
     ) {}
 
     @Get('tokens/summary')
@@ -105,7 +107,7 @@ export class TokenUsageController {
             throw new BadRequestException('organizationId not found in request');
         }
 
-        const mapped = this.mapDtoToContract(query, organizationId);
+        const mapped = await this.mapDtoToContract(query, organizationId);
         // Load the org's manual pricing overrides so the summary's totalCost
         // reconciles with the spend-limit widget, which also honors them.
         const config = await this.spendLimitConfigService.getConfig({
@@ -132,7 +134,7 @@ export class TokenUsageController {
             throw new BadRequestException('organizationId not found in request');
         }
 
-        const mapped = this.mapDtoToContract(query, organizationId);
+        const mapped = await this.mapDtoToContract(query, organizationId);
         const config = await this.spendLimitConfigService.getConfig({
             organizationId,
             teamId: '',
@@ -158,7 +160,7 @@ export class TokenUsageController {
             throw new BadRequestException('organizationId not found in request');
         }
 
-        const mapped = this.mapDtoToContract(query, organizationId);
+        const mapped = await this.mapDtoToContract(query, organizationId);
         return this.tokenUsageService.getDailyUsage(mapped);
     }
 
@@ -177,7 +179,7 @@ export class TokenUsageController {
             throw new BadRequestException('organizationId not found in request');
         }
 
-        const mapped = this.mapDtoToContract(query, organizationId);
+        const mapped = await this.mapDtoToContract(query, organizationId);
         return await this.tokenUsageService.getUsageByPr(mapped);
     }
 
@@ -196,7 +198,7 @@ export class TokenUsageController {
             throw new BadRequestException('organizationId not found in request');
         }
 
-        const mapped = this.mapDtoToContract(query, organizationId);
+        const mapped = await this.mapDtoToContract(query, organizationId);
         return await this.tokenUsageService.getDailyUsageByPr(mapped);
     }
 
@@ -216,7 +218,7 @@ export class TokenUsageController {
             throw new BadRequestException('organizationId not found in request');
         }
 
-        const mapped = this.mapDtoToContract(query, organizationId);
+        const mapped = await this.mapDtoToContract(query, organizationId);
         return await this.tokenUsageService.getUsageByReview(mapped);
     }
 
@@ -236,7 +238,7 @@ export class TokenUsageController {
             throw new BadRequestException('organizationId not found in request');
         }
 
-        const mapped = this.mapDtoToContract(query, organizationId);
+        const mapped = await this.mapDtoToContract(query, organizationId);
         return await this.tokenUsageService.getUsageByArea(mapped);
     }
 
@@ -255,7 +257,7 @@ export class TokenUsageController {
             throw new BadRequestException('organizationId not found in request');
         }
 
-        const mapped = this.mapDtoToContract(query, organizationId);
+        const mapped = await this.mapDtoToContract(query, organizationId);
         return await this.tokensByDeveloperUseCase.execute(mapped, false);
     }
 
@@ -274,7 +276,7 @@ export class TokenUsageController {
             throw new BadRequestException('organizationId not found in request');
         }
 
-        const mapped = this.mapDtoToContract(query, organizationId);
+        const mapped = await this.mapDtoToContract(query, organizationId);
         return await this.tokensByDeveloperUseCase.execute(mapped, true);
     }
 
@@ -346,10 +348,10 @@ export class TokenUsageController {
         return await this.costEstimateUseCase.execute(organizationId);
     }
 
-    private mapDtoToContract(
+    private async mapDtoToContract(
         query: TokenUsageQueryDto,
         organizationId: string,
-    ): TokenUsageQueryContract {
+    ): Promise<TokenUsageQueryContract> {
         const start = new Date(query.startDate);
         const end = new Date(query.endDate);
 
@@ -367,13 +369,7 @@ export class TokenUsageController {
             end.setUTCHours(23, 59, 59, 999);
         }
 
-        const normalized = query.byok.trim().toLowerCase();
-        if (normalized !== 'true' && normalized !== 'false') {
-            throw new BadRequestException(
-                `byok must be a 'true' or 'false' string`,
-            );
-        }
-        const byokBoolean = normalized === 'true';
+        const byokBoolean = await this.resolveByok(query, organizationId);
 
         return {
             organizationId,
@@ -386,5 +382,27 @@ export class TokenUsageController {
             models: query.models,
             byok: byokBoolean,
         };
+    }
+
+    // Callers that know the bucket (the web page) pass it; the CLI omits it
+    // and gets the one the organization's plan and LLM setup use.
+    private async resolveByok(
+        query: TokenUsageQueryDto,
+        organizationId: string,
+    ): Promise<boolean> {
+        if (query.byok === undefined || query.byok === '') {
+            return this.resolveUsageByokViewUseCase.execute({
+                organizationId,
+                teamId: query.teamId,
+            });
+        }
+
+        const normalized = query.byok.trim().toLowerCase();
+        if (normalized !== 'true' && normalized !== 'false') {
+            throw new BadRequestException(
+                `byok must be a 'true' or 'false' string`,
+            );
+        }
+        return normalized === 'true';
     }
 }

@@ -3,6 +3,10 @@ import chalk from 'chalk';
 import ora from 'ora';
 import fs from 'fs/promises';
 import { reviewService } from '../../services/review.service.js';
+import {
+    pullRequestReviewsService,
+    type PullRequestReviewsResult,
+} from '../../services/pr-reviews.service.js';
 import { gitService } from '../../services/git.service.js';
 import type { GlobalOptions } from '../../types/cli.js';
 import type {
@@ -41,6 +45,14 @@ type PrSuggestionsOptions = {
     fields?: string;
 };
 
+type PrReviewsOptions = {
+    repo?: string;
+    repoId?: string;
+    team?: string;
+    limit?: string;
+    json?: boolean;
+};
+
 type BusinessValidationOptions = {
     taskUrl?: string;
     taskId?: string;
@@ -66,6 +78,25 @@ export function createPrCommand(): Command {
             'Select response fields (JSON/agent mode only), e.g. summary,issues.file',
         )
         .action(prSuggestionsAction);
+
+    prCommand
+        .command('reviews')
+        .description(
+            'Review history of a pull request: every Kody run, newest first (requires kodus auth login)',
+        )
+        .argument('<pr-number>', 'Pull request number')
+        .option(
+            '--repo <repo>',
+            'Repository as owner/repo or name (default: this checkout origin)',
+        )
+        .option('--repo-id <id>', 'Repository ID (wins over --repo)')
+        .option(
+            '--team <team>',
+            'Team name or id (logged-in users with more than one team)',
+        )
+        .option('--limit <n>', 'Most recent runs to return (default 20)')
+        .option('--json', 'Output the review runs as JSON')
+        .action(prReviewsAction);
 
     prCommand
         .command('business-validation')
@@ -238,6 +269,106 @@ async function prSuggestionsAction(
             cliError(chalk.red(error.message));
         }
 
+        exitWithCode(normalized.exitCode);
+    }
+}
+
+function printReviewRuns(result: PullRequestReviewsResult): void {
+    if (result.runs.length === 0) {
+        cliInfo(
+            chalk.yellow(
+                `No Kody reviews found for PR #${result.prNumber} in ${result.repository}.`,
+            ),
+        );
+        return;
+    }
+
+    const [latest] = result.runs;
+    cliInfo(chalk.bold(`PR #${result.prNumber} · ${latest.title}`));
+    cliInfo(chalk.dim(`${latest.repositoryName} · ${latest.url}`));
+    cliInfo('');
+
+    for (const run of result.runs) {
+        const execution = run.automationExecution;
+        const when = execution?.createdAt ?? 'unknown date';
+        const sent = run.suggestionsCount?.sent ?? 0;
+        const filtered = run.suggestionsCount?.filtered ?? 0;
+        const commit = run.reviewedCommitSha
+            ? ` · commit ${run.reviewedCommitSha.slice(0, 7)}`
+            : '';
+        cliInfo(
+            `${when} · ${execution?.status ?? 'unknown'} · ${sent} sent, ${filtered} filtered${commit}`,
+        );
+        if (execution?.errorMessage) {
+            cliInfo(chalk.red(`  ${execution.errorMessage}`));
+        }
+    }
+
+    if (result.truncated) {
+        cliInfo('');
+        cliInfo(
+            chalk.dim(
+                `Showing the ${result.runs.length} most recent runs. Pass --limit for more.`,
+            ),
+        );
+    }
+}
+
+async function prReviewsAction(
+    prNumberArg: string,
+    options: PrReviewsOptions,
+    cmd: Command,
+): Promise<void> {
+    const globalOpts = cmd.optsWithGlobals() as GlobalOptions;
+    const ctx = createCommandContext('pr reviews', globalOpts);
+
+    try {
+        const prNumber = parseOptionalNumber(prNumberArg, '<pr-number>');
+        const limit = parseOptionalNumber(options.limit, '--limit');
+
+        const result = await pullRequestReviewsService.list({
+            prNumber: prNumber as number,
+            repository: options.repo,
+            repositoryId: options.repoId,
+            team: options.team,
+            limit,
+        });
+
+        if (ctx.isAgent) {
+            await emitAgentEnvelope(
+                buildAgentSuccessEnvelope(ctx.command, result, ctx.startedAt),
+                ctx.outputFile,
+            );
+            return;
+        }
+
+        if (options.json || globalOpts.format === 'json') {
+            cliInfo(JSON.stringify(result, null, 2));
+            return;
+        }
+
+        printReviewRuns(result);
+    } catch (error) {
+        const normalized = normalizeCommandError(error);
+
+        if (ctx.isAgent) {
+            await emitAgentEnvelope(
+                buildAgentErrorEnvelope(
+                    ctx.command,
+                    {
+                        code: normalized.code,
+                        message: normalized.message,
+                        details: normalized.details,
+                    },
+                    ctx.startedAt,
+                ),
+                ctx.outputFile,
+            );
+            exitWithCode(normalized.exitCode > 0 ? normalized.exitCode : 1);
+            return;
+        }
+
+        cliError(chalk.red(normalized.message));
         exitWithCode(normalized.exitCode);
     }
 }

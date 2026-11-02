@@ -632,6 +632,38 @@ describe('RealApi config repository methods', () => {
         );
     });
 
+    it('keeps every validation message of a 400', async () => {
+        fetchMock.mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    statusCode: 400,
+                    error: 'Bad Request',
+                    message: [
+                        'name must be shorter than or equal to 60 characters',
+                        'property foo should not exist',
+                    ],
+                }),
+                {
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json' },
+                },
+            ),
+        );
+
+        const api = new RealApi();
+
+        await expect(
+            api.config.getAvailableRepositories('kodus_team_key'),
+        ).rejects.toEqual(
+            expect.objectContaining({
+                name: 'ApiError',
+                statusCode: 400,
+                message:
+                    'name must be shorter than or equal to 60 characters; property foo should not exist',
+            } satisfies Partial<ApiError>),
+        );
+    });
+
     it('explains oversized requests when a 413 has no JSON body', async () => {
         // A gateway/CDN (or the API's own body-parser) rejecting an oversized
         // request body with a non-JSON 413 used to surface a bare "Request

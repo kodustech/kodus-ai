@@ -11,7 +11,15 @@ This directory contains the agent skills shipped with the Kodus CLI repository.
 - `kodus-business-rules-validation`
     - Canonical skill name for business rules validation in installers and multi-agent integrations.
 - `kodus-pr-suggestions-resolver`
-    - Fetch PR suggestions and apply fixes with judgment.
+    - Fetch PR suggestions and apply fixes with judgment, and read a PR's review history (`kodus pr reviews`).
+- `kodus-kody-rules`
+    - View, create, update, pause, resume and delete Kody Rules.
+- `kodus-cockpit-usage`
+    - Read Cockpit metrics (`kodus cockpit <tab>`) and token usage (`kodus usage tokens`).
+- `kodus-custom-agents`
+    - List, create, update, enable, disable, delete and try custom agents (`kodus agents`).
+- `kodus-review-settings`
+    - Show and change code review settings at global, repository and directory level, and the review model (`kodus config remote`).
 - `kodus-centralized-config`
     - Manage centralized config from CLI (status, init, sync, disable, download).
 - `hunk-review` (vendored from [`hunkdiff`](https://github.com/modem-dev/hunk))
@@ -30,6 +38,16 @@ This directory contains the agent skills shipped with the Kodus CLI repository.
     - Use `kodus-pr-suggestions-resolver`.
 - User asks to validate local implementation against a task, acceptance criteria, or business rules
     - Use `kodus-business-rules-validation`.
+- User asks to view, create, change, pause, resume or delete a Kody Rule
+    - Use `kodus-kody-rules`.
+- User asks for cockpit numbers (cycle time, lead time, deploy frequency, PR size, implementation rate, negative feedback) or token usage / cost
+    - Use `kodus-cockpit-usage`.
+- User asks to create, edit, turn on/off, delete or try a custom agent / dedicated reviewer
+    - Use `kodus-custom-agents`.
+- User asks to see or change how Kody reviews a repository (categories, severity limits, PR summary, base branches, ignored paths, approval, review model)
+    - Use `kodus-review-settings`.
+- User asks for the review history of a pull request
+    - Use `kodus-pr-suggestions-resolver` (`kodus pr reviews`).
 - User asks to enable/disable/sync/download centralized config or choose centralized config source repository
     - Use `kodus-centralized-config`.
 - User has a Hunk session open or asks to navigate / comment / reload a live Hunk diff

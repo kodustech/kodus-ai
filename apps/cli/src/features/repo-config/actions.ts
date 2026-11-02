@@ -29,6 +29,22 @@ import {
     getRepositorySettingsSectionLabel,
     validateRepositorySettingsSection,
 } from '../../utils/repo-settings-dashboard.js';
+import {
+    LOGIN_REQUIRED_HINT,
+    userContextService,
+} from '../../services/user-context.service.js';
+import { reviewSettingsService } from '../../services/review-settings.service.js';
+import { CommandError } from '../../utils/command-errors.js';
+import {
+    legacyAliasFor,
+    resolveReviewSetting,
+} from '../../utils/review-settings-catalog.js';
+import {
+    reviewSettingsSetAction,
+    reviewSettingsShowAction,
+    type ReviewSettingsSetOptions,
+    type ReviewSettingsShowOptions,
+} from './review-settings-actions.js';
 
 export type ConfigRepoAddOptions = {
     prompt?: boolean;
@@ -37,11 +53,10 @@ export type ConfigRepoAddOptions = {
 
 export type ConfigRepoListOptions = {
     json?: boolean;
+    team?: string;
 };
 
-export type ConfigRepoShowOptions = {
-    json?: boolean;
-};
+export type ConfigRepoShowOptions = ReviewSettingsShowOptions;
 
 export type ConfigRepoSetupOptions = {
     yes?: boolean;
@@ -53,8 +68,43 @@ export type ConfigRepoOpenOptions = {
     json?: boolean;
 };
 
-export type ConfigRepoMutationOptions = {
-    json?: boolean;
+export type ConfigRepoMutationOptions = ReviewSettingsSetOptions;
+
+/**
+ * Logged in, repository settings go through the endpoints Settings > Code
+ * Review uses (every key, every level). A team key keeps the
+ * /cli/config/repositories path and the keys it has always taken.
+ */
+async function isUserCredential(): Promise<boolean> {
+    const credential = await userContextService.resolveCredential();
+    return credential.kind === 'user';
+}
+
+function rejectTeamKeyScope(
+    repository: string,
+    options: { team?: string; directory?: string },
+): void {
+    if (repository === 'global' || options.directory || options.team) {
+        throw new CommandError(
+            'AUTH_REQUIRED',
+            `Global, directory and --team settings require a logged-in user. ${LOGIN_REQUIRED_HINT}`,
+        );
+    }
+}
+
+function isKnownReviewSetting(key: string): boolean {
+    try {
+        resolveReviewSetting(key);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+const PATTERN_FIELD_KEYS: Record<string, string> = {
+    'ignore-files': 'ignorePaths',
+    'base-branches': 'baseBranches',
+    'ignore-titles': 'ignoredTitleKeywords',
 };
 
 function shouldOfferSetupPrompt(options: ConfigRepoAddOptions = {}): boolean {
@@ -173,7 +223,9 @@ export async function configRepoListAction(
     options: ConfigRepoListOptions = {},
 ): Promise<void> {
     try {
-        const repositories = await repoConfigService.listRepositories();
+        const repositories = await repoConfigService.listRepositories({
+            team: options.team,
+        });
 
         if (options.json) {
             cliInfo(JSON.stringify(repositories, null, 2));
@@ -201,6 +253,12 @@ export async function configRepoShowAction(
     options: ConfigRepoShowOptions = {},
 ): Promise<void> {
     try {
+        if (await isUserCredential()) {
+            await reviewSettingsShowAction(repository, options);
+            return;
+        }
+        rejectTeamKeyScope(repository, options);
+
         const result =
             await repositorySettingsService.getRepositorySettings(repository);
 
@@ -400,12 +458,29 @@ export async function configRepoSetAction(
     options: ConfigRepoMutationOptions = {},
 ): Promise<void> {
     try {
-        validateRepositorySettingKey(key);
+        if (await isUserCredential()) {
+            await reviewSettingsSetAction(repository, key, value, options);
+            return;
+        }
+        rejectTeamKeyScope(repository, options);
+
+        const legacyKey = legacyAliasFor(key);
+        if (!legacyKey && !isKnownReviewSetting(key)) {
+            // Unknown everywhere: the team-key message, with the keys it takes.
+            validateRepositorySettingKey(key);
+        }
+        if (!legacyKey) {
+            throw new CommandError(
+                'AUTH_REQUIRED',
+                `Setting '${key}' requires a logged-in user; a team key sets only: review.enabled, review.autoApprove, review.requestChanges.minSeverity, patterns.ignoreFiles, patterns.baseBranches, patterns.ignoreTitles. ${LOGIN_REQUIRED_HINT}`,
+            );
+        }
+        validateRepositorySettingKey(legacyKey);
         const current =
             await repositorySettingsService.getRepositorySettings(repository);
         const nextSettings = applyRepositorySetting(
             current.settings,
-            key,
+            legacyKey,
             value,
         );
         const updated =
@@ -429,7 +504,21 @@ export async function configRepoPatternAddAction(
     options: ConfigRepoMutationOptions = {},
 ): Promise<void> {
     try {
-        validateRepositoryPatternField(field);
+        const normalizedField = validateRepositoryPatternField(field);
+        if (await isUserCredential()) {
+            await updatePatternAsUser(
+                repository,
+                normalizedField,
+                options,
+                (patterns) =>
+                    patterns.includes(pattern.trim())
+                        ? patterns
+                        : [...patterns, pattern.trim()],
+            );
+            return;
+        }
+        rejectTeamKeyScope(repository, options);
+
         const current =
             await repositorySettingsService.getRepositorySettings(repository);
         const nextSettings = addRepositoryPattern(
@@ -458,7 +547,19 @@ export async function configRepoPatternRemoveAction(
     options: ConfigRepoMutationOptions = {},
 ): Promise<void> {
     try {
-        validateRepositoryPatternField(field);
+        const normalizedField = validateRepositoryPatternField(field);
+        if (await isUserCredential()) {
+            await updatePatternAsUser(
+                repository,
+                normalizedField,
+                options,
+                (patterns) =>
+                    patterns.filter((item) => item !== pattern.trim()),
+            );
+            return;
+        }
+        rejectTeamKeyScope(repository, options);
+
         const current =
             await repositorySettingsService.getRepositorySettings(repository);
         const nextSettings = removeRepositoryPattern(
@@ -478,4 +579,31 @@ export async function configRepoPatternRemoveAction(
         cliError(chalk.red(normalized.message));
         exitWithCode(normalized.exitCode);
     }
+}
+
+/** A pattern list edit for a logged-in user: read the effective list at the scope, write the new one. */
+async function updatePatternAsUser(
+    repository: string,
+    field: string,
+    options: ConfigRepoMutationOptions,
+    update: (patterns: string[]) => string[],
+): Promise<void> {
+    const key = PATTERN_FIELD_KEYS[field];
+    const current = await reviewSettingsService.show(
+        { repository, directory: options.directory, team: options.team },
+        { includeFileOverlay: false },
+    );
+    const value = current.settings.find(
+        (setting) => setting.key === key,
+    )?.value;
+    const patterns = Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === 'string')
+        : [];
+
+    await reviewSettingsSetAction(
+        repository,
+        key,
+        JSON.stringify(update(patterns)),
+        options,
+    );
 }

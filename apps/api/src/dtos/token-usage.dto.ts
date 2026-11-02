@@ -38,9 +38,20 @@ export class TokenUsageQueryDto {
     })
     repositoryId?: string;
 
+    @IsOptional()
     @IsString()
-    @ApiProperty()
-    byok: string;
+    @ApiPropertyOptional({
+        description:
+            "'true' for the BYOK bucket, 'false' for the managed one. Omitted: the bucket the organization's plan and LLM setup use, as on the Token Usage page.",
+    })
+    byok?: string;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        description: 'Team used to read the license when byok is omitted.',
+    })
+    teamId?: string;
 }
 
 export class TokenPricingQueryDto {

@@ -168,7 +168,8 @@ export async function getCloudflareAccessHeaders(): Promise<
 }
 
 interface ApiErrorPayload {
-    message?: string;
+    // Nest's ValidationPipe answers a 400 with one message per failed field.
+    message?: string | string[];
     code?: string;
     details?: {
         limit?: number;
@@ -240,12 +241,17 @@ function normalizeApiErrorMessage(
     }
 
     const fallbackMessage = getDefaultApiErrorMessage(statusCode, endpoint);
-    if (!errorData.message || typeof errorData.message !== 'string') {
+    const message = Array.isArray(errorData.message)
+        ? errorData.message
+              .filter((item): item is string => typeof item === 'string')
+              .join('; ')
+        : errorData.message;
+    if (!message || typeof message !== 'string') {
         return fallbackMessage;
     }
 
     const endpointPath = endpoint.split('?')[0] || endpoint;
-    const trimmed = errorData.message.trim();
+    const trimmed = message.trim();
     const hasNonAscii = /[^\p{ASCII}]/u.test(trimmed);
 
     if (
