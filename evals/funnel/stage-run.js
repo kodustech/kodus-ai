@@ -88,7 +88,6 @@ async function runStage(stage) {
         }
     }
     const dir = path.join(__dirname, stage.id);
-    const TARGET = ((require(path.join(dir, 'targets.json')).sets || {})[SET]?.models || {})[MODEL] || {};
     // libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
     if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
     process.env.RECALL_MODEL = MODEL;
@@ -103,6 +102,8 @@ async function runStage(stage) {
 
     // eslint-disable-next-line global-require, import/no-dynamic-require
     const snapshot = require(path.join(__dirname, 'snapshot', `${SNAPSHOT.replace(/[^\w.@-]+/g, '-')}.json`));
+    // A heavy snapshot (snapshot.js --heavy) has floors of its own, under sets.heavy-<set>.
+    const TARGET = ((require(path.join(dir, 'targets.json')).sets || {})[snapshot.heavy ? `heavy-${SET}` : SET]?.models || {})[MODEL] || {};
     const only = args.cases ? new Set(String(args.cases).split(',')) : null;
     const inSet = SETS[SET];
     const cases = args.controls ? [] : snapshot.cases.filter((c) => inSet(c.caseId) && (!only || only.has(c.caseId))).slice(0, args.limit ? Number(args.limit) : undefined);
