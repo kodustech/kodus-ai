@@ -171,6 +171,31 @@ describe('resolveKnowledgeRepositories', () => {
         });
     });
 
+    it('reads at the ref of the last item that pins one, as a directory overrides', async () => {
+        const result = await resolveKnowledgeRepositories({
+            items: [
+                { repository: RULES, ref: 'v2' },
+                { repository: RULES.toUpperCase() },
+                { repository: RULES, ref: 'v3' },
+            ],
+            codeManagement: provider({}),
+            organizationAndTeamData: ORG,
+        });
+
+        expect(result.sources[0].source.ref).toBe('v3');
+    });
+
+    it('reads at the listing default branch when the provider has no default-branch call', async () => {
+        const { getDefaultBranch: _none, ...cm } = provider({}) as any;
+        const result = await resolveKnowledgeRepositories({
+            items: [{ repository: RULES }],
+            codeManagement: cm,
+            organizationAndTeamData: ORG,
+        });
+
+        expect(result.sources[0].source.ref).toBe('trunk');
+    });
+
     it('tells a listing that failed apart from a repository that is not there', async () => {
         const cm = provider({});
         (cm.getRepositories as jest.Mock).mockRejectedValueOnce(
