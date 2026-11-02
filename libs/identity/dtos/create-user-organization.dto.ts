@@ -1,10 +1,5 @@
-import {
-    IsEmail,
-    IsOptional,
-    IsString,
-    IsStrongPassword,
-} from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsString, IsStrongPassword } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class SignUpDTO {
     @ApiProperty({ example: 'Jane Doe' })
@@ -29,13 +24,4 @@ export class SignUpDTO {
         minSymbols: 1,
     })
     public password: string;
-
-    @ApiPropertyOptional({
-        format: 'uuid',
-        description:
-            'Existing organization ID. Optional when creating a new organization.',
-    })
-    @IsString()
-    @IsOptional()
-    public organizationId?: string;
 }
