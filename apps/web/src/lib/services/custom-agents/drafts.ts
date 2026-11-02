@@ -647,10 +647,152 @@ export const agentStatusLine = (
             : `Runs on ${scopeLabel(agent)}`;
     // Usage is counted per repository.
     if (isGlobal) return where;
+    const failed = status?.health?.failedPullRequests ?? 0;
+    const failedNote = failed ? ` · failed on ${plural(failed, "PR")}` : "";
     if (!status || status.pullRequests === 0) {
-        return `${where} · no findings in ${windowDays} days`;
+        // Runs that all failed left no finding: say so instead of "nothing
+        // to report", which reads the same as a healthy quiet agent.
+        return status?.health?.runs
+            ? `${where} · ${plural(status.health.runs, "run")}, nothing posted${failedNote} in ${windowDays} days`
+            : `${where} · no findings in ${windowDays} days`;
     }
-    return `${where} · ${plural(status.pullRequests, "PR")} · ${status.posted} posted in ${windowDays} days`;
+    return `${where} · ${plural(status.pullRequests, "PR")} · ${status.posted} posted${failedNote} in ${windowDays} days`;
+};
+
+/** What fixes a failing agent: its model, or the AI provider's account. */
+export type RunProblemAction = "model" | "providers";
+
+const RUN_PROBLEMS: Array<{
+    match: RegExp;
+    detail: string;
+    action?: RunProblemAction;
+}> = [
+    {
+        match: /^MODEL_NOT_FOUND\b/,
+        detail: "The model it is set to no longer exists on your AI provider.",
+        action: "model",
+    },
+    {
+        match: /^MODEL_ACCESS_DENIED\b/,
+        detail: "Your AI provider account can't use the model it is set to.",
+        action: "model",
+    },
+    {
+        match: /^CONTEXT_OVERFLOW\b/,
+        detail: "The model's context window is too small for this agent.",
+        action: "model",
+    },
+    {
+        match: /^AUTH_INVALID\b/,
+        detail: "Your AI provider rejected the key.",
+        action: "providers",
+    },
+    {
+        match: /^QUOTA_EXCEEDED\b/,
+        detail: "Your AI provider account is out of credits or over its limit.",
+        action: "providers",
+    },
+    {
+        match: /^RATE_LIMIT\b/,
+        detail: "Your AI provider rate-limited the runs.",
+        action: "providers",
+    },
+    {
+        match: /^TRANSIENT\b/,
+        detail: "Your AI provider was unavailable. The next review tries again.",
+    },
+    {
+        match: /^max-steps$/,
+        detail: "It hit its step limit before finishing. Narrower files or instructions help.",
+    },
+    {
+        match: /^truncated$/,
+        detail: "The model's answer was cut off.",
+        action: "model",
+    },
+    {
+        match: /^no-result$/,
+        detail: "It finished without reporting its findings.",
+    },
+];
+
+/**
+ * What the agent page says when the newest runs did not finish: how many in
+ * a row, why, and what fixes it. Nothing once the newest run finished.
+ */
+export const runProblem = (
+    health: CustomAgentStatus["health"],
+): {
+    tone: "danger" | "warning";
+    title: string;
+    detail: string;
+    action?: RunProblemAction;
+} | null => {
+    if (!health || health.streak === 0 || health.last.status === "ran") {
+        return null;
+    }
+    const failed = health.last.status === "failed";
+    const runs =
+        health.streak === 1 ? "The last run" : `The last ${health.streak} runs`;
+    const known = RUN_PROBLEMS.find((p) =>
+        p.match.test(health.last.reason ?? ""),
+    );
+    return {
+        tone: failed ? "danger" : "warning",
+        title: `${runs} ${failed ? "failed" : "stopped before finishing"}`,
+        detail:
+            known?.detail ??
+            (failed
+                ? "The run failed before posting anything."
+                : "It stopped before finishing."),
+        ...(known?.action && { action: known.action }),
+    };
+};
+
+/** Guide files and skill folders a cited path can name. */
+const citedKnowledge = (
+    path: string,
+    repository?: string,
+): KnowledgeIdentity => {
+    const skill = /^(.*)\/SKILL\.md$/i.exec(path);
+    return {
+        path: skill ? skill[1] : path,
+        kind: skill ? "skill" : "doc",
+        ...(repository && { repository }),
+    };
+};
+
+/**
+ * The skills and docs a file a finding cited can be, most likely first:
+ * `owner/repo:path` names one; `repo/path` or `owner/repo/path` names a file
+ * of that repository; a bare path is this repository's, else one of the
+ * repositories its skills and docs come from. The check of each candidate
+ * decides which one exists.
+ */
+export const citationCandidates = (
+    file: string,
+    repositories: string[],
+): KnowledgeIdentity[] => {
+    const cited = file.replace(/^\/+/, "");
+    const qualified = /^([^:\s]+\/[^:\s]+):(.+)$/.exec(cited);
+    if (qualified) return [citedKnowledge(qualified[2], qualified[1])];
+    const prefixed = repositories.flatMap((repository) => {
+        const full = `${repository.toLowerCase()}/`;
+        const name = `${(repository.split("/").pop() ?? "").toLowerCase()}/`;
+        const lower = cited.toLowerCase();
+        if (lower.startsWith(full)) {
+            return [citedKnowledge(cited.slice(full.length), repository)];
+        }
+        if (name !== "/" && lower.startsWith(name)) {
+            return [citedKnowledge(cited.slice(name.length), repository)];
+        }
+        return [];
+    });
+    return [
+        ...prefixed,
+        citedKnowledge(cited),
+        ...repositories.map((repository) => citedKnowledge(cited, repository)),
+    ];
 };
 
 const PLUGIN_NAMES_BY_ID: Record<string, string> = {

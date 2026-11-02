@@ -14,6 +14,7 @@ import { Textarea } from "@components/ui/textarea";
 import {
     CUSTOM_AGENT_LIMITS,
     nameCollisionHint,
+    setAgentKnowledge,
     TAG_COLORS,
 } from "@services/custom-agents/drafts";
 import type {
@@ -21,6 +22,7 @@ import type {
     CustomAgentPresentation,
     CustomAgentResolveReport,
     CustomAgentSeverity,
+    CustomAgentUnfollowedCitation,
     KnowledgeItem,
 } from "@services/custom-agents/types";
 import { getBYOK } from "@services/organizationParameters/fetch";
@@ -31,6 +33,25 @@ import type { BYOKConfig } from "src/features/ee/byok/_types";
 
 import { Choice, Field, Section } from "./field";
 import { AgentKnowledgeField } from "./knowledge-card";
+import { AGENT_MODEL_FIELD_ID } from "./status-strip";
+import { UnfollowedCitations } from "./unfollowed-citations";
+
+/** Repositories skills and docs come from: linked first, then any in use. */
+const knowledgeRepositories = (
+    report: CustomAgentResolveReport | undefined,
+    knowledge: KnowledgeItem[],
+) => [
+    ...new Map(
+        [
+            ...(report?.knowledge.status === "ok"
+                ? (report.knowledge.linkedRepositories ?? [])
+                : []),
+            ...knowledge.flatMap((item) =>
+                item.repository ? [item.repository] : [],
+            ),
+        ].map((name) => [name.toLowerCase(), name]),
+    ).values(),
+];
 
 type Patch = (patch: (agent: CustomAgent) => CustomAgent) => void;
 
@@ -108,6 +129,7 @@ export const FilesAndKnowledge = ({
     skillsHref,
     teamId,
     repositoryId,
+    unfollowedCitations,
 }: {
     agent: CustomAgent;
     knowledge: KnowledgeItem[];
@@ -121,6 +143,8 @@ export const FilesAndKnowledge = ({
     /** To list skills and docs of another repository. */
     teamId?: string;
     repositoryId?: string;
+    /** Files the agent's dropped findings cited without following them. */
+    unfollowedCitations?: CustomAgentUnfollowedCitation[];
 }) => {
     const bracketed = globsWithBrackets(agent);
     return (
@@ -195,6 +219,27 @@ export const FilesAndKnowledge = ({
                     repositoryId={repositoryId}
                     instructions={agent.instructions}
                 />
+                {unfollowedCitations && unfollowedCitations.length > 0 && (
+                    <UnfollowedCitations
+                        agentId={agent.id}
+                        citations={unfollowedCitations}
+                        knowledge={knowledge}
+                        repositories={knowledgeRepositories(report, knowledge)}
+                        canEdit={canEdit}
+                        teamId={teamId}
+                        repositoryId={repositoryId}
+                        onFollow={(item) =>
+                            onKnowledgeChange(
+                                setAgentKnowledge(
+                                    knowledge,
+                                    item,
+                                    agent.id,
+                                    true,
+                                ),
+                            )
+                        }
+                    />
+                )}
             </div>
         </Section>
     );
@@ -434,7 +479,10 @@ export const ModelsFields = ({
             value={agent.models?.run ?? ROUTING_DEFAULT}
             disabled={!canEdit || !models.length}
             onValueChange={pick}>
-            <SelectTrigger size="md" aria-label="Model">
+            <SelectTrigger
+                size="md"
+                aria-label="Model"
+                id={AGENT_MODEL_FIELD_ID}>
                 <SelectValue />
             </SelectTrigger>
             <SelectContent>
