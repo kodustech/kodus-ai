@@ -3,7 +3,7 @@ import {
     RabbitSubscribe,
     MessageHandlerErrorBehavior,
 } from '@golevelup/nestjs-rabbitmq';
-import { Injectable, Inject, OnApplicationShutdown } from '@nestjs/common';
+import { BeforeApplicationShutdown, Injectable, Inject } from '@nestjs/common';
 import { ConsumeMessage } from 'amqplib';
 
 import { IJobProcessorService } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
@@ -38,7 +38,7 @@ interface WorkflowJobMessage {
 }
 
 @Injectable()
-export class WorkflowJobConsumer implements OnApplicationShutdown {
+export class WorkflowJobConsumer implements BeforeApplicationShutdown {
     private readonly logger = createLogger(WorkflowJobConsumer.name);
     private readonly instanceId = os.hostname();
     // Default ECS protection time in minutes
@@ -135,7 +135,9 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         queueOptions: {
             channel: 'channel-cli-code-review',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.cli_code_review.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.cli_code_review.queue'
+                ],
         },
     })
     async handleCliCodeReviewJob(
@@ -165,7 +167,9 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         queueOptions: {
             channel: 'channel-check-implementation',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.check_implementation.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.check_implementation.queue'
+                ],
         },
     })
     async handleImplementationCheckJob(
@@ -213,7 +217,9 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         queueOptions: {
             channel: 'channel-ast-graph-build',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.ast_graph_build.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.ast_graph_build.queue'
+                ],
         },
     })
     async handleAstGraphBuildJob(
@@ -249,7 +255,9 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         queueOptions: {
             channel: 'channel-ast-graph-incremental',
             arguments:
-                WORKFLOW_JOB_QUEUE_ARGUMENTS['workflow.jobs.ast_graph_incremental.queue'],
+                WORKFLOW_JOB_QUEUE_ARGUMENTS[
+                    'workflow.jobs.ast_graph_incremental.queue'
+                ],
         },
     })
     async handleAstGraphIncrementalJob(
@@ -545,7 +553,13 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         );
     }
 
-    async onApplicationShutdown(signal?: string): Promise<void> {
+    /**
+     * Drain active jobs and release this host's inbox locks. Runs in
+     * beforeApplicationShutdown: after WorkerDrainService cancelled the
+     * consumers (onModuleDestroy) and before it closes the AMQP connection
+     * (onApplicationShutdown), so running jobs can still ack.
+     */
+    async beforeApplicationShutdown(signal?: string): Promise<void> {
         const rawDrain = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
         const parsedDrain = rawDrain ? parseInt(rawDrain, 10) : NaN;
         const maxWaitMs =

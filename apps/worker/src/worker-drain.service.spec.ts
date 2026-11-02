@@ -13,9 +13,9 @@ describe('WorkerDrainService', () => {
             }),
         };
 
-        await new WorkerDrainService(amqpConnection as any).onApplicationShutdown(
-            'SIGTERM',
-        );
+        await new WorkerDrainService(
+            amqpConnection as any,
+        ).onApplicationShutdown('SIGTERM');
 
         expect(order).toEqual([
             'cancel:tag-webhook',
@@ -34,9 +34,9 @@ describe('WorkerDrainService', () => {
             close: jest.fn().mockResolvedValue(undefined),
         };
 
-        await new WorkerDrainService(amqpConnection as any).onApplicationShutdown(
-            'SIGTERM',
-        );
+        await new WorkerDrainService(
+            amqpConnection as any,
+        ).onApplicationShutdown('SIGTERM');
 
         expect(amqpConnection.cancelConsumer).toHaveBeenCalledTimes(2);
         expect(amqpConnection.close).toHaveBeenCalled();
@@ -72,9 +72,9 @@ describe('WorkerDrainService', () => {
             close: jest.fn().mockResolvedValue(undefined),
         };
 
-        await new WorkerDrainService(amqpConnection as any).onApplicationShutdown(
-            'SIGTERM',
-        );
+        await new WorkerDrainService(
+            amqpConnection as any,
+        ).onApplicationShutdown('SIGTERM');
 
         expect(amqpConnection.close).toHaveBeenCalled();
     });
@@ -83,5 +83,30 @@ describe('WorkerDrainService', () => {
         await expect(
             new WorkerDrainService(undefined).onApplicationShutdown('SIGTERM'),
         ).resolves.toBeUndefined();
+    });
+
+    it('cancels consumers in onModuleDestroy and closes only in onApplicationShutdown', async () => {
+        const order: string[] = [];
+        const amqpConnection = {
+            consumerTags: ['tag-code-review'],
+            cancelConsumer: jest.fn(async (tag: string) => {
+                order.push(`cancel:${tag}`);
+            }),
+            close: jest.fn(async () => {
+                order.push('close');
+            }),
+        };
+        const drain = new WorkerDrainService(amqpConnection as any);
+
+        await drain.onModuleDestroy();
+        expect(order).toEqual(['cancel:tag-code-review']);
+
+        // The job drain (WorkflowJobConsumer.beforeApplicationShutdown)
+        // runs here, with consumers cancelled and the connection still open.
+
+        await drain.onApplicationShutdown('SIGTERM');
+        expect(order).toEqual(['cancel:tag-code-review', 'close']);
+        // Not cancelled twice
+        expect(amqpConnection.cancelConsumer).toHaveBeenCalledTimes(1);
     });
 });

@@ -1,6 +1,7 @@
 import * as os from 'os';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { createLogger } from '@libs/core/log/logger';
+import { parseDrainTimeoutMs } from './worker-drain.service';
 import {
     Injectable,
     OnApplicationBootstrap,
@@ -33,6 +34,16 @@ import {
  * 3. **Periodic health check** — safety net that polls channel state
  *    in case events were missed.
  */
+/**
+ * Headroom on top of the job drain budget for cancelling consumers,
+ * releasing inbox locks and closing the AMQP connection.
+ */
+const SHUTDOWN_HEADROOM_MS = 30_000;
+
+function forceExitAfterMs(): number {
+    return parseDrainTimeoutMs() + SHUTDOWN_HEADROOM_MS;
+}
+
 @Injectable()
 export class WorkerHealthGuardService
     implements OnApplicationBootstrap, OnApplicationShutdown
@@ -50,16 +61,15 @@ export class WorkerHealthGuardService
     private deadChannelsSince?: number;
     private isShuttingDown = false;
 
-    constructor(
-        @Optional() private readonly amqpConnection?: AmqpConnection,
-    ) {}
+    constructor(@Optional() private readonly amqpConnection?: AmqpConnection) {}
 
     // ───────────────────── Startup assertion ─────────────────────
 
     async onApplicationBootstrap(): Promise<void> {
         if (!this.amqpConnection) {
             this.logger.warn({
-                message: 'No AmqpConnection — RabbitMQ disabled, skipping health guard.',
+                message:
+                    'No AmqpConnection — RabbitMQ disabled, skipping health guard.',
                 context: WorkerHealthGuardService.name,
                 metadata: { instanceId: this.instanceId },
             });
@@ -75,7 +85,9 @@ export class WorkerHealthGuardService
         });
 
         const managedChannels = this.amqpConnection.managedChannels;
-        const missing = expectedChannels.filter((name) => !managedChannels[name]);
+        const missing = expectedChannels.filter(
+            (name) => !managedChannels[name],
+        );
 
         if (missing.length > 0) {
             this.logger.error({
@@ -95,7 +107,12 @@ export class WorkerHealthGuardService
         // Wait for each channel to connect.
         const timeout = new Promise<never>((_, reject) =>
             setTimeout(
-                () => reject(new Error(`Boot timeout after ${this.BOOT_TIMEOUT_MS}ms`)),
+                () =>
+                    reject(
+                        new Error(
+                            `Boot timeout after ${this.BOOT_TIMEOUT_MS}ms`,
+                        ),
+                    ),
                 this.BOOT_TIMEOUT_MS,
             ),
         );
@@ -210,8 +227,12 @@ export class WorkerHealthGuardService
         });
 
         try {
-            const managedConnection = (this.amqpConnection as any).managedConnection;
-            if (managedConnection && typeof managedConnection.reconnect === 'function') {
+            const managedConnection = (this.amqpConnection as any)
+                .managedConnection;
+            if (
+                managedConnection &&
+                typeof managedConnection.reconnect === 'function'
+            ) {
                 managedConnection.reconnect();
                 this.logger.log({
                     message: 'Forced reconnect triggered.',
@@ -384,9 +405,16 @@ export class WorkerHealthGuardService
         // lives at msgOptions.queueOptions.channel (same path the lib itself
         // uses to dispatch — see selectManagedChannel call site).
         const consumersMap =
-            (this.amqpConnection as unknown as { _consumers?: Record<string, unknown> })._consumers ?? {};
+            (
+                this.amqpConnection as unknown as {
+                    _consumers?: Record<string, unknown>;
+                }
+            )._consumers ?? {};
         const consumerCountByChannel: Record<string, number> = {};
-        type ConsumerOpts = { queueOptions?: { channel?: string }; channel?: string };
+        type ConsumerOpts = {
+            queueOptions?: { channel?: string };
+            channel?: string;
+        };
         for (const c of Object.values(consumersMap)) {
             const opts = (c as { msgOptions?: ConsumerOpts })?.msgOptions;
             const channelName: string =
@@ -424,8 +452,11 @@ export class WorkerHealthGuardService
             metadata: { instanceId: this.instanceId, exitCode: code },
         });
 
-        // Give shutdown hooks 30s to run, then force exit.
-        // This must be longer than the WorkerDrainService timeout (default 25s).
+        // Give the shutdown hooks the job drain budget plus room to cancel
+        // consumers, release inbox locks and close the connection, then force
+        // exit. A fixed 30s killed the process mid-drain whenever
+        // API_WORKER_DRAIN_TIMEOUT_MS was longer (prod uses 240s), before the
+        // inbox locks were released.
         const forceExitTimer = setTimeout(() => {
             this.logger.error({
                 message: 'Graceful shutdown timed out. Force exiting.',
@@ -433,12 +464,13 @@ export class WorkerHealthGuardService
                 metadata: { instanceId: this.instanceId },
             });
             process.exit(code);
-        }, 30_000);
+        }, forceExitAfterMs());
 
         // process.kill(process.pid, 'SIGTERM') triggers NestJS shutdown hooks
         // (enableShutdownHooks is called in main.ts), which runs:
-        // - WorkerDrainService.onApplicationShutdown (close consumers)
-        // - WorkflowJobConsumer.onApplicationShutdown (release inbox locks)
+        // - WorkerDrainService.onModuleDestroy (cancel consumers)
+        // - WorkflowJobConsumer.beforeApplicationShutdown (drain, release inbox locks)
+        // - WorkerDrainService.onApplicationShutdown (close connection)
         // - This service's onApplicationShutdown (cleanup timer)
         process.kill(process.pid, 'SIGTERM');
 

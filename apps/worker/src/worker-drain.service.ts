@@ -1,11 +1,16 @@
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { createLogger } from '@libs/core/log/logger';
-import { Injectable, OnApplicationShutdown, Optional } from '@nestjs/common';
+import {
+    Injectable,
+    OnApplicationShutdown,
+    OnModuleDestroy,
+    Optional,
+} from '@nestjs/common';
 
 const DEFAULT_DRAIN_TIMEOUT_MS = 25_000;
 const CANCEL_CONSUMERS_TIMEOUT_MS = 5_000;
 
-function parseDrainTimeoutMs(): number {
+export function parseDrainTimeoutMs(): number {
     const raw = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
 
     if (!raw) {
@@ -20,12 +25,42 @@ function parseDrainTimeoutMs(): number {
     return parsed;
 }
 
+/**
+ * Shutdown order (Nest runs every phase root module first, and this service
+ * lives in the root WorkerModule):
+ *
+ * 1. onModuleDestroy (this service, first hook of the whole shutdown):
+ *    cancel every RabbitMQ consumer, so the worker stops taking messages
+ *    before anything else starts winding down.
+ * 2. beforeApplicationShutdown (WorkflowJobConsumer): wait for the active
+ *    jobs, then release this host's inbox locks.
+ * 3. onApplicationShutdown (this service): close the AMQP connection. Only
+ *    now, so jobs that were still running could ack their messages instead
+ *    of having them redelivered to other workers mid-run.
+ */
 @Injectable()
-export class WorkerDrainService implements OnApplicationShutdown {
+export class WorkerDrainService
+    implements OnModuleDestroy, OnApplicationShutdown
+{
     private readonly logger = createLogger(WorkerDrainService.name);
     private readonly drainTimeoutMs = parseDrainTimeoutMs();
+    private consumersCancelled = false;
 
     constructor(@Optional() private readonly amqpConnection?: AmqpConnection) {}
+
+    async onModuleDestroy(): Promise<void> {
+        if (!this.amqpConnection) {
+            return;
+        }
+
+        this.logger.log({
+            message: 'Worker drain: cancelling RabbitMQ consumers',
+            context: WorkerDrainService.name,
+            metadata: { drainTimeoutMs: this.drainTimeoutMs },
+        });
+
+        await this.cancelConsumers();
+    }
 
     async onApplicationShutdown(signal?: string): Promise<void> {
         if (!this.amqpConnection) {
@@ -33,11 +68,13 @@ export class WorkerDrainService implements OnApplicationShutdown {
         }
 
         this.logger.log({
-            message: 'Worker drain: shutting down RabbitMQ consumers',
+            message: 'Worker drain: closing RabbitMQ connection',
             context: WorkerDrainService.name,
             metadata: { signal, drainTimeoutMs: this.drainTimeoutMs },
         });
 
+        // app.close() without a destroy phase (or a failed one) still must
+        // not close the connection with live consumers.
         await this.cancelConsumers();
 
         try {
@@ -85,7 +122,13 @@ export class WorkerDrainService implements OnApplicationShutdown {
      * half-open connection must not keep close() from running.
      */
     private async cancelConsumers(): Promise<void> {
-        const timeoutMs = Math.min(CANCEL_CONSUMERS_TIMEOUT_MS, this.drainTimeoutMs);
+        if (this.consumersCancelled) return;
+        this.consumersCancelled = true;
+
+        const timeoutMs = Math.min(
+            CANCEL_CONSUMERS_TIMEOUT_MS,
+            this.drainTimeoutMs,
+        );
         let timer: NodeJS.Timeout | undefined;
         let consumerCount: number | undefined;
 
@@ -111,7 +154,9 @@ export class WorkerDrainService implements OnApplicationShutdown {
                     );
                 }),
             ]);
-            const failed = results.filter((r) => r.status === 'rejected').length;
+            const failed = results.filter(
+                (r) => r.status === 'rejected',
+            ).length;
 
             this.logger.log({
                 message: 'Worker drain: RabbitMQ consumers cancelled',
