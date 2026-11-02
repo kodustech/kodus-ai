@@ -1211,6 +1211,28 @@ describe('runStructuredReviewCall — single retry owner (maxRetries:0 + cooldow
         expect(mockGenerate).toHaveBeenCalledTimes(2);
     });
 
+    it('transient failure then a 429 on the re-issue → throws the 429 marked exhausted', async () => {
+        // A 503 takes the one transient re-issue; when that re-issue meets the
+        // plan's 429, the fallback must still be allowed to take the call.
+        mockGetLimiter.mockReturnValue(null);
+        const unavailable: any = new Error('Service Unavailable');
+        unavailable.status = 503;
+        const rateErr: any = new Error('Usage limit reached for 5 hour.');
+        rateErr.status = 429;
+        mockGenerate
+            .mockRejectedValueOnce(unavailable)
+            .mockRejectedValueOnce(rateErr);
+
+        const thrown = await runStructuredReviewCall({ ...base }).catch(
+            (e) => e,
+        );
+
+        expect(thrown).toBe(rateErr);
+        expect(retriesWereExhausted(thrown)).toBe(true);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        assertNoSecondModelBuilt();
+    });
+
     it('transient failure NOT in cooldown → still exactly ONE same-model re-issue', async () => {
         mockGetLimiter.mockReturnValue({ isInCooldown: () => false });
         mockGenerate
