@@ -235,15 +235,21 @@ export class ResolveCustomAgentUseCase {
             return { status: 'unavailable', reason: NOT_BOUND };
         }
         try {
-            const sourceRepository =
-                source?.repository?.trim() &&
-                KNOWLEDGE_REPOSITORY_PATTERN.test(source.repository.trim())
+            // Any JSON can arrive here: only a string can name a source.
+            const wantedRepository =
+                typeof source?.repository === 'string'
                     ? source.repository.trim()
+                    : '';
+            const wantedRef =
+                typeof source?.ref === 'string' ? source.ref.trim() : '';
+            const sourceRepository =
+                wantedRepository &&
+                KNOWLEDGE_REPOSITORY_PATTERN.test(wantedRepository)
+                    ? wantedRepository
                     : undefined;
             const sourceRef =
-                source?.ref?.trim() &&
-                KNOWLEDGE_REF_PATTERN.test(source.ref.trim())
-                    ? source.ref.trim()
+                wantedRef && KNOWLEDGE_REF_PATTERN.test(wantedRef)
+                    ? wantedRef
                     : undefined;
             const others = new Set(
                 [...knowledge.map((item) => item.repository), sourceRepository]

@@ -337,6 +337,30 @@ describe('ResolveCustomAgentUseCase', () => {
             );
         });
 
+        it('lists this repository when the source is not a string, instead of failing the check', async () => {
+            const knowledgeReader = reader();
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                cm as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: 12, ref: ['v3'] } as any,
+            });
+
+            expect(report.knowledge.status).toBe('ok');
+            expect(knowledgeReader.discover).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: expect.objectContaining({ id: 'repo-1' }),
+                }),
+            );
+        });
+
         it('does not list the integration repositories on a plain draft check', async () => {
             const lister = {
                 ...cm,

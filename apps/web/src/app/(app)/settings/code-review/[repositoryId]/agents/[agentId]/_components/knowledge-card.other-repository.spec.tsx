@@ -182,6 +182,12 @@ describe("AgentKnowledgeField with another repository", () => {
                 linkedTo: [{ agentId: "valves" }],
             },
             { path: "b.md", kind: "doc", linkedTo: [{ agentId: "valves" }] },
+            {
+                path: "c.md",
+                kind: "doc",
+                repository: RULES,
+                linkedTo: [{ agentId: "valves" }],
+            },
         ];
         const onChange = field(knowledge);
 
@@ -202,6 +208,7 @@ describe("AgentKnowledgeField with another repository", () => {
         expect(onChange).toHaveBeenLastCalledWith([
             { ...knowledge[0], ref: "v3" },
             knowledge[1],
+            { ...knowledge[2], ref: "v3" },
         ]);
     });
 
