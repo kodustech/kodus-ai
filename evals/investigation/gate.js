@@ -16,10 +16,10 @@ function avg(values) {
  * minMeanFindings (prompt lost / findings not parsed) and minMeanToolCalls
  * (tools dead / loop not engaging).
  */
-function evaluateGate(summary, rows, model, setName) {
+function evaluateGate(summary, rows, model, setName, targetsFile) {
     let targets;
     try {
-        targets = loadTargets();
+        targets = loadTargets(targetsFile);
     } catch (err) {
         // Missing file → skip the gate. A malformed file must fail loudly
         // rather than silently disabling the gate.
@@ -84,8 +84,10 @@ function evaluateGate(summary, rows, model, setName) {
 }
 
 
-function loadTargets() {
-    return require('./targets.json');
+// Another eval over the same review (evals/heavy-recall) keeps its floors in its
+// own file.
+function loadTargets(file) {
+    return require(file ? require('path').resolve(file) : './targets.json');
 }
 
 module.exports = { evaluateGate, avg };

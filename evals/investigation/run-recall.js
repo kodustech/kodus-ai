@@ -28,6 +28,7 @@ const KNOWN_FLAGS = new Set([
     'gate',
     'no-judge',
     'team-config',
+    'targets',
 ]);
 
 function parseArgs(argv) {
@@ -48,6 +49,7 @@ function parseArgs(argv) {
         noJudge: process.env.RECALL_NO_JUDGE === '1',
         gate: process.env.RECALL_GATE === '1',
         teamConfig: '',
+        targets: '',
     };
 
     for (let i = 2; i < argv.length; i += 1) {
@@ -103,6 +105,9 @@ function parseArgs(argv) {
             out.gate = true;
         } else if (key === 'team-config') {
             out.teamConfig = value || '';
+            if (consumesNext) i += 1;
+        } else if (key === 'targets') {
+            out.targets = value || '';
             if (consumesNext) i += 1;
         }
     }
@@ -627,7 +632,7 @@ async function main() {
 
     const setName = args.all ? 'all' : args.cases ? 'custom' : args.set;
     const gate = args.gate
-        ? evaluateGate(summary, rows, args.model, setName)
+        ? evaluateGate(summary, rows, args.model, setName, args.targets || undefined)
         : { status: 'off' };
     summary.gate = gate;
 
