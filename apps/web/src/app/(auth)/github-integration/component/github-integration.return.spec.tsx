@@ -27,8 +27,9 @@ jest.mock("src/core/utils/axios", () => ({
     axiosAuthorized: { fetcher: jest.fn() },
 }));
 jest.mock("@components/ui/toaster/use-toast", () => ({ toast: jest.fn() }));
+const mockGetCookie = jest.fn();
 jest.mock("cookies-next/client", () => ({
-    getCookie: jest.fn(),
+    getCookie: (name: string) => mockGetCookie(name),
     deleteCookie: jest.fn(),
 }));
 
@@ -71,5 +72,36 @@ describe("GithubIntegrationClient — return from GitHub's authorization", () =>
             expect(path).toMatch(/^\/setup\/github\?installation_id=42&/);
             expect(path).toContain("github_code=gh-code");
         }
+    });
+});
+
+describe("GithubIntegrationClient — install started from the onboarding", () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        sessionStorage.clear();
+        mockSearch.value = new URLSearchParams({ installation_id: "42" });
+        mockQuery.value = { data: {}, isLoading: false, error: null };
+    });
+
+    it("continues on the setup page instead of asking to log in", () => {
+        mockGetCookie.mockImplementation((name: string) =>
+            name === "started-setup-from-new-setup-page" ? "true" : undefined,
+        );
+
+        const { queryByText } = render(<GithubIntegrationClient />);
+
+        expect(mockReplace).toHaveBeenCalledWith(
+            "/setup/github?installation_id=42",
+        );
+        expect(queryByText("Copy link")).toBeNull();
+    });
+
+    it("still asks to log in when neither a team nor the onboarding started it", () => {
+        mockGetCookie.mockReturnValue(undefined);
+
+        const { getByText } = render(<GithubIntegrationClient />);
+
+        expect(mockReplace).not.toHaveBeenCalled();
+        expect(getByText("Copy link")).toBeTruthy();
     });
 });
