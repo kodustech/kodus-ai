@@ -63,7 +63,7 @@ Everything runs via Docker (`docker-compose.dev.yml`):
 
 - "Kody" is the AI agent that performs automated code reviews
 - "Kody Rules" are custom review rules (per org, per repo, or from library)
-- "Custom agents" are extra reviewers a team configures in the app (not in `kodus-config.yml`): instructions, files, skills and docs, tools. Skills and docs are read from the PR's target branch, or from another repository at its default branch or a set ref, never a ref the PR controls (`libs/code-review/infrastructure/agents/knowledge/`). User docs: `docs/en/how_to_use/code_review/custom_agents*.mdx`; evals: `evals/custom-agents/`
+- "Custom agents" are extra reviewers a team configures in the app (not in `kodus-config.yml`): instructions, files, skills and docs, tools. Skills and docs are read from the PR's target branch, or (custom agents only, never the main review) from another repository at its default branch or a set ref, never a ref the PR controls (`libs/code-review/infrastructure/agents/knowledge/`). User docs: `docs/en/how_to_use/code_review/custom_agents*.mdx`; evals: `evals/custom-agents/`
 - Organization > Team > Members hierarchy
 - Git integrations: GitHub, GitLab, Bitbucket, Azure Repos, Forgejo
 - Project management integrations: Jira, Linear, Azure Boards
