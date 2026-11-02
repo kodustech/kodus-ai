@@ -197,6 +197,12 @@ export interface KnowledgeCodeManagementPort {
     }): Promise<Array<{ path: string }>>;
     /** The repositories the team's integration reaches, to find another
      *  repository a skill or doc lives in. */
+    /** The provider's own answer for a repository's default branch; some
+     *  listings guess it (Bitbucket Data Center lists `master`). */
+    getDefaultBranch?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+    }): Promise<string | undefined>;
     getRepositories?(params: {
         organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<KnowledgeRepositoryListing[]>;
@@ -458,7 +464,10 @@ export class MultiRepositoryKnowledgeReader implements BaseBranchReader {
         const parsed = parseKnowledgeSourcePath(path);
         if (!parsed) return null;
         const entry = this.byRepository.get(parsed.repository.toLowerCase());
-        if (!entry) return 'refused';
+        // Not a linked repository: the whole name is a path of the reviewed
+        // repository (`docs/payments:2024.md`). Another repository is never
+        // read unless the config links it.
+        if (!entry) return null;
         return {
             reader: entry.reader,
             path: parsed.path,
@@ -530,7 +539,16 @@ export async function resolveKnowledgeRepositories(params: {
             missing.push(repository);
             continue;
         }
-        const readAt = ref || repo.default_branch || 'main';
+        const readAt =
+            ref ||
+            (await params.codeManagement
+                .getDefaultBranch?.({
+                    organizationAndTeamData: params.organizationAndTeamData,
+                    repository: { id: String(repo.id), name: repo.name },
+                })
+                .catch(() => undefined)) ||
+            repo.default_branch ||
+            'main';
         const source: KnowledgeRepositorySource = {
             fullName: repository,
             id: String(repo.id),

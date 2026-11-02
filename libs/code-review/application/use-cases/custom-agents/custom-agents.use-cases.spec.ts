@@ -176,7 +176,10 @@ describe('ResolveCustomAgentUseCase', () => {
             },
         ];
         const cm = {
-            getDefaultBranch: jest.fn().mockResolvedValue('main'),
+            // The provider answers each repository's own default branch.
+            getDefaultBranch: jest.fn(async ({ repository }) =>
+                repository.id === 'repo-9' ? 'trunk' : 'main',
+            ),
             getRepositories: jest.fn().mockResolvedValue(listing),
         };
         const reader = () => ({

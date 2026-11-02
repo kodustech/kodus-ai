@@ -256,18 +256,28 @@ export class ResolveCustomAgentUseCase {
                 }
             }
             const listed = (name: string) => byName.get(name.toLowerCase());
-            const refOf = (
+            // The provider's own default branch: some listings guess it
+            // (Bitbucket Data Center lists `master`).
+            const refOf = async (
                 name: string,
                 ref: string | undefined,
-            ): CustomAgentRepositoryRef | undefined => {
+            ): Promise<CustomAgentRepositoryRef | undefined> => {
                 const repo = listed(name);
-                return repo
-                    ? {
-                          id: String(repo.id),
-                          name: repo.name,
-                          branch: ref || repo.default_branch || 'main',
-                      }
-                    : undefined;
+                if (!repo) return undefined;
+                const branch =
+                    ref ||
+                    (await Promise.resolve(
+                        this.codeManagementService.getDefaultBranch({
+                            organizationAndTeamData,
+                            repository: {
+                                id: String(repo.id),
+                                name: repo.name,
+                            },
+                        }),
+                    ).catch(() => undefined)) ||
+                    repo.default_branch ||
+                    'main';
+                return { id: String(repo.id), name: repo.name, branch };
             };
 
             // Each repository's items are checked on its own branch.
@@ -283,7 +293,7 @@ export class ResolveCustomAgentUseCase {
                 [...groups.values()].map(async (items) => {
                     const other = items[0].repository;
                     const ref = other
-                        ? refOf(other, items.find((i) => i.ref)?.ref)
+                        ? await refOf(other, items.find((i) => i.ref)?.ref)
                         : repository;
                     if (!ref) {
                         items.forEach((item) =>
@@ -315,7 +325,7 @@ export class ResolveCustomAgentUseCase {
             let candidates: KnowledgeCandidate[] | undefined;
             if (discover) {
                 const ref = sourceRepository
-                    ? refOf(sourceRepository, sourceRef)
+                    ? await refOf(sourceRepository, sourceRef)
                     : repository;
                 const repo = sourceRepository
                     ? listed(sourceRepository)

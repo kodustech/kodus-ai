@@ -128,6 +128,25 @@ describe('resolveKnowledgeRepositories', () => {
         });
     });
 
+    it("reads at the provider's default branch over the one a listing guesses", async () => {
+        const cm = {
+            ...provider({}),
+            // Bitbucket Data Center lists every repository on `master`.
+            getDefaultBranch: jest.fn(async () => 'develop'),
+        };
+        const result = await resolveKnowledgeRepositories({
+            items: [{ repository: RULES }],
+            codeManagement: cm,
+            organizationAndTeamData: ORG,
+        });
+
+        expect(result.sources[0].source.ref).toBe('develop');
+        expect(cm.getDefaultBranch).toHaveBeenCalledWith({
+            organizationAndTeamData: ORG,
+            repository: { id: '20', name: 'irrigation-rules' },
+        });
+    });
+
     it('tells a listing that failed apart from a repository that is not there', async () => {
         const cm = provider({});
         (cm.getRepositories as jest.Mock).mockRejectedValueOnce(
@@ -225,13 +244,20 @@ describe('MultiRepositoryKnowledgeReader', () => {
         expect(reader.refFor('docs/local.md')).toBe('main');
     });
 
-    it('refuses a repository the config does not link', async () => {
+    it('never reads a repository the config does not link: the name is a path here', async () => {
         await expect(
             reader.readFile('greenhouse/secrets:stack/node/rules/valves.md'),
-        ).resolves.toMatchObject({ status: 'refused' });
+        ).resolves.not.toMatchObject({ status: 'ok' });
         await expect(
             reader.listFiles('greenhouse/secrets:stack'),
         ).resolves.toEqual([]);
+        const withColon = new MultiRepositoryKnowledgeReader(
+            new InMemoryBaseBranchReader({ 'docs/payments:2024.md': 'local' }),
+            [],
+        );
+        await expect(
+            withColon.readFile('docs/payments:2024.md'),
+        ).resolves.toEqual({ status: 'ok', content: 'local' });
     });
 
     it('lists a folder of the other repository with its qualified prefix', async () => {

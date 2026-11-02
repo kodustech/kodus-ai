@@ -740,8 +740,15 @@ export const knowledgeChoices = (
     candidates: KnowledgeCandidate[],
     agentId: string,
 ): KnowledgeChoice[] => {
-    const found = (item: KnowledgeIdentity) =>
-        candidates.find((candidate) => sameKnowledge(candidate, item));
+    // Keyed as sameKnowledge compares: the repository in any case.
+    const keyOf = (item: KnowledgeIdentity) =>
+        `${item.kind}:${(item.repository ?? "").toLowerCase()}:${item.path}`;
+    const byKey = new Map<string, KnowledgeCandidate>();
+    for (const candidate of candidates) {
+        if (!byKey.has(keyOf(candidate)))
+            byKey.set(keyOf(candidate), candidate);
+    }
+    const found = (item: KnowledgeIdentity) => byKey.get(keyOf(item));
     const registered = knowledge.map((item) => ({
         path: item.path,
         kind: item.kind,
