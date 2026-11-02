@@ -10,6 +10,8 @@ import { guideSourcesFor } from '@libs/code-review/infrastructure/agents/core/co
 import {
     type KnowledgeCodeManagementPort,
     MultiRepositoryKnowledgeReader,
+    repositoryFullName,
+    repositoryNames,
     resolveKnowledgeRepositories,
 } from './base-branch-reader';
 import { InMemoryBaseBranchReader, skillMarkdown } from './knowledge.fixtures';
@@ -126,6 +128,28 @@ describe('resolveKnowledgeRepositories', () => {
             id: '30',
             ref: 'trunk',
         });
+    });
+
+    it('takes a Forgejo name that is already owner/repo as it is', async () => {
+        const forgejo = {
+            id: '40',
+            name: 'greenhouse/forge-rules',
+            organizationName: 'greenhouse',
+            default_branch: 'main',
+            selected: true,
+        };
+        expect(repositoryFullName(forgejo)).toBe('greenhouse/forge-rules');
+        expect(repositoryNames(forgejo)).not.toContain(
+            'greenhouse/greenhouse/forge-rules',
+        );
+        const result = await resolveKnowledgeRepositories({
+            items: [{ repository: 'greenhouse/forge-rules' }],
+            codeManagement: provider({}, [forgejo as any]),
+            organizationAndTeamData: ORG,
+        });
+        expect(result.sources[0].source.fullName).toBe(
+            'greenhouse/forge-rules',
+        );
     });
 
     it("reads at the provider's default branch over the one a listing guesses", async () => {

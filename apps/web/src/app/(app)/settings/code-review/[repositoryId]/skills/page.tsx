@@ -447,6 +447,7 @@ function SkillsContent() {
                             )}
                             {!isGlobal &&
                                 !listing.loading &&
+                                !listing.unavailable &&
                                 (source.repository || knowledgeReport) &&
                                 listing.discoveredIn?.available !== false &&
                                 candidates.length === 0 && (

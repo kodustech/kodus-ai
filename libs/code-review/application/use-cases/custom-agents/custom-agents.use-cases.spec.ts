@@ -178,7 +178,8 @@ describe('ResolveCustomAgentUseCase', () => {
         const cm = {
             // The provider answers each repository's own default branch.
             getDefaultBranch: jest.fn(async ({ repository }) =>
-                repository.id === 'repo-9' ? 'trunk' : 'main',
+                // Not the listing's `trunk`: the provider's answer wins.
+                repository.id === 'repo-9' ? 'release' : 'main',
             ),
             getRepositories: jest.fn().mockResolvedValue(listing),
         };
@@ -203,6 +204,9 @@ describe('ResolveCustomAgentUseCase', () => {
             const useCase = new ResolveCustomAgentUseCase(
                 parametersService(
                     storedConfig({
+                        // The linked repository's own ref steers code
+                        // context, not skills and docs: they read at the
+                        // item's ref, else the provider's default branch.
                         linkedRepositories: [
                             { repository: RULES, ref: 'main' },
                         ],
@@ -244,7 +248,7 @@ describe('ResolveCustomAgentUseCase', () => {
                     repository: {
                         id: 'repo-9',
                         name: 'ledger-rules',
-                        branch: 'trunk',
+                        branch: 'release',
                     },
                     items: [
                         { path: 'stack/ledger/rules/postings.md', kind: 'doc' },
@@ -256,7 +260,7 @@ describe('ResolveCustomAgentUseCase', () => {
                     repository: {
                         id: 'repo-9',
                         name: 'ledger-rules',
-                        branch: 'trunk',
+                        branch: 'release',
                     },
                 }),
             );
@@ -271,7 +275,7 @@ describe('ResolveCustomAgentUseCase', () => {
                 ]),
             ).toEqual([
                 [undefined, 'docs/ledger.md', true, 'main'],
-                [RULES, 'stack/ledger/rules/postings.md', true, 'trunk'],
+                [RULES, 'stack/ledger/rules/postings.md', true, 'release'],
                 ['someone-else/rules', 'rules.md', false, undefined],
             ]);
             expect(report.knowledge.items[2].issues).toEqual([
@@ -283,7 +287,7 @@ describe('ResolveCustomAgentUseCase', () => {
             ]);
             expect(report.knowledge.discoveredIn).toEqual({
                 repository: RULES,
-                branch: 'trunk',
+                branch: 'release',
                 visibility: 'private',
                 available: true,
             });
@@ -297,6 +301,41 @@ describe('ResolveCustomAgentUseCase', () => {
             expect(report.knowledge.linkedRepositories).toEqual([RULES]);
             expect(report.knowledge.connectedRepositories).toEqual([RULES]);
             expect(report.knowledge.repositoryVisibility).toBe('public');
+        });
+
+        it("falls back to the listing's default branch when the provider cannot say", async () => {
+            const knowledgeReader = reader();
+            const { getDefaultBranch: _none, ...withoutDefault } = cm;
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                {
+                    ...withoutDefault,
+                    // The reviewed repository answers; the rules one fails.
+                    getDefaultBranch: jest.fn(async ({ repository }) => {
+                        if (repository.id === 'repo-9') throw new Error('500');
+                        return 'main';
+                    }),
+                } as any,
+                knowledgeReader,
+            );
+
+            await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: RULES },
+            });
+
+            expect(knowledgeReader.discover).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: {
+                        id: 'repo-9',
+                        name: 'ledger-rules',
+                        branch: 'trunk',
+                    },
+                }),
+            );
         });
 
         it('does not list the integration repositories on a plain draft check', async () => {

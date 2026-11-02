@@ -240,9 +240,11 @@ export const isConnectedRepository = (
 export function repositoryNames(repo: KnowledgeRepositoryListing): string[] {
     const owner = repo.organizationName?.trim();
     const project = repo.project?.name?.trim();
+    // Forgejo lists `name` already qualified (`owner/repo`).
+    const qualified = repo.name?.includes('/');
     return [
         repo.full_name,
-        owner ? `${owner}/${repo.name}` : undefined,
+        owner && !qualified ? `${owner}/${repo.name}` : undefined,
         owner && project ? `${owner}/${project}/${repo.name}` : undefined,
         project ? `${project}/${repo.name}` : undefined,
         repo.name,
@@ -254,7 +256,10 @@ export function repositoryNames(repo: KnowledgeRepositoryListing): string[] {
 /** The name a listed repository is offered and saved under (`owner/repo`). */
 export function repositoryFullName(repo: KnowledgeRepositoryListing): string {
     const owner = repo.organizationName?.trim();
-    return repo.full_name || (owner ? `${owner}/${repo.name}` : repo.name);
+    if (repo.full_name) return repo.full_name;
+    // Forgejo lists `name` already qualified (`owner/repo`).
+    if (repo.name?.includes('/')) return repo.name;
+    return owner ? `${owner}/${repo.name}` : repo.name;
 }
 
 /** Another repository skills or docs are read from, at one ref. */

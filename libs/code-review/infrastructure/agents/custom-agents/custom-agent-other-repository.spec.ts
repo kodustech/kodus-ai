@@ -110,9 +110,15 @@ describe('citing a rule of another repository', () => {
         [
             PlatformType.BITBUCKET,
             'https://git.example.com/scm/g/rules.git',
-            undefined,
+            'https://git.example.com/projects/g/repos/rules/browse/a%20b/c.md?at=v3',
         ],
-        ['FORGEJO', 'https://forge.example.com/g/rules', undefined],
+        [
+            PlatformType.FORGEJO,
+            'https://forge.example.com/g/rules.git',
+            'https://forge.example.com/g/rules/src/branch/v3/a%20b/c.md',
+        ],
+        [PlatformType.BITBUCKET, 'https://git.example.com/g/rules', undefined],
+        ['SVN', 'https://svn.example.com/g/rules', undefined],
     ])(
         'builds the %s file link only where the URL shape is known',
         (platform, httpUrl, expected) => {
@@ -165,6 +171,23 @@ describe('saving a skill or doc of another repository', () => {
                 item({ repository: RULES, ref: '--upload-pack=x' }),
             ).success,
         ).toBe(false);
+    });
+
+    it('rejects every control and format character, not a list of spellings', () => {
+        const invisible: string[] = [];
+        for (let code = 0; code <= 0xffff; code++) {
+            const char = String.fromCharCode(code);
+            if (/[\p{Cc}\p{Cf}]/u.test(char)) invisible.push(char);
+        }
+        // C0, C1, bidi controls and isolates, zero-width, BOM, and the rest.
+        expect(invisible.length).toBeGreaterThan(100);
+        for (const char of invisible) {
+            expect(
+                knowledgeItemSchema.safeParse(
+                    item({ repository: `greenhouse/rul${char}es` }),
+                ).success,
+            ).toBe(false);
+        }
     });
 
     it('refuses a ref without a repository, two refs for one repository, and duplicates', () => {
