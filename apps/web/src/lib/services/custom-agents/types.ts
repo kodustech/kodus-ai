@@ -162,8 +162,10 @@ export type CustomAgentResolveReport = {
         };
         /** Repositories linked to the reviewed one, offered first. */
         linkedRepositories?: string[];
-        /** Every other repository the team's integration reaches. */
+        /** Every other repository connected to Kodus (selected in Git settings). */
         connectedRepositories?: string[];
+        /** The provider could not list repositories. */
+        listingFailed?: boolean;
         repositoryVisibility?: "public" | "private";
     }>;
     mcp: Section<{ integrations: ReadOnlyMcpIntegration[] }>;

@@ -132,7 +132,7 @@ export async function resolveReviewKnowledge(params: {
                                 path: knowledgeSourcePath(item),
                                 detail: repositories.listingFailed
                                     ? `the repositories of this team's integration could not be listed, so ${item.repository} was not read`
-                                    : `${item.repository} is not a repository this team's integration can read`,
+                                    : `${item.repository} is not connected to Kodus; select it in Git settings`,
                             },
                         ],
                         typeof target === 'string'

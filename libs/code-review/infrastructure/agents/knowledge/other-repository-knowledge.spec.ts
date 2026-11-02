@@ -29,6 +29,7 @@ function provider(
             name: 'irrigation-service',
             full_name: 'greenhouse/irrigation-service',
             default_branch: 'main',
+            selected: true,
             visibility: 'public' as const,
             http_url: 'https://github.com/greenhouse/irrigation-service',
         },
@@ -37,6 +38,7 @@ function provider(
             name: 'irrigation-rules',
             full_name: RULES,
             default_branch: 'trunk',
+            selected: true,
             visibility: 'private' as const,
             http_url: `https://github.com/${RULES}`,
         },
@@ -111,6 +113,7 @@ describe('resolveKnowledgeRepositories', () => {
                 name: 'irrigation-rules',
                 organizationName: 'greenhouse',
                 default_branch: 'trunk',
+                selected: true,
             } as any,
         ]);
         const result = await resolveKnowledgeRepositories({
@@ -130,6 +133,40 @@ describe('resolveKnowledgeRepositories', () => {
         (cm.getRepositories as jest.Mock).mockRejectedValueOnce(
             new Error('503'),
         );
+        const result = await resolveKnowledgeRepositories({
+            items: [{ repository: RULES }],
+            codeManagement: cm,
+            organizationAndTeamData: ORG,
+        });
+
+        expect(result).toMatchObject({ missing: [RULES], listingFailed: true });
+    });
+
+    it('does not read a repository the integration lists but the team did not connect', async () => {
+        const cm = provider({}, [
+            {
+                id: '20',
+                name: 'irrigation-rules',
+                full_name: RULES,
+                default_branch: 'trunk',
+                visibility: 'private' as const,
+                http_url: `https://github.com/${RULES}`,
+                selected: false,
+            } as any,
+        ]);
+        const result = await resolveKnowledgeRepositories({
+            items: [{ repository: RULES }],
+            codeManagement: cm,
+            organizationAndTeamData: ORG,
+        });
+
+        expect(result.sources).toEqual([]);
+        expect(result.missing).toEqual([RULES]);
+        expect(result.listingFailed).toBe(false);
+    });
+
+    it('treats a provider that cannot list repositories as a failed listing', async () => {
+        const { getRepositories: _none, ...cm } = provider({});
         const result = await resolveKnowledgeRepositories({
             items: [{ repository: RULES }],
             codeManagement: cm,
@@ -377,7 +414,7 @@ describe('resolveReviewKnowledge with another repository', () => {
             expect.objectContaining({
                 kind: 'DOC_NOT_FOUND',
                 agentName: 'Valves',
-                detail: "someone-else/rules:rules.md: someone-else/rules is not a repository this team's integration can read",
+                detail: 'someone-else/rules:rules.md: someone-else/rules is not connected to Kodus; select it in Git settings',
             }),
         ]);
     });

@@ -169,8 +169,14 @@ export const useKnowledgeSourceListing = (params: {
         params.report?.knowledge.status === "ok"
             ? params.report.knowledge
             : null;
+    const remoteLoading = remote.isLoading || remote.isFetching;
+    // Rows of the previous source never show under the new one: they would
+    // be saved with the new repository and read as not found.
     const listing = params.source.repository
-        ? remote.data?.knowledge.status === "ok"
+        ? remote.data?.knowledge.status === "ok" &&
+          !remoteLoading &&
+          remote.data.knowledge.discoveredIn?.repository?.toLowerCase() ===
+              params.source.repository.toLowerCase()
             ? remote.data.knowledge
             : null
         : local;
@@ -192,12 +198,11 @@ export const useKnowledgeSourceListing = (params: {
         candidates,
         discoveredIn: listing?.discoveredIn,
         connectedRepositories: connectedKnowledge?.connectedRepositories,
+        connectedListingFailed: connectedKnowledge?.listingFailed === true,
         reviewedVisibility:
             listing?.repositoryVisibility ??
             connectedKnowledge?.repositoryVisibility,
-        loading: params.source.repository
-            ? remote.isLoading || remote.isFetching
-            : !local,
+        loading: params.source.repository ? remoteLoading : !local,
         unavailable:
             params.source.repository &&
             remote.data?.knowledge.status === "unavailable"
@@ -217,6 +222,7 @@ export const KnowledgeSourceBar = ({
     onSourceChange,
     linkedRepositories,
     connectedRepositories,
+    connectedListingFailed,
     knowledge,
     discoveredIn,
     reviewedVisibility,
@@ -227,8 +233,10 @@ export const KnowledgeSourceBar = ({
     source: KnowledgeSource;
     onSourceChange: (source: KnowledgeSource) => void;
     linkedRepositories: string[];
-    /** Every other repository the integration reaches; unset while unknown. */
+    /** Every other repository connected to Kodus; unset while unknown. */
     connectedRepositories?: string[];
+    /** The connected repositories could not be listed. */
+    connectedListingFailed?: boolean;
     knowledge: KnowledgeItem[];
     discoveredIn?: NonNullable<
         Extract<
@@ -254,15 +262,22 @@ export const KnowledgeSourceBar = ({
     const inUse = knowledge
         .map((item) => item.repository)
         .filter((name): name is string => !!name);
-    const tabs = [
+    const selected = source.repository?.toLowerCase();
+    const first = [
         ...new Map(
-            [
-                ...linkedRepositories,
-                ...inUse,
-                ...(source.repository ? [source.repository] : []),
-            ].map((name) => [name.toLowerCase(), name]),
+            [...linkedRepositories, ...inUse].map((name) => [
+                name.toLowerCase(),
+                name,
+            ]),
         ).values(),
-    ].slice(0, MAX_SOURCE_TABS + (source.repository ? 1 : 0));
+    ].slice(0, MAX_SOURCE_TABS);
+    // The selected repository always keeps its tab, after the others when
+    // it is past the cap.
+    const tabs =
+        source.repository &&
+        !first.some((name) => name.toLowerCase() === selected)
+            ? [...first, source.repository]
+            : first;
     const refOf = (repository: string) =>
         knowledge.find(
             (item) =>
@@ -304,6 +319,7 @@ export const KnowledgeSourceBar = ({
             {picking && (
                 <OtherRepositoryPicker
                     options={connectedRepositories}
+                    failed={connectedListingFailed}
                     onSelect={(name) => open(name)}
                     onCancel={() => setPicking(false)}
                 />
@@ -416,10 +432,12 @@ export const KnowledgeSourceBar = ({
 /** Every repository the integration reaches, to pick one not linked yet. */
 const OtherRepositoryPicker = ({
     options,
+    failed,
     onSelect,
     onCancel,
 }: {
     options?: string[];
+    failed?: boolean;
     onSelect: (fullName: string) => void;
     onCancel: () => void;
 }) => {
@@ -429,9 +447,11 @@ const OtherRepositoryPicker = ({
                 <CommandInput placeholder="Search connected repositories…" />
                 <CommandList className="max-h-56 overflow-y-auto">
                     <CommandEmpty>
-                        {options
-                            ? "No repository found."
-                            : "Loading repositories…"}
+                        {failed
+                            ? "Could not list your repositories. Try again later."
+                            : options
+                              ? "No connected repository found."
+                              : "Loading repositories…"}
                     </CommandEmpty>
                     <CommandGroup>
                         {(options ?? []).map((name) => (
@@ -487,7 +507,6 @@ export const AgentKnowledgeField = ({
 }) => {
     const [adding, setAdding] = useState(false);
     const [source, setSource] = useState<KnowledgeSource>({});
-    const [pickingOther, setPickingOther] = useState(false);
     const [pickerOpen, setPickerOpen] = useState(false);
     const resolved =
         report?.knowledge.status === "ok" ? report.knowledge : null;
@@ -501,7 +520,7 @@ export const AgentKnowledgeField = ({
         source,
         report,
         enabled: adding,
-        listConnected: pickingOther,
+        listConnected: pickerOpen,
     });
     const candidates = listing.candidates;
     const reportOf = (
@@ -702,10 +721,8 @@ export const AgentKnowledgeField = ({
                         reviewedVisibility={listing.reviewedVisibility}
                         canEdit={canEdit}
                         onRefChange={changeRef}
-                        onPickingChange={(picking) => {
-                            setPickerOpen(picking);
-                            if (picking) setPickingOther(true);
-                        }}
+                        onPickingChange={setPickerOpen}
+                        connectedListingFailed={listing.connectedListingFailed}
                     />
                     {!pickerOpen && (
                         <>

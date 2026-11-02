@@ -38,9 +38,10 @@ export function withDirectoryAgentLists<T extends object>(
             (item) => {
                 const entry = item as
                     { path?: string; repository?: string } | undefined;
-                return entry?.path === undefined
+                const path = entry?.path;
+                return path === undefined
                     ? undefined
-                    : `${(entry.repository ?? '').toLowerCase()}:${entry.path}`;
+                    : `${(entry?.repository ?? '').toLowerCase()}:${path}`;
             },
         );
     }

@@ -569,8 +569,9 @@ export const customAgentsSchema = z
  * `:`, which separates it from the path in a qualified path.
  */
 export const KNOWLEDGE_REPOSITORY_PATTERN =
-    // eslint-disable-next-line no-control-regex
-    /^(?![-\s])(?!.*\s$)[^:\\/\u0000-\u001f]+(?:\/[^:\\/\u0000-\u001f]+)+$/;
+    // Control and format characters by class (C0, C1, bidi overrides,
+    // zero-width), so an invisible one cannot disguise `owner/repo:path`.
+    /^(?![-\s])(?!.*\s$)[^:\\/\p{Cc}\p{Cf}]+(?:\/[^:\\/\p{Cc}\p{Cf}]+)+$/u;
 
 /** A branch or tag name a skill or doc of another repository is read at. */
 export const KNOWLEDGE_REF_PATTERN = /^(?!-)[A-Za-z0-9._\-/@+]{1,200}$/;

@@ -20,6 +20,7 @@ import {
 import { CLI_SECRET_MASK } from '@libs/code-review/domain/custom-agents/cli-secrets';
 import {
     repositoryFullName,
+    isConnectedRepository,
     repositoryNames,
 } from '@libs/code-review/infrastructure/agents/knowledge/base-branch-reader';
 import {
@@ -72,9 +73,12 @@ export type CustomAgentResolveReport = {
         /** The repositories linked to the reviewed one, offered first as
          *  places skills and docs can come from. */
         linkedRepositories?: string[];
-        /** Every other repository the team's integration reaches, to pick
-         *  one that is not linked. Set when the listing was fetched. */
+        /** Every other repository connected to Kodus, to pick one that is
+         *  not linked. Set when the listing was asked for. */
         connectedRepositories?: string[];
+        /** The provider could not list repositories: other repositories
+         *  were not checked. */
+        listingFailed?: boolean;
         /** The reviewed repository is public: a rule from a private one is
          *  cited without its quote. */
         repositoryVisibility?: 'public' | 'private';
@@ -102,11 +106,15 @@ type RepositoryListing = {
     visibility?: 'public' | 'private';
     organizationName?: string;
     project?: { name?: string };
+    selected?: boolean;
+    isSelected?: boolean;
 };
 
 const NOT_BOUND = 'Not available on this server yet.';
 const UNREACHABLE = (repository: string) =>
-    `${repository} is not a repository this team's integration can read.`;
+    `${repository} is not connected to Kodus; select it in Git settings.`;
+const NOT_LISTED = (repository: string) =>
+    `Could not list this team's repositories, so ${repository} was not checked. Try again.`;
 
 /**
  * Checks a draft agent and the skills and docs it links against the
@@ -235,10 +243,12 @@ export class ResolveCustomAgentUseCase {
             // reaches, as a review finds them.
             // Only when something needs it: listing every repository on
             // each draft edit would hit the provider for large orgs.
-            const listing = await this.listRepositories(
-                organizationAndTeamData,
-                others.size > 0 || listConnected,
-            );
+            const { repositories: listing, failed: listingFailed } =
+                await this.listRepositories(
+                    organizationAndTeamData,
+                    others.size > 0 || listConnected,
+                );
+            const unreachableReason = listingFailed ? NOT_LISTED : UNREACHABLE;
             const byName = new Map<string, RepositoryListing>();
             for (const repo of listing) {
                 for (const name of repositoryNames(repo)) {
@@ -286,9 +296,12 @@ export class ResolveCustomAgentUseCase {
                         repository: ref,
                         items: items.map(({ path, kind }) => ({ path, kind })),
                     });
+                    const byPathAndKind = new Map(
+                        read.map((r) => [`${r.kind}:${r.path}`, r]),
+                    );
                     for (const item of items) {
-                        const resolution = read.find(
-                            (r) => r.path === item.path && r.kind === item.kind,
+                        const resolution = byPathAndKind.get(
+                            `${item.kind}:${item.path}`,
                         );
                         if (resolution) {
                             resolutions.set(knowledgeItemKey(item), resolution);
@@ -313,7 +326,7 @@ export class ResolveCustomAgentUseCase {
                     visibility: repo?.visibility,
                     available: !!ref,
                     ...(!ref && sourceRepository
-                        ? { reason: UNREACHABLE(sourceRepository) }
+                        ? { reason: unreachableReason(sourceRepository) }
                         : {}),
                 };
                 candidates = ref
@@ -349,7 +362,7 @@ export class ResolveCustomAgentUseCase {
                                 ? [
                                       {
                                           severity: 'error' as const,
-                                          message: UNREACHABLE(
+                                          message: unreachableReason(
                                               item.repository!,
                                           ),
                                       },
@@ -384,13 +397,15 @@ export class ResolveCustomAgentUseCase {
                 })),
                 ...(discoveredIn && { discoveredIn }),
                 linkedRepositories,
-                ...(listConnected &&
-                    listing.length && {
-                        connectedRepositories: listing
-                            .filter((repo) => String(repo.id) !== repository.id)
-                            .map(repositoryFullName)
-                            .filter(Boolean),
-                    }),
+                // Always set when asked for, so the picker can tell "none" and
+                // "could not list" from "still loading".
+                ...(listConnected && {
+                    connectedRepositories: listing
+                        .filter((repo) => String(repo.id) !== repository.id)
+                        .map(repositoryFullName)
+                        .filter(Boolean),
+                }),
+                ...(listingFailed && { listingFailed }),
                 ...(reviewed?.visibility && {
                     repositoryVisibility: reviewed.visibility,
                 }),
@@ -412,19 +427,22 @@ export class ResolveCustomAgentUseCase {
         }
     }
 
-    /** The repositories the team's integration reaches; empty when not
-     *  needed or when the provider cannot list them. */
+    /** The repositories connected to Kodus on the team's integration; empty
+     *  when not needed. `failed` when the provider could not list them. */
     private async listRepositories(
         organizationAndTeamData: OrganizationAndTeamData,
         needed: boolean,
-    ): Promise<RepositoryListing[]> {
-        if (!needed) return [];
+    ): Promise<{ repositories: RepositoryListing[]; failed: boolean }> {
+        if (!needed) return { repositories: [], failed: false };
         try {
-            return (
+            const listed =
                 ((await this.codeManagementService.getRepositories({
                     organizationAndTeamData,
-                })) as RepositoryListing[]) ?? []
-            );
+                })) as RepositoryListing[]) ?? [];
+            return {
+                repositories: listed.filter(isConnectedRepository),
+                failed: false,
+            };
         } catch (error) {
             this.logger.warn({
                 message: 'Could not list repositories for skills and docs',
@@ -432,7 +450,7 @@ export class ResolveCustomAgentUseCase {
                 error,
                 metadata: { organizationAndTeamData },
             });
-            return [];
+            return { repositories: [], failed: true };
         }
     }
 

@@ -597,8 +597,15 @@ export const followedBy = (
     named: NamedKnowledge[] = [],
 ) => {
     const linked = knowledge.filter((item) => isLinked(item, { agentId }));
+    // Keyed as sameKnowledge compares: the repository in any case.
+    const keyOf = (item: KnowledgeIdentity) =>
+        `${item.kind}:${(item.repository ?? "").toLowerCase()}:${item.path}`;
+    const names = new Map<string, string | undefined>();
+    for (const entry of named) {
+        if (!names.has(keyOf(entry))) names.set(keyOf(entry), entry.name);
+    }
     const nameOf = (item: KnowledgeItem) =>
-        named.find((entry) => sameKnowledge(entry, item))?.name ??
+        names.get(keyOf(item)) ??
         (item.kind === "skill" ? skillFolderName(item.path) : item.path);
     return {
         skills: linked

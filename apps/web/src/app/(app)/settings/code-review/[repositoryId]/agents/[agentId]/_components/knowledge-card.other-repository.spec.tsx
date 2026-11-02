@@ -76,20 +76,41 @@ beforeEach(() => {
     );
 });
 
-const field = (knowledge: KnowledgeItem[], onChange = jest.fn()) => {
+const field = (
+    knowledge: KnowledgeItem[],
+    onChange = jest.fn(),
+    over: {
+        canEdit?: boolean;
+        instructions?: string;
+        report?: CustomAgentResolveReport;
+    } = {},
+) => {
     render(
         <AgentKnowledgeField
             agentId="valves"
             knowledge={knowledge}
-            report={report()}
-            canEdit
+            report={over.report ?? report()}
+            canEdit={over.canEdit ?? true}
             onChange={onChange}
             teamId="team-1"
             repositoryId="repo-1"
-            instructions="Read the rules in irrigation-rules before commenting."
+            instructions={
+                over.instructions ??
+                "Read the rules in irrigation-rules before commenting."
+            }
         />,
     );
     return onChange;
+};
+
+const stubCommandList = () => {
+    // The command list measures itself; jsdom has no ResizeObserver.
+    globalThis.ResizeObserver ??= class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    Element.prototype.scrollIntoView ??= jest.fn();
 };
 
 describe("AgentKnowledgeField with another repository", () => {
@@ -193,7 +214,7 @@ describe("AgentKnowledgeField with another repository", () => {
                               repository: RULES,
                               branch: "trunk",
                               available: false,
-                              reason: `${RULES} is not a repository this team's integration can read.`,
+                              reason: `${RULES} is not connected to Kodus; select it in Git settings.`,
                           },
                       }),
                   }
@@ -207,19 +228,13 @@ describe("AgentKnowledgeField with another repository", () => {
 
         expect(
             screen.getByText(
-                `${RULES} is not a repository this team's integration can read.`,
+                `${RULES} is not connected to Kodus; select it in Git settings.`,
             ),
         ).toBeInTheDocument();
     });
 
     it("lists every connected repository under Other repository", () => {
-        // The command list measures itself; jsdom has no ResizeObserver.
-        globalThis.ResizeObserver ??= class {
-            observe() {}
-            unobserve() {}
-            disconnect() {}
-        } as unknown as typeof ResizeObserver;
-        Element.prototype.scrollIntoView ??= jest.fn();
+        stubCommandList();
         field([]);
 
         fireEvent.click(
@@ -286,4 +301,113 @@ describe("AgentKnowledgeField with another repository", () => {
             ).toBeInTheDocument();
         },
     );
+
+    it("offers nothing to change without edit rights, and no hint for instructions naming no linked repository", () => {
+        field([], jest.fn(), {
+            canEdit: false,
+            instructions: "Flag imports that cross a layer boundary.",
+        });
+
+        expect(screen.queryByRole("note")).toBeNull();
+        expect(
+            screen.queryByRole("button", { name: "Add skill or doc" }),
+        ).toBeNull();
+        expect(
+            screen.queryByRole("button", { name: "Browse its rules" }),
+        ).toBeNull();
+    });
+
+    it("shows no rows of the previous source while the picked repository loads", () => {
+        mockResolve.mockImplementation((params) =>
+            params?.source?.repository && params.enabled !== false
+                ? { ...remoteListing, isFetching: true }
+                : { isLoading: false, isFetching: false, data: undefined },
+        );
+        field([]);
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Add skill or doc" }),
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "irrigation-rules" }),
+        );
+
+        expect(screen.getByText(`Reading ${RULES}…`)).toBeInTheDocument();
+        expect(
+            screen.queryByRole("button", {
+                name: "Follow stack/node/rules/valves.md",
+            }),
+        ).toBeNull();
+    });
+
+    it("keeps the selected repository's tab when more repositories are in use than tabs", () => {
+        const inUse = ["greenhouse/a", "greenhouse/b", "greenhouse/c", RULES];
+        field(
+            inUse.map((repository) => ({
+                path: "x.md",
+                kind: "doc" as const,
+                repository,
+                linkedTo: [{ agentId: "valves" }],
+            })),
+            jest.fn(),
+            { report: report({ linkedRepositories: [] }) },
+        );
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Add skill or doc" }),
+        );
+        stubCommandList();
+        mockResolve.mockImplementation((params) =>
+            params?.listConnected && params.enabled !== false
+                ? {
+                      isLoading: false,
+                      isFetching: false,
+                      data: report({ connectedRepositories: inUse }),
+                  }
+                : params?.source?.repository && params.enabled !== false
+                  ? remoteListing
+                  : { isLoading: false, isFetching: false, data: undefined },
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "Other repository…" }),
+        );
+        fireEvent.click(screen.getByText(RULES));
+
+        expect(
+            screen.getByRole("button", {
+                name: "irrigation-rules",
+                pressed: true,
+            }),
+        ).toBeInTheDocument();
+    });
+
+    it("says the repositories could not be listed instead of loading forever", () => {
+        stubCommandList();
+        mockResolve.mockImplementation((params) =>
+            params?.listConnected && params.enabled !== false
+                ? {
+                      isLoading: false,
+                      isFetching: false,
+                      data: report({
+                          connectedRepositories: [],
+                          listingFailed: true,
+                      }),
+                  }
+                : { isLoading: false, isFetching: false, data: undefined },
+        );
+        field([]);
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Add skill or doc" }),
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "Other repository…" }),
+        );
+
+        expect(
+            screen.getByText(
+                "Could not list your repositories. Try again later.",
+            ),
+        ).toBeInTheDocument();
+    });
 });

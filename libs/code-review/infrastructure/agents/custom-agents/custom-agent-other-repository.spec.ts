@@ -151,6 +151,10 @@ describe('saving a skill or doc of another repository', () => {
             'greenhouse/rules:main',
             '-x/rules',
             'greenhouse//rules',
+            // Invisible characters that would disguise owner/repo:path.
+            'greenhouse/rules\u202e',
+            'greenhouse/\u200brules',
+            'greenhouse/rules\u0085',
         ]) {
             expect(
                 knowledgeItemSchema.safeParse(item({ repository })).success,

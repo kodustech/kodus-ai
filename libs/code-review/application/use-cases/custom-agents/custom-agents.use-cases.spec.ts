@@ -163,6 +163,7 @@ describe('ResolveCustomAgentUseCase', () => {
                 name: 'ledger',
                 full_name: 'acme-ledger/ledger',
                 default_branch: 'main',
+                selected: true,
                 visibility: 'public',
             },
             {
@@ -170,6 +171,7 @@ describe('ResolveCustomAgentUseCase', () => {
                 name: 'ledger-rules',
                 full_name: RULES,
                 default_branch: 'trunk',
+                selected: true,
                 visibility: 'private',
             },
         ];
@@ -273,7 +275,7 @@ describe('ResolveCustomAgentUseCase', () => {
                 {
                     severity: 'error',
                     message:
-                        "someone-else/rules is not a repository this team's integration can read.",
+                        'someone-else/rules is not connected to Kodus; select it in Git settings.',
                 },
             ]);
             expect(report.knowledge.discoveredIn).toEqual({
@@ -327,16 +329,15 @@ describe('ResolveCustomAgentUseCase', () => {
                 parametersService(storedConfig()) as any,
                 {
                     ...cm,
-                    getRepositories: jest
-                        .fn()
-                        .mockResolvedValue([
-                            {
-                                id: 'repo-9',
-                                name: 'ledger-rules',
-                                organizationName: 'acme-ledger',
-                                default_branch: 'main',
-                            },
-                        ]),
+                    getRepositories: jest.fn().mockResolvedValue([
+                        {
+                            id: 'repo-9',
+                            name: 'ledger-rules',
+                            organizationName: 'acme-ledger',
+                            default_branch: 'main',
+                            selected: true,
+                        },
+                    ]),
                 } as any,
                 knowledgeReader,
             );
@@ -354,6 +355,81 @@ describe('ResolveCustomAgentUseCase', () => {
                 throw new Error('expected ok');
             expect(report.knowledge.discoveredIn?.available).toBe(true);
             expect(report.knowledge.connectedRepositories).toEqual([RULES]);
+        });
+
+        it('offers and reads only repositories connected to Kodus', async () => {
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                {
+                    ...cm,
+                    getRepositories: jest.fn().mockResolvedValue([
+                        ...listing,
+                        {
+                            id: 'repo-7',
+                            name: 'unconnected-rules',
+                            full_name: 'acme-ledger/unconnected-rules',
+                            default_branch: 'main',
+                            selected: false,
+                        },
+                    ]),
+                } as any,
+                reader(),
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: 'acme-ledger/unconnected-rules' },
+                listConnected: true,
+            });
+
+            if (report.knowledge.status !== 'ok')
+                throw new Error('expected ok');
+            expect(report.knowledge.connectedRepositories).toEqual([RULES]);
+            expect(report.knowledge.discoveredIn).toMatchObject({
+                available: false,
+                reason: 'acme-ledger/unconnected-rules is not connected to Kodus; select it in Git settings.',
+            });
+        });
+
+        it('says the repositories could not be listed, not that they are unreachable', async () => {
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                {
+                    ...cm,
+                    getRepositories: jest
+                        .fn()
+                        .mockRejectedValue(new Error('503')),
+                } as any,
+                reader(),
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [
+                    {
+                        path: 'stack/ledger/rules/postings.md',
+                        kind: 'doc',
+                        repository: RULES,
+                        linkedTo: ['main-review'],
+                    },
+                ],
+                listConnected: true,
+            });
+
+            if (report.knowledge.status !== 'ok')
+                throw new Error('expected ok');
+            expect(report.knowledge.listingFailed).toBe(true);
+            expect(report.knowledge.connectedRepositories).toEqual([]);
+            expect(report.knowledge.items[0].issues).toEqual([
+                {
+                    severity: 'error',
+                    message: `Could not list this team's repositories, so ${RULES} was not checked. Try again.`,
+                },
+            ]);
         });
 
         it('says when the repository to list is not reachable', async () => {
@@ -377,7 +453,7 @@ describe('ResolveCustomAgentUseCase', () => {
                 repository: 'someone-else/rules',
                 branch: 'v1',
                 available: false,
-                reason: "someone-else/rules is not a repository this team's integration can read.",
+                reason: 'someone-else/rules is not connected to Kodus; select it in Git settings.',
             });
             expect(report.knowledge.candidates).toEqual([]);
         });

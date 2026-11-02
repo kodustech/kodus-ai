@@ -212,7 +212,19 @@ export interface KnowledgeRepositoryListing {
     http_url?: string;
     organizationName?: string;
     project?: { name?: string };
+    /** Selected in the team's Git settings (providers spell it either way). */
+    selected?: boolean;
+    isSelected?: boolean;
 }
+
+/**
+ * A repository the team connected to Kodus (selected in its Git settings).
+ * Only these are read: Bitbucket and Azure resolve a file read through the
+ * saved selection, so a repository outside it cannot be read there.
+ */
+export const isConnectedRepository = (
+    repo: Pick<KnowledgeRepositoryListing, 'selected' | 'isSelected'>,
+): boolean => repo.selected === true || repo.isSelected === true;
 
 /**
  * Every name a listed repository answers to, lowercased. Bitbucket and Azure
@@ -488,7 +500,9 @@ export async function resolveKnowledgeRepositories(params: {
     }
     if (!wanted.size) return { sources: [], missing: [], listing: [] };
 
-    let listingFailed = false;
+    // No way to list is a failed listing too: `missing` then means "not
+    // checked", and the warning says so instead of "not connected".
+    let listingFailed = !params.codeManagement.getRepositories;
     const listing: KnowledgeRepositoryListing[] =
         (await params.codeManagement
             .getRepositories?.({
@@ -499,7 +513,7 @@ export async function resolveKnowledgeRepositories(params: {
                 return undefined;
             })) ?? [];
     const byName = new Map<string, KnowledgeRepositoryListing>();
-    for (const repo of listing) {
+    for (const repo of listing.filter(isConnectedRepository)) {
         for (const name of repositoryNames(repo)) {
             if (!byName.has(name)) byName.set(name, repo);
         }
