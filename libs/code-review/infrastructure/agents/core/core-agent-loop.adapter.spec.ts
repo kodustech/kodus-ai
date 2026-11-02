@@ -1206,6 +1206,26 @@ describe('finderRunEnvironment — overhead', () => {
         );
         expect(claude.overheadTokens).toBeGreaterThan(other.overheadTokens);
     });
+
+    it('follows the primary model, not a Claude fallback', () => {
+        const model = new MockLanguageModelV3({});
+        const systemPrompt =
+            'Each finding must be technical, direct, and verifiable. Structure every suggestionContent as:';
+        const withSlot = (byokConfig: Record<string, unknown>) =>
+            finderRunEnvironment(makeInput(model, { systemPrompt }), {
+                ...secrets,
+                byokConfig,
+            }).finderSystemPrompt;
+        expect(
+            withSlot({
+                model: 'gpt-6.1-sol',
+                fallback: { model: 'claude-sonnet-5-5' },
+            }),
+        ).toBe(systemPrompt);
+        expect(withSlot({ model: 'claude-sonnet-5-5' })).not.toBe(
+            systemPrompt,
+        );
+    });
 });
 
 describe('runAgentLoopViaCore — finder labels', () => {

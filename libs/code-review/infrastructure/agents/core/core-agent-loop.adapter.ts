@@ -157,10 +157,12 @@ export function finderRunEnvironment(
     // — it matters on small windows where the safety margin is tight.
     // Claude gets the WHAT/WHY/HOW writing policy (#1821), so its system
     // prompt, and the overhead counted from it, carry the policy too.
-    const claudeSafeWording =
+    // The primary decides, as it does for the finder profile: a fallback that
+    // serves a call keeps the primary's settings.
+    const claudeWording =
         input.byokProvider === 'anthropic' ||
-        [secrets.byokConfig?.model, secrets.byokConfig?.fallback?.model].some((id) => typeof id === 'string' && isClaudeModel(id));
-    const finderSystemPrompt = claudeSafeWording
+        isClaudeModel(secrets.byokConfig?.model);
+    const finderSystemPrompt = claudeWording
         ? withClaudeWritingPolicy(input.systemPrompt)
         : input.systemPrompt;
     const overheadTokens = contextWindowTokens
@@ -215,7 +217,7 @@ export function finderRunEnvironment(
         providerOptions,
         contextWindowTokens,
         overheadTokens,
-        claudeSafeWording,
+        claudeWording,
         finderSystemPrompt,
         specModelId,
         fallbackModelId,
@@ -272,7 +274,7 @@ export async function runAgentLoopViaCore(
         providerOptions,
         contextWindowTokens,
         overheadTokens,
-        claudeSafeWording,
+        claudeWording,
         finderSystemPrompt,
         specModelId,
         fallbackModelId,
@@ -317,7 +319,7 @@ export async function runAgentLoopViaCore(
         acceptsConventions: !!readGuide,
         fullOutput: input.conventionGuides !== undefined,
     });
-    const finderPrompt = claudeSafeWording
+    const finderPrompt = claudeWording
         ? withClaudeOneProblem(input.userPrompt)
         : input.userPrompt;
 
