@@ -2058,46 +2058,20 @@ export class BitbucketCloudService implements Omit<
                 fillMissingPerFile: true,
             });
 
-            const contentLimit = pLimit(
-                BitbucketCloudService.PER_FILE_REQUEST_CONCURRENCY,
-            );
-            const prFilesWithDiffAndContents = await Promise.all(
-                changedPrFiles.map((file) =>
-                    contentLimit(async () => {
-                        const isRemoved = file.status === 'removed';
-                        const pathForContent = isRemoved
-                            ? file.old?.path
-                            : (file.new?.path ?? file.old?.path);
-                        const commitForContent = isRemoved
-                            ? destinationHash
-                            : sourceHash;
+            // No file contents here: every caller reads them later through
+            // getRepositoryContentFile (the review only for files it keeps),
+            // and GitHub's adapter returns none either. Reading them here
+            // cost one request per file on a call made several times per
+            // review, and that is what kept Bitbucket credentials at 429.
+            const prFilesWithDiff = changedPrFiles.map((file) => {
+                const diffPath = pathForDiff(file);
+                return {
+                    ...file,
+                    diff: diffPath ? (patches.get(diffPath) ?? null) : null,
+                };
+            });
 
-                        const contents =
-                            pathForContent && commitForContent
-                                ? await bitbucketAPI.source
-                                      .read({
-                                          repo_slug: `{${repo.id}}`,
-                                          workspace: `{${repo.workspaceId}}`,
-                                          commit: commitForContent,
-                                          path: pathForContent,
-                                      })
-                                      .then((res) => res.data as string)
-                                      .catch(() => null)
-                                : null;
-
-                        const diffPath = pathForDiff(file);
-                        return {
-                            ...file,
-                            contents,
-                            diff: diffPath
-                                ? (patches.get(diffPath) ?? null)
-                                : null,
-                        };
-                    }),
-                ),
-            );
-
-            return prFilesWithDiffAndContents.map((file) => ({
+            return prFilesWithDiff.map((file) => ({
                 filename: file.new?.path ?? file.old?.path,
                 previous_filename:
                     file.new?.path && file.old?.path !== file.new.path
@@ -2110,7 +2084,6 @@ export class BitbucketCloudService implements Omit<
                 changes: file.lines_added + file.lines_removed,
                 patch: file.diff,
                 blob_url: null,
-                content: file.contents,
                 contents_url: null,
                 raw_url: null,
             }));
@@ -2188,47 +2161,28 @@ export class BitbucketCloudService implements Omit<
                 fillMissingPerFile: false,
             });
 
-            const contentLimit = pLimit(
-                BitbucketCloudService.PER_FILE_REQUEST_CONCURRENCY,
-            );
-            const changedFiles = await Promise.all(
-                allFilesInPR.map((file) =>
-                    contentLimit(async () => {
-                        const path = file.new?.path;
-                        if (!path) {
-                            return null;
-                        }
+            // No contents, same as getFilesByPullRequestId: the caller
+            // (PullRequestHandlerService) reads them per kept file.
+            const changedFiles = allFilesInPR.map((file) => {
+                const path = file.new?.path;
+                const diff = path ? patches.get(path) : undefined;
+                if (!path || !diff?.trim()) {
+                    return null;
+                }
 
-                        const diff = patches.get(path);
-                        if (!diff?.trim()) {
-                            return null;
-                        }
-
-                        const content = await bitbucketAPI.source
-                            .read({
-                                repo_slug: `{${repo.id}}`,
-                                workspace: `{${repo.workspaceId}}`,
-                                commit: pr.source?.commit?.hash,
-                                path,
-                            })
-                            .then((res) => res.data as string);
-
-                        return {
-                            filename: path,
-                            sha: pr.source?.commit?.hash,
-                            status: file.status,
-                            additions: file.lines_added,
-                            deletions: file.lines_removed,
-                            changes: file.lines_added + file.lines_removed,
-                            patch: diff,
-                            content,
-                            blob_url: null,
-                            contents_url: null,
-                            raw_url: null,
-                        };
-                    }),
-                ),
-            );
+                return {
+                    filename: path,
+                    sha: pr.source?.commit?.hash,
+                    status: file.status,
+                    additions: file.lines_added,
+                    deletions: file.lines_removed,
+                    changes: file.lines_added + file.lines_removed,
+                    patch: diff,
+                    blob_url: null,
+                    contents_url: null,
+                    raw_url: null,
+                };
+            });
 
             return changedFiles.filter(Boolean);
         } catch (error) {

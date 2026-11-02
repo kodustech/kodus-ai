@@ -120,7 +120,8 @@ describe('BitbucketCloudService.getFilesByPullRequestId — batch diff', () => {
             workspace: '{ws-1}',
             spec: 'head..base',
         });
-        expect(read).toHaveBeenCalledTimes(2);
+        // Contents are read later per kept file, never here
+        expect(read).not.toHaveBeenCalled();
         expect(files?.map((f) => [f.filename, f.patch])).toEqual([
             ['src/a.ts', '@@ -1 +1 @@\n-old a\n+new a'],
             ['src/b.ts', '@@ -0,0 +1 @@\n+new b'],
@@ -173,7 +174,6 @@ describe('BitbucketCloudService.getChangedFilesSinceLastCommit — batch diff', 
         expect(getDiff).toHaveBeenCalledTimes(1);
         expect(getDiff.mock.calls[0][0].spec).toBe('head..last');
         expect(files?.map((f) => f.filename)).toEqual(['src/a.ts']);
-        // Content only for the file that changed
-        expect(read).toHaveBeenCalledTimes(1);
+        expect(read).not.toHaveBeenCalled();
     });
 });
