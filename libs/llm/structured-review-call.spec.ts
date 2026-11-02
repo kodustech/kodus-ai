@@ -30,6 +30,11 @@ jest.mock('@libs/core/log/langfuse', () => ({
         telemetry: { isEnabled: false },
     })),
 }));
+// The 429 re-issue waits seconds; resolve the wait at once and assert on it.
+jest.mock('@libs/llm/retry-policy', () => ({
+    ...jest.requireActual('@libs/llm/retry-policy'),
+    sleep: jest.fn(() => Promise.resolve()),
+}));
 jest.mock('@libs/llm/reasoning-options', () => ({
     buildProviderOptions: jest.fn(() => ({ __providerOptions: 'reasoning' })),
     defaultReasoningEffortFor: () => undefined,
@@ -48,6 +53,8 @@ import {
 import { tracedGenerateText, timeoutSignal } from '@libs/llm/llm-call';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { setLlmObservability } from '@libs/llm/llm-observability';
+import { retriesWereExhausted } from '@libs/llm/error-classifier';
+import { sleep } from '@libs/llm/retry-policy';
 import {
     buildModelFromSlot,
     getLimiterForSlot,
@@ -1130,37 +1137,78 @@ describe('runStructuredReviewCall — single retry owner (maxRetries:0 + cooldow
         assertNoSecondModelBuilt();
     });
 
-    it('RATE_LIMIT (429) failure → NO immediate re-fire, THROWS (backs off via cooldown)', async () => {
-        // Slot in cooldown (arm-then-honor): a 429 never immediately re-issues.
+    it('RATE_LIMIT (429) while IN COOLDOWN → no re-issue, throws marked exhausted', async () => {
+        // Slot in cooldown (arm-then-honor): a 429 never re-fires into it, and
+        // the error is left eligible for the fallback.
         mockGetLimiter.mockReturnValue({ isInCooldown: () => true });
         const rateErr: any = new Error('rate limit exceeded');
         rateErr.status = 429;
         mockGenerate.mockRejectedValueOnce(rateErr);
 
-        await expect(
-            runStructuredReviewCall({
-                ...base,
-                byokConfig: { main: { provider: 'openai' } } as any,
-            }),
-        ).rejects.toThrow('rate limit');
+        const thrown = await runStructuredReviewCall({
+            ...base,
+            byokConfig: { main: { provider: 'openai' } } as any,
+        }).catch((e) => e);
 
+        expect(thrown).toBe(rateErr);
+        expect(retriesWereExhausted(thrown)).toBe(true);
         expect(mockGenerate).toHaveBeenCalledTimes(1);
         assertNoSecondModelBuilt();
     });
 
-    it('RATE_LIMIT (429) with NO cooldown armed → still NO immediate re-fire, THROWS', async () => {
-        // Even without a cooldown, a 429 is not hammered with an instant retry.
+    it('RATE_LIMIT (429) with NO cooldown → one re-issue after a seconds-long wait', async () => {
         mockGetLimiter.mockReturnValue(null);
         const rateErr: any = new Error('too many requests');
         rateErr.status = 429;
-        mockGenerate.mockRejectedValueOnce(rateErr);
+        mockGenerate
+            .mockRejectedValueOnce(rateErr)
+            .mockResolvedValueOnce(ok({ violations: ['reissued'] }));
 
-        await expect(runStructuredReviewCall({ ...base })).rejects.toThrow(
-            'too many requests',
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: ['reissued'] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        const waitMs = (sleep as jest.Mock).mock.calls.at(-1)[0];
+        expect(waitMs).toBeGreaterThanOrEqual(2_000);
+        assertNoSecondModelBuilt();
+    });
+
+    it('RATE_LIMIT (429) twice → throws the second 429 marked exhausted', async () => {
+        // A spent plan window (e.g. a 5-hour usage cap) answers 429 again.
+        mockGetLimiter.mockReturnValue(null);
+        const first: any = new Error('Usage limit reached for 5 hour.');
+        first.status = 429;
+        const second: any = new Error('Usage limit reached for 5 hour.');
+        second.status = 429;
+        mockGenerate.mockRejectedValueOnce(first).mockRejectedValueOnce(second);
+
+        const thrown = await runStructuredReviewCall({ ...base }).catch(
+            (e) => e,
         );
 
-        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        expect(thrown).toBe(second);
+        expect(retriesWereExhausted(thrown)).toBe(true);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
         assertNoSecondModelBuilt();
+    });
+
+    it('RATE_LIMIT (429) then a non-429 failure → throws it unmarked', async () => {
+        mockGetLimiter.mockReturnValue(null);
+        const rateErr: any = new Error('too many requests');
+        rateErr.status = 429;
+        const badRequest: any = new Error('invalid request body');
+        badRequest.status = 400;
+        mockGenerate
+            .mockRejectedValueOnce(rateErr)
+            .mockRejectedValueOnce(badRequest);
+
+        const thrown = await runStructuredReviewCall({ ...base }).catch(
+            (e) => e,
+        );
+
+        expect(thrown).toBe(badRequest);
+        expect(retriesWereExhausted(thrown)).toBe(false);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
     });
 
     it('transient failure NOT in cooldown → still exactly ONE same-model re-issue', async () => {

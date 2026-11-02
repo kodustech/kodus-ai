@@ -1,5 +1,9 @@
 import { shouldFailoverToNextModel } from './model-failover';
-import { classifyLLMError, LlmErrorCategory } from './error-classifier';
+import {
+    classifyLLMError,
+    LlmErrorCategory,
+    markRetriesExhausted,
+} from './error-classifier';
 
 /**
  * A 429 that outlived the executor's own backoff must cascade.
@@ -131,5 +135,22 @@ describe('a 429 that exhausted its same-model retries', () => {
         const badKey: any = new Error('invalid api key');
         badKey.statusCode = 401;
         expect(shouldFailoverToNextModel(badKey)).toBe(true);
+    });
+});
+
+describe('a one-shot 429 whose app-level retry was spent', () => {
+    const FIVE_HOUR_CAP =
+        'Usage limit reached for 5 hour. Your limit will reset at 2026-11-02 21:00:06';
+
+    it('cascades once marked exhausted', () => {
+        expect(
+            shouldFailoverToNextModel(
+                markRetriesExhausted(apiError(FIVE_HOUR_CAP)),
+            ),
+        ).toBe(true);
+    });
+
+    it('does not cascade before the retry is spent', () => {
+        expect(shouldFailoverToNextModel(apiError(FIVE_HOUR_CAP))).toBe(false);
     });
 });

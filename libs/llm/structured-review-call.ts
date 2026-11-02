@@ -70,8 +70,11 @@ import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
 import {
     classifyLLMError,
     isAbortOrHardTimeout,
+    LlmErrorCategory,
+    markRetriesExhausted,
 } from '@libs/llm/error-classifier';
 import {
+    RATE_LIMIT_RETRY_DELAY_MS,
     RETRYABLE_CATEGORY,
     jitteredBackoffMs,
     sleep,
@@ -780,25 +783,54 @@ async function runReviewCall<T>(
         // Cooldown-aware: after a classified RATE_LIMIT the wrapper armed the
         // slot's limiter with cooldownMs. Never re-issue into a cooling slot
         // (arm-then-honor) — an immediate re-fire would just hammer the
-        // rate-limited provider. The caller backs off instead.
+        // rate-limited provider. A 429 that cannot be retried here counts as
+        // exhausted, so the org's fallback (its own slot) can take the call.
         if (
             getLimiterForSlot({
                 slot: mainSlot,
                 organizationId,
             })?.isInCooldown()
         ) {
-            throw err;
+            throw category === LlmErrorCategory.RATE_LIMIT
+                ? markRetriesExhausted(err)
+                : err;
         }
 
         // The ONE bounded same-model re-issue: a transient (5xx / network) blip.
-        // A RATE_LIMIT (429) is NOT re-fired immediately — it backs off via the
-        // limiter cooldown rather than an instant same-model retry. Full-jitter
-        // backoff first (shared policy) so N parallel shards hitting the same blip
-        // don't re-fire in lockstep — the thundering-herd the immediate re-issue
-        // caused. One re-issue only; a re-issue failure still propagates.
+        // Full-jitter backoff first (shared policy) so N parallel shards hitting
+        // the same blip don't re-fire in lockstep — the thundering-herd the
+        // immediate re-issue caused. One re-issue only; a re-issue failure
+        // still propagates.
         if (category === RETRYABLE_CATEGORY) {
             await sleep(jitteredBackoffMs(1));
             return await call(mainModel, mainModelName, mainSystem);
+        }
+
+        // A 429 gets one re-issue after a longer wait, never an instant re-fire.
+        // A second 429 means the limit is not a passing burst (a spent plan
+        // window answers 429 for hours), so it is marked exhausted and the
+        // model failover moves the call to the org's fallback.
+        if (category === LlmErrorCategory.RATE_LIMIT) {
+            await sleep(jitteredBackoffMs(1, RATE_LIMIT_RETRY_DELAY_MS));
+            try {
+                return await call(
+                    mainModel,
+                    mainModelName,
+                    mainSystem,
+                    undefined,
+                    schemaOnlyInPrompt
+                        ? { prompt: withJsonUserHint(user) }
+                        : undefined,
+                );
+            } catch (retryErr) {
+                if (
+                    classifyLLMError(retryErr).category ===
+                    LlmErrorCategory.RATE_LIMIT
+                ) {
+                    throw markRetriesExhausted(retryErr);
+                }
+                throw retryErr;
+            }
         }
         throw err;
     }
