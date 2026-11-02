@@ -90,6 +90,19 @@ describe('ExternalReferenceLoaderService', () => {
             expect([...result.referencesMap.keys()]).toEqual(['r-ok']);
         });
 
+        it('keeps a rule whose reference no longer exists reportable', async () => {
+            const svc = makeSvc(
+                jest.fn().mockResolvedValue({ referenceMissing: true }),
+            );
+
+            const result = await svc.loadReferencesForRules(
+                [{ uuid: 'r-stale', contextReferenceId: 'deleted' }] as any,
+                {} as any,
+            );
+
+            expect(result.rulesWithoutFileReferences?.size).toBe(0);
+        });
+
         it('counts a load that threw as expecting files', async () => {
             const svc = makeSvc(jest.fn().mockRejectedValue(new Error('down')));
 

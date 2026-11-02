@@ -5,9 +5,12 @@ import type {
     CustomAgentResolveReport,
     KnowledgeItem,
 } from "@services/custom-agents/types";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, renderHook, screen } from "@testing-library/react";
 
-import { AgentKnowledgeField } from "./knowledge-card";
+import {
+    AgentKnowledgeField,
+    useKnowledgeSourceListing,
+} from "./knowledge-card";
 
 /**
  * The agent's skills and docs from another repository (#2329).
@@ -341,7 +344,14 @@ describe("AgentKnowledgeField with another repository", () => {
     });
 
     it("keeps the selected repository's tab when more repositories are in use than tabs", () => {
-        const inUse = ["greenhouse/a", "greenhouse/b", "greenhouse/c", RULES];
+        // Two past the cap, so the selected one falls outside any prefix.
+        const inUse = [
+            "greenhouse/a",
+            "greenhouse/b",
+            "greenhouse/c",
+            "greenhouse/d",
+            RULES,
+        ];
         field(
             inUse.map((repository) => ({
                 path: "x.md",
@@ -435,5 +445,35 @@ describe("AgentKnowledgeField with another repository", () => {
             screen.getByText(`Could not read ${RULES}. Try again.`),
         ).toBeInTheDocument();
         expect(screen.queryByText(/No skills or docs found/)).toBeNull();
+    });
+
+    it("stops loading this repository's list once the page check answers, even unavailable", () => {
+        mockResolve.mockReturnValue({
+            isLoading: false,
+            isFetching: false,
+            data: undefined,
+        });
+        const pending = renderHook(() =>
+            useKnowledgeSourceListing({ source: {}, enabled: true }),
+        );
+        expect(pending.result.current.loading).toBe(true);
+
+        const answered = renderHook(() =>
+            useKnowledgeSourceListing({
+                source: {},
+                enabled: true,
+                report: {
+                    ...report(),
+                    knowledge: {
+                        status: "unavailable",
+                        reason: "Could not read the repository.",
+                    },
+                },
+            }),
+        );
+        expect(answered.result.current).toMatchObject({
+            loading: false,
+            unavailable: "Could not read the repository.",
+        });
     });
 });

@@ -202,10 +202,14 @@ export const useKnowledgeSourceListing = (params: {
         reviewedVisibility:
             listing?.repositoryVisibility ??
             connectedKnowledge?.repositoryVisibility,
-        loading: params.source.repository ? remoteLoading : !local,
+        // This repository is listed by the page's check: loading only until
+        // it answers, whatever it answered.
+        loading: params.source.repository ? remoteLoading : !params.report,
         // A request that failed is not an empty repository: say so.
         unavailable: !params.source.repository
-            ? undefined
+            ? params.report?.knowledge.status === "unavailable"
+                ? params.report.knowledge.reason
+                : undefined
             : remote.data?.knowledge.status === "unavailable"
               ? remote.data.knowledge.reason
               : remote.isError && !remoteLoading
@@ -389,7 +393,7 @@ export const KnowledgeSourceBar = ({
                                 <>
                                     Reading{" "}
                                     <span className="text-text-secondary font-medium">
-                                        {discoveredIn?.branch ??
+                                        {discoveredIn?.branch ||
                                             "the default branch"}
                                     </span>
                                     , its default branch.{" "}

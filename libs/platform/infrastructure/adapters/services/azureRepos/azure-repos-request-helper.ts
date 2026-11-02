@@ -791,31 +791,45 @@ export class AzureReposRequestHelper {
     }): Promise<{ content: string } | null> {
         const instance = await this.azureRequest(params);
 
-        // Azure DevOps expects plain branch names for versionDescriptor.version.
+        // Azure DevOps expects plain names for versionDescriptor.version.
         // Normalize typical refs (e.g., "refs/heads/main" -> "main").
-        const normalizedBranch = params.branch?.replace(/^refs\/heads\//, '');
+        const isTag = params.branch?.startsWith('refs/tags/') ?? false;
+        const normalizedBranch = params.branch
+            ?.replace(/^refs\/heads\//, '')
+            .replace(/^refs\/tags\//, '');
 
-        const versionQuery = normalizedBranch
-            ? `versionDescriptor.version=${encodeURIComponent(normalizedBranch)}&versionDescriptor.versionType=branch`
-            : params.commitId
-              ? `versionDescriptor.version=${encodeURIComponent(params.commitId)}&versionDescriptor.versionType=commit`
-              : '';
-
-        const queryParts = [
-            `path=${encodeURIComponent(params.filePath)}`,
-            versionQuery,
-            'includeContent=true',
-            'resolveLfs=true',
-            'api-version=7.1',
-        ].filter(Boolean);
-
-        const { data } = await instance.get(
-            `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/items?${queryParts.join('&')}`,
-        );
-
-        return {
-            content: data?.content || '',
+        const read = async (versionType: 'branch' | 'tag') => {
+            const versionQuery = normalizedBranch
+                ? `versionDescriptor.version=${encodeURIComponent(normalizedBranch)}&versionDescriptor.versionType=${versionType}`
+                : params.commitId
+                  ? `versionDescriptor.version=${encodeURIComponent(params.commitId)}&versionDescriptor.versionType=commit`
+                  : '';
+            const queryParts = [
+                `path=${encodeURIComponent(params.filePath)}`,
+                versionQuery,
+                'includeContent=true',
+                'resolveLfs=true',
+                'api-version=7.1',
+            ].filter(Boolean);
+            const { data } = await instance.get(
+                `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/items?${queryParts.join('&')}`,
+            );
+            return { content: data?.content || '' };
         };
+
+        if (isTag) return read('tag');
+        try {
+            return await read('branch');
+        } catch (error) {
+            // A plain name may be a tag (a skill or doc pinned with "Use a
+            // branch or tag instead"): Azure resolves it only as a tag.
+            const status = (error as { response?: { status?: number } })
+                ?.response?.status;
+            if (!normalizedBranch || (status !== 404 && status !== 400)) {
+                throw error;
+            }
+            return read('tag');
+        }
     }
 
     async getCommitsForPullRequest(params: {
