@@ -2084,6 +2084,7 @@ export class BitbucketCloudService implements Omit<
                 changes: file.lines_added + file.lines_removed,
                 patch: file.diff,
                 blob_url: null,
+                content: null,
                 contents_url: null,
                 raw_url: null,
             }));
@@ -2179,6 +2180,7 @@ export class BitbucketCloudService implements Omit<
                     changes: file.lines_added + file.lines_removed,
                     patch: diff,
                     blob_url: null,
+                    content: null,
                     contents_url: null,
                     raw_url: null,
                 };
