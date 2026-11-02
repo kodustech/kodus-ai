@@ -25,6 +25,7 @@ import {
     agentStatusLine,
     customAgentsService,
     resolveLevel,
+    PLAN_NOT_ALLOWED_MESSAGE,
     STALE_AGENTS_MESSAGE,
 } from '../custom-agents.service.js';
 import { userContextService } from '../user-context.service.js';
@@ -93,6 +94,17 @@ function config(): FormattedCodeReviewParameter {
     };
 }
 
+// What the config reads back after a save that went through: every list's
+// fingerprint changed. A save the plan left out reads back the same ones.
+function saved<T>(value: T): T {
+    return JSON.parse(
+        JSON.stringify(value).replace(
+            /"(customAgentsRevision|knowledgeRevision)":"([^"]*)"/g,
+            '"$1":"$2-saved"',
+        ),
+    );
+}
+
 describe('customAgentsService', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -102,7 +114,12 @@ describe('customAgentsService', () => {
             teamId: 'team-1',
             teamName: 'Core',
         });
-        api.getCodeReviewConfig.mockResolvedValue(config());
+        // mockReset: a test that never read the config must not leave its
+        // queued first answer to the next one.
+        api.getCodeReviewConfig
+            .mockReset()
+            .mockResolvedValueOnce(config())
+            .mockResolvedValue(saved(config()));
         api.save.mockResolvedValue({});
     });
 
@@ -118,6 +135,23 @@ describe('customAgentsService', () => {
             code: 'AUTH_REQUIRED',
         });
         expect(api.getCodeReviewConfig).not.toHaveBeenCalled();
+    });
+
+    it('fails when the plan left the agents out of the save', async () => {
+        // The API answers success but writes nothing: the list reads back
+        // with the same fingerprint.
+        api.getCodeReviewConfig.mockReset().mockResolvedValue(config());
+
+        await expect(
+            customAgentsService.create(
+                { name: 'Data contracts', instructions: 'Check schemas.' },
+                { repo: 'kodus-ai' },
+            ),
+        ).rejects.toMatchObject({
+            code: 'API_REQUEST_FAILED',
+            message: PLAN_NOT_ALLOWED_MESSAGE,
+        });
+        expect(api.save).toHaveBeenCalledTimes(1);
     });
 
     it('creates a turned-off agent at the repository with the list revision', async () => {

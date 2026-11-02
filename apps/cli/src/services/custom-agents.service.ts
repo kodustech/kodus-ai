@@ -108,6 +108,9 @@ export type CustomAgentTemplateId =
 export const TRY_POLL_INTERVAL_MS = 4000;
 // A run on a large pull request takes minutes; past this the run is lost (its
 // worker died) rather than slow, and the CLI must not poll forever.
+export const PLAN_NOT_ALLOWED_MESSAGE =
+    "Custom agents and skills & docs run on the Teams and Enterprise plans and during the trial. This organization's plan left the change out, so nothing was saved.";
+
 export const MAX_TRY_WAIT_MS = 30 * 60 * 1000;
 
 export const STALE_AGENTS_MESSAGE =
@@ -1036,6 +1039,7 @@ class CustomAgentsService {
             expectedRevisions.knowledge = view.revisions.knowledge;
         }
 
+        let centralized: CentralizedPrResult | undefined;
         try {
             const result = await customAgentsApi.save(ctx.accessToken, {
                 configValue,
@@ -1045,7 +1049,7 @@ class CustomAgentsService {
                 directoryId: view.directoryId,
                 expectedRevisions,
             });
-            return isCentralizedPrResult(result) ? result : undefined;
+            centralized = isCentralizedPrResult(result) ? result : undefined;
         } catch (error) {
             if (error instanceof ApiError && error.statusCode === 409) {
                 throw new CommandError('API_REQUEST_FAILED', staleMessage, 1, {
@@ -1053,6 +1057,62 @@ class CustomAgentsService {
                 });
             }
             throw error;
+        }
+
+        if (!centralized) {
+            await this.ensureSaved(ctx, view, next);
+        }
+        return centralized;
+    }
+
+    /**
+     * On a plan without custom agents the API answers the save with success
+     * but leaves both lists out of it (keepCustomAgentsIfPlanNotAllowed in
+     * update-or-create-code-review-parameter-use-case.ts); the web never gets
+     * there because its plan gate hides the screens. A list whose content
+     * changed but whose fingerprint did not was not written.
+     */
+    private async ensureSaved(
+        ctx: UserContext,
+        view: LevelView,
+        next: { agents?: CustomAgent[]; knowledge?: KnowledgeItem[] },
+    ): Promise<void> {
+        const changed = (
+            [
+                ['customAgents', next.agents, view.agents],
+                ['knowledge', next.knowledge, view.knowledge],
+            ] as const
+        )
+            .filter(
+                ([, sent, before]) =>
+                    sent !== undefined &&
+                    JSON.stringify(sent) !== JSON.stringify(before),
+            )
+            .map(([field]) => field);
+        if (changed.length === 0) {
+            return;
+        }
+
+        const after = resolveLevel(
+            await customAgentsApi.getCodeReviewConfig(
+                ctx.accessToken,
+                ctx.teamId,
+            ),
+            {
+                repo: view.level === 'global' ? undefined : view.repositoryId,
+                directory: view.directoryId,
+            },
+        );
+        const dropped = changed.filter(
+            (field) => after.revisions[field] === view.revisions[field],
+        );
+        if (dropped.length > 0) {
+            throw new CommandError(
+                'API_REQUEST_FAILED',
+                PLAN_NOT_ALLOWED_MESSAGE,
+                1,
+                { dropped },
+            );
         }
     }
 

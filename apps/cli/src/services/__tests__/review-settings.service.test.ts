@@ -343,6 +343,57 @@ describe('reviewSettingsService', () => {
             });
         });
 
+        it('fails when the plan left linkedRepositories out of the save', async () => {
+            // The config reads back without the value: the API dropped it.
+            await expect(
+                reviewSettingsService.set(
+                    { repository: 'kodus-ai' },
+                    'linkedRepositories',
+                    '[{"repository":"acme/docs"}]',
+                ),
+            ).rejects.toMatchObject({
+                code: 'API_REQUEST_FAILED',
+                message: expect.stringContaining('Teams and Enterprise'),
+            });
+            expect(configApi.saveCodeReviewConfig).toHaveBeenCalledTimes(1);
+        });
+
+        it('accepts linkedRepositories when the value reads back', async () => {
+            const value = [{ repository: 'acme/docs' }];
+            configApi.getFormattedCodeReviewParameter
+                .mockResolvedValueOnce(FORMATTED as never)
+                .mockResolvedValue({
+                    ...FORMATTED,
+                    configValue: {
+                        ...(FORMATTED as any).configValue,
+                        repositories: (
+                            FORMATTED as any
+                        ).configValue.repositories.map((repo: any) =>
+                            repo.id === 'repo-1'
+                                ? {
+                                      ...repo,
+                                      configs: {
+                                          ...repo.configs,
+                                          linkedRepositories: {
+                                              value,
+                                              level: 'repository',
+                                          },
+                                      },
+                                  }
+                                : repo,
+                        ),
+                    },
+                } as never);
+
+            await expect(
+                reviewSettingsService.set(
+                    { repository: 'kodus-ai' },
+                    'linkedRepositories',
+                    JSON.stringify(value),
+                ),
+            ).resolves.toMatchObject({ key: 'linkedRepositories' });
+        });
+
         it('saves global without a repository id', async () => {
             await reviewSettingsService.set(
                 { repository: 'global' },

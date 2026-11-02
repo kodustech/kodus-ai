@@ -92,6 +92,17 @@ function config(): FormattedCodeReviewParameter {
     };
 }
 
+// What the config reads back after a save that went through: every list's
+// fingerprint changed. A save the plan left out reads back the same ones.
+function saved<T>(value: T): T {
+    return JSON.parse(
+        JSON.stringify(value).replace(
+            /"(customAgentsRevision|knowledgeRevision)":"([^"]*)"/g,
+            '"$1":"$2-saved"',
+        ),
+    );
+}
+
 describe('customAgentsService skills & docs', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -101,7 +112,12 @@ describe('customAgentsService skills & docs', () => {
             teamId: 'team-1',
             teamName: 'Core',
         });
-        api.getCodeReviewConfig.mockResolvedValue(config());
+        // mockReset: a test that never read the config must not leave its
+        // queued first answer to the next one.
+        api.getCodeReviewConfig
+            .mockReset()
+            .mockResolvedValueOnce(config())
+            .mockResolvedValue(saved(config()));
         api.save.mockResolvedValue({});
     });
 

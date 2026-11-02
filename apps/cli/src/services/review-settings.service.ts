@@ -96,6 +96,11 @@ function normalizePath(path: string): string {
         .replace(/\/+$/, '');
 }
 
+// Keys the API leaves out of a save on plans below Teams, still answering
+// success (stripLinkedRepositoriesIfPlanNotAllowed in
+// update-or-create-code-review-parameter-use-case.ts).
+const PLAN_GATED_KEYS = new Set(['linkedRepositories']);
+
 function isLeaf(node: unknown): node is FormattedConfigLeaf {
     return (
         typeof node === 'object' &&
@@ -452,6 +457,17 @@ class ReviewSettingsService {
             scope,
             buildConfigDelta(setting.key, value),
         );
+
+        if (!isCentralizedPr(result) && PLAN_GATED_KEYS.has(setting.key)) {
+            const after = await this.loadScopeConfigs(ctx, scope);
+            const stored = readLeaf(after.configs, setting.key);
+            if (JSON.stringify(stored?.value) !== JSON.stringify(value)) {
+                throw new CommandError(
+                    'API_REQUEST_FAILED',
+                    `'${setting.key}' runs on the Teams and Enterprise plans and during the trial. This organization's plan left it out, so nothing was saved.`,
+                );
+            }
+        }
 
         return {
             team: ctx.teamName,
