@@ -110,6 +110,14 @@ export default function GithubIntegrationClient() {
         })();
 
         if (!team?.uuid) {
+            // The onboarding starts the install without a selected team: the
+            // setup page links it to the team being set up.
+            if (getCookie("started-setup-from-new-setup-page")) {
+                router.replace(
+                    `/setup/github?installation_id=${encodeURIComponent(installationId)}`,
+                );
+                return;
+            }
             setStep("needs-login");
             return;
         }
