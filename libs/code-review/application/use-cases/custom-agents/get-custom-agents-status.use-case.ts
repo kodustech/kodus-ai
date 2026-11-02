@@ -1,5 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
+import { createLogger } from '@libs/core/log/logger';
+
 import {
     CUSTOM_AGENT_RUN_LOG_TOKEN,
     type CustomAgentRunRecord,
@@ -274,6 +276,8 @@ const suggestionRowsPipeline = (
  */
 @Injectable()
 export class GetCustomAgentsStatusUseCase {
+    private readonly logger = createLogger(GetCustomAgentsStatusUseCase.name);
+
     constructor(
         @Inject(PULL_REQUESTS_REPOSITORY_TOKEN)
         private readonly pullRequestsRepository: IPullRequestsRepository,
@@ -330,7 +334,20 @@ export class GetCustomAgentsStatusUseCase {
                               repositoryId: params.repositoryId,
                               since,
                           })
-                          .catch(() => [] as CustomAgentRunRecord[])
+                          .catch((error) => {
+                              this.logger.warn({
+                                  message:
+                                      'Could not read custom agent runs; showing findings only',
+                                  context: GetCustomAgentsStatusUseCase.name,
+                                  error,
+                                  metadata: {
+                                      organizationId: params.organizationId,
+                                      repositoryId: params.repositoryId,
+                                      since,
+                                  },
+                              });
+                              return [] as CustomAgentRunRecord[];
+                          })
                     : Promise.resolve([] as CustomAgentRunRecord[]),
             ]);
 
@@ -342,6 +359,7 @@ export class GetCustomAgentsStatusUseCase {
         const citations = summarizeUnfollowedCitations(
             citationRows as UnfollowedCitationRow[],
         );
+        const findingsByAgent = new Map(findings.map((s) => [s.agentId, s]));
         // An agent whose runs all failed left no finding: list it anyway.
         const agentIds = new Set([
             ...findings.map((s) => s.agentId),
@@ -350,7 +368,7 @@ export class GetCustomAgentsStatusUseCase {
         return {
             windowDays: CUSTOM_AGENT_STATUS_WINDOW_DAYS,
             agents: [...agentIds].map((agentId) => {
-                const status = findings.find((s) => s.agentId === agentId) ?? {
+                const status = findingsByAgent.get(agentId) ?? {
                     agentId,
                     pullRequests: 0,
                     posted: 0,

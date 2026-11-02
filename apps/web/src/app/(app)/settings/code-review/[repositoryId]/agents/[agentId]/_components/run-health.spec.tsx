@@ -213,13 +213,14 @@ describe("UnfollowedCitations", () => {
         );
     });
 
-    it("warns before following a file that also feeds Kody Rules", () => {
+    it("warns before following a file of this repository that also feeds Kody Rules", () => {
+        // Only this repository's files feed Kody Rules; the check never
+        // flags another repository's.
         mockResolve.mockReturnValue(
             found([
                 {
-                    path: "stack/node/valves.md",
+                    path: "docs/missing.md",
                     kind: "doc",
-                    repository: RULES,
                     kodyRuleSource: true,
                 },
             ]),

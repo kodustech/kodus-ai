@@ -56,7 +56,8 @@ export class CustomAgentRunRepository implements ICustomAgentRunLog {
                     at: 1,
                 },
             )
-            .sort({ at: -1 })
+            // `_id` breaks ties so the capped cut is the same on every read.
+            .sort({ at: -1, _id: -1 })
             .limit(MAX_RUNS_READ)
             .lean<CustomAgentRunRecord[]>()
             .exec();
