@@ -1,0 +1,16 @@
+{
+    "__doc": [
+        "Floors of the heavy review (evals/heavy-recall), per case set and model, read by evals/investigation/gate.js through run-recall.js --targets. Same rules as the finder's (evals/investigation/targets.json): two runs of one commit, the per-PR run-to-run difference, recallFloor = mean - 2.2 sigma, collapse floors at about half the observed findings and tool calls, under the judge below.",
+        "Not calibrated yet: no model has a floor, so --gate exits 2 (not measured) until two runs per tier-0 model are written here."
+    ],
+    "set": "pr",
+    "models": {},
+    "sets": {
+        "controlled": {
+            "cases": 15,
+            "judge": "gpt-5.6-luna",
+            "judgeReasoningEffort": "low",
+            "models": {}
+        }
+    }
+}
