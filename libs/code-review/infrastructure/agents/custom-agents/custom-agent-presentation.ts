@@ -352,10 +352,21 @@ export function repositoryFileUrl(
             return `${base}/blob/${ref}/${file}`;
         case PlatformType.GITLAB:
             return `${base}/-/blob/${ref}/${file}`;
-        case PlatformType.BITBUCKET:
-            return /^https:\/\/bitbucket\.org\//.test(base)
-                ? `${base}/src/${ref}/${file}`
+        case PlatformType.BITBUCKET: {
+            if (/^https:\/\/bitbucket\.org\//.test(base)) {
+                return `${base}/src/${ref}/${file}`;
+            }
+            // Data Center clones at `/scm/<project>/<repo>`; files are
+            // browsed at `/projects/<project>/repos/<repo>/browse`.
+            const dataCenter = /^(https:\/\/.+?)\/scm\/([^/]+)\/([^/]+)$/.exec(
+                base,
+            );
+            return dataCenter
+                ? `${dataCenter[1]}/projects/${dataCenter[2]}/repos/${dataCenter[3]}/browse/${file}?at=${ref}`
                 : undefined;
+        }
+        case PlatformType.FORGEJO:
+            return `${base}/src/branch/${ref}/${file}`;
         case PlatformType.AZURE_REPOS:
             return `${base}?path=/${file}&version=GB${ref}`;
         default:

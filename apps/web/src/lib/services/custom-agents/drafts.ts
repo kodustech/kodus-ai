@@ -440,8 +440,13 @@ export const knowledgeSourcePath = (
 ) => (item.repository ? `${item.repository}:${item.path}` : item.path);
 
 /** Stable key for lists: kind, repository and path. */
+/** One key per skill or doc, as sameKnowledge compares: the repository in
+ *  any case. */
 export const knowledgeKey = (item: KnowledgeIdentity) =>
-    `${item.kind}:${knowledgeSourcePath(item)}`;
+    `${item.kind}:${knowledgeSourcePath({
+        ...item,
+        ...(item.repository && { repository: item.repository.toLowerCase() }),
+    })}`;
 
 const sameTarget = (a: KnowledgeLinkTarget, b: KnowledgeLinkTarget) =>
     typeof a === "string" || typeof b === "string"
@@ -760,11 +765,11 @@ export const knowledgeChoices = (
     }));
     const taken = new Set(knowledge.map(knowledgeKey));
     const discovered = candidates
+        // The first candidate of each key, which byKey kept.
         .filter(
-            (candidate, index, all) =>
+            (candidate) =>
                 !taken.has(knowledgeKey(candidate)) &&
-                all.findIndex((other) => sameKnowledge(other, candidate)) ===
-                    index,
+                byKey.get(keyOf(candidate)) === candidate,
         )
         .map((candidate) => ({
             path: candidate.path,

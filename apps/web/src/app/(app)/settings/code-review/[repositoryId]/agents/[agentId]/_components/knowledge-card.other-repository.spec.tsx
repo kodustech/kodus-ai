@@ -410,4 +410,30 @@ describe("AgentKnowledgeField with another repository", () => {
             ),
         ).toBeInTheDocument();
     });
+
+    it("says a repository could not be read instead of that it has nothing", () => {
+        mockResolve.mockImplementation((params) =>
+            params?.source?.repository && params.enabled !== false
+                ? {
+                      isLoading: false,
+                      isFetching: false,
+                      isError: true,
+                      data: undefined,
+                  }
+                : { isLoading: false, isFetching: false, data: undefined },
+        );
+        field([]);
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Add skill or doc" }),
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "irrigation-rules" }),
+        );
+
+        expect(
+            screen.getByText(`Could not read ${RULES}. Try again.`),
+        ).toBeInTheDocument();
+        expect(screen.queryByText(/No skills or docs found/)).toBeNull();
+    });
 });

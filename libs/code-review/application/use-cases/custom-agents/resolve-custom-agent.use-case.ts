@@ -289,8 +289,10 @@ export class ResolveCustomAgentUseCase {
             const resolutions = new Map<string, KnowledgeItemResolution>();
             const branches = new Map<string, string>();
             const unreachable = new Set<string>();
-            await Promise.all(
-                [...groups.values()].map(async (items) => {
+            // One repository at a time: each one costs provider calls (its
+            // default branch, its files), and a team can link several.
+            for (const items of groups.values()) {
+                {
                     const other = items[0].repository;
                     const ref = other
                         ? await refOf(other, items.find((i) => i.ref)?.ref)
@@ -299,7 +301,7 @@ export class ResolveCustomAgentUseCase {
                         items.forEach((item) =>
                             unreachable.add(knowledgeItemKey(item)),
                         );
-                        return;
+                        continue;
                     }
                     const read = await reader.resolve({
                         organizationAndTeamData,
@@ -318,8 +320,8 @@ export class ResolveCustomAgentUseCase {
                         }
                         branches.set(knowledgeItemKey(item), ref.branch);
                     }
-                }),
-            );
+                }
+            }
 
             let discoveredIn: KnowledgeSourceReport | undefined;
             let candidates: KnowledgeCandidate[] | undefined;

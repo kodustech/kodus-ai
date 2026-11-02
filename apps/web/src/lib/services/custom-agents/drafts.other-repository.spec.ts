@@ -4,6 +4,7 @@
  */
 import {
     knowledgeChoices,
+    knowledgeKey,
     mentionedButNotFollowed,
     prepareKnowledgeForSave,
     sameKnowledge,
@@ -33,6 +34,13 @@ describe("knowledge of another repository", () => {
                 repository: RULES.toUpperCase(),
             }),
         ).toBe(true);
+    });
+
+    it("keys a repository in any case as one item, so it is not added twice", () => {
+        expect(knowledgeKey(remote)).toBe(
+            knowledgeKey({ ...remote, repository: RULES.toUpperCase() }),
+        );
+        expect(knowledgeKey(remote)).not.toBe(knowledgeKey(local));
     });
 
     it("follows and unfollows a doc of the rules repository without touching the local one", () => {

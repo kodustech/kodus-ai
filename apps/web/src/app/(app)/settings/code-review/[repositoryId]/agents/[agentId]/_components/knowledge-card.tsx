@@ -203,10 +203,13 @@ export const useKnowledgeSourceListing = (params: {
             listing?.repositoryVisibility ??
             connectedKnowledge?.repositoryVisibility,
         loading: params.source.repository ? remoteLoading : !local,
-        unavailable:
-            params.source.repository &&
-            remote.data?.knowledge.status === "unavailable"
-                ? remote.data.knowledge.reason
+        // A request that failed is not an empty repository: say so.
+        unavailable: !params.source.repository
+            ? undefined
+            : remote.data?.knowledge.status === "unavailable"
+              ? remote.data.knowledge.reason
+              : remote.isError && !remoteLoading
+                ? `Could not read ${params.source.repository}. Try again.`
                 : undefined,
     };
 };
