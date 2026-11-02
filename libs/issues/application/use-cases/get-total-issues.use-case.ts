@@ -34,11 +34,11 @@ export class GetTotalIssuesUseCase implements IUseCase {
     async execute(filters: GetIssuesByFiltersDto): Promise<number> {
         const newFilters: Parameters<
             typeof this.kodyIssuesManagementService.buildFilter
-        >[0] = { ...filters };
-
-        if (!newFilters?.organizationId) {
-            newFilters.organizationId = this.request.user.organization.uuid;
-        }
+        >[0] = {
+            ...filters,
+            // Always the caller's organization, never a client-supplied one.
+            organizationId: this.request.user.organization.uuid,
+        };
 
         const assignedRepositoryIds =
             await this.authorizationService.getRepositoryScope({
