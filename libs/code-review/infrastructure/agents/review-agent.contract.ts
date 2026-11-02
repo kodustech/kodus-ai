@@ -659,6 +659,16 @@ export interface AgentLoopOutput {
     coverage: CoverageSummary;
     verification?: VerificationTraceSummary | null;
     anomalies: AgentAnomalySummary;
+    /** New findings each finder pass contributed (base, synthesis-rescue).
+     *  Attribution the merged total hides: a pass costing a full run and
+     *  adding nothing looks identical otherwise. */
+    recallPasses?: Array<{
+        label: string;
+        added: number;
+        steps: number;
+        toolCalls: number;
+        fullFileReads: number;
+    }>;
     /** Fidelity warnings emitted during the loop (small context window
      *  forced compact prompt, dropped callGraph, etc). Always present;
      *  empty array when no adaptive strategy fired. */
@@ -690,6 +700,19 @@ export interface VerificationDecisionTrace {
     confidence?: 'high' | 'medium' | 'low';
     verifierEvidence: ToolEvidenceSummary;
     rawTextPreview?: string;
+    /** Only on `drop`: what the finding said, so a dropped finding can be
+     *  judged afterwards. The kept ones travel on as findings; a dropped one
+     *  otherwise leaves only its file behind, and whether the verifier threw
+     *  away real defects cannot be measured. */
+    droppedFinding?: {
+        oneSentenceSummary?: string;
+        suggestionContent?: string;
+        relevantLinesStart?: number;
+        relevantLinesEnd?: number;
+        label?: string;
+        severity?: string;
+        producedBy?: string;
+    };
 }
 
 export interface VerificationTraceSummary {
@@ -703,6 +726,8 @@ export interface VerificationTraceSummary {
     /** @deprecated Always 0 — evidence gate now forces verification instead of dropping. Kept for backwards compatibility. */
     droppedByEvidenceFilter: number;
     sentToEvidenceGate?: number;
+    /** Wall-clock of the verify sub-step, in ms. */
+    verifyMs?: number;
     decisions: VerificationDecisionTrace[];
 }
 

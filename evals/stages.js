@@ -80,9 +80,15 @@ const STAGES = [
             {
                 kind: 'unit',
                 name: 'Which task a PR names, read through each tracker, scripted MCP servers',
-                specs: ['test/evals/business-rules-validation/task-resolution/task-resolution.eval.spec.ts'],
+                specs: [
+                    'test/evals/business-rules-validation/task-resolution/task-resolution.eval.spec.ts',
+                ],
             },
-            { kind: 'contract', name: 'The stage, its MCP adapter and the Jira MCP, end to end', wiring: ['business-logic', 'business-logic-requirements'] },
+            {
+                kind: 'contract',
+                name: 'The stage, its MCP adapter and the Jira MCP, end to end',
+                wiring: ['business-logic', 'business-logic-requirements'],
+            },
             {
                 kind: 'contract',
                 name: 'Per requirement: done work not called a gap, and gaps caught (evals/business-logic-requirements)',
@@ -141,7 +147,7 @@ const STAGES = [
         name: 'Finder',
         short: 'Finds the bugs in the PR',
         group: 'The agents, side by side',
-        does: 'The agent that looks for bugs. It reads the PR and the repository with tools (opening files, searching, running commands in a sandbox) and writes down each problem it finds, with its lines and a fix. Verify then checks each one.',
+        does: 'The agent that looks for bugs. It reads the PR and the repository with tools (opening files, searching, running commands in a sandbox) and writes down each problem it finds: the file, the lines and what is wrong. Its step cap and the synthesis-rescue pass are set per model family. Verify then checks each one.',
         pipeline: ['AgentReviewStage'],
         tests: [
             {
@@ -153,6 +159,8 @@ const STAGES = [
                     'libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.spec.ts',
                     'libs/code-review/infrastructure/agents/prompts/prompt-builder.spec.ts',
                     'libs/code-review/infrastructure/agents/prompts/prompt-builder.snapshot.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/finder-model-profile.spec.ts',
+                    'libs/code-review/infrastructure/agents/core/recall-passes.spec.ts',
                 ],
             },
             {
@@ -226,7 +234,7 @@ const STAGES = [
         name: 'Agent instructions',
         short: "Checks the repo's coding-agent instructions",
         group: 'The agents, side by side',
-        does: "Inside the finder, when the team turns it on: lists the CLAUDE.md, AGENTS.md, .cursor/rules and Copilot instructions that govern the changed files, reads them from the target branch, and reports a change that breaks one, quoting it.",
+        does: 'Inside the finder, when the team turns it on: lists the CLAUDE.md, AGENTS.md, .cursor/rules and Copilot instructions that govern the changed files, reads them from the target branch, and reports a change that breaks one, quoting it.',
         pipeline: ['AgentReviewStage'],
         tests: [
             {
@@ -238,17 +246,22 @@ const STAGES = [
                     'libs/code-review/infrastructure/agents/core/finder-with-verify.spec.ts',
                 ],
             },
-            { kind: 'contract', name: "A scripted model reads the CLAUDE.md through the tool and the verifier gets it", wiring: ['repo-instructions'] },
+            {
+                kind: 'contract',
+                name: 'A scripted model reads the CLAUDE.md through the tool and the verifier gets it',
+                wiring: ['repo-instructions'],
+            },
         ],
         eval: {
             path: 'evals/repo-instructions',
             metric: 'of violation lines the review posts',
             sets: {
-                controlled: 'real merged PRs, one per repository and convention, each with a CLAUDE.md on its target branch stating the convention it breaks beside a decoy',
+                controlled:
+                    'real merged PRs, one per repository and convention, each with a CLAUDE.md on its target branch stating the convention it breaks beside a decoy',
                 full: 'every such PR (14)',
             },
             nightly: 'shared',
-            caveat: "Counts what the review posts under the team's default severity and quantity filters, which drop most of these findings (the finder rates them low); what the finder reported before the filters is shown beside it.",
+            caveat: "Counts what the review posts under the team's default severity and quantity filters, which drop most of these findings (the severity step rates them low); what the finder reported before the filters is shown beside it.",
         },
     },
     {
@@ -270,6 +283,14 @@ const STAGES = [
                 ],
             },
             {
+                kind: 'unit',
+                name: "The finder's five-field schema and its label normalization, deterministic",
+                specs: [
+                    'libs/code-review/infrastructure/agents/engine/parse-finder-schema.spec.ts',
+                    'libs/code-review/infrastructure/agents/engine/normalize-finder-label.spec.ts',
+                ],
+            },
+            {
                 kind: 'contract',
                 name: 'Recorded outputs of nine production models go through the parse; a finding written twice in two shapes parses the same',
                 wiring: ['parse', 'review-chain', 'shape-invariance'],
@@ -277,6 +298,38 @@ const STAGES = [
         ],
         eval: null,
         note: "Tests only for now: they replay recorded model output through production's parse. An eval of this step comes later.",
+    },
+    {
+        id: 'prose-recovery',
+        name: 'Prose recovery',
+        short: 'Recovers findings a run wrote only as prose',
+        group: 'The agents, side by side',
+        does: 'When a finder run ends with no findings, asks the model to turn the prose it wrote into findings: the ones the prose reports, never the hypotheses it dismissed.',
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'The recovery gate and its fallback parse',
+                specs: [
+                    'libs/code-review/infrastructure/agents/core/finder.agent.findings-parse.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: 'Finder prose written for the eval goes through the recovery on the scripted model',
+                wiring: ['prose-recovery'],
+            },
+        ],
+        eval: {
+            path: 'evals/prose-recovery',
+            metric: 'of the checks, findings extracted and dismissed hypotheses left out',
+            sets: {
+                controlled:
+                    'finder prose written for the eval: 18 that dismiss every hypothesis, 8 that report defects, 6 that do both',
+                full: null,
+            },
+            nightly: 'shared',
+        },
     },
     {
         id: 'verify',
@@ -492,6 +545,7 @@ const STAGES = [
                 specs: [
                     'libs/code-review/infrastructure/agents/engine/classify-severity.spec.ts',
                     'libs/code-review/infrastructure/agents/engine/survives-severity-filter.spec.ts',
+                    'libs/code-review/infrastructure/agents/engine/severity-prompt.spec.ts',
                 ],
             },
             {
@@ -505,6 +559,75 @@ const STAGES = [
             metric: 'of known bugs reaching severity kept above the threshold, and of its control checks right',
             sets: FUNNEL_SETS,
             nightly: 'shared',
+        },
+    },
+    {
+        id: 'severity-levels',
+        name: 'Severity levels',
+        short: 'Rates each finding at its defined level',
+        group: 'After the agents',
+        does: 'The rating itself: each suggestion gets critical, high, medium or low from the defined-level prompt, one call per PR. A wrong level moves a real bug under the team threshold or a nit above it.',
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'contract',
+                name: "Rates a PR's suggestions in one call and maps each level back",
+                wiring: ['severity-levels'],
+            },
+        ],
+        eval: {
+            path: 'evals/severity-levels',
+            metric: 'of the 205 suggestions, rated at their defined level (and per level)',
+            sets: {
+                controlled: '205 suggestions labeled from their own text: 50 low, 70 medium, 50 high, 35 critical',
+                full: null,
+            },
+            nightly: 'shared',
+            caveat: 'A critical rated high counts as wrong.',
+        },
+    },
+    {
+        id: 'enrichment',
+        name: 'Enrichment',
+        short: 'Titles each finding and writes its fix',
+        group: 'After the agents',
+        does: 'Completes each finding the review keeps: the cited code and its language from the file at the PR head, then one model call for a title that names the problem and, when a fix fits exactly the cited lines, the code that replaces them. A finding with no fix that fits ships with no code.',
+        pipeline: ['AgentReviewStage'],
+        tests: [
+            {
+                kind: 'unit',
+                name: 'What the call gets and what the finding keeps',
+                specs: [
+                    'libs/code-review/infrastructure/agents/engine/enrich-suggestions.spec.ts',
+                    'libs/code-review/infrastructure/agents/engine/enrich-deterministic.spec.ts',
+                    'libs/code-review/pipeline/stages/agent-review.stage.post-finder.spec.ts',
+                ],
+            },
+            {
+                kind: 'unit',
+                name: 'The publish gate: a fix that does not fit ships as a plain comment, and the title the stage resolves',
+                specs: [
+                    'libs/code-review/infrastructure/agents/engine/is-usable-fix.spec.ts',
+                    'libs/code-review/pipeline/stages/agent-review.stage.bad-fix-gate.spec.ts',
+                    'libs/code-review/pipeline/stages/agent-review.stage.title.spec.ts',
+                ],
+            },
+            {
+                kind: 'contract',
+                name: 'Enriches each finding in one call and keeps it when the call fails',
+                wiring: ['suggestion-enrichment'],
+            },
+        ],
+        eval: {
+            path: 'evals/suggestion-enrichment',
+            metric: 'of the checks, the right code (a fix the judge passes on the fixable findings, no code on the others) and a title that names the problem in 80 characters',
+            sets: {
+                controlled:
+                    'the 150 confirmed findings of the enrichment dataset, each with its file at the PR head',
+                full: null,
+            },
+            nightly: 'shared',
+            caveat: "Graded by the nightly's judge (gpt-5.6-luna) against Astra references: a floor holds only under that judge.",
         },
     },
     {

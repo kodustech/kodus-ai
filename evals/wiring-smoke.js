@@ -169,6 +169,17 @@ async function main() {
             model: true,
             args: ['evals/parse/run.js', '--model=eval-fake', '--gate'],
         },
+        // Every case reaches the scripted model, whose answer yields no finding.
+        {
+            name: 'prose-recovery',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/prose-recovery/run.js',
+                '--model=eval-fake',
+                '--gate',
+            ],
+        },
         { name: 'review-chain', args: ['evals/review-chain/run.js', '--gate'] },
         {
             name: 'shape-invariance',
@@ -196,7 +207,16 @@ async function main() {
                 '--gate',
             ],
         },
-        { name: 'business-logic-requirements', result: 'shared', model: true, args: ['evals/business-logic-requirements/run.js', '--model=eval-fake', '--gate'] },
+        {
+            name: 'business-logic-requirements',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/business-logic-requirements/run.js',
+                '--model=eval-fake',
+                '--gate',
+            ],
+        },
         {
             name: 'approval-risk',
             result: 'shared',
@@ -253,6 +273,32 @@ async function main() {
                 '--model=eval-fake',
                 '--gate',
                 '--controls',
+            ],
+        },
+        // The severity step on two PRs of the severity dataset: one call per PR, each level mapped back.
+        {
+            name: 'severity-levels',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/severity-levels/run.js',
+                '--model=eval-fake',
+                '--gate',
+                '--limit=2',
+                '--concurrency=1',
+            ],
+        },
+        {
+            name: 'suggestion-enrichment',
+            result: 'shared',
+            model: true,
+            args: [
+                'evals/suggestion-enrichment/run.js',
+                '--model=eval-fake',
+                '--judge=eval-fake',
+                '--gate',
+                '--limit=2',
+                '--concurrency=1',
             ],
         },
         {

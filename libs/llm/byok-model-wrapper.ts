@@ -140,13 +140,14 @@ export function wrapByokModel(
                                           )
                                     : undefined;
                             if (!refusal || !retry) throw err;
-                            const { field, off } = refusal;
+                            const { field, off, refusedType } = refusal;
                             rememberRefusal(
                                 slot,
                                 opts.organizationId,
                                 field,
                                 Date.now(),
                                 off,
+                                refusedType,
                             );
                             logger.warn({
                                 message: off

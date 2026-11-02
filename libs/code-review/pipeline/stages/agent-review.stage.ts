@@ -4,6 +4,14 @@ import { createLogger } from '@libs/core/log/logger';
 import { jsonSchema, type EmbeddingModel } from 'ai';
 import { tracedEmbed as embed } from '@libs/llm/llm-call';
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { parseFinderSchema } from '@libs/code-review/infrastructure/agents/engine/parse-finder-schema';
+import { normalizeFinderLabels } from '@libs/code-review/infrastructure/agents/engine/normalize-finder-label';
+import {
+    citedFromPatch,
+    enrichSuggestions,
+} from '@libs/code-review/infrastructure/agents/engine/enrich-suggestions';
+import { enrichDeterministic } from '@libs/code-review/infrastructure/agents/engine/enrich-deterministic';
+import { CATEGORY_LABELS } from '@libs/code-review/infrastructure/agents/engine/finding-labels';
 import {
     DEDUP_SCHEMA,
     DEDUP_CONTENT_THRESHOLD,
@@ -77,7 +85,10 @@ import {
     type CustomAgentCliRun,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { analyzerFindingsToSuggestions } from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
+import {
+    analyzerFindingsToSuggestions,
+    isAnalyzerSuggestion,
+} from '@libs/code-review/infrastructure/analyzers/analyzer-findings-to-suggestions';
 import { preferAnalyzerKeep } from '@libs/code-review/infrastructure/agents/engine/prefer-analyzer-keep';
 import { normalizeSuggestionSeverity } from '@libs/code-review/infrastructure/agents/engine/normalize-severity';
 import {
@@ -337,6 +348,17 @@ export function snapLinesToDiff(
  * - Results are stored in context.fileAnalysisResults for downstream stages
  */
 const INSTRUCTION_INDEX_TTL_MS = 60 * 60 * 1000;
+
+/** A suggestion the generalist finder wrote: not a Kody Rule, analyzer or
+ *  custom agent finding. Only these take the parse schema, the strip and the
+ *  enrichment (#1821). */
+function isFinderSuggestion(s: Partial<CodeSuggestion>): boolean {
+    return (
+        s.label !== 'kody_rules' &&
+        !isAnalyzerSuggestion(s) &&
+        !isCustomAgentFinding(s)
+    );
+}
 
 @Injectable()
 export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -1351,16 +1373,38 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 }
             }
 
+            // After the finder, in order: parse schema, anchoring, label
+            // normalization (#1821). Then the dedup and the rest.
+            const logIds = {
+                organizationId: context.organizationAndTeamData?.organizationId,
+                teamId: context.organizationAndTeamData?.teamId,
+                prNumber,
+            };
+            const parsedSuggestions = this.discardUnparsedFindings(
+                result.suggestions,
+                allDiscarded,
+                logIds,
+            );
+
             const changedFilesByName = new Map(
                 changedFiles.map((f) => [f.filename, f]),
             );
             // A custom agent's findings on an ignored file it names are held
             // to that file's hunks like any other.
-            const validatedSuggestions = this.anchorSuggestionsToDiff(
-                result.suggestions,
+            const anchoredSuggestions = this.anchorSuggestionsToDiff(
+                parsedSuggestions,
                 [...changedFiles, ...ignoredChangedFiles],
                 context.codeReviewConfig?.kodyRules ?? [],
                 allDiscarded,
+                logIds,
+            );
+
+            const validatedSuggestions = this.normalizeSuggestionLabels(
+                anchoredSuggestions,
+                reviewOptions,
+                !!repoInstructions?.files?.length,
+                allDiscarded,
+                logIds,
             );
 
             // Verify/Discover removed — was hurting recall across all models.
@@ -1390,25 +1434,16 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // them, a group was kept or dropped whole by whichever occurrence
             // had the longest text. Also before the severity and formatter
             // passes, so a repeat costs no further model call.
-            const repeatCheck = await this.dropRepeats(
+            const repeatCheck = await this.dropRepeatsOnCitedCode(
                 context,
-                [
-                    ...severityNormalizedNonRules,
-                    ...analyzerSuggestions,
-                    ...kodyRulesWithSeverity,
-                ],
+                severityNormalizedNonRules,
+                [...analyzerSuggestions, ...kodyRulesWithSeverity],
+                [...changedFiles, ...ignoredChangedFiles],
                 kodyRulesById,
+                allDiscarded,
                 telemetryMeta,
             );
-            for (const s of repeatCheck.repeats) {
-                allDiscarded.push({
-                    ...s,
-                    priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
-                    deliveryStatus: DeliveryStatus.NOT_SENT,
-                });
-            }
-            let severityNormalized: Partial<CodeSuggestion>[] =
-                repeatCheck.kept;
+            let severityNormalized = repeatCheck.kept;
 
             // A custom agent's own severity floor and comment limit apply
             // whatever the team's filter is (#2172), and also before dedup:
@@ -1467,6 +1502,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context,
                 allDiscarded,
                 customAgentsById,
+            );
+
+            // Enrichment (#1821): the title, cited code and fix of each finder
+            // suggestion still standing. After the severity step, so only what
+            // reaches the team is enriched; before the title and the formatter,
+            // which read what it writes.
+            deduped = await this.enrichFinderSuggestions(
+                deduped,
+                context,
+                [...changedFiles, ...ignoredChangedFiles],
+                telemetryMeta,
             );
 
             // The agent's fix policy (its floor and limit applied before dedup).
@@ -1589,6 +1635,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             {
                 const badFixCounts: Partial<Record<BadFixReason, number>> = {};
                 for (const s of deduped) {
+                    // The enrichment chose no code: not an unusable fix.
+                    if (s.fixStatus && s.fixStatus !== 'local') {
+                        continue;
+                    }
+                    // Its enrichment call failed: no fix was proposed, and
+                    // the finding posts as a plain comment.
+                    if (!s.fixStatus && isFinderSuggestion(s)) {
+                        continue;
+                    }
                     const reason = checkFix(
                         s.existingCode,
                         s.improvedCode,
@@ -2057,6 +2112,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         changedFiles: FileChange[],
         kodyRules: Partial<IKodyRule>[],
         allDiscarded: Partial<CodeSuggestion>[],
+        /** The review's ids, on every log line. */
+        logMeta: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        } = {},
     ): Partial<CodeSuggestion>[] {
         // Snap suggestion line numbers to valid diff ranges before passing downstream.
         // GitHub rejects inline comments on lines that aren't part of the diff.
@@ -2071,6 +2132,23 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         const validatedSuggestions = suggestions
             .map((s) => {
                 const file = changedFilesByName.get(s.relevantFile);
+                // A finding on a file this PR does not change has no hunk to
+                // overlap; the delivery guard would drop it after the dedup and
+                // the severity calls, so it goes now. Kody Rules keep their own
+                // routing (PR-level and file-anchored comments).
+                if (!file && s.label !== 'kody_rules') {
+                    this.logger.log({
+                        message: `[AGENT] Dropped suggestion for ${s.relevantFile}: the file is not changed by this PR`,
+                        context: this.stageName,
+                        metadata: { ...logMeta, relevantFile: s.relevantFile },
+                    });
+                    allDiscarded.push({
+                        ...s,
+                        priorityStatus: PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
+                    });
+                    return null;
+                }
                 if (!file) return s;
                 const validRanges = extractValidDiffLines(file.patch);
                 const snapped = snapLinesToDiff(s, validRanges);
@@ -2079,12 +2157,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         this.logger.log({
                             message: `[AGENT] File-anchored finding for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} sit outside every hunk, but the rule declared it needs context beyond the diff — delivering it as a PR-level comment`,
                             context: this.stageName,
+                            metadata: {
+                                ...logMeta,
+                                relevantFile: s.relevantFile,
+                            },
                         });
                         return { ...s, fileAnchored: true };
                     }
                     this.logger.log({
                         message: `[AGENT] Dropped out-of-diff suggestion for ${s.relevantFile}: lines ${s.relevantLinesStart}-${s.relevantLinesEnd} do not overlap any changed hunk`,
                         context: this.stageName,
+                        metadata: { ...logMeta, relevantFile: s.relevantFile },
                     });
                     allDiscarded.push({
                         ...s,
@@ -2100,12 +2183,186 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     this.logger.log({
                         message: `[AGENT] Snapped lines for ${s.relevantFile}: ${s.relevantLinesStart}-${s.relevantLinesEnd} → ${snapped.relevantLinesStart}-${snapped.relevantLinesEnd}`,
                         context: this.stageName,
+                        metadata: { ...logMeta, relevantFile: s.relevantFile },
                     });
                 }
                 return snapped;
             })
             .filter((s): s is Partial<CodeSuggestion> => s !== null);
         return validatedSuggestions;
+    }
+
+    /**
+     * Parse schema (#1821): a finder suggestion without the five lean fields
+     * is discarded into `allDiscarded`, before anchoring, so every suggestion
+     * anchored has a file and lines. The mapper already gave it the lean shape
+     * (finding-mapper.ts, leanOutput). Custom agents write the full finding and
+     * keep main's anchoring: one without lines snaps to the first hunk.
+     * Returns what goes on to anchoring, Kody Rules last.
+     */
+    private discardUnparsedFindings(
+        suggestions: Partial<CodeSuggestion>[],
+        allDiscarded: Partial<CodeSuggestion>[],
+        /** The review's ids, on every log line. */
+        logMeta: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        },
+    ): Partial<CodeSuggestion>[] {
+        const finderSuggestions = suggestions.filter(isFinderSuggestion);
+        const parsed = parseFinderSchema(
+            finderSuggestions as Array<Record<string, unknown>>,
+        );
+        const parseDiscarded = new Set(parsed.discarded.map((d) => d.index));
+        for (const d of parsed.discarded) {
+            allDiscarded.push({
+                ...finderSuggestions[d.index],
+                priorityStatus: PriorityStatus.DISCARDED_BY_SCHEMA,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        if (parsed.discarded.length > 0) {
+            this.logger.warn({
+                message: `[PARSE-SCHEMA] PR#${logMeta.prNumber}: discarded ${parsed.discarded.length} finder suggestions missing lean fields`,
+                context: this.stageName,
+                metadata: { ...logMeta, discarded: parsed.discarded },
+            });
+        }
+        const discardedByParse = new Set(
+            finderSuggestions.filter((_, i) => parseDiscarded.has(i)),
+        );
+        return [
+            ...suggestions.filter(
+                (s) => s.label !== 'kody_rules' && !discardedByParse.has(s),
+            ),
+            ...suggestions.filter((s) => s.label === 'kody_rules'),
+        ];
+    }
+
+    /**
+     * Label normalization (#1821): a label off the list becomes `bug`, and a
+     * label the team turned off is discarded into `allDiscarded`, never moved
+     * to one that is on. Kody Rules and custom agents answer to their own
+     * config.
+     */
+    private normalizeSuggestionLabels(
+        suggestions: Partial<CodeSuggestion>[],
+        reviewOptions: ReturnType<
+            typeof resolveAgentReviewSettings
+        >['reviewOptions'],
+        hasRepoInstructions: boolean,
+        allDiscarded: Partial<CodeSuggestion>[],
+        /** The review's ids, on every log line. */
+        logMeta: {
+            organizationId?: string;
+            teamId?: string;
+            prNumber?: number;
+        },
+    ): Partial<CodeSuggestion>[] {
+        const labeled = normalizeFinderLabels(suggestions, {
+            allowed: new Set<string>([
+                ...CATEGORY_LABELS.filter((c) => reviewOptions?.[c] !== false),
+                ...(hasRepoInstructions ? ['repo_instruction'] : []),
+            ]),
+            exempt: (s) => s.label === 'kody_rules' || isCustomAgentFinding(s),
+        });
+        for (const s of labeled.discarded) {
+            allDiscarded.push({
+                ...s,
+                priorityStatus: PriorityStatus.DISCARDED_BY_CATEGORY,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        if (labeled.discarded.length > 0) {
+            const byLabel: Record<string, number> = {};
+            for (const s of labeled.discarded) {
+                byLabel[s.label] = (byLabel[s.label] || 0) + 1;
+            }
+            this.logger.log({
+                message: `[LABEL-NORMALIZE] PR#${logMeta.prNumber}: discarded ${labeled.discarded.length} suggestions in categories the team turned off`,
+                context: this.stageName,
+                metadata: { ...logMeta, byLabel },
+            });
+        }
+        if (Object.keys(labeled.replaced).length > 0) {
+            this.logger.warn({
+                message: `[LABEL-NORMALIZE] PR#${logMeta.prNumber}: replaced the label of ${Object.values(labeled.replaced).reduce((a, b) => a + b, 0)} suggestions with bug`,
+                context: this.stageName,
+                metadata: { ...logMeta, replaced: labeled.replaced },
+            });
+        }
+        return labeled.suggestions;
+    }
+
+    /**
+     * The repeat check (#2097) on findings that carry their cited code. The
+     * finder's suggestions carry no code: the cited lines, read from the PR
+     * head as the enrichment reads them, let the check match an earlier
+     * comment on the same code in another file. The code goes on a copy the
+     * check reads; the suggestion itself stays lean, and the enrichment reads
+     * the code again. Repeats go to `allDiscarded`; returns what was kept and
+     * the history read, so the revision links resolve against it.
+     */
+    private async dropRepeatsOnCitedCode(
+        context: CodeReviewPipelineContext,
+        nonRuleSuggestions: Partial<CodeSuggestion>[],
+        otherSuggestions: Partial<CodeSuggestion>[],
+        headFileList: FileChange[],
+        kodyRulesById: ReadonlyMap<string, Partial<IKodyRule>>,
+        allDiscarded: Partial<CodeSuggestion>[],
+        telemetryMeta?: LangfuseTelemetryMetadata,
+    ): Promise<{
+        kept: Partial<CodeSuggestion>[];
+        history: readonly PrDecisionRecord[] | undefined;
+    }> {
+        const headFiles = new Map(headFileList.map((f) => [f.filename, f]));
+        const originalOf = new Map<
+            Partial<CodeSuggestion>,
+            Partial<CodeSuggestion>
+        >();
+        const withCitedCode = nonRuleSuggestions.map((s) => {
+            if (s.existingCode || isCustomAgentFinding(s)) return s;
+            const file = headFiles.get(s.relevantFile);
+            // A review sent as a diff (the CLI's) has no file content:
+            // the cited lines come from the diff's new side.
+            const existingCode =
+                file?.fileContent == null && file?.patch
+                    ? citedFromPatch(
+                          file.patch,
+                          s.relevantLinesStart ?? 1,
+                          s.relevantLinesEnd ?? s.relevantLinesStart ?? 1,
+                      )
+                    : enrichDeterministic(s, file?.fileContent ?? null)
+                          .existingCode;
+            if (!existingCode) return s;
+            const copy = { ...s, existingCode };
+            originalOf.set(copy, s);
+            return copy;
+        });
+        const repeatCheck = await this.dropRepeats(
+            context,
+            [...withCitedCode, ...otherSuggestions],
+            kodyRulesById,
+            telemetryMeta,
+        );
+        for (const s of repeatCheck.repeats) {
+            allDiscarded.push({
+                ...s,
+                priorityStatus: PriorityStatus.DISCARDED_BY_REPEAT,
+                deliveryStatus: DeliveryStatus.NOT_SENT,
+            });
+        }
+        const kept = repeatCheck.kept.map((s) => {
+            const original = originalOf.get(s);
+            if (!original) return s;
+            // The check links a kept finding to the earlier comment it
+            // revises on the copy; the link goes back with it.
+            return s.revisesSuggestionId
+                ? { ...original, revisesSuggestionId: s.revisesSuggestionId }
+                : original;
+        });
+        return { kept, history: repeatCheck.history };
     }
 
     /**
@@ -2308,6 +2565,47 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     }
 
     /**
+     * The enrichment step (enrich-suggestions.ts) on the finder suggestions;
+     * Kody Rules, analyzer and custom agent findings keep what their own
+     * steps wrote. Called by executeStage; the enrichment eval calls it too.
+     */
+    private async enrichFinderSuggestions(
+        suggestions: Partial<CodeSuggestion>[],
+        context: CodeReviewPipelineContext,
+        changedFiles: FileChange[],
+        telemetryMeta?: LangfuseTelemetryMetadata,
+    ): Promise<Partial<CodeSuggestion>[]> {
+        const prNumber = context.pullRequest?.number;
+        const { suggestions: enriched, counts } = await enrichSuggestions(
+            suggestions,
+            changedFiles,
+            {
+                shouldEnrich: isFinderSuggestion,
+                byokConfig: context.codeReviewConfig?.byokConfig,
+                telemetryMetadata: telemetryMeta,
+                organizationId: context.organizationAndTeamData?.organizationId,
+                usageAttrs: {
+                    prNumber,
+                    ...(context.organizationAndTeamData?.teamId
+                        ? { teamId: context.organizationAndTeamData.teamId }
+                        : {}),
+                },
+            },
+        );
+        this.logger.log({
+            message: `[ENRICH] PR#${prNumber}: enriched ${counts.enriched}, failed ${counts.failed}, skipped ${counts.skipped}`,
+            context: this.stageName,
+            metadata: {
+                organizationId: context.organizationAndTeamData?.organizationId,
+                teamId: context.organizationAndTeamData?.teamId,
+                prNumber,
+                ...counts,
+            },
+        });
+        return enriched;
+    }
+
+    /**
      * The definitive severity of each finding (the severity classifier; a Kody
      * Rule finding keeps its rule's), then the team's severity threshold, the
      * findings below it moved to `allDiscarded`. Returns the findings that stay.
@@ -2325,7 +2623,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             customAgentsById ??
             indexCustomAgents(await this.resolveCustomAgents(context));
         let deduped = suggestions;
-        // Reclassify severity using dedicated criteria (Gemini Flash)
+        // Reclassify severity with the defined levels (or the team's own criteria).
         // The agent assigns rough severity during investigation; this step
         // applies the definitive criteria (default or client-custom) without
         // biasing the agent's bug-finding behavior.
@@ -2336,6 +2634,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const severityMap = await classifySeverity(
                 deduped.map((s) => ({
                     relevantFile: s.relevantFile || '',
+                    relevantLinesStart: s.relevantLinesStart,
+                    relevantLinesEnd: s.relevantLinesEnd,
                     suggestionContent: s.suggestionContent || '',
                     oneSentenceSummary: s.oneSentenceSummary || '',
                     existingCode: s.existingCode || '',
@@ -2345,11 +2645,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context.codeReviewConfig?.byokConfig,
                 context.organizationAndTeamData?.organizationId,
             );
+            // Findings the classifier left out keep the default (medium).
+            let unclassified = 0;
             for (let i = 0; i < deduped.length; i++) {
-                const classified = severityMap.get(i);
-                if (!classified) {
-                    continue;
-                }
                 const hasKodyRuleSeverity =
                     deduped[i].brokenKodyRulesIds?.length > 0;
                 // A custom agent's severity is the team's call too: its
@@ -2359,16 +2657,35 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 if (hasKodyRuleSeverity || hasCustomAgentSeverity) {
                     continue;
                 }
+                const classified = severityMap.get(i);
+                if (!classified) {
+                    unclassified++;
+                    continue;
+                }
                 deduped[i].severity = classified;
             }
             this.logger.log({
-                message: `[AGENT] Reclassified severity for ${deduped.length} suggestions`,
+                message: `[AGENT] Reclassified severity for ${deduped.length} suggestions (${unclassified} left unclassified, default kept)`,
                 context: this.stageName,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    prNumber: context.pullRequest?.number,
+                    unclassified,
+                },
             });
         } catch (err) {
             this.logger.warn({
                 message: `[AGENT] Severity classification failed, keeping agent-assigned severity: ${err instanceof Error ? err.message : String(err)}`,
                 context: this.stageName,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    teamId: context.organizationAndTeamData?.teamId,
+                    prNumber: context.pullRequest?.number,
+                    unclassified: deduped.length,
+                },
             });
         }
 

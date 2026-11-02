@@ -198,6 +198,26 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         });
     });
 
+    it("anchors a finding without lines on the first hunk and keeps the agent's label", async () => {
+        const { stage } = makeStage(
+            output([
+                finding({
+                    relevantLinesStart: undefined,
+                    relevantLinesEnd: undefined,
+                }),
+            ]),
+        );
+
+        const result = await run(stage, makeContext([agent()]));
+
+        const [posted] = result.validSuggestions;
+        expect(posted.suggestionContent).toContain(
+            'The entry is booked on one side only.',
+        );
+        expect(posted.relevantLinesStart).toBeGreaterThan(0);
+        expect(posted.label).toBe('custom_agent');
+    });
+
     it('applies the agent severity floor even without a team filter', async () => {
         const { stage } = makeStage(
             output([

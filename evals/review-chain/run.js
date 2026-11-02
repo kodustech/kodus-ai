@@ -79,6 +79,14 @@ const BOUNDARIES = [
         note: 'off-schema output recovered by normalizeEnvelope; a failed call posts the findings it had to judge (#2097)',
     },
     {
+        phase: 'enrich-content',
+        files: [
+            'libs/code-review/infrastructure/agents/engine/enrich-content.ts',
+        ],
+        requires: ['schema'],
+        note: "the finding's title, fixStatus and improvedCode in one call (#1821)",
+    },
+    {
         phase: 'kody-rules-shard',
         files: [
             'libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider.ts',
