@@ -23,6 +23,10 @@ import {
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { CodeReviewSettingsLogResponseDto } from '../dtos/code-review-settings-log-response.dto';
+import { BillingSignatureGuard } from '../guards/billing-signature.guard';
+
+/** Called by kodus-service-billing when a license seat changes. */
+export const USER_STATUS_CHANGE_PATH = '/user-log/status-change';
 
 @ApiTags('Code Review Logs')
 @ApiStandardResponses()
@@ -34,8 +38,11 @@ export class CodeReviewSettingLogController {
         private readonly registerUserStatusLogUseCase: RegisterUserStatusLogUseCase,
     ) {}
 
+    // No user JWT: kodus-service-billing calls it, signed with the shared
+    // billing secret like the /billing/events callbacks.
     @Post('/status-change')
     @Public()
+    @UseGuards(BillingSignatureGuard)
     @ApiOperation({
         summary: 'Register user status change',
         description: 'Registers a user status change log entry.',
