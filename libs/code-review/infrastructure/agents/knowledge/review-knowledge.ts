@@ -188,7 +188,7 @@ export async function resolveReviewKnowledge(params: {
                     reason: 'knowledge',
                     contextWindowTokens: 0,
                     modelName: '',
-                    detail: 'the linked skills and docs could not be read from the target branch; the review ran without them',
+                    detail: 'the linked skills and docs could not be read; the review ran without them',
                 },
             ],
         };

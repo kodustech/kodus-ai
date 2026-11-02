@@ -103,7 +103,7 @@ La página tiene una línea de estado (encendido/apagado, los archivos en los qu
 | --- | --- |
 | **Files** | Globs que revisa el agente, p. ej. `src/payments/**`. Vacío se ejecuta en todo pull request. |
 | **Except** | Globs que omite, p. ej. `**/*.test.ts`, `**/generated/**`. |
-| **Skills & docs** | Las guías que sigue este agente, leídas de la rama de destino del pull request. Consulta [Skills, docs y herramientas](/es/how_to_use/code_review/custom_agents_knowledge_and_tools). |
+| **Skills & docs** | Las guías que sigue este agente, leídas de la rama de destino del pull request, o de otro repositorio en su rama por defecto o en una rama o tag que definas. Consulta [Skills, docs y herramientas](/es/how_to_use/code_review/custom_agents_knowledge_and_tools). |
 
 Los globs se comparan con la ruta desde la raíz del repositorio, en todos los niveles, incluso en un directorio.
 
@@ -174,10 +174,10 @@ Kody ejecuta solo ese agente, sobre todo el pull request, aunque el agente esté
     Se ejecuta todo agente activado cuyos globs coincidan con al menos un archivo cambiado. Un agente sin archivos coincidentes no se ejecuta.
   </Step>
   <Step title="Revisión">
-    Cada agente revisa solo sus archivos, junto a la revisión de Kody, y reporta solo lo que piden sus instrucciones. Lee skills y docs de la rama de destino y usa sus herramientas.
+    Cada agente revisa solo sus archivos, junto a la revisión de Kody, y reporta solo lo que piden sus instrucciones. Lee skills y docs de la rama de destino (una guía de otro repositorio, de la rama definida para él) y usa sus herramientas.
   </Step>
   <Step title="Verificación de cada hallazgo">
-    Un hallazgo de convención debe citar la regla que aplica, de una guía vinculada o de las instrucciones del agente. Una cita que no está en la guía en la rama de destino se descarta. Una cita abreviada con "..." pasa cuando cada parte está ahí, en orden. Después, un verificador descarta los hallazgos fuera del foco del agente o sin respaldo en el código. Una coincidencia de ast-grep cuenta como prueba por sí sola.
+    Un hallazgo de convención debe citar la regla que aplica, de una guía vinculada o de las instrucciones del agente. Una cita que no está en la guía, en la rama de la que se lee, se descarta. Una cita abreviada con "..." pasa cuando cada parte está ahí, en orden. Después, un verificador descarta los hallazgos fuera del foco del agente o sin respaldo en el código. Una coincidencia de ast-grep cuenta como prueba por sí sola.
   </Step>
   <Step title="Configuración del agente">
     La severidad mínima del agente y, después, su límite de comentarios (se conservan los más graves).
@@ -220,17 +220,24 @@ Los comentarios de cada agente llevan su etiqueta, así el pull request muestra 
   <Accordion title="¿Por qué se descartó un hallazgo?">
     Ejecuta el agente con **Try it** en el mismo pull request: cada hallazgo descartado muestra su motivo. Los habituales:
 
-    - La cita no está en la guía en la rama de destino (parafraseada, o la guía solo cambió en el pull request).
+    - La cita no está en la guía en la rama de la que se lee (parafraseada, o la guía solo cambió en el pull request).
     - El hallazgo está fuera de lo que piden las instrucciones del agente.
     - El verificador no encontró respaldo en el código.
     - Quedó por debajo de la severidad mínima del agente o superó su límite de comentarios.
     - La revisión de Kody reportó el mismo problema y conservó su comentario.
   </Accordion>
+  <Accordion title="¿Por qué no se aplica una guía de otro repositorio?">
+    **Try it** muestra, en **Warnings**, qué archivo no se leyó y por qué. Los motivos habituales:
+
+    - Tu integración de Git ya no puede leer ese repositorio (se eliminó, se renombró o se revocó su acceso). Elígelo de nuevo en **Other repository…**.
+    - No se pudieron listar los repositorios de la integración en ese momento. La siguiente revisión lo intenta de nuevo.
+    - El archivo no está en la rama por defecto de ese repositorio, ni en la rama o tag que definiste.
+  </Accordion>
   <Accordion title="¿Puedo configurar agentes en kodus-config.yml?">
     No. `customAgents` y `knowledge` en `kodus-config.yml` no se leen. El comentario final lo indica: "kodus-config.yml: customAgents is not read from this file; configure custom agents in the app."
   </Accordion>
   <Accordion title="¿Puede un pull request cambiar las reglas con las que se evalúa?">
-    No. Las skills, los docs y los archivos de reglas de ast-grep se leen de la rama de destino del pull request. Los cambios en ellos dentro del pull request aplican después del merge.
+    No. Las skills, los docs y los archivos de reglas de ast-grep se leen de la rama de destino del pull request. Los cambios en ellos dentro del pull request aplican después del merge. Una skill o doc de otro repositorio se lee en la rama por defecto de ese repositorio, o en la rama o tag que definió el equipo, nunca en una ref que nombre el pull request.
   </Accordion>
   <Accordion title="¿Qué pasa con los comentarios anteriores cuando borro un agente?">
     Sus hallazgos se quedan en los pull requests anteriores. Las skills y docs siguen registradas en la página Skills & docs.

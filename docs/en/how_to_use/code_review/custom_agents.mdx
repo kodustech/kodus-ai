@@ -173,10 +173,10 @@ Kody runs that agent alone, on the whole pull request, even while the agent is o
     Every enabled agent whose globs match at least one changed file runs. An agent with no matching file doesn't run.
   </Step>
   <Step title="Review">
-    Each agent reviews only its files, beside Kody's own review, and reports only what its instructions ask for. It reads skills and docs from the target branch and uses its tools.
+    Each agent reviews only its files, beside Kody's own review, and reports only what its instructions ask for. It reads skills and docs from the target branch (a guide of another repository from the branch set for it) and uses its tools.
   </Step>
   <Step title="Check every finding">
-    A convention finding must quote the rule it applies, from a linked guide or from the agent's instructions. A quote that is not in the guide on the target branch is dropped. A quote shortened with "..." passes when each part is there, in order. A verifier then drops findings outside the agent's focus or without support in the code. An ast-grep match counts as proof on its own.
+    A convention finding must quote the rule it applies, from a linked guide or from the agent's instructions. A quote that is not in the guide, on the branch it is read from, is dropped. A quote shortened with "..." passes when each part is there, in order. A verifier then drops findings outside the agent's focus or without support in the code. An ast-grep match counts as proof on its own.
   </Step>
   <Step title="Apply the agent's settings">
     The agent's minimum severity, then its comment limit (the most severe are kept).
@@ -219,11 +219,18 @@ Each agent's comments carry its tag, so the pull request shows which agent said 
   <Accordion title="Why was a finding dropped?">
     Run the agent with **Try it** on the same pull request: each dropped finding shows its reason. The usual ones:
 
-    - The quote is not in the guide on the target branch (paraphrased, or the guide changed only in the pull request).
+    - The quote is not in the guide on the branch it is read from (paraphrased, or the guide changed only in the pull request).
     - The finding is outside what the agent's instructions ask for.
     - The verifier found no support for it in the code.
     - It was below the agent's minimum severity, or over its comment limit.
     - Kody's review reported the same problem and kept its comment.
+  </Accordion>
+  <Accordion title="Why is a guide from another repository not applied?">
+    **Try it** shows, under **Warnings**, which file was not read and why. The usual reasons:
+
+    - Your Git integration can no longer read that repository (removed, renamed, or its access revoked). Pick it again under **Other repository…**.
+    - The integration's repositories could not be listed at that moment. The next review tries again.
+    - The file is not on that repository's default branch, or on the branch or tag you set.
   </Accordion>
   <Accordion title="Can I configure agents in kodus-config.yml?">
     No. `customAgents` and `knowledge` in `kodus-config.yml` are not read. The closing comment says: "kodus-config.yml: customAgents is not read from this file; configure custom agents in the app."
