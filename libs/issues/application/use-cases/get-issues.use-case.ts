@@ -31,9 +31,12 @@ export class GetIssuesUseCase implements IUseCase {
 
     async execute(filters: GetIssuesByFiltersDto): Promise<IIssue[]> {
         try {
-            if (!filters?.organizationId) {
-                filters.organizationId = this.request.user.organization.uuid;
-            }
+            // Always the caller's organization: a client-supplied
+            // organizationId must never select another tenant's issues.
+            filters = {
+                ...filters,
+                organizationId: this.request.user.organization.uuid,
+            };
 
             const cacheKey = `issues_${filters.organizationId}`;
 
