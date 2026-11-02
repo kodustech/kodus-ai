@@ -36,6 +36,11 @@ import { SignUpDTO } from '@libs/identity/dtos/create-user-organization.dto';
 
 export interface SignUpOptions {
     preVerified?: boolean;
+    /**
+     * Existing organization the account joins. Only for callers that already
+     * proved membership (SSO); the public signup body cannot carry it.
+     */
+    organizationId?: string;
 }
 
 @Injectable()
@@ -60,13 +65,8 @@ export class SignUpUseCase implements IUseCase {
         payload: SignUpDTO,
         options?: SignUpOptions,
     ): Promise<Partial<IUser>> {
-        const { email, password, name, organizationId, firstTouch } = payload;
-
-        this.logger.error({
-            message: 'TEST LOG: Starting signup process',
-            context: SignUpUseCase.name,
-            metadata: { email, organizationId, name },
-        });
+        const { email, password, name, firstTouch } = payload;
+        const organizationId = options?.organizationId;
 
         try {
             const userExists = await this.checkIfUserAlreadyExists(email);

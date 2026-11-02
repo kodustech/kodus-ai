@@ -5,6 +5,7 @@ import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/servic
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { createSubmoduleProbe } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
+import { readWithinRootCommand } from '@libs/sandbox/infrastructure/providers/read-within-root';
 import {
     isSecretFilePath,
     secretFileRefusal,
@@ -67,6 +68,10 @@ export interface DocumentationSearchAdapter {
      */
     isSearchAvailable?: () => boolean;
 }
+
+/** How the local sandbox's exec refuses a command that needs a shell. */
+const LOCAL_SHELL_REFUSAL =
+    /^(Command substitution is not allowed|Unsupported shell syntax) in local sandbox/;
 
 /**
  * Create a tool definition compatible with all AI SDK providers (including Anthropic).
@@ -644,12 +649,25 @@ export function buildAgentTools(
                         ) {
                             return `Error: ${filePath} in linked repo ${linked.repository} is a symlink; read the file it points to instead.`;
                         }
-                        const cmd =
-                            startLine === 0 && endLine === 0
-                                ? `cat ${shSingleQuote(target.abs)}`
-                                : `sed -n '${startLine < 1 ? 1 : startLine},${endLine}p' ${shSingleQuote(target.abs)}`;
-                        const { stdout, stderr, exitCode } =
-                            await remoteCommands.exec(cmd);
+                        let run = await remoteCommands.exec(
+                            readWithinRootCommand(
+                                target.abs,
+                                linked.rootPath,
+                                startLine,
+                                endLine,
+                            ),
+                        );
+                        // The local sandbox runs no shell: it refuses the
+                        // guarded command and checks the real path of every
+                        // argument of a plain one itself.
+                        if (LOCAL_SHELL_REFUSAL.test(run.stdout)) {
+                            run = await remoteCommands.exec(
+                                startLine === 0 && endLine === 0
+                                    ? `cat ${shSingleQuote(target.abs)}`
+                                    : `sed -n '${startLine < 1 ? 1 : startLine},${endLine}p' ${shSingleQuote(target.abs)}`,
+                            );
+                        }
+                        const { stdout, stderr, exitCode } = run;
                         if (!stdout && (stderr || exitCode !== 0)) {
                             return `Error reading ${filePath} from linked repo ${linked.repository}: ${(stderr || `exit ${exitCode}`).trim()}`;
                         }

@@ -16,9 +16,12 @@ import {
     buildDropReviewUserPrivilegesScript,
     confirmsPrivilegesDropped,
     DROP_PRIVILEGES_TIMEOUT_MS,
+    ROOT_ONLY_DIR,
+    SS_LOCAL_CONFIG_FILE,
 } from '@libs/sandbox/infrastructure/providers/review-user-privileges';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import { readWithinRootCommand } from './read-within-root';
 import {
     fetchSubmodules,
     isContainedRelativePath,
@@ -157,12 +160,14 @@ export function buildE2BRemoteCommands(
             start: number,
             end: number,
         ): Promise<string> => {
-            const escapedPath = resolveRepoPath(path).replace(/'/g, "'\\''");
-            // GNU sed rejects address 0, so start=end=0 means "whole file" (cat).
-            const cmd =
-                start === 0 && end === 0
-                    ? `cat '${escapedPath}'`
-                    : `sed -n '${start < 1 ? 1 : start},${end}p' '${escapedPath}'`;
+            // GNU sed rejects address 0, so start=end=0 means "whole file"
+            // (cat). Neither follows a symlink the repository commits.
+            const cmd = readWithinRootCommand(
+                resolveRepoPath(path),
+                REPO_DIR,
+                start,
+                end,
+            );
             const result = await runCmd(cmd, {
                 timeoutMs: TIMEOUTS.COMMAND_SHORT_MS,
             });
@@ -1166,13 +1171,21 @@ export class E2BSandboxService implements ISandboxProvider {
             );
         }
 
-        // Start ss-local daemon listening on SOCKS5 port 1080
+        // Start ss-local daemon listening on SOCKS5 port 1080. The password
+        // goes in a root-only config file: a process's arguments are readable
+        // by every user of the sandbox, the review user included. `-f` is how
+        // shadowsocks-libev daemonizes; it has no `-d start`.
+        const config = `${ROOT_ONLY_DIR}/${SS_LOCAL_CONFIG_FILE}`;
         await sandbox.commands.run(
-            `ss-local -s ${host} -p ${port} -l 1080 -k "$SS_PASSWORD" -m ${method} -d start`,
+            [
+                `umask 077 && mkdir -p ${ROOT_ONLY_DIR}`,
+                `printf '%s' "$SS_CONFIG" > ${config}`,
+                `ss-local -c ${config} -s ${shSingleQuote(host)} -p ${shSingleQuote(port)} -l 1080 -m ${shSingleQuote(method)} -f /run/ss-local.pid`,
+            ].join(' && '),
             {
                 timeoutMs: TIMEOUTS.PROXY_DAEMON_MS,
                 user: 'root',
-                envs: { SS_PASSWORD: password },
+                envs: { SS_CONFIG: JSON.stringify({ password }) },
             },
         );
 

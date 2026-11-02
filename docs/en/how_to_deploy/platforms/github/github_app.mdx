@@ -35,6 +35,7 @@ This step is critical to ensure installation and redirection work properly. Fill
   WEB_DOMAIN/api/auth/callback/github
   ```
   This URL is used to complete the authorization flow.
+  Keep **Allow wildcard matching** checked on it: when someone connects the app, GitHub confirms they can access the installation and sends them back to `WEB_DOMAIN/api/auth/callback/github/installation`, a subdirectory of this URL. If you turn wildcard matching off, add that URL as a second Callback URL.
 
 - **Setup URL**:
   ```

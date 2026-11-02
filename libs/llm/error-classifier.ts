@@ -157,6 +157,8 @@ export function isAbortOrHardTimeout(err: unknown): boolean {
     return /\[HARD-TIMEOUT\]|aborted|timed?\s*out|timeout/i.test(text);
 }
 
+const RETRIES_EXHAUSTED = Symbol.for('kodus.llm.retriesExhausted');
+
 /**
  * True when the executor already spent ALL of its same-model retries on this
  * error — the AI SDK's `RetryError` with `reason: 'maxRetriesExceeded'`.
@@ -176,12 +178,37 @@ export function isAbortOrHardTimeout(err: unknown): boolean {
  *
  * `errorNotRetryable` is deliberately NOT exhaustion: the SDK declined to
  * retry at all, so nothing about the failure has been tested by repetition.
+ *
+ * One-shot calls pin the SDK's retry to 0 and own their retry instead
+ * (structured-review-call), so they mark the error with `markRetriesExhausted`
+ * when that retry is spent or the slot's cooldown forbids it.
  * Pure — safe in any catch block.
  */
 export function retriesWereExhausted(err: unknown): boolean {
     if (!err || typeof err !== 'object') return false;
+    if ((err as Record<symbol, unknown>)[RETRIES_EXHAUSTED] === true) {
+        return true;
+    }
     const e = err as { name?: string; reason?: string };
     return e.name === 'AI_RetryError' && e.reason === 'maxRetriesExceeded';
+}
+
+/** Flags an error whose app-level retry was spent, so `retriesWereExhausted`
+ *  reads it the same as the SDK's own `maxRetriesExceeded`. */
+export function markRetriesExhausted<E>(err: E): E {
+    if (err && typeof err === 'object') {
+        try {
+            Object.defineProperty(err, RETRIES_EXHAUSTED, {
+                value: true,
+                enumerable: false,
+                writable: false,
+                configurable: true,
+            });
+        } catch {
+            // Frozen errors — leave unmarked; the call fails as it did before.
+        }
+    }
+    return err;
 }
 
 /**

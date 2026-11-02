@@ -30,6 +30,11 @@ jest.mock('@libs/core/log/langfuse', () => ({
         telemetry: { isEnabled: false },
     })),
 }));
+// The 429 re-issue waits seconds; resolve the wait at once and assert on it.
+jest.mock('@libs/llm/retry-policy', () => ({
+    ...jest.requireActual('@libs/llm/retry-policy'),
+    sleep: jest.fn(() => Promise.resolve()),
+}));
 jest.mock('@libs/llm/reasoning-options', () => ({
     buildProviderOptions: jest.fn(() => ({ __providerOptions: 'reasoning' })),
     defaultReasoningEffortFor: () => undefined,
@@ -48,6 +53,8 @@ import {
 import { tracedGenerateText, timeoutSignal } from '@libs/llm/llm-call';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { setLlmObservability } from '@libs/llm/llm-observability';
+import { retriesWereExhausted } from '@libs/llm/error-classifier';
+import { sleep } from '@libs/llm/retry-policy';
 import {
     buildModelFromSlot,
     getLimiterForSlot,
@@ -1130,36 +1137,99 @@ describe('runStructuredReviewCall — single retry owner (maxRetries:0 + cooldow
         assertNoSecondModelBuilt();
     });
 
-    it('RATE_LIMIT (429) failure → NO immediate re-fire, THROWS (backs off via cooldown)', async () => {
-        // Slot in cooldown (arm-then-honor): a 429 never immediately re-issues.
+    it('RATE_LIMIT (429) while IN COOLDOWN → no re-issue, throws marked exhausted', async () => {
+        // Slot in cooldown (arm-then-honor): a 429 never re-fires into it, and
+        // the error is left eligible for the fallback.
         mockGetLimiter.mockReturnValue({ isInCooldown: () => true });
         const rateErr: any = new Error('rate limit exceeded');
         rateErr.status = 429;
         mockGenerate.mockRejectedValueOnce(rateErr);
 
-        await expect(
-            runStructuredReviewCall({
-                ...base,
-                byokConfig: { main: { provider: 'openai' } } as any,
-            }),
-        ).rejects.toThrow('rate limit');
+        const thrown = await runStructuredReviewCall({
+            ...base,
+            byokConfig: { main: { provider: 'openai' } } as any,
+        }).catch((e) => e);
 
+        expect(thrown).toBe(rateErr);
+        expect(retriesWereExhausted(thrown)).toBe(true);
         expect(mockGenerate).toHaveBeenCalledTimes(1);
         assertNoSecondModelBuilt();
     });
 
-    it('RATE_LIMIT (429) with NO cooldown armed → still NO immediate re-fire, THROWS', async () => {
-        // Even without a cooldown, a 429 is not hammered with an instant retry.
+    it('RATE_LIMIT (429) with NO cooldown → one re-issue after a seconds-long wait', async () => {
         mockGetLimiter.mockReturnValue(null);
         const rateErr: any = new Error('too many requests');
         rateErr.status = 429;
-        mockGenerate.mockRejectedValueOnce(rateErr);
+        mockGenerate
+            .mockRejectedValueOnce(rateErr)
+            .mockResolvedValueOnce(ok({ violations: ['reissued'] }));
 
-        await expect(runStructuredReviewCall({ ...base })).rejects.toThrow(
-            'too many requests',
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: ['reissued'] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        const waitMs = (sleep as jest.Mock).mock.calls.at(-1)[0];
+        expect(waitMs).toBeGreaterThanOrEqual(2_000);
+        assertNoSecondModelBuilt();
+    });
+
+    it('RATE_LIMIT (429) twice → throws the second 429 marked exhausted', async () => {
+        // A spent plan window (e.g. a 5-hour usage cap) answers 429 again.
+        mockGetLimiter.mockReturnValue(null);
+        const first: any = new Error('Usage limit reached for 5 hour.');
+        first.status = 429;
+        const second: any = new Error('Usage limit reached for 5 hour.');
+        second.status = 429;
+        mockGenerate.mockRejectedValueOnce(first).mockRejectedValueOnce(second);
+
+        const thrown = await runStructuredReviewCall({ ...base }).catch(
+            (e) => e,
         );
 
-        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        expect(thrown).toBe(second);
+        expect(retriesWereExhausted(thrown)).toBe(true);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        assertNoSecondModelBuilt();
+    });
+
+    it('RATE_LIMIT (429) then a non-429 failure → throws it unmarked', async () => {
+        mockGetLimiter.mockReturnValue(null);
+        const rateErr: any = new Error('too many requests');
+        rateErr.status = 429;
+        const badRequest: any = new Error('invalid request body');
+        badRequest.status = 400;
+        mockGenerate
+            .mockRejectedValueOnce(rateErr)
+            .mockRejectedValueOnce(badRequest);
+
+        const thrown = await runStructuredReviewCall({ ...base }).catch(
+            (e) => e,
+        );
+
+        expect(thrown).toBe(badRequest);
+        expect(retriesWereExhausted(thrown)).toBe(false);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('transient failure then a 429 on the re-issue → throws the 429 marked exhausted', async () => {
+        // A 503 takes the one transient re-issue; when that re-issue meets the
+        // plan's 429, the fallback must still be allowed to take the call.
+        mockGetLimiter.mockReturnValue(null);
+        const unavailable: any = new Error('Service Unavailable');
+        unavailable.status = 503;
+        const rateErr: any = new Error('Usage limit reached for 5 hour.');
+        rateErr.status = 429;
+        mockGenerate
+            .mockRejectedValueOnce(unavailable)
+            .mockRejectedValueOnce(rateErr);
+
+        const thrown = await runStructuredReviewCall({ ...base }).catch(
+            (e) => e,
+        );
+
+        expect(thrown).toBe(rateErr);
+        expect(retriesWereExhausted(thrown)).toBe(true);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
         assertNoSecondModelBuilt();
     });
 
@@ -1297,6 +1367,69 @@ describe('MATRIX C — unparseable / transport (the fail-safe layer)', () => {
         // Reroute is single-shot: exactly one attempt, no 2nd-model cascade.
         expect(mockGenerate).toHaveBeenCalledTimes(1);
         assertNoSecondModelBuilt();
+    });
+});
+
+describe('reroute-json — a 429 is re-issued once, then handed to the fallback', () => {
+    const rerouteSlot = {
+        provider: 'moonshot',
+        model: 'kimi-k2.7-code',
+        apiKey: 'enc',
+    } as any;
+    const rateLimited = (message: string) => {
+        const e: any = new Error(message);
+        e.status = 429;
+        return e;
+    };
+
+    it('429 then an answer → the re-issue answers', async () => {
+        mockGenerate
+            .mockRejectedValueOnce(rateLimited('too many requests'))
+            .mockResolvedValueOnce({ text: '{"keep":true}', usage: {} });
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: rerouteSlot,
+        });
+
+        expect(out).toEqual({ keep: true });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(mockGenerate.mock.calls[1][0]).not.toHaveProperty('output');
+        assertNoSecondModelBuilt();
+    });
+
+    it('429 twice → throws the second 429 marked exhausted', async () => {
+        const second = rateLimited('Usage limit reached for 5 hour.');
+        mockGenerate
+            .mockRejectedValueOnce(rateLimited('Usage limit reached for 5 hour.'))
+            .mockRejectedValueOnce(second);
+
+        const thrown = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: rerouteSlot,
+        }).catch((e) => e);
+
+        expect(thrown).toBe(second);
+        expect(retriesWereExhausted(thrown)).toBe(true);
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('429 while the slot is in cooldown → no re-issue, marked exhausted', async () => {
+        mockGetLimiter.mockReturnValue({ isInCooldown: () => true });
+        const rateErr = rateLimited('too many requests');
+        mockGenerate.mockRejectedValueOnce(rateErr);
+
+        const thrown = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: rerouteSlot,
+        }).catch((e) => e);
+
+        expect(thrown).toBe(rateErr);
+        expect(retriesWereExhausted(thrown)).toBe(true);
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
     });
 });
 

@@ -71,9 +71,8 @@ describe('SignUpUseCase — user status when joining an existing org', () => {
                 email: 'sso-user@acme.co',
                 name: 'SSO User',
                 password: 'random-bytes',
-                organizationId: 'org-1',
             } as any,
-            options,
+            { organizationId: 'org-1', ...options },
         );
         return deps.usersService.register.mock.calls[0][0];
     };
@@ -87,7 +86,7 @@ describe('SignUpUseCase — user status when joining an existing org', () => {
         environment.API_CLOUD_MODE = originalCloudMode;
     });
 
-    describe('with organizationId (auto-join / SSO path)', () => {
+    describe('with options.organizationId (join / SSO path)', () => {
         it('cloud + self-claim → PENDING (must confirm email)', async () => {
             const registered = await runWith(true);
             expect(registered.status).toBe(STATUS.PENDING);
@@ -107,6 +106,33 @@ describe('SignUpUseCase — user status when joining an existing org', () => {
         it('self-hosted + preVerified (SSO) → ACTIVE', async () => {
             const registered = await runWith(false, { preVerified: true });
             expect(registered.status).toBe(STATUS.ACTIVE);
+        });
+    });
+
+    describe('organizationId in the payload', () => {
+        // The payload is the public POST /auth/signUp body. Joining an existing
+        // organization is only for trusted callers (SSO) through the options,
+        // so an id in the payload must never place the account in that org.
+        it('is ignored: the account creates its own organization as owner', async () => {
+            environment.API_CLOUD_MODE = false;
+            const deps = buildDeps();
+            deps.organizationService.findOne.mockResolvedValue(null);
+
+            await buildUseCase(deps).execute({
+                email: 'outsider@example.com',
+                name: 'Outsider',
+                password: 'x',
+                organizationId: 'org-1',
+            } as any);
+
+            expect(deps.organizationService.findOne).not.toHaveBeenCalledWith({
+                uuid: 'org-1',
+            });
+            expect(
+                deps.organizationService.createOrganizationWithTenant,
+            ).toHaveBeenCalled();
+            const registered = deps.usersService.register.mock.calls[0][0];
+            expect(registered.role).toBe(Role.OWNER);
         });
     });
 
@@ -148,9 +174,8 @@ describe('SignUpUseCase — user status when joining an existing org', () => {
                     email: 'sso@acme.com',
                     name: 'SSO User',
                     password: 'x',
-                    organizationId: 'org-1',
                 } as any,
-                { preVerified: true },
+                { preVerified: true, organizationId: 'org-1' },
             );
             expect(membershipStatusFromCreate(deps)).toBe(true);
         });
@@ -158,12 +183,14 @@ describe('SignUpUseCase — user status when joining an existing org', () => {
         it('plain non-owner join (no preVerified) → membership INACTIVE — unchanged', async () => {
             environment.API_CLOUD_MODE = true;
             const deps = buildDeps();
-            await buildUseCase(deps).execute({
-                email: 'invitee@acme.com',
-                name: 'Invitee',
-                password: 'x',
-                organizationId: 'org-1',
-            } as any);
+            await buildUseCase(deps).execute(
+                {
+                    email: 'invitee@acme.com',
+                    name: 'Invitee',
+                    password: 'x',
+                } as any,
+                { organizationId: 'org-1' },
+            );
             expect(membershipStatusFromCreate(deps)).toBe(false);
         });
 
@@ -256,13 +283,15 @@ describe('SignUpUseCase — user status when joining an existing org', () => {
         it('never writes attribution when joining an existing organization', async () => {
             const deps = buildDeps();
 
-            await buildUseCase(deps).execute({
-                email: 'invitee@acme.com',
-                name: 'Invitee',
-                password: 'x',
-                organizationId: 'org-1',
-                firstTouch,
-            } as any);
+            await buildUseCase(deps).execute(
+                {
+                    email: 'invitee@acme.com',
+                    name: 'Invitee',
+                    password: 'x',
+                    firstTouch,
+                } as any,
+                { organizationId: 'org-1' },
+            );
 
             expect(
                 deps.organizationService.createOrganizationWithTenant,
