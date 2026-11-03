@@ -1088,3 +1088,18 @@ describe('E2B review user lockdown', () => {
         expect(sbx.commands.run.mock.calls[1][1]?.user).toBeUndefined();
     });
 });
+
+describe('E2BSandboxService.installDependencies', () => {
+    it('installs as root with the 5 min budget a cold apt-get needs', async () => {
+        const service = Object.create(E2BSandboxService.prototype);
+        service.logger = { log: jest.fn() };
+        const run = jest.fn().mockResolvedValue({ exitCode: 0, stderr: '' });
+
+        await service.installDependencies({ commands: { run } });
+
+        expect(run).toHaveBeenCalledWith(
+            expect.stringContaining('apt-get install'),
+            { timeoutMs: 300_000, user: 'root' },
+        );
+    });
+});

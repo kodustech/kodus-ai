@@ -525,6 +525,7 @@ describe('SandboxLeaseManager', () => {
                 repoDir: '/home/user/repo',
             } as any);
 
+        const warn = jest.spyOn((manager as any).logger, 'warn');
         jest.useFakeTimers();
         const acquirePromise = manager.acquire(
             prKey,
@@ -540,6 +541,13 @@ describe('SandboxLeaseManager', () => {
         jest.useRealTimers();
 
         expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(2);
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message:
+                    'SandboxLeaseManager: provider.createSandboxWithRepo failed (attempt 1/2); retrying in 10000ms',
+                metadata: { prKey },
+            }),
+        );
         expect(result.sandboxId).toBe('retry-success-id');
         // Failed first sandbox was never created (provider threw before returning),
         // so nothing to kill.
@@ -569,6 +577,7 @@ describe('SandboxLeaseManager', () => {
         sandboxProvider.createSandboxWithRepo.mockRejectedValue(
             new Error('E2B quota exceeded'),
         );
+        const warn = jest.spyOn((manager as any).logger, 'warn');
 
         jest.useFakeTimers();
         const acquirePromise = manager
@@ -582,6 +591,11 @@ describe('SandboxLeaseManager', () => {
 
         // Initial attempt + one retry before giving up
         expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(2);
+        // A retry is announced once: not after the last attempt
+        const retries = warn.mock.calls.filter(([entry]: any[]) =>
+            String(entry?.message).includes('retrying in'),
+        );
+        expect(retries).toHaveLength(1);
         expect(err).toBeInstanceOf(Error);
         expect(err.message).toMatch(/E2B quota exceeded/);
         // Lease doc cleaned up so polling joiners don't hang forever
@@ -709,6 +723,16 @@ describe('SandboxLeaseManager', () => {
                 .catch((e) => e);
 
             expect(err).toBeInstanceOf(SandboxCircuitOpenError);
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: `SandboxLeaseManager: sandbox creation circuit open, skipping create prKey="${orgPrKeyFor('d', 200)}"`,
+                    metadata: {
+                        prKey: orgPrKeyFor('d', 200),
+                        retryInMs: expect.any(Number),
+                        attempt: 1,
+                    },
+                }),
+            );
             // Provider never called while open, lease doc still cleaned up
             expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
                 5,
