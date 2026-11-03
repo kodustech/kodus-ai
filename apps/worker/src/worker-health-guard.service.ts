@@ -1,7 +1,10 @@
 import * as os from 'os';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { createLogger } from '@libs/core/log/logger';
-import { parseDrainTimeoutMs } from './worker-drain.service';
+import {
+    parseDrainTimeoutMs,
+    SHUTDOWN_AFTER_DRAIN_MS,
+} from './worker-drain.service';
 import {
     Injectable,
     OnApplicationBootstrap,
@@ -34,14 +37,20 @@ import {
  * 3. **Periodic health check** — safety net that polls channel state
  *    in case events were missed.
  */
-/**
- * Headroom on top of the job drain budget for cancelling consumers,
- * releasing inbox locks and closing the AMQP connection.
- */
-const SHUTDOWN_HEADROOM_MS = 30_000;
+/** Room for releasing this host's inbox locks after the job drain. */
+const INBOX_RELEASE_HEADROOM_MS = 10_000;
 
-function forceExitAfterMs(): number {
-    return parseDrainTimeoutMs() + SHUTDOWN_HEADROOM_MS;
+/**
+ * The whole bounded shutdown chain: job drain, consumer cancels and the
+ * connection close (SHUTDOWN_AFTER_DRAIN_MS), and the inbox release. The
+ * force-exit must not fire before any of them could have finished.
+ */
+export function forceExitAfterMs(): number {
+    return (
+        parseDrainTimeoutMs() +
+        SHUTDOWN_AFTER_DRAIN_MS +
+        INBOX_RELEASE_HEADROOM_MS
+    );
 }
 
 @Injectable()

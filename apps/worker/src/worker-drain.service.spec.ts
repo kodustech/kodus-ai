@@ -1,4 +1,8 @@
-import { WorkerDrainService } from './worker-drain.service';
+import {
+    SHUTDOWN_AFTER_DRAIN_MS,
+    WorkerDrainService,
+} from './worker-drain.service';
+import { forceExitAfterMs } from './worker-health-guard.service';
 
 describe('WorkerDrainService', () => {
     it('cancels every registered consumer before closing the connection', async () => {
@@ -108,5 +112,67 @@ describe('WorkerDrainService', () => {
         expect(order).toEqual(['cancel:tag-code-review', 'close']);
         // Not cancelled twice
         expect(amqpConnection.cancelConsumer).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries only the consumers whose cancel failed before closing', async () => {
+        const amqpConnection = {
+            consumerTags: ['a', 'b'],
+            cancelConsumer: jest
+                .fn()
+                .mockRejectedValueOnce(new Error('channel closed'))
+                .mockResolvedValue(undefined),
+            close: jest.fn().mockResolvedValue(undefined),
+        };
+        const drain = new WorkerDrainService(amqpConnection as any);
+
+        await drain.onModuleDestroy();
+        await drain.onApplicationShutdown('SIGTERM');
+
+        expect(
+            amqpConnection.cancelConsumer.mock.calls.map(([t]) => t),
+        ).toEqual(['a', 'b', 'a']);
+        expect(amqpConnection.close).toHaveBeenCalled();
+    });
+
+    it('gives the close its own short budget, not a second drain budget', async () => {
+        jest.useFakeTimers();
+        const prev = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+        process.env.API_WORKER_DRAIN_TIMEOUT_MS = '240000';
+        try {
+            const amqpConnection = {
+                consumerTags: [],
+                cancelConsumer: jest.fn(),
+                close: jest.fn(() => new Promise(() => {})),
+            };
+            let settled = false;
+            const done = new WorkerDrainService(amqpConnection as any)
+                .onApplicationShutdown('SIGTERM')
+                .then(() => {
+                    settled = true;
+                });
+
+            await jest.advanceTimersByTimeAsync(15_000);
+            await done;
+            expect(settled).toBe(true);
+        } finally {
+            if (prev === undefined)
+                delete process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+            else process.env.API_WORKER_DRAIN_TIMEOUT_MS = prev;
+            jest.useRealTimers();
+        }
+    });
+
+    it('force-exits only after the drain budget plus every bounded step after it', () => {
+        const prev = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+        process.env.API_WORKER_DRAIN_TIMEOUT_MS = '240000';
+        try {
+            // 2 cancels (5s each) + close (15s) + inbox release room (10s)
+            expect(SHUTDOWN_AFTER_DRAIN_MS).toBe(25_000);
+            expect(forceExitAfterMs()).toBe(240_000 + 25_000 + 10_000);
+        } finally {
+            if (prev === undefined)
+                delete process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+            else process.env.API_WORKER_DRAIN_TIMEOUT_MS = prev;
+        }
     });
 });

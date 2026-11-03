@@ -9,6 +9,20 @@ import {
 
 const DEFAULT_DRAIN_TIMEOUT_MS = 25_000;
 const CANCEL_CONSUMERS_TIMEOUT_MS = 5_000;
+/**
+ * The connection closes after the job drain, so no handler should still be
+ * running; close() only has to flush acks and tear channels down.
+ */
+const CLOSE_CONNECTION_TIMEOUT_MS = 15_000;
+
+/**
+ * Longest the shutdown can take after the job drain budget: a consumer
+ * cancel in each hook (the second only retries what the first missed) and
+ * the connection close. The health guard's force-exit adds this on top of
+ * the drain budget, so it never fires mid-close.
+ */
+export const SHUTDOWN_AFTER_DRAIN_MS =
+    2 * CANCEL_CONSUMERS_TIMEOUT_MS + CLOSE_CONNECTION_TIMEOUT_MS;
 
 export function parseDrainTimeoutMs(): number {
     const raw = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
@@ -44,7 +58,8 @@ export class WorkerDrainService
 {
     private readonly logger = createLogger(WorkerDrainService.name);
     private readonly drainTimeoutMs = parseDrainTimeoutMs();
-    private consumersCancelled = false;
+    /** Tags whose cancel succeeded; a later call retries only the rest. */
+    private readonly cancelledTags = new Set<string>();
 
     constructor(@Optional() private readonly amqpConnection?: AmqpConnection) {}
 
@@ -77,24 +92,25 @@ export class WorkerDrainService
         // not close the connection with live consumers.
         await this.cancelConsumers();
 
+        let timer: NodeJS.Timeout | undefined;
         try {
-            // AmqpConnection.close():
-            // - cancels all consumers (stop getting new messages)
-            // - waits for outstanding message handlers to finish
-            // - closes channels/connection
+            // AmqpConnection.close() waits for outstanding message handlers,
+            // then closes channels and the connection. The jobs already
+            // drained in beforeApplicationShutdown, so this gets a short
+            // budget of its own, not a second drain budget.
             await Promise.race([
                 this.amqpConnection.close(),
-                new Promise<void>((_, reject) =>
-                    setTimeout(
+                new Promise<void>((_, reject) => {
+                    timer = setTimeout(
                         () =>
                             reject(
                                 new Error(
-                                    `Drain timeout after ${this.drainTimeoutMs}ms`,
+                                    `Connection close timeout after ${CLOSE_CONNECTION_TIMEOUT_MS}ms`,
                                 ),
                             ),
-                        this.drainTimeoutMs,
-                    ),
-                ),
+                        CLOSE_CONNECTION_TIMEOUT_MS,
+                    );
+                }),
             ]);
 
             this.logger.log({
@@ -107,6 +123,8 @@ export class WorkerDrainService
                 context: WorkerDrainService.name,
                 error: error instanceof Error ? error : undefined,
             });
+        } finally {
+            clearTimeout(timer);
         }
     }
 
@@ -119,12 +137,12 @@ export class WorkerDrainService
      * SIGKILL. Cancel them explicitly through golevelup's own registry.
      *
      * Best-effort and bounded: the amqplib cancel RPC has no timeout, and a
-     * half-open connection must not keep close() from running.
+     * half-open connection must not keep close() from running. A tag whose
+     * cancel failed or timed out stays pending, so the call in
+     * onApplicationShutdown retries it (and any consumer a recreated channel
+     * registered meanwhile) instead of closing with live consumers.
      */
     private async cancelConsumers(): Promise<void> {
-        if (this.consumersCancelled) return;
-        this.consumersCancelled = true;
-
         const timeoutMs = Math.min(
             CANCEL_CONSUMERS_TIMEOUT_MS,
             this.drainTimeoutMs,
@@ -133,14 +151,18 @@ export class WorkerDrainService
         let consumerCount: number | undefined;
 
         try {
-            const consumerTags = this.amqpConnection?.consumerTags ?? [];
+            const consumerTags = (
+                this.amqpConnection?.consumerTags ?? []
+            ).filter((tag) => !this.cancelledTags.has(tag));
             consumerCount = consumerTags.length;
+            if (!consumerTags.length) return;
 
             const results = await Promise.race([
                 Promise.allSettled(
-                    consumerTags.map((tag) =>
-                        this.amqpConnection!.cancelConsumer(tag),
-                    ),
+                    consumerTags.map(async (tag) => {
+                        await this.amqpConnection!.cancelConsumer(tag);
+                        this.cancelledTags.add(tag);
+                    }),
                 ),
                 new Promise<never>((_, reject) => {
                     timer = setTimeout(
