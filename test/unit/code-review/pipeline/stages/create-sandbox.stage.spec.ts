@@ -298,6 +298,35 @@ describe('CreateSandboxStage', () => {
             );
         });
 
+        it('logs an open circuit for a CLI review, which has no pull request', async () => {
+            mockLeaseManager.acquire.mockRejectedValue(
+                new SandboxCircuitOpenError('org:repo-1:cli:feat', 30_000),
+            );
+            const context = createBaseContext({
+                origin: 'cli',
+                pullRequest: undefined,
+                changedFiles: [{ filename: 'test.ts' } as any],
+            } as any);
+            (context as any).gitContext = {
+                branch: 'feat',
+                remote: 'https://github.com/org/test-repo.git',
+            };
+
+            const result = await (stage as any).executeStage(context);
+            const logger = (stage as any).logger;
+
+            expect(result).toBe(context);
+            expect(logger.error).not.toHaveBeenCalled();
+            expect(logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'circuit open for branch feat',
+                    ),
+                    metadata: expect.objectContaining({ prNumber: undefined }),
+                }),
+            );
+        });
+
         it('does not retry acquire itself — retry+backoff lives inside the lease manager', async () => {
             // The stage used to retry once on failure; that responsibility moved
             // to SandboxLeaseManager.createWithRetry (3 attempts, 60s/120s backoff).

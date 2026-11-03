@@ -259,8 +259,8 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                     context: this.stageName,
                     metadata: {
                         organizationAndTeamData:
-                            context?.organizationAndTeamData,
-                        prNumber: context?.pullRequest?.number,
+                            context.organizationAndTeamData,
+                        prNumber: context.pullRequest?.number,
                     },
                 });
                 return context;
