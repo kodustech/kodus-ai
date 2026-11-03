@@ -111,4 +111,29 @@ describe('agent tools — readFile on a linked repository', () => {
             rc.read('x', 0, 0, '/home/user/_linked/../.ssh'),
         ).rejects.toThrow(/Not a repository root/);
     });
+
+    it('takes only the checkout or a clone under _linked as an E2B root', async () => {
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: 'body\n', stderr: '', exitCode: 0 });
+        const rc = buildE2BRemoteCommands({ commands: { run } } as any);
+
+        await expect(rc.read('a.ts', 0, 0, '/home/user/repo')).resolves.toBe(
+            'body\n',
+        );
+        expect(run.mock.calls[0][0]).toContain("f='/home/user/repo/a.ts'");
+
+        for (const root of [
+            '/home/user/another-checkout',
+            '/home/user/_linked/',
+            '/home/user/_linked',
+            '/home/user/_linkedX/acme',
+            '/tmp/home/user/_linked/acme',
+        ]) {
+            await expect(rc.read('a.ts', 0, 0, root)).rejects.toThrow(
+                /Not a repository root/,
+            );
+        }
+        expect(run).toHaveBeenCalledTimes(1);
+    });
 });

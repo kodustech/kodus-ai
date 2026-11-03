@@ -24,7 +24,8 @@ export function isLineNumber(value: unknown): value is number {
  * without following a symlink: `cat` alone follows one anywhere in the
  * sandbox, to files of other processes included. Like the local sandbox's
  * resolveSafePath, the file itself must not be a symlink and its real path
- * must stay under the root. `start = end = 0` prints the whole file.
+ * must stay under the root, which must itself be a real directory, not a
+ * symlink. `start = end = 0` prints the whole file.
  */
 export function readWithinRootCommand(
     abs: string,
@@ -39,6 +40,8 @@ export function readWithinRootCommand(
     return [
         `f=${shSingleQuote(abs)}`,
         `r=$(realpath ${shSingleQuote(root)}) || exit 1`,
+        // A symlinked root would move the boundary to wherever it points.
+        `if [ "$r" != ${shSingleQuote(root)} ]; then echo "Not a real directory: ${root.replace(/[^A-Za-z0-9_./-]/g, '?')}" >&2; exit 1; fi`,
         `if [ -L "$f" ]; then echo "Symlink detected, refusing to follow: $f" >&2; exit 1; fi`,
         `p=$(realpath "$f") || exit 1`,
         `case "$p" in "$r"/*) ;; *) echo "Path escapes repo boundary: $f" >&2; exit 1 ;; esac`,

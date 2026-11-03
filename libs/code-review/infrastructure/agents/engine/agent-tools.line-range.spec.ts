@@ -45,7 +45,11 @@ describe('agent tools — readFile line range', () => {
         const tools = localTools();
 
         expect(
-            await tools.readFile.execute({ path: 'a.ts', startLine: 2, endLine: 2 }),
+            await tools.readFile.execute({
+                path: 'a.ts',
+                startLine: 2,
+                endLine: 2,
+            }),
         ).toContain('2: two');
         expect(
             await tools.readFile.execute({
@@ -54,6 +58,56 @@ describe('agent tools — readFile line range', () => {
                 endLine: '3',
             }),
         ).toContain('3: three');
+    });
+
+    it('reads the whole file when no line is given, or only zeros', async () => {
+        const tools = localTools();
+        for (const range of [
+            {},
+            { startLine: null, endLine: null },
+            { startLine: '', endLine: '' },
+            { startLine: 0, endLine: 0 },
+            { start_line: 0, end_line: 0 },
+        ]) {
+            const out = await tools.readFile.execute({
+                path: 'a.ts',
+                ...range,
+            });
+            expect(out).toContain('1: one');
+            expect(out).toContain('3: three');
+        }
+    });
+
+    it('reads a numeric string with spaces or several digits as its number', async () => {
+        fs.writeFileSync(
+            path.join(dir, 'long.ts'),
+            Array.from({ length: 12 }, (_, i) => `line${i + 1}`).join('\n') +
+                '\n',
+        );
+        const out = await localTools().readFile.execute({
+            path: 'long.ts',
+            startLine: ' 11 ',
+            endLine: '12',
+        });
+
+        expect(out).toContain('11: line11');
+        expect(out).toContain('12: line12');
+        expect(out).not.toContain('line10');
+    });
+
+    // Number() reads `true` as 1 and `[5]` as 5: only a number or a numeric
+    // string is a line.
+    it('refuses a value that only Number() would read as a line', async () => {
+        const tools = localTools();
+        for (const value of [true, [2], ['2'], '2x', 'x2', '1 2', {}]) {
+            expect(
+                await tools.readFile.execute({
+                    path: 'a.ts',
+                    startLine: value,
+                    endLine: 3,
+                }),
+            ).toMatch(/^Error: /);
+        }
     });
 
     it('refuses a range that is not line numbers, without running sed', async () => {
@@ -99,14 +153,22 @@ describe('agent tools — readFile line range', () => {
         const injected = `1p' ${path.join(outside, 'secret.env')}; echo '`;
 
         expect(() =>
-            readWithinRootCommand(path.join(dir, 'a.ts'), dir, 1, injected as any),
+            readWithinRootCommand(
+                path.join(dir, 'a.ts'),
+                dir,
+                1,
+                injected as any,
+            ),
         ).toThrow(/line/i);
 
         // The shape the guard exists for still reads.
         expect(
             execFileSync(
                 'sh',
-                ['-c', readWithinRootCommand(path.join(dir, 'a.ts'), dir, 2, 3)],
+                [
+                    '-c',
+                    readWithinRootCommand(path.join(dir, 'a.ts'), dir, 2, 3),
+                ],
                 { encoding: 'utf8' },
             ),
         ).toBe('two\nthree\n');
@@ -114,13 +176,45 @@ describe('agent tools — readFile line range', () => {
 
     it('refuses the same values at the local provider itself', async () => {
         const written = path.join(outside, 'written');
-        const rc = (new LocalSandboxService({} as any) as any).buildRemoteCommands(
-            dir,
-        );
+        const rc = (
+            new LocalSandboxService({} as any) as any
+        ).buildRemoteCommands(dir);
 
         await expect(rc.read('a.ts', 1, `1p;w ${written}`)).rejects.toThrow(
             /line/i,
         );
         expect(fs.existsSync(written)).toBe(false);
+    });
+
+    describe('local provider read', () => {
+        const rc = () =>
+            (new LocalSandboxService({} as any) as any).buildRemoteCommands(
+                dir,
+            );
+
+        it('reads the whole file, a range, or from the first line', async () => {
+            expect(await rc().read('a.ts', 0, 0)).toBe('one\ntwo\nthree\n');
+            expect(await rc().read('a.ts', 0, 2)).toBe('one\ntwo\n');
+            expect(await rc().read('a.ts', 2, 3)).toBe('two\nthree\n');
+        });
+
+        it('reads under a linked repository cloned in the checkout', async () => {
+            const linked = path.join(dir, '_linked', 'lib');
+            fs.mkdirSync(linked, { recursive: true });
+            fs.writeFileSync(path.join(linked, 'b.ts'), 'linked\n');
+
+            expect(await rc().read('b.ts', 0, 0, linked)).toBe('linked\n');
+        });
+
+        it('refuses a root outside the checkout, directly or through a symlink', async () => {
+            fs.mkdirSync(path.join(dir, '_linked'), { recursive: true });
+            fs.symlinkSync(outside, path.join(dir, '_linked', 'escape'));
+
+            for (const root of [outside, path.join(dir, '_linked', 'escape')]) {
+                await expect(
+                    rc().read('secret.env', 0, 0, root),
+                ).rejects.toThrow('Not a repository root of this sandbox');
+            }
+        });
     });
 });
