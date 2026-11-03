@@ -54,6 +54,10 @@ See references/reconciliation.md for the nightly job.
 
 在全局级别，Skills & docs 页面只接受手动输入的路径。每个代码库会单独读取，请打开某个代码库的设置，查看每个路径在其中是否存在。
 
+### 被丢弃发现引用的文件
+
+当审查因为发现引用了智能体未遵循的文件（"is not a guide linked to this review"）而将其丢弃时，智能体的 **Skills & docs** 会在 **Cited by dropped findings** 下显示该文件及被丢弃的数量。**Follow** 会从本仓库或文件所在的仓库关联它。只会显示存在的文件。
+
 ### 来自另一个仓库
 
 团队常把规则放在一个仓库里，再应用到多个仓库。在代理页面添加 skill 或 doc 时在 **From** 中选择它：已关联的仓库排在前面，**Other repository…** 列出所有已连接到 Kodus 的仓库（在 Git settings 中选择的仓库）。如果规则仓库不在列表中，请先在那里连接它。

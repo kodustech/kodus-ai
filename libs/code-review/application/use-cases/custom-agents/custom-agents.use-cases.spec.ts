@@ -1372,6 +1372,8 @@ describe('GetCustomAgentsStatusUseCase', () => {
     it('reads file and PR-level findings of the repository over 30 days', async () => {
         const aggregate = jest
             .fn()
+            // The unfollowed-citations read finds nothing here.
+            .mockReturnValue({ toArray: async () => [] })
             .mockReturnValueOnce({
                 toArray: async () => [
                     {

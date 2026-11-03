@@ -211,11 +211,37 @@ export type CustomAgentTryTrace = {
 
 // ── /code-review/custom-agents/status ──────────────────────────────────────
 
+export type CustomAgentRunHealth = {
+    /** Runs recorded in the window. */
+    runs: number;
+    /** Pull requests where a run failed or stopped short. */
+    failedPullRequests: number;
+    last: {
+        status: "ran" | "failed" | "incomplete";
+        /** `MODEL_NOT_FOUND (HTTP 404)`, or a stop reason like `max-steps`. */
+        reason?: string;
+        at: string;
+        prNumber: number;
+    };
+    /** Runs in a row, from the newest, that failed or stopped short. */
+    streak: number;
+};
+
+/** A file dropped findings cited as their rule while the agent does not
+ *  follow it. */
+export type CustomAgentUnfollowedCitation = {
+    file: string;
+    findings: number;
+    pullRequests: number;
+};
+
 export type CustomAgentStatus = {
     agentId: string;
     pullRequests: number;
     posted: number;
     dropped: number;
+    health?: CustomAgentRunHealth;
+    unfollowedCitations?: CustomAgentUnfollowedCitation[];
 };
 
 export type CustomAgentsStatus = {

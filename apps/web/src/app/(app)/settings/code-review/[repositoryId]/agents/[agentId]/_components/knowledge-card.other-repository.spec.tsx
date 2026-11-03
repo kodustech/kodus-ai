@@ -317,6 +317,14 @@ describe("AgentKnowledgeField with another repository", () => {
         );
 
         expect(screen.getByText("greenhouse/dashboard")).toBeInTheDocument();
+        expect(
+            screen.getAllByRole("option").map((option) => option.textContent),
+        ).toEqual(
+            expect.arrayContaining([
+                expect.stringContaining(RULES),
+                expect.stringContaining("greenhouse/dashboard"),
+            ]),
+        );
         // While picking, what the previous source offers is out of the way.
         expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
 

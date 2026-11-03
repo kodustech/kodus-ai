@@ -158,7 +158,11 @@ export const useCustomAgentsForm = () => {
     const reviewKnowledge = addOrReplace(
         inheritedList(loadedKnowledge, level),
         knowledge,
-        (item) => `${(item.repository ?? "").toLowerCase()}:${item.path}`,
+        (item) => {
+            // Stored config: only a string names a repository.
+            const repository: unknown = item.repository;
+            return `${typeof repository === "string" ? repository.toLowerCase() : ""}:${item.path}`;
+        },
     );
     const dirtyKeys = Object.keys(dirtyFields ?? {});
     // What the settings layout's leave guard counts, so the pages that save

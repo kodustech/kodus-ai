@@ -92,7 +92,14 @@ import {
     stripCustomAgentFixes,
     type CustomAgentsById,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation';
-import { summarizeCustomAgentRuns } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
+import {
+    CUSTOM_AGENT_RUN_LOG_TOKEN,
+    type ICustomAgentRunLog,
+} from '@libs/code-review/domain/custom-agents/contracts';
+import {
+    summarizeCustomAgentRuns,
+    toCustomAgentRunRecords,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import {
     customAgentSlug,
     ignoredFilesForCustomAgents,
@@ -395,6 +402,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // without it the instruction index is listed on every review.
         @Optional()
         private readonly cacheService?: CacheService,
+        // Optional so specs that construct the stage manually still compile;
+        // without it the agent page cannot say an agent is failing.
+        @Optional()
+        @Inject(CUSTOM_AGENT_RUN_LOG_TOKEN)
+        private readonly customAgentRunLog?: ICustomAgentRunLog,
     ) {
         super();
     }
@@ -714,6 +726,37 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 })),
             },
         });
+    }
+
+    /**
+     * Keeps how each agent that ran ended (ran, failed, incomplete, and why)
+     * so its page can say it is failing. Never blocks or fails the review.
+     */
+    private recordCustomAgentRuns(
+        context: CodeReviewPipelineContext,
+        runs: ReturnType<typeof summarizeCustomAgentRuns>,
+    ): void {
+        const organizationId = context.organizationAndTeamData?.organizationId;
+        const repositoryId = context.repository?.id;
+        const prNumber = context.pullRequest?.number;
+        if (!this.customAgentRunLog || !organizationId || !repositoryId) return;
+        if (typeof prNumber !== 'number') return;
+        const records = toCustomAgentRunRecords({
+            organizationId,
+            repositoryId: String(repositoryId),
+            prNumber,
+            runs,
+            at: new Date(),
+        });
+        if (!records.length) return;
+        void this.customAgentRunLog.record(records).catch((error) =>
+            this.logger.warn({
+                message: `[AGENT] Could not record custom agent runs for PR#${prNumber}`,
+                context: this.stageName,
+                error,
+                metadata: { organizationId, repositoryId, prNumber },
+            }),
+        );
     }
 
     /**
@@ -1797,6 +1840,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 allDiscarded,
                 mergedInDedup,
             );
+            this.recordCustomAgentRuns(context, customAgentSummaries);
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
             const fileLevelSuggestions = deduped.filter(
                 (s) => !isPrLevelSuggestion(s),

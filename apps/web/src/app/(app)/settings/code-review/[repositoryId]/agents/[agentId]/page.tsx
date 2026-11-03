@@ -347,6 +347,12 @@ function AgentContent() {
                                     )}
                                     teamId={teamId}
                                     repositoryId={repositoryId}
+                                    unfollowedCitations={
+                                        status.data?.agents.find(
+                                            (entry) =>
+                                                entry.agentId === agent.id,
+                                        )?.unfollowedCitations
+                                    }
                                 />
                                 <ToolsCard
                                     agent={agent}

@@ -54,6 +54,10 @@ Hay dos lugares para vincular una skill o un doc:
 
 En el nivel global, la página Skills & docs solo acepta rutas escritas a mano. Cada repositorio se lee por separado; abre la configuración de un repositorio para ver si cada ruta existe ahí.
 
+### Citados por hallazgos descartados
+
+Cuando las revisiones descartan hallazgos porque citan un archivo que el agente no sigue ("is not a guide linked to this review"), **Skills & docs** del agente muestra ese archivo en **Cited by dropped findings**, con cuántos hallazgos se descartaron. **Follow** lo vincula, desde este repositorio o desde el repositorio donde está. Solo se ofrecen archivos que existen.
+
 ### Desde otro repositorio
 
 Es común que un equipo mantenga sus reglas en un repositorio y las aplique en varios. Elígelo en **From** al añadir un skill o doc en la página de un agente: primero aparecen los repositorios vinculados, y **Other repository…** lista todos los repositorios conectados a Kodus (seleccionados en Git settings). Si el repositorio de reglas no aparece, conéctalo ahí primero.
