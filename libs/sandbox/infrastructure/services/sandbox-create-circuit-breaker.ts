@@ -44,8 +44,9 @@ export const DEFAULT_SANDBOX_CIRCUIT_OPTIONS: SandboxCircuitBreakerOptions = {
     failureThreshold: 5,
     minDistinctOrgs: 3,
     openMs: 2 * 60_000,
-    // Above a whole create (2 attempts of create + 2-min fetch + install)
-    probeTimeoutMs: 10 * 60_000,
+    // Above one whole create: the head and base fetches (5 min each) plus
+    // setup; a timeout is not retried
+    probeTimeoutMs: 15 * 60_000,
 };
 
 /**

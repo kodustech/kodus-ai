@@ -47,11 +47,12 @@ export function e2bDeploymentTag(apiNodeEnv: string | undefined): string {
 const REPO_DIR = '/home/user/repo';
 
 const TIMEOUTS = {
-    // Shallow `git fetch` of the PR head / base branch. Was 5 min; with 3
-    // attempts that held reviews ~18 min on a degraded proxy. 2 min still
-    // covers a shallow fetch of large repos (cal.com, grafana) on a healthy
-    // path, and a timeout is not retried (see SandboxLeaseManager).
-    CLONE_MS: 120_000,
+    // Shallow `git fetch` of the PR head / base branch. Kept at 5 min: the
+    // largest repositories need it on a healthy path, and lowering it would
+    // review them without a sandbox on every PR. Fail-fast on a degraded
+    // proxy comes from not retrying a timeout and from the breaker
+    // (SandboxLeaseManager), not from a shorter fetch.
+    CLONE_MS: 300_000,
     // Re-syncing a reused sandbox's checkout to the new head. Kept at 5 min:
     // a timeout here is not a fallback but a review on the stale checkout
     // (#1313), so this path trades latency for correctness.
