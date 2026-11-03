@@ -1,10 +1,8 @@
 import * as os from 'os';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { createLogger } from '@libs/core/log/logger';
-import {
-    parseDrainTimeoutMs,
-    SHUTDOWN_AFTER_DRAIN_MS,
-} from './worker-drain.service';
+import { parseDrainTimeoutMs } from '@libs/core/workflow/infrastructure/drain-timeout';
+import { SHUTDOWN_AFTER_DRAIN_MS } from './worker-drain.service';
 import {
     Injectable,
     OnApplicationBootstrap,

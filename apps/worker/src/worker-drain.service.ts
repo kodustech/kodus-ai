@@ -1,5 +1,6 @@
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { createLogger } from '@libs/core/log/logger';
+import { parseDrainTimeoutMs } from '@libs/core/workflow/infrastructure/drain-timeout';
 import {
     Injectable,
     OnApplicationShutdown,
@@ -7,13 +8,6 @@ import {
     Optional,
 } from '@nestjs/common';
 
-const DEFAULT_DRAIN_TIMEOUT_MS = 25_000;
-/**
- * The drain budget sizes the health guard's force-exit timer. Node clamps a
- * timer above 2^31-1 ms to ~1 ms, so an extra zero would force-exit at once,
- * mid-drain; ten minutes is far above prod's 240s.
- */
-export const MAX_DRAIN_TIMEOUT_MS = 10 * 60_000;
 const CANCEL_CONSUMERS_TIMEOUT_MS = 5_000;
 /**
  * The connection closes after the job drain, so no handler should still be
@@ -29,35 +23,6 @@ const CLOSE_CONNECTION_TIMEOUT_MS = 15_000;
  */
 export const SHUTDOWN_AFTER_DRAIN_MS =
     2 * CANCEL_CONSUMERS_TIMEOUT_MS + CLOSE_CONNECTION_TIMEOUT_MS;
-
-export function parseDrainTimeoutMs(): number {
-    const raw = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
-
-    if (!raw) {
-        return DEFAULT_DRAIN_TIMEOUT_MS;
-    }
-    const parsed = Number.parseInt(raw, 10);
-
-    if (
-        !Number.isFinite(parsed) ||
-        parsed <= 0 ||
-        parsed > MAX_DRAIN_TIMEOUT_MS
-    ) {
-        createLogger('WorkerDrainService').warn({
-            message:
-                'API_WORKER_DRAIN_TIMEOUT_MS is out of range; using the default',
-            context: 'WorkerDrainService',
-            metadata: {
-                configured: raw,
-                max: MAX_DRAIN_TIMEOUT_MS,
-                default: DEFAULT_DRAIN_TIMEOUT_MS,
-            },
-        });
-        return DEFAULT_DRAIN_TIMEOUT_MS;
-    }
-
-    return parsed;
-}
 
 /**
  * Shutdown order (Nest runs every phase root module first, and this service

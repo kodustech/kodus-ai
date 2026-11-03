@@ -1,6 +1,8 @@
 import {
     MAX_DRAIN_TIMEOUT_MS,
     parseDrainTimeoutMs,
+} from '@libs/core/workflow/infrastructure/drain-timeout';
+import {
     SHUTDOWN_AFTER_DRAIN_MS,
     WorkerDrainService,
 } from './worker-drain.service';
@@ -204,6 +206,18 @@ describe('WorkerDrainService', () => {
             if (prev === undefined)
                 delete process.env.API_WORKER_DRAIN_TIMEOUT_MS;
             else process.env.API_WORKER_DRAIN_TIMEOUT_MS = prev;
+        }
+    });
+
+    it('uses the default drain budget, and sizes the force-exit from it, when the variable is unset', () => {
+        const prev = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+        delete process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+        try {
+            expect(parseDrainTimeoutMs()).toBe(25_000);
+            expect(forceExitAfterMs()).toBe(25_000 + 25_000 + 10_000);
+        } finally {
+            if (prev !== undefined)
+                process.env.API_WORKER_DRAIN_TIMEOUT_MS = prev;
         }
     });
 });

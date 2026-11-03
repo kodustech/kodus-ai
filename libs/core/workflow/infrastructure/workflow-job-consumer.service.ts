@@ -1,4 +1,5 @@
 import * as os from 'os';
+import { parseDrainTimeoutMs } from '@libs/core/workflow/infrastructure/drain-timeout';
 import {
     RabbitSubscribe,
     MessageHandlerErrorBehavior,
@@ -560,12 +561,8 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
      * (onApplicationShutdown), so running jobs can still ack.
      */
     async beforeApplicationShutdown(signal?: string): Promise<void> {
-        const rawDrain = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
-        const parsedDrain = rawDrain ? parseInt(rawDrain, 10) : NaN;
-        const maxWaitMs =
-            Number.isFinite(parsedDrain) && parsedDrain > 0
-                ? parsedDrain
-                : 25_000; // safe fallback: dev/self-hosted default (30s ECS grace - 5s headroom)
+        // Same reader as the worker's force-exit timer, so the two agree
+        const maxWaitMs = parseDrainTimeoutMs();
 
         this.logger.log({
             message: `Shutdown signal ${signal} received. Waiting for active jobs...`,
@@ -573,10 +570,7 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
             metadata: {
                 activeJobs: this.activeJobs,
                 maxWaitMs,
-                drainTimeoutSource:
-                    Number.isFinite(parsedDrain) && parsedDrain > 0
-                        ? 'API_WORKER_DRAIN_TIMEOUT_MS'
-                        : 'default_25s',
+                configured: process.env.API_WORKER_DRAIN_TIMEOUT_MS ?? null,
             },
         });
 
