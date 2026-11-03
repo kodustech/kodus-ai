@@ -183,6 +183,19 @@ export abstract class BaseCodeReviewAgentProvider {
     }
 
     /**
+     * Run settings that depend on the resolved model, applied once it is
+     * known. Unchanged for every agent but the generalist. Must be idempotent:
+     * a chunked review runs execute again on each batch.
+     */
+    protected applyModelSettings(
+        input: ReviewAgentInput,
+        _modelName: string,
+        _byokConfig?: NormalizedModel,
+    ): ReviewAgentInput {
+        return input;
+    }
+
+    /**
      * Team guides whose findings take the convention second pass (#2172).
      * Unset for every built-in agent; a custom agent returns its linked
      * skills and docs (possibly none).
@@ -315,6 +328,8 @@ export abstract class BaseCodeReviewAgentProvider {
             context: identity.name,
         });
 
+        input = this.applyModelSettings(input, modelName, byokConfig);
+
         // Check if the estimated prompt exceeds the context window budget
         // and needs chunking. The measurement accounts for diff + callGraph
         // + PR context + coverage list + static overhead (system prompt +
@@ -430,6 +445,12 @@ export abstract class BaseCodeReviewAgentProvider {
                 (estimatedPromptTokens > promptBudget &&
                     input.reviewMode !== 'deep'));
 
+        // Tiers only where main has them: a PR over the prompt budget or a
+        // small-window model. With tiers, CompletionGatePolicy holds the
+        // result until every critical hunk is read, which on a PR that fits
+        // can run a finder that answers from the diff to its step cap.
+        const shouldTierFiles = shouldFireFilter;
+
         if (shouldFireFilter) {
             const filesBefore = input.changedFiles.length;
             const filteredFiles = applyLargePrAggressiveFilter(
@@ -470,7 +491,9 @@ export abstract class BaseCodeReviewAgentProvider {
                     });
                 }
             }
+        }
 
+        if (shouldTierFiles) {
             const scores = computeFileScores(
                 input.changedFiles,
                 input.callGraphJson,
@@ -1042,7 +1065,12 @@ export abstract class BaseCodeReviewAgentProvider {
             changedFiles: input.changedFiles,
             kodyRules: input.kodyRules,
             prNumber: input.prNumber,
+            organizationId: input.organizationAndTeamData?.organizationId,
+            teamId: input.organizationAndTeamData?.teamId,
             isKodyRules: this.getCategoryLabel() === 'kody_rules',
+            leanOutput:
+                this.getCategoryLabel() !== 'kody_rules' &&
+                this.getConventionGuides(input) === undefined,
             identityName: this.getIdentity().name,
             labelPolicy: {
                 categoryLabel: this.getCategoryLabel(),

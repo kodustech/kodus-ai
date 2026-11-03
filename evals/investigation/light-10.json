@@ -1,0 +1,12 @@
+[
+ "add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak",
+ "add-client-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "add-html-sanitizer-for-translated-message-resources-keycloak",
+ "anonymous-add-configurable-device-limit-grafana-codex",
+ "dual-storage-architecture-grafana-codex",
+ "feat-2fa-backup-codes-cal-com",
+ "feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com",
+ "feat-ecosystem-implement-cross-system-issue-synchronization-sentry",
+ "feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry",
+ "feature-can-edit-category-host-relationships-for-embedding-discourse-cursor"
+]

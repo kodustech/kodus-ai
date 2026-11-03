@@ -13,7 +13,10 @@ import { OrganizationModel } from './schemas/organization.model';
 
 import { IOrganizationRepository } from '@libs/organization/domain/organization/contracts/organization.repository.contract';
 import { OrganizationEntity } from '@libs/organization/domain/organization/entities/organization.entity';
-import { IOrganization } from '@libs/organization/domain/organization/interfaces/organization.interface';
+import {
+    CreateOrganization,
+    IOrganization,
+} from '@libs/organization/domain/organization/interfaces/organization.interface';
 import { createNestedConditions } from '@libs/core/infrastructure/repositories/model/filters';
 import {
     mapSimpleModelToEntity,
@@ -139,7 +142,7 @@ export class OrganizationDatabaseRepository implements IOrganizationRepository {
     }
 
     public async create(
-        organizationEntity: IOrganization,
+        organizationEntity: CreateOrganization,
     ): Promise<OrganizationEntity> {
         const queryBuilder =
             this.organizationRepository.createQueryBuilder('organization');

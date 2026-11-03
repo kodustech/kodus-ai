@@ -316,6 +316,9 @@ describe('row19 tool-call repair delegation (repairToolCall → repairInvalidToo
             toolCall,
             inputSchema,
             error,
+            // The re-ask runs in a usage span of its own (charged to the org).
+            inSpan: expect.any(Function),
+            logContext: expect.any(Object),
         });
         expect(recovered).toEqual({ toolName: 't1', input: '{"fixed":1}' });
     });

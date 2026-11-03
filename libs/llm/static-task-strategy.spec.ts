@@ -17,6 +17,7 @@ import '@libs/llm/providers'; // side-effect: self-register every provider modul
 import { REGISTRY } from './providers';
 import { StaticTaskStrategy } from './static-task-strategy';
 import type { RoutingVerdict, RequestContext } from './routing-strategy';
+import { overrideContext } from './routing-strategy';
 import type {
     BYOKConfig,
     BYOKCredential,
@@ -249,6 +250,56 @@ describe('StaticTaskStrategy — REQ-ROUTE-01', () => {
             // Chosen slot = the default (m-A, openai credential); the NAME overrides
             // its model string; capability gate ran against the NAME.
             expect(v.modelId).toBe('m-A');
+            expect(v.modelName).toBe('gpt-5-mini');
+        });
+    });
+
+    describe('id override that no longer resolves (model deleted from BYOK)', () => {
+        it('skips it and routes the task normally instead of sending the id as a model name', () => {
+            const v = strategy.resolve(
+                'customAgent',
+                {
+                    override: {
+                        modelId: '97ad0d7d-181c-4387-b908-fbaee2fd1989',
+                        byId: true,
+                    },
+                },
+                cfg({ defaultModelId: 'm-A' }),
+            );
+            expect(v.modelId).toBe('m-A');
+            expect(v.modelName).toBeUndefined();
+            expect(v.reason).toContain(
+                'override "97ad0d7d-181c-4387-b908-fbaee2fd1989": no model with this id',
+            );
+        });
+
+        it("falls back to the repository override when a custom agent's pinned model is gone", () => {
+            const v = strategy.resolve(
+                'customAgent',
+                overrideContext('m-B', undefined, 'deleted-pin'),
+                cfg({ defaultModelId: 'm-A' }),
+            );
+            expect(v.modelId).toBe('m-B');
+            expect(v.reason).toContain(
+                'override "deleted-pin": no model with this id',
+            );
+        });
+
+        it("keeps a custom agent's pinned model over the repository override", () => {
+            const v = strategy.resolve(
+                'customAgent',
+                overrideContext('m-B', undefined, 'm-ANT'),
+                cfg({ defaultModelId: 'm-A' }),
+            );
+            expect(v.modelId).toBe('m-ANT');
+        });
+
+        it('still applies an unmatched legacy NAME onto the routed slot', () => {
+            const v = strategy.resolve(
+                'codeReview',
+                { override: { modelId: 'gpt-5-mini', byId: false } },
+                cfg({ defaultModelId: 'm-A' }),
+            );
             expect(v.modelName).toBe('gpt-5-mini');
         });
     });

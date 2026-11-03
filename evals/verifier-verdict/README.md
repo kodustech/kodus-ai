@@ -71,13 +71,15 @@ the **real** verifier spec step by step, at both depths, and asserts two things:
    most of the fleet. Forcing the tool mid-run contradicts the prompt.
 
 ```
-light (default, confidence >= 5)  maxSteps=5   policies=[budget, force-text-finalize]
+light (every verify)  maxSteps=7   policies=[budget, force-text-finalize]
   step   budget-note  finalize-note  tools-restricted
   1..2   -            -              -
-  3..5   -            yes            -
-full (confidence < 5, evidence gate)  maxSteps=10
-  2, 5   yes          -              -
-  8..10  -            yes            -
+  3..4   yes          -              -
+  5      -            -              -
+  6..7   -            yes            -
+full (the evidence gate re-verify)  maxSteps=10
+  3, 6   yes          -              -
+  9..10  -            yes            -
 ```
 
 Proven in three states on the real spec: with no finalize policy the last steps

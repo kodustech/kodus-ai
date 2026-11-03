@@ -1113,7 +1113,9 @@ export class AzureReposService implements Omit<
                 context: AzureReposService.name,
                 serviceName: 'AzureReposService approvePullRequest',
                 error,
-                metadata: { params },
+                // Azure says why it refused the vote (TF… code) only in the
+                // body; without it a 400 repeated by the cron can't be read.
+                metadata: { params, azureError: error?.response?.data },
             });
             return null;
         }

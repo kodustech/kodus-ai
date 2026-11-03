@@ -23,6 +23,9 @@ export interface CustomAgentRun {
     /** Findings the checks refuted: the verify pass (or could not judge),
      *  and the quote check on rules the finding claimed to cite. */
     droppedByVerify: number;
+    /** Why a failed or incomplete agent stopped: the error's category and
+     *  HTTP status, or the limit it hit. Never the provider's message. */
+    reason?: string;
 }
 
 export interface CustomAgentRunSummary extends CustomAgentRun {

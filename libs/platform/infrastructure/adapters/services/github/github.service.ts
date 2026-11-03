@@ -9,6 +9,14 @@ import { graphql } from '@octokit/graphql';
 import { enterpriseServer313 } from '@octokit/plugin-enterprise-server';
 import { retry } from '@octokit/plugin-retry';
 import { groupCommentsByPullRequest } from './github-comment-sample';
+import {
+    githubUserAuthorizationUrl,
+    installationAuthorizationRedirectUri,
+    InstallationAuthorizationError,
+    isInstallationId,
+    openInstallationState,
+    sealInstallationState,
+} from './installation-authorization';
 import { throttling } from '@octokit/plugin-throttling';
 import { Octokit, RestEndpointMethodTypes } from '@octokit/rest';
 
@@ -164,6 +172,9 @@ interface GitHubInstallationData {
 /** A compare response lists at most this many files, with no way to page. */
 const GITHUB_COMPARE_MAX_FILES = 300;
 
+/** GitHub said the App installation is uninstalled or suspended. */
+export class InstallationUnavailableError extends Error {}
+
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITHUB, 'codeManagement')
 export class GithubService
@@ -179,6 +190,9 @@ export class GithubService
 {
     private readonly MAX_RETRY_ATTEMPTS = 2;
     private readonly TTL = 50 * 60 * 1000; // 50 minutes
+    // How long GitHub's "uninstalled" / "suspended" answer is trusted before
+    // asking again: a reinstall or unsuspend is picked up within this window.
+    private readonly UNAVAILABLE_INSTALLATION_TTL = 60 * 60 * 1000;
 
     private readonly logger = createLogger(GithubService.name);
 
@@ -526,16 +540,161 @@ export class GithubService
 
             return res;
         } catch (err) {
+            // Credentials stay out of the log: a PAT, or GitHub's
+            // authorization code and state.
+            const {
+                token: _token,
+                githubCode: _githubCode,
+                githubState: _githubState,
+                ...loggable
+            } = params ?? {};
             this.logger.error({
                 message:
                     'Failed to list repositories when creating integration',
                 context: GithubService.name,
                 serviceName: GithubService.name,
                 error: err,
-                metadata: params,
+                metadata: loggable,
             });
             throw new BadRequestException(err);
         }
+    }
+
+    /**
+     * GitHub's authorization page for linking an installation, with a state
+     * bound to the user and organization asking (see
+     * installation-authorization).
+     */
+    getInstallationAuthorizationUrl(params: {
+        installationId: unknown;
+        userId: string;
+        organizationId: string;
+    }): { url: string } {
+        if (!isInstallationId(params.installationId)) {
+            throw new BadRequestException('Invalid GitHub installation id.');
+        }
+        if (!params.userId || !params.organizationId) {
+            throw new BadRequestException('A signed-in user is required.');
+        }
+        this.assertGithubOAuthEnv();
+        const redirectUri = this.installationRedirectUri();
+        const state = sealInstallationState({
+            installationId: params.installationId,
+            userId: params.userId,
+            organizationId: params.organizationId,
+        });
+        return {
+            url: githubUserAuthorizationUrl(
+                this.configService.get<string>('GLOBAL_GITHUB_CLIENT_ID'),
+                state,
+                redirectUri,
+            ),
+        };
+    }
+
+    private installationRedirectUri(): string {
+        // Self-hosted installs set NEXTAUTH_URL, the web app's public URL,
+        // in the .env every service reads; cloud sets API_FRONTEND_URL.
+        const frontendUrl = (
+            this.configService.get<string>('API_FRONTEND_URL') ||
+            this.configService.get<string>('NEXTAUTH_URL')
+        )?.trim();
+        if (!frontendUrl) {
+            throw new BadRequestException(
+                'Neither API_FRONTEND_URL nor NEXTAUTH_URL is configured: one is needed to send the user back from GitHub.',
+            );
+        }
+        return installationAuthorizationRedirectUri(frontendUrl);
+    }
+
+    /**
+     * Proof that the caller can see the installation on GitHub before it is
+     * linked: the code from GitHub's user authorization of the App becomes a
+     * user token, and that user's installations must include this one. The
+     * installation must not belong to another Kodus organization either.
+     */
+    private async assertCanLinkInstallation(
+        appOctokit: Octokit,
+        params: any,
+    ): Promise<void> {
+        const installationId = params?.code;
+        if (!isInstallationId(installationId)) {
+            throw new BadRequestException('Invalid GitHub installation id.');
+        }
+        const organizationId = params?.organizationAndTeamData?.organizationId;
+
+        let state: ReturnType<typeof openInstallationState>;
+        try {
+            state = openInstallationState(params?.githubState);
+        } catch (err) {
+            if (err instanceof InstallationAuthorizationError) {
+                throw new BadRequestException(err.message);
+            }
+            throw err;
+        }
+        if (
+            state.installationId !== installationId ||
+            !params?.userId ||
+            state.userId !== params.userId ||
+            state.organizationId !== organizationId
+        ) {
+            throw new BadRequestException(
+                'The GitHub authorization was issued for another connection. Start the GitHub connection again.',
+            );
+        }
+        if (typeof params?.githubCode !== 'string' || !params.githubCode) {
+            throw new BadRequestException(
+                'The GitHub authorization is missing or invalid. Start the GitHub connection again.',
+            );
+        }
+
+        let userToken: string;
+        try {
+            const userAuth = (await appOctokit.auth({
+                type: 'oauth-user',
+                code: params.githubCode,
+                redirectUrl: this.installationRedirectUri(),
+            })) as { token: string };
+            userToken = userAuth.token;
+        } catch {
+            throw new BadRequestException(
+                'GitHub did not accept the authorization. Start the GitHub connection again.',
+            );
+        }
+
+        const installations = await this.createUserOctokit(userToken).paginate(
+            'GET /user/installations',
+            { per_page: 100 },
+        );
+        if (!installations.some((i) => String(i.id) === installationId)) {
+            throw new BadRequestException(
+                'Your GitHub account cannot access this installation of the Kodus app. Ask an owner of the GitHub organization to connect it.',
+            );
+        }
+
+        const linked = await Promise.all(
+            [Number(installationId), installationId].map((id) =>
+                this.authIntegrationService.findOne({
+                    authDetails: { installationId: id },
+                    status: true,
+                }),
+            ),
+        );
+        if (
+            linked.some(
+                (integration) =>
+                    integration?.organization?.uuid &&
+                    integration.organization.uuid !== organizationId,
+            )
+        ) {
+            throw new BadRequestException(
+                'This GitHub installation is already connected to another Kodus organization.',
+            );
+        }
+    }
+
+    private createUserOctokit(userToken: string): Octokit {
+        return new Octokit({ auth: userToken, request: { timeout: 60000 } });
     }
 
     async authenticateWithCodeOauth(
@@ -544,6 +703,8 @@ export class GithubService
         try {
             this.assertGithubOAuthEnv();
             const appOctokit = this.createOctokitInstance();
+
+            await this.assertCanLinkInstallation(appOctokit, params);
 
             const installationAuthentication = await appOctokit.auth({
                 type: 'installation',
@@ -2618,6 +2779,14 @@ export class GithubService
         installationId: string,
         retryCount = 0,
     ): Promise<GitHubAuthResponse> {
+        const unavailableKey = `github:installation-unavailable:${installationId}`;
+        const unavailable = await this.cacheService.getFromCache<{
+            message: string;
+        }>(unavailableKey);
+        if (unavailable) {
+            throw new InstallationUnavailableError(unavailable.message);
+        }
+
         try {
             const cachedAuth = await this.getCachedToken(installationId);
 
@@ -2633,6 +2802,28 @@ export class GithubService
 
             return await this.generateAndCacheNewToken(installationId);
         } catch (error) {
+            // The App was uninstalled (404) or suspended: GitHub gives the same
+            // answer until the customer acts, so don't retry it or ask again on
+            // every call.
+            if (
+                error?.status === 404 ||
+                (error?.status === 403 &&
+                    /installation has been suspended/i.test(error.message))
+            ) {
+                await this.cacheService.addToCache(
+                    unavailableKey,
+                    { message: error.message },
+                    this.UNAVAILABLE_INSTALLATION_TTL,
+                );
+                this.logger.warn({
+                    message:
+                        'GitHub App installation is uninstalled or suspended; skipping it for an hour',
+                    context: GithubService.name,
+                    metadata: { installationId, status: error.status },
+                });
+                throw new InstallationUnavailableError(error.message);
+            }
+
             if (
                 error.message?.includes('token') &&
                 retryCount < this.MAX_RETRY_ATTEMPTS
@@ -3462,15 +3653,18 @@ export class GithubService
                 throw new BadRequestException('Unknown authentication type.');
             }
         } catch (err) {
-            this.logger.error({
-                message: 'Error instantiating instanceOctokit',
-                context: GithubService.name,
-                serviceName: 'GithubService',
-                error: err,
-                metadata: {
-                    organizationAndTeamData,
-                },
-            });
+            // Already logged once, when GitHub first answered it.
+            if (!(err instanceof InstallationUnavailableError)) {
+                this.logger.error({
+                    message: 'Error instantiating instanceOctokit',
+                    context: GithubService.name,
+                    serviceName: 'GithubService',
+                    error: err,
+                    metadata: {
+                        organizationAndTeamData,
+                    },
+                });
+            }
             throw new BadRequestException(err);
         }
     }

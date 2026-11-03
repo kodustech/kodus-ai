@@ -4,6 +4,7 @@
  * edit that silently drops a section is caught.
  */
 import {
+    buildCompactUserPrompt,
     buildSystemPrompt,
     buildUserPrompt,
     formatTraceDecisions,
@@ -590,5 +591,27 @@ describe('CrossRepoBoundary lane', () => {
             'Do not report boundary mismatches your instructions do not cover.',
         );
         expect(prompt).toContain('acme/web');
+    });
+});
+
+describe('custom agent output format', () => {
+    const agentMeta = { ...meta, conventionGuides: [] };
+
+    it.each([
+        ['full', buildUserPrompt],
+        ['compact', buildCompactUserPrompt],
+    ])('asks a custom agent for the full finding (%s prompt)', (_, build) => {
+        const prompt = build(baseInput(), agentMeta);
+        expect(prompt).toContain('Assign a confidence score (1-10)');
+        if (build === buildUserPrompt) {
+            expect(prompt).toContain('"existingCode"');
+            expect(prompt).toContain('"severity": "critical|high|medium|low"');
+        }
+    });
+
+    it('asks the finder for the five fields only', () => {
+        const prompt = buildUserPrompt(baseInput(), meta);
+        expect(prompt).not.toContain('"existingCode"');
+        expect(prompt).not.toContain('Assign a confidence score');
     });
 });

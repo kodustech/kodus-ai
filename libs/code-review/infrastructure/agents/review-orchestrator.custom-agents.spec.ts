@@ -522,6 +522,25 @@ describe('ReviewOrchestratorService — custom agents', () => {
         expect(out.customAgentRuns?.[0].status).toBe('failed');
     });
 
+    it('records why a custom agent failed, without the provider message', async () => {
+        const { service } = setup(() => {
+            throw Object.assign(
+                new Error('Rate limit reached for org sk-ant-secret'),
+                { statusCode: 429 },
+            );
+        });
+
+        const out = await service.execute(
+            inputFor({ customAgents: [agentConfig()] }),
+        );
+
+        expect(out.customAgentRuns?.[0]).toMatchObject({
+            status: 'failed',
+            reason: 'RATE_LIMIT (HTTP 429)',
+        });
+        expect(JSON.stringify(out.customAgentRuns)).not.toContain('sk-ant');
+    });
+
     it('logs a skipped and a failed agent with the review and agent ids', async () => {
         const { service } = setup(() => {
             throw new Error('provider down');
@@ -616,7 +635,10 @@ describe('ReviewOrchestratorService — custom agents', () => {
         expect(out.incomplete).toEqual([
             expect.objectContaining({ finishReason: 'no-result' }),
         ]);
-        expect(out.customAgentRuns?.[0].status).toBe('incomplete');
+        expect(out.customAgentRuns?.[0]).toMatchObject({
+            status: 'incomplete',
+            reason: 'no-result',
+        });
     });
 
     it('runs nothing custom when no agents are passed (feature off)', async () => {

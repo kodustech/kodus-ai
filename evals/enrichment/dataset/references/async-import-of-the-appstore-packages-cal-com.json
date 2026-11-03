@@ -1,0 +1,33 @@
+{
+ "caseId": "async-import-of-the-appstore-packages-cal-com",
+ "items": [
+  {
+   "issueId": "async-import-of-the-appstore-packages-cal-com#sncc-01",
+   "defectStatement": "Every dynamic import in the appStore object executes when packages/app-store/index.ts is evaluated, initiating loading of all registered integrations even when a caller needs only one. Making the entries promises does not defer loading until an integration is requested.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Do not initiate integration imports merely by evaluating the registry module.",
+    "Accessing an integration must load its corresponding module without initiating imports for unrelated registry entries.",
+    "Preserve all registered keys, module paths, and compatibility with existing await appStore[key] consumers."
+   ],
+   "exampleFix": "const appStore = {\n  get applecalendar() {\n    return import(\"./applecalendar\");\n  },\n  get caldavcalendar() {\n    return import(\"./caldavcalendar\");\n  },\n  get closecom() {\n    return import(\"./closecom\");\n  },\n  get dailyvideo() {\n    return import(\"./dailyvideo\");\n  },\n  get googlecalendar() {\n    return import(\"./googlecalendar\");\n  },\n  get googlevideo() {\n    return import(\"./googlevideo\");\n  },\n  get hubspot() {\n    return import(\"./hubspot\");\n  },\n  get huddle01video() {\n    return import(\"./huddle01video\");\n  },\n  get jitsivideo() {\n    return import(\"./jitsivideo\");\n  },\n  get larkcalendar() {\n    return import(\"./larkcalendar\");\n  },\n  get office365calendar() {\n    return import(\"./office365calendar\");\n  },\n  get office365video() {\n    return import(\"./office365video\");\n  },\n  get plausible() {\n    return import(\"./plausible\");\n  },\n  get salesforce() {\n    return import(\"./salesforce\");\n  },\n  get zohocrm() {\n    return import(\"./zohocrm\");\n  },\n  get sendgrid() {\n    return import(\"./sendgrid\");\n  },\n  get stripepayment() {\n    return import(\"./stripepayment\");\n  },\n  get tandemvideo() {\n    return import(\"./tandemvideo\");\n  },\n  get vital() {\n    return import(\"./vital\");\n  },\n  get zoomvideo() {\n    return import(\"./zoomvideo\");\n  },\n  get wipemycalother() {\n    return import(\"./wipemycalother\");\n  },\n  get giphy() {\n    return import(\"./giphy\");\n  },\n  get zapier() {\n    return import(\"./zapier\");\n  },\n  get exchange2013calendar() {\n    return import(\"./exchange2013calendar\");\n  },\n  get exchange2016calendar() {\n    return import(\"./exchange2016calendar\");\n  },\n  get exchangecalendar() {\n    return import(\"./exchangecalendar\");\n  },\n  get facetime() {\n    return import(\"./facetime\");\n  },\n  get sylapsvideo() {\n    return import(\"./sylapsvideo\");\n  },\n};",
+   "notes": "Lazy getters allow a local fix while preserving the promise-valued access contract. Replacing values with ordinary thunks alone breaks existing consumers; that approach also requires edits outside the anchor. Dynamic imports retain module caching."
+  },
+  {
+   "issueId": "async-import-of-the-appstore-packages-cal-com#02",
+   "defectStatement": "The reschedule handler discards the promises returned by its async forEach callbacks, so calendar and video deletions are not awaited before emails, webhooks, or request completion. Rejections from calendar loading or deletion escape the handler's promise chain and can become unhandled.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Await calendar loading and applicable calendar/video deletions before proceeding to reschedule notifications on success.",
+    "Propagate cancellation failures through the enclosing async handler instead of leaving unobserved rejections.",
+    "Preserve UID checks, integration-type dispatch, optional calendar handling, and deletion arguments."
+   ],
+   "exampleFix": "        await Promise.all(\n          bookingRefsFiltered.map(async (bookingRef) => {\n            if (bookingRef.uid) {\n              if (bookingRef.type.endsWith(\"_calendar\")) {\n                const calendar = await getCalendar(credentialsMap.get(bookingRef.type));\n\n                return calendar?.deleteEvent(\n                  bookingRef.uid,\n                  builder.calendarEvent,\n                  bookingRef.externalCalendarId\n                );\n              } else if (bookingRef.type.endsWith(\"_video\")) {\n                return deleteMeeting(credentialsMap.get(bookingRef.type), bookingRef.uid);\n              }\n            }\n          })\n        );",
+   "notes": "There is no surrounding try/catch in this mutation; failures should propagate to its caller. An awaited sequential loop is also valid. Promise.all observes every rejection but can reject before other deletions finish."
+  }
+ ]
+}
