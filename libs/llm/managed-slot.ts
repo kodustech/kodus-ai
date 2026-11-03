@@ -16,6 +16,12 @@ import { DEFAULT_MODEL } from './byok-defaults';
 import { vertexModelFromAdc } from './model-builders';
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from './opencode-go';
 import { servedByOpenAi } from './providers/openai/endpoint';
+import {
+    resolveDeclaredEnvProvider,
+    type DeclaredEnvModel,
+} from './env-declared-provider';
+import { attachClassification, LlmErrorCategory } from './error-classifier';
+import type { ReasoningEffort } from './reasoning-options';
 
 // Model-name protocol patterns, used by the self-hosted / trial default-model
 // resolution below (the BYOK provider builders moved to the provider modules
@@ -85,7 +91,7 @@ function isProxyBaseURL(baseURL: string | undefined): boolean {
  * falls through to the cloud/managed default. `name` is the telemetry label;
  * `kind` drives the SDK/auth branch.
  */
-export type EnvProviderResolution =
+export type EnvProviderResolution = (
     | { kind: 'gemini_studio'; name: 'google_ai_studio'; apiKey: string }
     | {
           kind: 'gemini_vertex';
@@ -112,6 +118,8 @@ export type EnvProviderResolution =
           kind: 'openai_native';
           name: 'openai';
           apiKey: string;
+          /** Only from a declared provider; inference never moves it. */
+          baseURL?: string;
       }
     | {
           kind: 'openai_compat';
@@ -128,7 +136,96 @@ export type EnvProviderResolution =
           project: string;
           vertexLocation?: string;
           isClaude: boolean;
-      };
+      }
+    | {
+          // API_LLM_PROVIDER was set but cannot run. Never falls back to
+          // inference or to the cloud default: guessing is the bug (#1687).
+          kind: 'invalid';
+          name: 'invalid';
+          reason: string;
+      }
+) & {
+    /** The operator stated the provider (API_LLM_PROVIDER). */
+    declared?: boolean;
+    reasoningEffort?: ReasoningEffort;
+};
+
+/** A declared env provider, as the same resolution the inference produces. */
+function fromDeclared(config: DeclaredEnvModel): EnvProviderResolution {
+    const tags = {
+        declared: true,
+        ...(config.reasoningEffort
+            ? { reasoningEffort: config.reasoningEffort }
+            : {}),
+    };
+    const isClaude = CLAUDE_MODEL_PATTERN.test(config.model);
+    const apiKey = config.apiKey ?? '';
+    switch (config.provider) {
+        case 'openai':
+            return {
+                kind: 'openai_native',
+                name: 'openai',
+                apiKey,
+                ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+                ...tags,
+            };
+        case 'openai_compatible':
+            return {
+                kind: 'openai_compat',
+                name: 'openai_compatible',
+                apiKey,
+                baseURL: config.baseURL as string,
+                ...tags,
+            };
+        case 'anthropic':
+            return {
+                kind: 'claude_anthropic',
+                name: 'anthropic',
+                apiKey,
+                baseURL: config.baseURL,
+                ...tags,
+            };
+        case 'google_gemini':
+            return {
+                kind: 'gemini_studio',
+                name: 'google_ai_studio',
+                apiKey,
+                ...tags,
+            };
+        case 'google_vertex':
+            if (!config.apiKey) {
+                return {
+                    kind: 'vertex_adc',
+                    name: 'google_vertex',
+                    project: config.adcProject as string,
+                    vertexLocation: config.vertexLocation,
+                    isClaude,
+                    ...tags,
+                };
+            }
+            return {
+                kind: isClaude ? 'claude_vertex' : 'gemini_vertex',
+                name: 'google_vertex',
+                apiKey,
+                vertexLocation: config.vertexLocation,
+                ...tags,
+            };
+    }
+}
+
+/**
+ * The error a review fails with when the declared env config cannot run. Its
+ * classification carries the reason, so the PR comment and the dashboard say
+ * which env var to fix instead of "Unexpected error".
+ */
+export function invalidEnvConfigError(reason: string): Error {
+    const message = `The server LLM configuration is invalid: ${reason}`;
+    return attachClassification(new Error(message), {
+        category: LlmErrorCategory.UNKNOWN,
+        rawMessage: message,
+        friendlyMessage: message,
+    });
+}
 
 /** Resolve the Vertex project id for keyless (ADC) auth from the environment. */
 function vertexProjectFromEnv(): string | undefined {
@@ -143,6 +240,14 @@ function vertexProjectFromEnv(): string | undefined {
 export function resolveEnvProvider(): EnvProviderResolution | null {
     const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
     if (envMode === 'auto') return null;
+
+    const declared = resolveDeclaredEnvProvider(process.env);
+    if (declared.kind === 'invalid') {
+        return { kind: 'invalid', name: 'invalid', reason: declared.reason };
+    }
+    if (declared.kind === 'declared') {
+        return fromDeclared(declared.config);
+    }
 
     const isGemini = GEMINI_MODEL_PATTERN.test(envMode);
     const isClaude = CLAUDE_MODEL_PATTERN.test(envMode);
@@ -245,7 +350,7 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
  *  mapping `resolveManagedSlot`'s switch uses to pick the SDK/module, kept here as
  *  the reasoning-only projection (no model build, no key). */
 const ENV_KIND_TO_PROVIDER: Record<
-    EnvProviderResolution['kind'],
+    Exclude<EnvProviderResolution['kind'], 'invalid'>,
     BYOKProvider
 > = {
     gemini_studio: BYOKProvider.GOOGLE_GEMINI,
@@ -267,13 +372,17 @@ const ENV_KIND_TO_PROVIDER: Record<
  * cloud (`API_LLM_PROVIDER_MODEL` unset/auto) → the caller's own default decides.
  */
 export function envManagedReasoningDescriptor():
-    | { provider: BYOKProvider; model: string }
+    | { provider: BYOKProvider; model: string; reasoningEffort?: ReasoningEffort }
     | undefined {
     const env = resolveEnvProvider();
-    if (!env) return undefined;
+    if (!env || env.kind === 'invalid') return undefined;
     const model = process.env.API_LLM_PROVIDER_MODEL;
     if (!model) return undefined;
-    return { provider: ENV_KIND_TO_PROVIDER[env.kind], model };
+    return {
+        provider: ENV_KIND_TO_PROVIDER[env.kind],
+        model,
+        ...(env.reasoningEffort ? { reasoningEffort: env.reasoningEffort } : {}),
+    };
 }
 
 /**
@@ -366,9 +475,15 @@ export function resolveManagedSlot(
                     },
                 );
             case 'openai_native':
-                // The openai module's native build: no baseURL, so the SDK's own
-                // api.openai.com/v1 default, and /v1/responses.
-                return managedSlot(BYOKProvider.OPENAI, env.apiKey, envMode);
+                // The openai module's native build: the SDK's own
+                // api.openai.com/v1 default (or a declared baseURL), and
+                // /v1/responses.
+                return managedSlot(
+                    BYOKProvider.OPENAI,
+                    env.apiKey,
+                    envMode,
+                    env.baseURL ? { baseURL: env.baseURL } : undefined,
+                );
             case 'openai_compat':
                 // INLINE EXCEPTION (self-hosted OpenAI-compatible): name
                 // 'self-hosted', default baseURL api.openai.com, raw
@@ -414,8 +529,15 @@ export function resolveManagedSlot(
                 if (adcModel) {
                     return { kind: 'inline', model: adcModel };
                 }
+                if (env.declared) {
+                    throw invalidEnvConfigError(
+                        'API_LLM_PROVIDER=google_vertex could not build a model from Application Default Credentials.',
+                    );
+                }
                 break;
             }
+            case 'invalid':
+                throw invalidEnvConfigError(env.reason);
         }
     }
 
@@ -502,6 +624,14 @@ export function resolveManagedSlot(
 export function hasManagedModelKey(): boolean {
     const selfHosted =
         (process.env.API_LLM_PROVIDER_MODEL ?? 'auto') !== 'auto';
+    // A declared provider, runnable or not, is attempted: an invalid one fails
+    // with its reason instead of skipping the call in silence.
+    if (
+        selfHosted &&
+        resolveDeclaredEnvProvider(process.env).kind !== 'inferred'
+    ) {
+        return true;
+    }
     if (selfHosted) {
         const envModel = process.env.API_LLM_PROVIDER_MODEL ?? '';
         // Keyless Vertex (ADC): no literal key, but the ambient project makes a
@@ -550,7 +680,9 @@ export function getModelName(
     // so the telemetry name always matches the model actually used.
     const env = resolveEnvProvider();
     if (env) {
-        return `${env.name}:${process.env.API_LLM_PROVIDER_MODEL}`;
+        return env.kind === 'invalid'
+            ? `${process.env.API_LLM_PROVIDER_MODEL}`
+            : `${env.name}:${process.env.API_LLM_PROVIDER_MODEL}`;
     }
 
     return defaultModelOverride || DEFAULT_MODEL.model;

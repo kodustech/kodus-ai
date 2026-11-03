@@ -10,6 +10,8 @@
  */
 
 import { servedByOpenAi } from './providers/openai/endpoint';
+import { resolveDeclaredEnvProvider } from './env-declared-provider';
+import type { ReasoningEffort } from './reasoning-options';
 
 export type EnvLLMProviderId =
     | 'openai'
@@ -35,6 +37,17 @@ export interface EnvLLMDescriptor {
      * them guessing why every prompt ignores its hard-coded temperature.
      */
     temperatureOverride?: number;
+    /**
+     * `declared` when the provider came from `API_LLM_PROVIDER` (runnable or
+     * not). Absent means it was guessed from the model name.
+     */
+    providerSource?: 'declared';
+    /** Why a declared config cannot run. Names env vars, never values. */
+    invalidReason?: string;
+    /** A generic and a legacy var that disagree, and which one won. */
+    warnings?: string[];
+    /** `API_LLM_REASONING_EFFORT`, when declared. */
+    reasoningEffort?: ReasoningEffort;
 }
 
 const CLAUDE_MODEL_PATTERN = /^claude[-_]/i;
@@ -114,6 +127,37 @@ export function describeEnvLLMConfig(
         temperatureOverride !== undefined
             ? { ...descriptor, temperatureOverride }
             : descriptor;
+
+    const declared = resolveDeclaredEnvProvider(env);
+    if (declared.kind === 'invalid') {
+        return {
+            configured: false,
+            model: envMode,
+            providerSource: 'declared',
+            invalidReason: declared.reason,
+        };
+    }
+    if (declared.kind === 'declared') {
+        const { config, warnings } = declared;
+        return baseDescriptor({
+            configured: true,
+            model: config.model,
+            providerId: config.provider,
+            providerSource: 'declared',
+            ...(config.provider === 'openai'
+                ? { baseUrl: config.baseURL ?? 'https://api.openai.com/v1' }
+                : config.baseURL
+                  ? { baseUrl: config.baseURL }
+                  : {}),
+            ...(config.vertexLocation
+                ? { vertexLocation: config.vertexLocation }
+                : {}),
+            ...(config.reasoningEffort
+                ? { reasoningEffort: config.reasoningEffort }
+                : {}),
+            ...(warnings.length ? { warnings } : {}),
+        });
+    }
 
     if (isGemini && !viaProxy) {
         if (googleAiStudioKey) {

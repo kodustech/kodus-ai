@@ -30,6 +30,10 @@ const ENV_KEYS = [
     'API_GOOGLE_AI_API_KEY',
     'GOOGLE_GENERATIVE_AI_API_KEY',
     'GOOGLE_CLOUD_PROJECT',
+    'API_LLM_PROVIDER',
+    'API_LLM_API_KEY',
+    'API_LLM_BASE_URL',
+    'API_LLM_REASONING_EFFORT',
 ] as const;
 
 const snapshot: Record<string, string | undefined> = {};
@@ -100,6 +104,29 @@ describe('resolveModelConfig — env reasoning reaches the funnel (uniform with 
         expect(inv.providerOptions).toEqual({
             anthropic: { thinking: { type: 'adaptive' }, effort: 'medium' },
         });
+    });
+
+    it('API_LLM_REASONING_EFFORT wins over the family default, as a BYOK slot effort does (#1687)', () => {
+        envAnthropicOpus5();
+        process.env.API_LLM_PROVIDER = 'anthropic';
+        process.env.API_LLM_REASONING_EFFORT = 'high';
+        const envInv = resolveModelConfig(undefined, { runName: 'review' });
+        const byokInv = resolveModelConfig(
+            {
+                provider: 'anthropic',
+                model: 'claude-opus-5',
+                apiKey: 'enc',
+                reasoningEffort: 'high',
+            } as any,
+            { runName: 'review' },
+        );
+        expect(envInv.providerOptions).toEqual(byokInv.providerOptions);
+        expect(envInv.providerOptions).not.toEqual(
+            resolveModelConfig(
+                { provider: 'anthropic', model: 'claude-opus-5', apiKey: 'enc' } as any,
+                { runName: 'review' },
+            ).providerOptions,
+        );
     });
 
     it('matches what a CONNECTED BYOK Opus-5 slot resolves to (env == BYOK)', () => {

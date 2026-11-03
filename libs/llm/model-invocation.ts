@@ -143,6 +143,8 @@ export function resolveModelConfig(
     const effectiveReasoningEffort: ReasoningEffort = suppressReasoning
         ? 'none'
         : (resolvedSlot?.reasoningEffort ??
+          // API_LLM_REASONING_EFFORT: the env's equivalent of the slot's own.
+          envDescriptor?.reasoningEffort ??
           // Family default from the provider's own reasoningTraits (thinks-by-
           // default → 'medium'), applied to BOTH env and BYOK slots. Replaces the
           // dead per-model catalog default; the slot's explicit effort still wins,

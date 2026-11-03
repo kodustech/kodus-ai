@@ -556,3 +556,72 @@ describe('describeEnvLLMConfig — mutation hardening', () => {
         });
     });
 });
+
+describe('describeEnvLLMConfig — declared provider (#1687)', () => {
+    it('describes the declared provider over every heuristic', () => {
+        expect(
+            describeEnvLLMConfig({
+                API_LLM_PROVIDER_MODEL: 'claude-sonnet-5',
+                API_LLM_PROVIDER: 'openai_compatible',
+                API_LLM_API_KEY: 'sk-x',
+                API_LLM_BASE_URL: 'https://api.anthropic.com/v1',
+                API_LLM_REASONING_EFFORT: 'low',
+            } as any),
+        ).toEqual({
+            configured: true,
+            model: 'claude-sonnet-5',
+            providerId: 'openai_compatible',
+            providerSource: 'declared',
+            baseUrl: 'https://api.anthropic.com/v1',
+            reasoningEffort: 'low',
+        });
+    });
+
+    it('reports an invalid declaration as not configured, with its reason', () => {
+        expect(
+            describeEnvLLMConfig({
+                API_LLM_PROVIDER_MODEL: 'gpt-4o',
+                API_LLM_PROVIDER: 'google_vertex',
+            } as any),
+        ).toEqual({
+            configured: false,
+            model: 'gpt-4o',
+            providerSource: 'declared',
+            invalidReason:
+                'API_LLM_PROVIDER=google_vertex has no API key. Set API_LLM_API_KEY or API_VERTEX_AI_API_KEY, or GOOGLE_CLOUD_PROJECT for keyless ADC.',
+        });
+    });
+
+    it('carries the disagreement warning and the temperature override', () => {
+        const descriptor = describeEnvLLMConfig({
+            API_LLM_PROVIDER_MODEL: 'gpt-5.6-luna',
+            API_LLM_PROVIDER: 'openai',
+            API_LLM_API_KEY: 'sk-a',
+            API_OPEN_AI_API_KEY: 'sk-b',
+            API_LLM_TEMPERATURE_OVERRIDE: '1',
+        } as any);
+        expect(descriptor).toMatchObject({
+            configured: true,
+            providerId: 'openai',
+            baseUrl: 'https://api.openai.com/v1',
+            temperatureOverride: 1,
+            warnings: [
+                'API_LLM_API_KEY and API_OPEN_AI_API_KEY are both set to different values; API_LLM_API_KEY is used.',
+            ],
+        });
+    });
+
+    it('describes an install without API_LLM_PROVIDER exactly as before (no source field)', () => {
+        expect(
+            describeEnvLLMConfig({
+                API_LLM_PROVIDER_MODEL: 'gpt-4o',
+                API_OPEN_AI_API_KEY: 'sk-x',
+            } as any),
+        ).toEqual({
+            configured: true,
+            model: 'gpt-4o',
+            providerId: 'openai_compatible',
+            baseUrl: 'https://api.openai.com/v1',
+        });
+    });
+});
