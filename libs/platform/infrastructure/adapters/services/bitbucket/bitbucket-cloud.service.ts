@@ -111,6 +111,9 @@ import {
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 import { listingFailed } from '../repository-listing';
 
+/** Bound on the pages `readAllPages` follows before calling a read incomplete. */
+const MAX_PAGES = 200;
+
 @Injectable()
 export class BitbucketCloudService implements Omit<
     ICodeManagementService,
@@ -4901,14 +4904,15 @@ export class BitbucketCloudService implements Omit<
     ): Promise<{ values: T[]; complete: boolean }> {
         let page = response.data;
         const values: T[] = [];
-        while (true) {
-            if (!Array.isArray(page?.values))
-                return { values, complete: false };
+        for (let read = 1; read <= MAX_PAGES; read++) {
+            if (!Array.isArray(page?.values)) break;
             values.push(...page.values);
             if (!bitbucketAPI.hasNextPage(page))
                 return { values, complete: true };
-            page = (await bitbucketAPI.getNextPage(page)).data;
+            if (read < MAX_PAGES)
+                page = (await bitbucketAPI.getNextPage(page)).data;
         }
+        return { values, complete: false };
     }
 
     /** Bitbucket's API returns IDs with curly braces around them (e.g. "{123}").

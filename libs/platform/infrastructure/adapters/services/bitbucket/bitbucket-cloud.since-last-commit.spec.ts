@@ -121,6 +121,21 @@ describe('BitbucketCloudService.getChangedFilesSinceLastCommit — diffstat page
         );
     });
 
+    it('returns null when the diffstat never reaches its last page', async () => {
+        const endless = new Proxy(
+            {},
+            {
+                get: (_t, key: string) =>
+                    key === 'first' || key.startsWith('p')
+                        ? { values: [stat('src/a.ts')], next: `p${key}` }
+                        : undefined,
+            },
+        );
+        const { service } = makeService(endless as Record<string, unknown>);
+
+        await expect(read(service)).resolves.toBeNull();
+    });
+
     it('returns null when a later diffstat page has no values', async () => {
         const { service } = makeService({
             first: { values: [stat('src/a.ts')], next: 'p2' },
