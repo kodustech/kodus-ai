@@ -33,6 +33,7 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { createLogger } from '@libs/core/log/logger';
+import { toBranchName } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
     type IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -306,7 +307,13 @@ export class ResolveCustomAgentUseCase {
                     })) ||
                     repo.default_branch ||
                     'main';
-                return { id: String(repo.id), name: repo.name, branch };
+                // Azure answers `refs/heads/main`: the plain name, as a
+                // review reads and links it.
+                return {
+                    id: String(repo.id),
+                    name: repo.name,
+                    branch: toBranchName(branch) ?? branch,
+                };
             };
 
             // Each repository's items are checked on its own branch.

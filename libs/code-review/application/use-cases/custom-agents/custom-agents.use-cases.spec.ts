@@ -303,6 +303,36 @@ describe('ResolveCustomAgentUseCase', () => {
             expect(report.knowledge.repositoryVisibility).toBe('public');
         });
 
+        it('shows and reads the plain branch name when the provider answers a full ref (Azure)', async () => {
+            const knowledgeReader = reader();
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                {
+                    ...cm,
+                    getDefaultBranch: jest.fn(async () => 'refs/heads/release'),
+                } as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: RULES },
+            });
+
+            expect(report.repository.branch).toBe('release');
+            expect(knowledgeReader.discover).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: expect.objectContaining({
+                        id: 'repo-9',
+                        branch: 'release',
+                    }),
+                }),
+            );
+        });
+
         it("falls back to the listing's default branch when the provider cannot say", async () => {
             const knowledgeReader = reader();
             const useCase = new ResolveCustomAgentUseCase(

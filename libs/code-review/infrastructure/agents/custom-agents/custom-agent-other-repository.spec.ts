@@ -329,4 +329,24 @@ describe('a directory overriding knowledge', () => {
 
         expect(result.knowledge).toEqual([inherited[0], directory[0]]);
     });
+
+    it('treats a stored repository or path of another type as absent instead of throwing', () => {
+        const inherited = [
+            { path: 'docs/valves.md', kind: 'doc', linkedTo: [] },
+        ];
+        const directory = [
+            { path: 'docs/valves.md', kind: 'doc', repository: 42 },
+            { path: 7, kind: 'doc' },
+        ];
+
+        const result = withDirectoryAgentLists(
+            {},
+            { knowledge: inherited },
+            { knowledge: directory },
+        ) as { knowledge: unknown[] };
+
+        // A repository that is not a string names none: the entry replaces
+        // the local one. A path that is not a string has no key: kept apart.
+        expect(result.knowledge).toEqual([directory[0], directory[1]]);
+    });
 });
