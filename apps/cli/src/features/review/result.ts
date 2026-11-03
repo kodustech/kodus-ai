@@ -133,6 +133,18 @@ export function formatHeavyTrialNotice(heavy?: boolean): string | null {
         : null;
 }
 
+/** The trial result carrying the heavy notice, for callers that read no
+ *  spinner (an agent's JSON envelope, `--format json`). */
+export function withHeavyTrialNotice(
+    result: TrialReviewResult,
+    heavy?: boolean,
+): TrialReviewResult {
+    const notice = formatHeavyTrialNotice(heavy);
+    return notice
+        ? { ...result, notices: [...(result.notices ?? []), notice] }
+        : result;
+}
+
 export function formatTrialCompletionMessage(
     result: TrialReviewResult,
 ): string {

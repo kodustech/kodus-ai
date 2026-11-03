@@ -3,6 +3,7 @@ import {
     formatFailOnExitMessage,
     formatHeavyTrialNotice,
     formatTrialCompletionMessage,
+    withHeavyTrialNotice,
     isHunkPlatformSupported,
     shouldFailReview,
     shouldUseHunkViewer,
@@ -155,5 +156,14 @@ describe('review result helpers', () => {
         expect(formatHeavyTrialNotice(true)).toContain('kodus auth login');
         expect(formatHeavyTrialNotice(false)).toBeNull();
         expect(formatHeavyTrialNotice(undefined)).toBeNull();
+    });
+
+    it('carries the heavy notice in a trial result for callers that read no spinner', () => {
+        const trial = { summary: '', issues: [], filesAnalyzed: 1, duration: 1 } as unknown as TrialReviewResult;
+
+        expect(withHeavyTrialNotice(trial, true).notices).toEqual([
+            expect.stringContaining('kodus auth login'),
+        ]);
+        expect(withHeavyTrialNotice(trial, false)).toBe(trial);
     });
 });

@@ -34,6 +34,7 @@ import {
     formatFailOnExitMessage,
     formatHeavyTrialNotice,
     formatTrialCompletionMessage,
+    withHeavyTrialNotice,
     isHunkPlatformSupported,
     shouldFailReview,
     shouldUseHunkViewer,
@@ -354,7 +355,7 @@ async function reviewAction(
             const trialResult = await reviewService.trialAnalyze(diff, {
                 githubPat: resolveTrialGithubPat(options),
             });
-            result = trialResult;
+            result = withHeavyTrialNotice(trialResult, options.heavy);
             if (!globalOpts.quiet && !ctx.isAgent) {
                 spinner.succeed(
                     chalk.green(formatTrialCompletionMessage(trialResult)),
@@ -589,7 +590,14 @@ function warnHeavyInTrial(
     globalOpts: GlobalOptions,
 ): void {
     const notice = formatHeavyTrialNotice(heavy);
-    if (!notice || globalOpts.quiet || ctx.isAgent) {
+    // An agent reads the notice in the result (withHeavyTrialNotice); a spinner
+    // line would corrupt its JSON.
+    if (!notice || ctx.isAgent) {
+        return;
+    }
+    // --quiet keeps stdout clean, so the notice goes to stderr.
+    if (globalOpts.quiet) {
+        cliError(chalk.yellow(notice));
         return;
     }
     spinner.warn(chalk.yellow(notice));
@@ -638,7 +646,7 @@ async function runTrialFallback({
         spinner.succeed(chalk.green(formatTrialCompletionMessage(trialResult)));
     }
 
-    return trialResult;
+    return withHeavyTrialNotice(trialResult, heavy);
 }
 
 async function handleNoChanges(
