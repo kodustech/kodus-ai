@@ -280,6 +280,26 @@ async function activeCodeManagementPlatform(
     return (active?.platformName ?? "").toUpperCase();
 }
 
+/** Whether the tenant's team already has a working `integrationType` connection. */
+async function hasLinkedCodeManagement(
+    target: TargetContext,
+    session: KodusSession,
+    integrationType: string,
+): Promise<boolean> {
+    const resp = await http<{
+        data?: Array<{ platformName?: string; category?: string; hasConnection?: boolean }>;
+    }>(
+        `${target.apiBaseUrl}/integration/connections?teamId=${encodeURIComponent(session.teamId)}`,
+        { headers: { Authorization: `Bearer ${session.accessToken}` }, timeoutMs: 15_000 },
+    );
+    return (resp.body?.data ?? []).some(
+        (c) =>
+            (c.category ?? "CODE_MANAGEMENT") === "CODE_MANAGEMENT" &&
+            (c.platformName ?? "").toUpperCase() === integrationType.toUpperCase() &&
+            c.hasConnection === true,
+    );
+}
+
 async function clearConflictingIntegrations(
     target: TargetContext,
     provider: Provider,
@@ -356,6 +376,27 @@ export async function registerIntegration(
     // that hijack getTypeIntegration. Self-hosted's fresh tenant never does.
     if (target.target === "cloud") {
         await clearConflictingIntegrations(target, provider, session);
+        // Linking a GitHub App installation needs GitHub's authorization of a
+        // user in a browser (GHSA-9r6j), which a run cannot do. The persistent
+        // tenant was linked once by hand (cli/cloud/README.md), and the link
+        // only stores the installation id, so it is reused as it is. The API
+        // does not show a tenant which installation it holds; the tenant only
+        // ever has the App linked, and one without the test repository fails
+        // at repository registration instead of passing.
+        if (
+            provider.authMode() === "oauth" &&
+            (await hasLinkedCodeManagement(
+                target,
+                session,
+                provider.integrationType,
+            ))
+        ) {
+            log.info(
+                `${provider.integrationType} App installation already linked to this tenant — reusing it`,
+            );
+            registeredIntegrationCache.add(cacheKey);
+            return;
+        }
     }
     log.info(`Registering ${provider.integrationType} integration`);
     const extras = provider.authExtraFields?.() ?? {};
