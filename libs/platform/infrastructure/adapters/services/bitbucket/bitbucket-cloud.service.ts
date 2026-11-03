@@ -4994,7 +4994,8 @@ export class BitbucketCloudService implements Omit<
         // mismatch rather than a file this diff leaves untouched.
         let parseMismatch = false;
         // Files whose section ends before its hunks do: the host cut the
-        // diff short there. Each is read again on its own.
+        // diff short there, and whatever came after the cut is not in it
+        // at all, so a path it lacks proves nothing.
         const cutShort = new Set<string>();
 
         try {
@@ -5030,25 +5031,32 @@ export class BitbucketCloudService implements Omit<
         }
 
         const missing = paths.filter((path) => !patches.has(path));
-        // Without a fill, a path the whole diff left out did not change;
-        // only the files it cut short still need a read of their own
-        const toRead =
-            !wholeDiffRead || fillMissingPerFile || parseMismatch
-                ? missing
-                : missing.filter((path) => cutShort.has(path));
-        if (!toRead.length) return patches;
+        // Without a fill, a path a complete whole diff left out did not
+        // change. A cut or mismatched one proves nothing: read them all.
+        if (
+            !missing.length ||
+            (wholeDiffRead &&
+                !fillMissingPerFile &&
+                !parseMismatch &&
+                !cutShort.size)
+        ) {
+            return patches;
+        }
         if (cutShort.size) {
             this.logger.warn({
-                message: `Whole-PR diff for spec ${spec} was cut short in ${cutShort.size} file(s); reading them one by one`,
+                message: `Whole-PR diff for spec ${spec} was cut short in ${[...cutShort].join(', ')}; reading ${missing.length} missing file(s) one by one`,
                 context: BitbucketCloudService.name,
-                metadata: { ...logMetadata, cutShort: [...cutShort] },
+                metadata: {
+                    ...logMetadata,
+                    cutShort: [...cutShort],
+                    missing: missing.length,
+                },
             });
-        }
-        if (wholeDiffRead && parseMismatch) {
+        } else if (wholeDiffRead && parseMismatch) {
             this.logger.warn({
-                message: `Whole-PR diff for spec ${spec} did not key every file; reading ${toRead.length} missing file(s) one by one`,
+                message: `Whole-PR diff for spec ${spec} did not key every file; reading ${missing.length} missing file(s) one by one`,
                 context: BitbucketCloudService.name,
-                metadata: { ...logMetadata, missing: toRead.length },
+                metadata: { ...logMetadata, missing: missing.length },
             });
         }
 
@@ -5056,7 +5064,7 @@ export class BitbucketCloudService implements Omit<
             BitbucketCloudService.PER_FILE_REQUEST_CONCURRENCY,
         );
         await Promise.all(
-            toRead.map((path) =>
+            missing.map((path) =>
                 limit(async () => {
                     try {
                         const diff = await bitbucketAPI.commits

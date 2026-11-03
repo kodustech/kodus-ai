@@ -2128,6 +2128,13 @@ export class ForgejoService implements Omit<
         repository: { name: string };
         prNumber: number;
     }): Promise<any[] | null> {
+        const logMetadata = {
+            organizationId: params.organizationAndTeamData.organizationId,
+            teamId: params.organizationAndTeamData.teamId,
+            repository: params.repository.name,
+            prNumber: params.prNumber,
+        };
+
         try {
             const authDetail = await this.getAuthDetails(
                 params.organizationAndTeamData,
@@ -2179,6 +2186,7 @@ export class ForgejoService implements Omit<
                             message: `Failed to fetch diff for PR#${params.prNumber}, continuing without patch data`,
                             context: ForgejoService.name,
                             error,
+                            metadata: logMetadata,
                         });
                         return { data: '' };
                     }),
@@ -2217,6 +2225,7 @@ export class ForgejoService implements Omit<
                 message: 'Error getting files by PR ID',
                 context: ForgejoService.name,
                 error,
+                metadata: logMetadata,
             });
             return null;
         }

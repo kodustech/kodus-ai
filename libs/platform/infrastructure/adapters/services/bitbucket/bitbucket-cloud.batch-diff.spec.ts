@@ -535,30 +535,19 @@ describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => 
         await expect(since(service)).resolves.toBeNull();
     });
 
-    it('reads a file the host cut short on its own, and only that one', async () => {
-        // The whole diff ends inside b.ts's hunk (3 lines declared, 1 sent)
-        const cut =
-            sectionFor('src/a.ts') +
-            [
-                'diff --git a/src/b.ts b/src/b.ts',
-                '--- /dev/null',
-                '+++ b/src/b.ts',
-                '@@ -0,0 +1,3 @@',
-                '+new b',
-                '',
-            ].join('\n');
-        const full = [
-            'diff --git a/src/b.ts b/src/b.ts',
-            '--- /dev/null',
-            '+++ b/src/b.ts',
-            '@@ -0,0 +1,3 @@',
-            '+new b',
-            '+more b',
-            '+last b',
+    it('incremental: reads every file the whole diff lacks once the host cut it short', async () => {
+        // The whole diff ends inside a.ts's hunk (3 lines declared, 1 sent);
+        // b.ts came after the cut and is not in it at all
+        const cut = [
+            'diff --git a/src/a.ts b/src/a.ts',
+            '--- a/src/a.ts',
+            '+++ b/src/a.ts',
+            '@@ -1,3 +1,3 @@',
+            '-old a',
             '',
         ].join('\n');
         const getDiff = jest.fn((args: { path?: string }) =>
-            Promise.resolve({ data: args.path ? full : cut }),
+            Promise.resolve({ data: args.path ? sectionFor(args.path) : cut }),
         );
         const { service } = makeService(getDiff as any);
 
@@ -566,18 +555,21 @@ describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => 
 
         expect(getDiff.mock.calls.map(([a]) => a.path)).toEqual([
             undefined,
+            'src/a.ts',
             'src/b.ts',
         ]);
-        expect(files?.find((f) => f.filename === 'src/b.ts')?.patch).toBe(
-            '@@ -0,0 +1,3 @@\n+new b\n+more b\n+last b',
-        );
+        expect(files?.map((f) => [f.filename, f.patch])).toEqual([
+            ['src/a.ts', '@@ -1 +1 @@\n-old a\n+new a'],
+            ['src/b.ts', '@@ -0,0 +1 @@\n+new b'],
+        ]);
         expect(logger(service).warn).toHaveBeenCalledWith(
             expect.objectContaining({
                 message:
-                    'Whole-PR diff for spec head..last was cut short in 1 file(s); reading them one by one',
+                    'Whole-PR diff for spec head..last was cut short in src/a.ts; reading 2 missing file(s) one by one',
                 metadata: expect.objectContaining({
                     organizationId: 'org-1',
-                    cutShort: ['src/b.ts'],
+                    cutShort: ['src/a.ts'],
+                    missing: 2,
                 }),
             }),
         );

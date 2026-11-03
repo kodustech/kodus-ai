@@ -128,7 +128,16 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
         expect(files?.map((f) => [f.filename, f.patch])).toEqual([
             ['src/a.ts', ''],
         ]);
-        expect(logger.warn).toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: {
+                    organizationId: 'org-1',
+                    teamId: 't',
+                    repository: 'acme/widget',
+                    prNumber: 7,
+                },
+            }),
+        );
     });
 
     it('lets a transport failure on the listing through', async () => {
@@ -142,8 +151,13 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
         repoGetPullRequestFiles.mockRejectedValue(
             new Error('unexpected payload'),
         );
-        const { service } = makeService();
+        const { service, logger } = makeService();
 
         await expect(list(service)).resolves.toBeNull();
+        expect(logger.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({ organizationId: 'org-1' }),
+            }),
+        );
     });
 });
