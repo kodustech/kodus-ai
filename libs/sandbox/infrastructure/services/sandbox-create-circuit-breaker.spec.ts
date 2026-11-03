@@ -1,5 +1,8 @@
+import { RateLimitError } from 'e2b';
+
 import {
     isRepositorySpecificSandboxFailure,
+    isSandboxCapacityFailure,
     isTimeoutSandboxFailure,
     SandboxCreateCircuitBreaker,
 } from './sandbox-create-circuit-breaker';
@@ -404,5 +407,36 @@ describe('sandbox failure classification — inputs', () => {
                 stderr: { text: 'Repository not found' },
             }),
         ).toBe(false);
+    });
+});
+
+describe('isSandboxCapacityFailure', () => {
+    it("takes E2B's own refusal as capacity", () => {
+        expect(
+            isSandboxCapacityFailure(
+                new RateLimitError(
+                    '429: You have reached the maximum number of concurrent E2B sandboxes',
+                ),
+            ),
+        ).toBe(true);
+    });
+
+    it.each([
+        [
+            'a git host rate limit during the clone',
+            Object.assign(new Error('Git clone failed (exit code 128)'), {
+                stderr: 'remote: API rate limit exceeded',
+            }),
+        ],
+        [
+            'a rate limit error from anything but the E2B SDK',
+            Object.assign(new Error('rate limit exceeded'), {
+                name: 'RateLimitError',
+            }),
+        ],
+        ['a plain message', 'maximum number of concurrent sandboxes'],
+        ['nothing', undefined],
+    ])('does not take %s as capacity', (_label, err) => {
+        expect(isSandboxCapacityFailure(err)).toBe(false);
     });
 });

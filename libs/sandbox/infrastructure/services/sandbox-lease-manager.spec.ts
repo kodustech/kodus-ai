@@ -20,11 +20,14 @@
  *   Test 5 — reaper cleans crashed-worker lease (Phase 1 criterion 3)
  */
 
-import { Sandbox } from 'e2b';
+import { RateLimitError, Sandbox } from 'e2b';
 import { SandboxLeaseManager } from './sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
-import { SandboxCircuitOpenError } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
+import {
+    SandboxCircuitOpenError,
+    SandboxWaitAbortedError,
+} from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import {
     ISandboxProvider,
     SandboxInstance,
@@ -602,6 +605,263 @@ describe('SandboxLeaseManager', () => {
         expect(leaseRepo.delete).toHaveBeenCalledWith(prKey);
         // No sandbox to kill — provider never returned one
         expect(Sandbox.kill).not.toHaveBeenCalled();
+    });
+
+    // ─── Sandbox capacity: a review waits for room, never skips it ───────
+
+    describe('sandbox capacity', () => {
+        const prKeyFor = (pr: number) =>
+            `7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:${pr}`;
+        const cloneParamsFor = (prNumber: number) => ({
+            cloneUrl: 'https://github.com/org/repo.git',
+            authToken: 'token',
+            branch: 'feature',
+            prNumber,
+            platform: 'GITHUB' as any,
+        });
+        const planFull = () =>
+            new RateLimitError(
+                '429: You have reached the maximum number of concurrent E2B sandboxes',
+            );
+
+        function cappedManager(
+            maxPerWorker: number | (() => Promise<{ maxPerWorker: number }>),
+        ) {
+            const concurrencyConfig = {
+                getLimits:
+                    typeof maxPerWorker === 'number'
+                        ? jest.fn().mockResolvedValue({ maxPerWorker })
+                        : jest.fn(maxPerWorker),
+            };
+            return new SandboxLeaseManager(
+                sandboxProvider as any,
+                leaseRepo,
+                configService,
+                concurrencyConfig as any,
+            );
+        }
+
+        beforeEach(() => {
+            leaseRepo.upsertAcquire.mockImplementation(
+                async (prKey: string) =>
+                    ({
+                        _id: prKey,
+                        leaseCount: 1,
+                        state: 'CREATING',
+                        createdAt: new Date(),
+                        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+                    }) as any,
+            );
+            leaseRepo.decrementLease.mockResolvedValue({
+                leaseCount: 1,
+            } as any);
+        });
+
+        afterEach(() => jest.useRealTimers());
+
+        it('waits in line past the cap instead of refusing, then takes the freed slot', async () => {
+            const capped = cappedManager(1);
+            const first = await capped.acquire(prKeyFor(1), 'review');
+
+            let settled = false;
+            const second = capped
+                .acquire(prKeyFor(2), 'review')
+                .finally(() => (settled = true));
+            await new Promise((r) => setTimeout(r, 50));
+
+            expect(settled).toBe(false);
+            expect(capped.concurrencyLimiter.waiting).toBe(1);
+            expect(leaseRepo.upsertAcquire).toHaveBeenCalledTimes(1);
+
+            await capped.release(first.leaseId);
+
+            await expect(second).resolves.toMatchObject({ wasCreated: true });
+            expect(capped.concurrencyLimiter.active).toBe(1);
+        });
+
+        it('logs the wait with the line state on each backoff tick', async () => {
+            jest.useFakeTimers();
+            const capped = cappedManager(1);
+            const warn = jest.spyOn((capped as any).logger, 'warn');
+            await capped.acquire(prKeyFor(1), 'review');
+            void capped.acquire(prKeyFor(2), 'review');
+
+            await jest.advanceTimersByTimeAsync(7_000);
+
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'waiting for a sandbox slot',
+                    ),
+                    metadata: expect.objectContaining({
+                        attempt: 1,
+                        maxPerWorker: 1,
+                        active: 1,
+                        waiting: 1,
+                    }),
+                }),
+            );
+        });
+
+        it('admits the line once the cap is raised in the global parameter', async () => {
+            jest.useFakeTimers();
+            let cap = 1;
+            const capped = cappedManager(async () => ({ maxPerWorker: cap }));
+            await capped.acquire(prKeyFor(1), 'review');
+            const second = capped.acquire(prKeyFor(2), 'review');
+
+            cap = 2;
+            await jest.advanceTimersByTimeAsync(7_000);
+
+            await expect(second).resolves.toMatchObject({ wasCreated: true });
+            expect(capped.concurrencyLimiter.active).toBe(2);
+        });
+
+        it('stops waiting only when the job aborts, giving its place up', async () => {
+            const capped = cappedManager(1);
+            const first = await capped.acquire(prKeyFor(1), 'review');
+            const job = new AbortController();
+
+            const second = capped.acquire(
+                prKeyFor(2),
+                'review',
+                undefined,
+                undefined,
+                { signal: job.signal },
+            );
+            job.abort();
+
+            await expect(second).rejects.toBeInstanceOf(
+                SandboxWaitAbortedError,
+            );
+            expect(capped.concurrencyLimiter.waiting).toBe(0);
+            await capped.release(first.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(0);
+        });
+
+        it('bounds the wait of a caller that passes no signal, so it cannot wait forever', async () => {
+            jest.useFakeTimers();
+            const capped = cappedManager(1);
+            await capped.acquire(prKeyFor(1), 'review');
+
+            const second = capped
+                .acquire(prKeyFor(2), 'conversation')
+                .catch((e) => e);
+            await jest.advanceTimersByTimeAsync(10 * 60_000 - 1_000);
+            expect(capped.concurrencyLimiter.waiting).toBe(1);
+
+            await jest.advanceTimersByTimeAsync(61_000);
+            await expect(second).resolves.toBeInstanceOf(
+                SandboxWaitAbortedError,
+            );
+            expect(capped.concurrencyLimiter.waiting).toBe(0);
+        });
+
+        it('lets a renewal replace its own sandbox without queueing behind its own slot', async () => {
+            const capped = cappedManager(1);
+            const review = await capped.acquire(prKeyFor(1), 'review');
+
+            const renewal = await capped.acquire(
+                '7e2e97b8-aefa-422e-92d4-30b378c0332e:safeguard-renew:1:abc',
+                'safeguard-renewal',
+                undefined,
+                undefined,
+                { replacesOwnSandbox: true },
+            );
+
+            expect(renewal.leaseId).toBeDefined();
+            expect(capped.concurrencyLimiter.active).toBe(1);
+            // Releasing the renewal leaves the review's slot in place
+            await capped.release(renewal.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(1);
+            await capped.release(review.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(0);
+        });
+
+        it('shares one slot between leases on the same PR', async () => {
+            const capped = cappedManager(1);
+
+            const review = await capped.acquire(prKeyFor(1), 'review');
+            const safeguard = await capped.acquire(prKeyFor(1), 'safeguard');
+
+            expect(review.leaseId).not.toBe(safeguard.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(1);
+
+            await capped.release(review.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(1);
+            await capped.release(safeguard.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(0);
+        });
+
+        it('stays quiet when uncapped', async () => {
+            const uncapped = cappedManager(0);
+            const warn = jest.spyOn((uncapped as any).logger, 'warn');
+            const log = jest.spyOn((uncapped as any).logger, 'log');
+
+            await uncapped.acquire(prKeyFor(3), 'review');
+
+            const slotLines = [...warn.mock.calls, ...log.mock.calls].filter(
+                ([p]: any[]) => /sandbox slot/.test(p?.message),
+            );
+            expect(slotLines).toEqual([]);
+        });
+
+        it('frees the slot when the acquire itself fails', async () => {
+            const capped = cappedManager(1);
+            leaseRepo.upsertAcquire.mockRejectedValueOnce(
+                new Error('Mongo down'),
+            );
+
+            await expect(capped.acquire(prKeyFor(1), 'review')).rejects.toThrow(
+                /Mongo down/,
+            );
+            expect(capped.concurrencyLimiter.active).toBe(0);
+        });
+
+        it('waits for room in the E2B plan and retries, without spending attempts or tripping the breaker', async () => {
+            jest.useFakeTimers();
+            const manager = cappedManager(0);
+            sandboxProvider.createSandboxWithRepo
+                .mockRejectedValueOnce(planFull())
+                .mockRejectedValueOnce(planFull())
+                .mockRejectedValueOnce(planFull());
+
+            const acquired = manager.acquire(
+                prKeyFor(10),
+                'review',
+                undefined,
+                cloneParamsFor(10),
+            );
+            // 5s, 10s, 20s backoff (±25% jitter)
+            await jest.advanceTimersByTimeAsync(60_000);
+
+            await expect(acquired).resolves.toMatchObject({ wasCreated: true });
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                4,
+            );
+            expect(manager.createCircuit.getState()).toBe('CLOSED');
+        });
+
+        it('stops waiting for room in the E2B plan when the job aborts', async () => {
+            const manager = cappedManager(0);
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(planFull());
+            const job = new AbortController();
+
+            const acquired = manager.acquire(
+                prKeyFor(11),
+                'review',
+                undefined,
+                cloneParamsFor(11),
+                { signal: job.signal },
+            );
+            await new Promise((r) => setTimeout(r, 20));
+            job.abort();
+
+            await expect(acquired).rejects.toBeInstanceOf(
+                SandboxWaitAbortedError,
+            );
+            expect(manager.createCircuit.getState()).toBe('CLOSED');
+        });
     });
 
     // ─── Fail-fast: timeouts, repo errors, circuit breaker ───────────────

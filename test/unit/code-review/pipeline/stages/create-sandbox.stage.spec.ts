@@ -6,6 +6,7 @@ import {
     SANDBOX_LEASE_MANAGER_TOKEN,
     AcquireResult,
     SandboxCircuitOpenError,
+    SandboxWaitAbortedError,
     SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
@@ -188,6 +189,7 @@ describe('CreateSandboxStage', () => {
                     prNumber: 42,
                     sandboxMetadata: { stage: 'review' },
                 }),
+                { signal: undefined },
             );
             // Null sandbox is stored in context — review runs in self-contained mode
             expect(result.sandboxHandle).toBeDefined();
@@ -214,6 +216,7 @@ describe('CreateSandboxStage', () => {
                     prNumber: 42,
                     sandboxMetadata: { stage: 'review' },
                 }),
+                { signal: undefined },
             );
 
             expect(result.sandboxHandle).toBeDefined();
@@ -325,6 +328,45 @@ describe('CreateSandboxStage', () => {
                     metadata: expect.objectContaining({ prNumber: undefined }),
                 }),
             );
+        });
+
+        it('marks the run partial when the job aborts while waiting for a sandbox', async () => {
+            mockLeaseManager.acquire.mockRejectedValue(
+                new SandboxWaitAbortedError(
+                    '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo-1:42',
+                    90_000,
+                    'a sandbox slot on this worker',
+                ),
+            );
+            const context = createBaseContext({
+                changedFiles: [{ filename: 'test.ts' } as any],
+            });
+
+            const result = await (stage as any).executeStage(context);
+
+            expect(result.sandboxHandle).toBeUndefined();
+            expect(result.errors).toEqual([
+                expect.objectContaining({
+                    severity: 'partial',
+                    error: expect.any(SandboxWaitAbortedError),
+                    metadata: { waitedMs: 90_000, prNumber: 42 },
+                }),
+            ]);
+            expect((stage as any).logger.error).not.toHaveBeenCalled();
+        });
+
+        it("passes the job's signal so a timed-out job leaves the capacity line", async () => {
+            const job = new AbortController();
+            const context = createBaseContext({
+                changedFiles: [{ filename: 'test.ts' } as any],
+            });
+            (context as any).parentSignal = job.signal;
+
+            await (stage as any).executeStage(context);
+
+            expect(mockLeaseManager.acquire.mock.calls[0][4]).toEqual({
+                signal: job.signal,
+            });
         });
 
         it('does not retry acquire itself — retry+backoff lives inside the lease manager', async () => {
