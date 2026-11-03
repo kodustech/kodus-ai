@@ -571,6 +571,11 @@ describe('TeamMemberService — deterministic logic', () => {
                 organization: { uuid: 'org-1', name: 'Acme' },
                 teamMember: [
                     {
+                        name: 'Elsewhere',
+                        organization: { uuid: 'org-1' },
+                        team: { uuid: 'team-2', name: 'Another team' },
+                    },
+                    {
                         name: 'Insider',
                         organization: { uuid: 'org-1' },
                         team: { uuid: 'team-1', name: 'Platform' },

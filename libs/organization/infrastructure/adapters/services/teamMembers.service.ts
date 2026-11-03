@@ -528,10 +528,17 @@ export class TeamMemberService implements ITeamMemberService {
                     user: {
                         email: user.email,
                         organization: { name: user.organization?.name },
-                        teamMember: (user.teamMember ?? []).map((member) => ({
-                            name: member.name,
-                            team: { name: member.team?.name },
-                        })),
+                        // The membership of the team inviting, not another one.
+                        teamMember: (user.teamMember ?? [])
+                            .filter(
+                                (member) =>
+                                    member.team?.uuid ===
+                                    organizationAndTeamData.teamId,
+                            )
+                            .map((member) => ({
+                                name: member.name,
+                                team: { name: member.team?.name },
+                            })),
                     },
                     inviterEmail: senderEmail,
                     inviteLink,
