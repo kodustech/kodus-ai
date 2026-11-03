@@ -117,9 +117,18 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
         });
     });
 
+    it('lets a transport failure on the diff through instead of empty patches', async () => {
+        repoDownloadPullDiffOrPatch.mockRejectedValue(
+            new TypeError('fetch failed'),
+        );
+        const { service } = makeService();
+
+        await expect(list(service)).rejects.toThrow('fetch failed');
+    });
+
     it('still lists the files without patches when the diff fails otherwise', async () => {
         repoDownloadPullDiffOrPatch.mockRejectedValue(
-            new Error('socket hang up'),
+            new Error('Request failed with status code 500'),
         );
         const { service, logger } = makeService();
 

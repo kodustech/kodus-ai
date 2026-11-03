@@ -2180,8 +2180,11 @@ export class ForgejoService implements Omit<
                         return result;
                     })
                     .catch((error) => {
-                        // A rate limit is not a PR without patches
-                        if (is429Error(error)) throw error;
+                        // A rate limit or a network blip is not a PR
+                        // without patches: let the job retry
+                        if (is429Error(error) || isTransientFetchError(error)) {
+                            throw error;
+                        }
                         this.logger.warn({
                             message: `Failed to fetch diff for PR#${params.prNumber}, continuing without patch data`,
                             context: ForgejoService.name,
