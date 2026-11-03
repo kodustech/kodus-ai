@@ -346,17 +346,21 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         pullRequest: any,
         lastCommit: string | Commit,
     ): Promise<FileChange[]> {
+        const lastCommitSha =
+            typeof lastCommit === 'string' ? lastCommit : lastCommit?.sha;
+        // Providers read `lastCommit.sha`.
         const changedFiles =
             await this.codeManagementService.getChangedFilesSinceLastCommit({
                 organizationAndTeamData,
                 repository,
                 prNumber: pullRequest?.number,
-                lastCommit,
+                lastCommit:
+                    typeof lastCommit === 'string'
+                        ? { sha: lastCommit }
+                        : lastCommit,
             });
         if (changedFiles) return changedFiles;
 
-        const lastCommitSha =
-            typeof lastCommit === 'string' ? lastCommit : lastCommit?.sha;
         const interdiff = lastCommitSha
             ? await this.getRebaseInterdiff(
                   organizationAndTeamData,
@@ -369,16 +373,17 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         // push with one is reviewed whole, as ValidateNewCommitsStage does.
         const useInterdiff = !!interdiff && !interdiff.revertedFiles.length;
 
-        const files =
-            (useInterdiff ? interdiff.files : null) ??
-            (await this.codeManagementService.getFilesByPullRequestId({
-                organizationAndTeamData,
-                repository,
-                prNumber: pullRequest?.number,
-                headSha: pullRequest?.head?.sha,
-            }));
+        const files = useInterdiff
+            ? interdiff.files
+            : await this.codeManagementService.getFilesByPullRequestId({
+                  organizationAndTeamData,
+                  repository,
+                  prNumber: pullRequest?.number,
+                  headSha: pullRequest?.head?.sha,
+              });
         // Not `[]`: that would skip the review as a PR with nothing new.
-        if (!files) {
+        // Readers answer an unreadable whole-PR list with `[]` too.
+        if (!files || (!useInterdiff && !files.length)) {
             throw new Error(
                 `Could not read the changes of PR#${pullRequest?.number}: neither the diff since ${lastCommitSha} nor the whole PR was readable`,
             );

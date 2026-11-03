@@ -160,6 +160,12 @@ describe('PullRequestHandlerService — unreadable incremental diff', () => {
 
         await metadata(service, 'reviewed-sha');
 
+        // Providers read `lastCommit.sha`; a bare sha would read as no base.
+        expect(
+            codeManagementService.getChangedFilesSinceLastCommit,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({ lastCommit: { sha: 'reviewed-sha' } }),
+        );
         expect(
             codeManagementService.getPullRequestFilesAtCommit,
         ).toHaveBeenCalledWith(
@@ -190,6 +196,16 @@ describe('PullRequestHandlerService — unreadable incremental diff', () => {
             sinceLastCommit: null,
             atCommit: null,
             prFiles: null,
+        });
+
+        await expect(metadata(service, lastCommit)).rejects.toThrow('PR#42');
+    });
+
+    it('throws when the whole-PR fallback comes back empty: readers answer an unreadable list with []', async () => {
+        const { service } = makeService({
+            sinceLastCommit: null,
+            atCommit: null,
+            prFiles: [],
         });
 
         await expect(metadata(service, lastCommit)).rejects.toThrow('PR#42');

@@ -251,7 +251,7 @@ describe('PullRequestHandlerService.getChangedFilesMetadata', () => {
             organizationAndTeamData: orgData,
             repository,
             prNumber: 42,
-            lastCommit: 'last-sha',
+            lastCommit: { sha: 'last-sha' },
         });
         expect(
             codeManagementService.getFilesByPullRequestId,
@@ -283,7 +283,7 @@ describe('PullRequestHandlerService.getChangedFilesMetadata', () => {
         ).not.toHaveBeenCalled();
     });
 
-    it('returns [] when the fetch resolves null and the PR has no files (lastCommit path)', async () => {
+    it('throws when the fetch resolves null and no fallback reads any file (lastCommit path)', async () => {
         const { service, codeManagementService } = makeService();
         codeManagementService.getChangedFilesSinceLastCommit.mockResolvedValue(
             null,
@@ -293,14 +293,17 @@ describe('PullRequestHandlerService.getChangedFilesMetadata', () => {
         );
         codeManagementService.getFilesByPullRequestId.mockResolvedValue([]);
 
-        const result = await (service as any).getChangedFilesMetadata(
-            orgData,
-            repository,
-            pullRequest,
-            'last-sha',
-        );
-
-        expect(result).toEqual([]);
+        await expect(
+            (service as any).getChangedFilesMetadata(
+                orgData,
+                repository,
+                pullRequest,
+                'last-sha',
+            ),
+        ).rejects.toThrow('PR#42');
+        expect(
+            codeManagementService.getPullRequestFilesAtCommit,
+        ).toHaveBeenCalledTimes(1);
     });
 
     it('returns [] when the fetch resolves undefined (no-lastCommit path)', async () => {
