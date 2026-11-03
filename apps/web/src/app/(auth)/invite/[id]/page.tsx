@@ -16,11 +16,15 @@ export default async function InvitePage({
 }: {
     params: Promise<{ id: string }>;
 }) {
-    const { id } = await params;
-    const userData = await getInviteData(id).catch((error) => {
-        console.error(`Failed to get invite data for id ${id}:`, error);
-        return null;
-    });
+    // The path segment is the sealed invitation token (see the API's
+    // invitation-token), not the user id.
+    const { id: token } = await params;
+    const userData = await getInviteData(decodeURIComponent(token)).catch(
+        (error) => {
+            console.error("Failed to get invite data:", error);
+            return null;
+        },
+    );
 
     if (!userData?.uuid || !userData?.email) {
         return (
@@ -68,7 +72,7 @@ export default async function InvitePage({
                     <Suspense>
                         <AcceptInviteForm
                             email={userData.email}
-                            inviteId={userData.uuid}
+                            inviteToken={decodeURIComponent(token)}
                             organizationName={userData.organization?.name}
                         />
                     </Suspense>

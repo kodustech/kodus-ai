@@ -16,6 +16,14 @@ export const joinOrganization = async (
     return response;
 };
 
+/** A fresh token for the invite link of a pending member (owner only). */
+export const getInvitationToken = async (userId: string): Promise<string> => {
+    const response = await axiosAuthorized.fetcher<{ data: { token: string } }>(
+        pathToApiUrl(`/user/${encodeURIComponent(userId)}/invitation-token`),
+    );
+    return response.data.token;
+};
+
 export const updateUser = async (
     userId: string,
     data: Pick<Partial<User>, "role" | "status">,

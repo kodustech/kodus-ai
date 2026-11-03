@@ -31,7 +31,7 @@ import {
     rolePriority,
 } from "@services/permissions/types";
 import { type MembersSetup } from "@services/setup/types";
-import { updateUser } from "@services/users/fetch";
+import { getInvitationToken, updateUser } from "@services/users/fetch";
 import { ColumnDef } from "@tanstack/react-table";
 import {
     CheckIcon,
@@ -406,8 +406,23 @@ export const columns: ColumnDef<MembersSetup>[] = [
                                 <DropdownMenuItem
                                     leftIcon={<CopyIcon />}
                                     disabled={!canEdit}
-                                    onSelect={() => {
-                                        const inviteLink = `${window.location.origin}/invite/${row.original.userId}`;
+                                    onSelect={async () => {
+                                        // The link carries a sealed
+                                        // invitation from the API, never the
+                                        // user id alone.
+                                        const token = await getInvitationToken(
+                                            row.original.userId,
+                                        ).catch(() => null);
+                                        if (!token) {
+                                            toast({
+                                                variant: "warning",
+                                                title: "No open invitation",
+                                                description:
+                                                    "This user has already accepted the invitation or is no longer pending.",
+                                            });
+                                            return;
+                                        }
+                                        const inviteLink = `${window.location.origin}/invite/${encodeURIComponent(token)}`;
                                         const copied =
                                             ClipboardHelpers.copyTextToClipboard(
                                                 inviteLink,

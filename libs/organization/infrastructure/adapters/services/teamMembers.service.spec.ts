@@ -560,6 +560,53 @@ describe('TeamMemberService — deterministic logic', () => {
         });
     });
 
+    describe('sendInvitations — the link carries a sealed invitation', () => {
+        it('never puts the bare user id in the invitation link', async () => {
+            const cryptoKey = process.env.API_CRYPTO_KEY;
+            const baseUrl = process.env.API_USER_INVITE_BASE_URL;
+            process.env.API_CRYPTO_KEY = 'cd'.repeat(32);
+            process.env.API_USER_INVITE_BASE_URL = 'https://app.example.test';
+            try {
+                const invited = {
+                    uuid: 'insider',
+                    email: 'insider@acme.dev',
+                    teamMember: [{ organization: { uuid: 'org-1' } }],
+                };
+                const notificationService = { emit: jest.fn() };
+                const service = makeService(
+                    {},
+                    { findOne: jest.fn(async () => invited) },
+                    notificationService,
+                );
+
+                await service.sendInvitations(
+                    [{ uuid: 'insider' }] as any,
+                    { organizationId: 'org-1', teamId: 'team-1' },
+                    'admin@acme.dev',
+                );
+
+                const link: string =
+                    notificationService.emit.mock.calls[0][0].payload
+                        .inviteLink;
+                const token = link.replace(
+                    'https://app.example.test/invite/',
+                    '',
+                );
+                expect(token).not.toBe('insider');
+                const { openInvitation } = jest.requireActual(
+                    '@libs/identity/domain/user/invitation-token',
+                );
+                expect(openInvitation(token)).toEqual({
+                    userId: 'insider',
+                    email: 'insider@acme.dev',
+                });
+            } finally {
+                process.env.API_CRYPTO_KEY = cryptoKey;
+                process.env.API_USER_INVITE_BASE_URL = baseUrl;
+            }
+        });
+    });
+
     describe('updateOrCreateMembers — entries without an email', () => {
         it('ignores them instead of creating a user for an undefined email', async () => {
             const usersService = { find: jest.fn(), findOne: jest.fn() };

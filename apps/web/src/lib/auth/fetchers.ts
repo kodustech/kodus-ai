@@ -2,8 +2,8 @@ import { typedFetch } from "@services/fetch";
 import type { AxiosResponse } from "axios";
 import { API_ROUTES } from "src/core/config/constants";
 import type { TODO } from "src/core/types";
-import { getApiPublicUrl } from "src/core/utils/api-public-url";
 import { apiProxyPath } from "src/core/utils/api-proxy";
+import { getApiPublicUrl } from "src/core/utils/api-public-url";
 import { axiosApi, axiosAuthorized } from "src/core/utils/axios";
 import { pathToApiUrl } from "src/core/utils/helpers";
 import { isServerSide } from "src/core/utils/server-side";
@@ -69,12 +69,10 @@ export const createNewPassword = (payload: {
 export const completeUserInvitation = (payload: {
     name: string;
     password: string;
-    uuid: string;
+    /** The sealed invitation from the invite link. */
+    token: string;
 }): Promise<TODO> => {
-    return axiosApi.post(
-        authUrl(API_ROUTES.completeUserInvitation),
-        payload,
-    );
+    return axiosApi.post(authUrl(API_ROUTES.completeUserInvitation), payload);
 };
 
 export const logout = (payload: TODO): Promise<TODO> => {
@@ -97,7 +95,7 @@ export const refreshAccessToken = async (payload: { refreshToken: string }) => {
     return response.data;
 };
 
-export const getInviteData = async (userId: string) => {
+export const getInviteData = async (token: string) => {
     try {
         const { data } = await typedFetch<{
             data: {
@@ -106,7 +104,7 @@ export const getInviteData = async (userId: string) => {
                 organization: { name: string };
             };
         }>(authUrl(API_ROUTES.getInviteData), {
-            params: { userId },
+            params: { token },
         });
         return data;
     } catch (error) {
