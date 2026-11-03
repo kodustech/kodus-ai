@@ -18,10 +18,10 @@ import { useEffectOnce } from "@hooks/use-effect-once";
 import { useReactQueryInvalidateQueries } from "@hooks/use-invalidate-queries";
 import { createCodeManagementIntegration } from "@services/codeManagement/fetch";
 import { SETUP_PATHS } from "@services/setup";
+import { startGithubInstallationAuthorization } from "@services/setup/github-installation-authorization";
 import { useGetGithubOrganizationName } from "@services/setup/hooks";
 import { deleteCookie, getCookie } from "cookies-next/client";
 import { SaveIcon } from "lucide-react";
-import { startGithubInstallationAuthorization } from "@services/setup/github-installation-authorization";
 import {
     GITHUB_CODE_PARAM,
     GITHUB_ERROR_PARAM,
@@ -240,11 +240,18 @@ export default function Redirect() {
             }
         } else if (integration === INTEGRATIONS_KEY.GITLAB) {
             if (organizationId) {
-                integrationResponse = await createCodeManagementIntegration({
-                    code,
-                    integrationType: PlatformType.GITLAB,
-                    organizationAndTeamData,
-                });
+                try {
+                    integrationResponse = await createCodeManagementIntegration(
+                        {
+                            code,
+                            integrationType: PlatformType.GITLAB,
+                            organizationAndTeamData,
+                        },
+                    );
+                } catch (err) {
+                    leaveAfterLinkFailure("GitLab", apiErrorMessage(err));
+                    return;
+                }
             }
         }
 
@@ -394,9 +401,17 @@ export default function Redirect() {
 
     /** Say why GitHub was not connected and go back to where it started. */
     function leaveAfterGithubFailure(message: string | undefined) {
+        leaveAfterLinkFailure("GitHub", message);
+    }
+
+    function leaveAfterLinkFailure(
+        provider: string,
+        message: string | undefined,
+    ) {
         toast({
-            title: "Integration with GitHub failed",
-            description: message ?? "GitHub could not be connected. Try again.",
+            title: `Integration with ${provider} failed`,
+            description:
+                message ?? `${provider} could not be connected. Try again.`,
             variant: "warning",
         });
         setIsIntegrating(false);

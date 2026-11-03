@@ -1,4 +1,5 @@
 import {
+    githubAuthorizationErrorMessage,
     needsGithubInstallationAuthorization,
     safeReturnPath,
 } from "./github-installation-authorization";
@@ -80,6 +81,22 @@ describe("safeReturnPath", () => {
             undefined,
         ]) {
             expect(safeReturnPath(value)).toBeNull();
+        }
+    });
+});
+
+describe("githubAuthorizationErrorMessage", () => {
+    it("tells a cancelled, an expired and any other failed authorization apart", () => {
+        expect(githubAuthorizationErrorMessage("access_denied")).toBe(
+            "The GitHub authorization was cancelled. Connect GitHub again when you are ready.",
+        );
+        expect(githubAuthorizationErrorMessage("expired")).toBe(
+            "The GitHub authorization took too long or was started in another browser. Start the GitHub connection again.",
+        );
+        for (const error of ["missing_code", "redirect_uri_mismatch", ""]) {
+            expect(githubAuthorizationErrorMessage(error)).toBe(
+                "GitHub did not complete the authorization. Start the GitHub connection again.",
+            );
         }
     });
 });

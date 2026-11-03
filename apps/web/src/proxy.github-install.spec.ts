@@ -1,16 +1,20 @@
 /** @jest-environment node */
 import { NextRequest } from "next/server";
 
+// eslint-disable-next-line import/first
+import { proxy } from "./proxy";
+
 jest.mock("./core/config/auth", () => ({
     auth: (handler: unknown) => handler,
 }));
 jest.mock("./core/utils/permissions", () => ({
-    handleAuthenticated: (_req: unknown, _path: unknown, _s: unknown, next: unknown) =>
-        next,
+    handleAuthenticated: (
+        _req: unknown,
+        _path: unknown,
+        _s: unknown,
+        next: unknown,
+    ) => next,
 }));
-
-// eslint-disable-next-line import/first
-import { proxy } from "./proxy";
 
 /**
  * GitHub's post-install return lands on /setup/github. Started from this
@@ -19,17 +23,17 @@ import { proxy } from "./proxy";
  * it (a team picked in settings, or someone else installing from a link).
  */
 describe("proxy — GitHub App post-install return", () => {
-    const run = async (cookies: Record<string, string>) => {
-        const req = new NextRequest(
-            "https://app.example.test/setup/github?setup_action=install&installation_id=42",
-            {
-                headers: {
-                    cookie: Object.entries(cookies)
-                        .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-                        .join("; "),
-                },
+    const run = async (
+        cookies: Record<string, string>,
+        path = "/setup/github?setup_action=install&installation_id=42",
+    ) => {
+        const req = new NextRequest(`https://app.example.test${path}`, {
+            headers: {
+                cookie: Object.entries(cookies)
+                    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+                    .join("; "),
             },
-        ) as NextRequest & { auth: unknown };
+        }) as NextRequest & { auth: unknown };
         req.auth = {
             user: { status: "active", accessToken: "t", reason: undefined },
         };
@@ -47,14 +51,27 @@ describe("proxy — GitHub App post-install return", () => {
         expect(
             await run({
                 "started-setup-from-new-setup-page": "true",
-                selectedTeam: JSON.stringify({ uuid: "team-1" }),
+                "selectedTeam": JSON.stringify({ uuid: "team-1" }),
             }),
-        ).toBe("https://app.example.test/github-integration?installation_id=42");
+        ).toBe(
+            "https://app.example.test/github-integration?installation_id=42",
+        );
     });
 
     it("sends an install from someone else to /github-integration", async () => {
         expect(await run({})).toBe(
             "https://app.example.test/github-integration?installation_id=42",
         );
+    });
+
+    it("leaves any other request alone", async () => {
+        for (const path of [
+            "/setup/github?installation_id=42",
+            "/setup/github?setup_action=update&installation_id=42",
+            "/setup/github?setup_action=install",
+            "/setup/gitlab?setup_action=install&installation_id=42",
+        ]) {
+            expect(await run({}, path)).toBeNull();
+        }
     });
 });

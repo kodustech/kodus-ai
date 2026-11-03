@@ -56,6 +56,28 @@ describe("GitHub installation authorization callback", () => {
         ).toBe("/setup/github?installation_id=42&github_error=access_denied");
     });
 
+    it("logs why GitHub refused, without the code or state", () => {
+        const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            call(
+                "?error=redirect_uri_mismatch&error_description=The+redirect_uri+MUST+match&state=sealed.state",
+                "/setup/github?installation_id=42",
+            );
+            expect(warn).toHaveBeenCalledWith(
+                "GitHub installation authorization did not complete",
+                {
+                    error: "redirect_uri_mismatch",
+                    description: "The redirect_uri MUST match",
+                },
+            );
+            expect(JSON.stringify(warn.mock.calls)).not.toContain(
+                "sealed.state",
+            );
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
     it("says the authorization expired when the return path is gone", () => {
         expect(call("?code=gh-code&state=sealed.state").location).toBe(
             "/github-integration?github_error=expired",
@@ -74,9 +96,7 @@ describe("GitHub installation authorization callback", () => {
         expect(
             call("?code=c&state=s", "/setup/github?installation_id=42#x")
                 .location,
-        ).toBe(
-            "/setup/github?installation_id=42&github_code=c&github_state=s",
-        );
+        ).toBe("/setup/github?installation_id=42&github_code=c&github_state=s");
     });
 
     it("never redirects to another site, whatever the cookie holds", () => {

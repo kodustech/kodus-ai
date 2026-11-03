@@ -4,10 +4,13 @@ import { act, render } from "@testing-library/react";
 import Redirect from "./page";
 
 const mockReplace = jest.fn();
+// Stable, as Next's router is: the page's effects depend on it.
+const mockRouter = { replace: mockReplace, push: jest.fn() };
 const mockSearch = { value: new URLSearchParams() };
+const mockParams = { id: "github" };
 jest.mock("next/navigation", () => ({
-    useParams: () => ({ id: "github" }),
-    useRouter: () => ({ replace: mockReplace, push: jest.fn() }),
+    useParams: () => mockParams,
+    useRouter: () => mockRouter,
     useSearchParams: () => mockSearch.value,
 }));
 const mockToast = jest.fn();
@@ -59,6 +62,7 @@ describe("setup page — GitHub authorization", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         setOnboarding(false);
+        mockParams.id = "github";
     });
 
     it("starts the authorization and shows progress meanwhile", async () => {
@@ -97,7 +101,10 @@ describe("setup page — GitHub authorization", () => {
     it("shows the API's reason and leaves when the authorization cannot start", async () => {
         mockStart.mockRejectedValue({
             response: {
-                data: { message: "Neither API_FRONTEND_URL nor NEXTAUTH_URL is configured" },
+                data: {
+                    message:
+                        "Neither API_FRONTEND_URL nor NEXTAUTH_URL is configured",
+                },
             },
         });
         mockSearch.value = new URLSearchParams({ installation_id: "42" });
@@ -130,5 +137,23 @@ describe("setup page — GitHub authorization", () => {
                 githubState: "sealed.state",
             }),
         );
+    });
+
+    it("says why and leaves when the GitLab link is refused", async () => {
+        mockParams.id = "gitlab";
+        mockCreate.mockRejectedValue({
+            response: { data: { message: "GitLab rejected the code" } },
+        });
+        mockSearch.value = new URLSearchParams({ code: "gl-code" });
+
+        const { queryByText } = render(<Redirect />);
+        await flush();
+
+        expect(mockToast.mock.calls[0][0]).toMatchObject({
+            title: "Integration with GitLab failed",
+            description: "GitLab rejected the code",
+        });
+        expect(mockReplace).toHaveBeenCalledWith("/settings/git");
+        expect(queryByText(/Connecting GITLAB/)).toBeNull();
     });
 });

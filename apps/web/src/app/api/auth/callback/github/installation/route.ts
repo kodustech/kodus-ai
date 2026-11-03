@@ -47,10 +47,14 @@ export function GET(request: NextRequest) {
         target.searchParams.set(GITHUB_CODE_PARAM, code);
         target.searchParams.set(GITHUB_STATE_PARAM, state);
     } else {
-        target.searchParams.set(
-            GITHUB_ERROR_PARAM,
-            incoming.get("error") ?? "missing_code",
-        );
+        const error = incoming.get("error") ?? "missing_code";
+        // The user sees a short message; why GitHub refused (a callback URL
+        // mismatch, an App restricted to an organization) goes to the log.
+        console.warn("GitHub installation authorization did not complete", {
+            error: error.slice(0, 100),
+            description: incoming.get("error_description")?.slice(0, 300),
+        });
+        target.searchParams.set(GITHUB_ERROR_PARAM, error);
     }
     return redirect(`${target.pathname}${target.search}`);
 }
