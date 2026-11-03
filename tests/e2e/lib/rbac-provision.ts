@@ -91,7 +91,8 @@ async function provisionUserWithRole(
     const token = invitation.body?.data?.token;
     if (invitation.status < 200 || invitation.status >= 300 || !token) {
         ctx.skip(
-            `provisioning: invitation token for ${role} failed (HTTP ${invitation.status}): ${invitation.raw.slice(0, 250)}`,
+            // Status only: a 2xx body carries the invitation token.
+            `provisioning: invitation token for ${role} failed (HTTP ${invitation.status})`,
         );
     }
 

@@ -325,6 +325,8 @@ describe('GitHub installation linking', () => {
         );
         expect(logged).not.toContain('gh-oauth-code-in-code');
         expect(logged).not.toContain('ghp_secret_pat');
+        // Token mode: `code` is not an installation id there.
+        expect(error.mock.calls[1][0].metadata.installationId).toBeUndefined();
         expect(logged).not.toContain('gh-oauth-code');
         expect(logged).not.toContain('sealed.state');
         expect(error.mock.calls[0][0].metadata).toEqual({
