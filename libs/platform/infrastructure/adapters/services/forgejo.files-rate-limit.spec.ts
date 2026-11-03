@@ -72,6 +72,28 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
         ]);
     });
 
+    it('keys a patch by its full path, even one holding " b/"', async () => {
+        repoGetPullRequestFiles.mockResolvedValue({
+            data: [{ filename: 'docs/a b/f.md', status: 'modified' }],
+        });
+        repoDownloadPullDiffOrPatch.mockResolvedValue({
+            data: [
+                'diff --git a/docs/a b/f.md b/docs/a b/f.md',
+                '--- a/docs/a b/f.md',
+                '+++ b/docs/a b/f.md',
+                '@@ -1 +1 @@',
+                '-x',
+                '+y',
+                '',
+            ].join('\n'),
+        });
+        const { service } = makeService();
+
+        const files = await list(service);
+
+        expect(files?.[0]?.patch).toBe('@@ -1 +1 @@\n-x\n+y');
+    });
+
     it('lets a 429 on a file listing page through', async () => {
         repoGetPullRequestFiles.mockResolvedValue(httpError(429));
         const { service } = makeService();
@@ -109,8 +131,17 @@ describe('ForgejoService.getFilesByPullRequestId under a rate limit', () => {
         expect(logger.warn).toHaveBeenCalled();
     });
 
-    it('answers null when the listing fails for another reason', async () => {
+    it('lets a transport failure on the listing through', async () => {
         repoGetPullRequestFiles.mockRejectedValue(new Error('socket hang up'));
+        const { service } = makeService();
+
+        await expect(list(service)).rejects.toThrow('socket hang up');
+    });
+
+    it('answers null when the listing fails for another reason', async () => {
+        repoGetPullRequestFiles.mockRejectedValue(
+            new Error('unexpected payload'),
+        );
         const { service } = makeService();
 
         await expect(list(service)).resolves.toBeNull();

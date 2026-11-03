@@ -1773,7 +1773,8 @@ export class AzureReposService implements Omit<
 
             return changedFiles;
         } catch (error) {
-            if (is429Error(error)) throw error;
+            // A transport failure is not an empty listing either: let the job retry
+            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message: `Failed to get changed files since last commit for PR #${params.prNumber}`,
                 context: AzureReposService.name,
@@ -4085,7 +4086,8 @@ export class AzureReposService implements Omit<
 
             return fileChanges;
         } catch (error: any) {
-            if (is429Error(error)) throw error;
+            // A transport failure is not an empty listing either: let the job retry
+            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message: `Failed to get files for Azure Repos PR #${params.prNumber} in repo ${params.repository.name}`,
                 context: this.getFilesByPullRequestId.name,

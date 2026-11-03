@@ -127,4 +127,30 @@ describe('AzureReposService listings under a rate limit', () => {
             } as any),
         ).resolves.toBeNull();
     });
+
+    it('lets a transport failure through both listings', async () => {
+        const fetchFailed = () => new TypeError('fetch failed');
+
+        const since = makeService('/a.ts', fetchFailed).service;
+        await expect(
+            since.getChangedFilesSinceLastCommit({
+                organizationAndTeamData: org,
+                repository,
+                prNumber: 7,
+                lastCommit: { sha: 'last' },
+            } as any),
+        ).rejects.toThrow('fetch failed');
+
+        const full = makeService('none').service;
+        (full as any).azureReposRequestHelper.getChanges.mockRejectedValue(
+            fetchFailed(),
+        );
+        await expect(
+            full.getFilesByPullRequestId({
+                organizationAndTeamData: org,
+                repository,
+                prNumber: 7,
+            } as any),
+        ).rejects.toThrow('fetch failed');
+    });
 });

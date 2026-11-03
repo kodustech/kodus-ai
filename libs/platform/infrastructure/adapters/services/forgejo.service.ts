@@ -4,8 +4,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { isAxiosError } from 'axios';
 import pLimit from 'p-limit';
 
-import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
+import {
+    is429Error,
+    isTransientFetchError,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
 import { createLogger } from '@libs/core/log/logger';
+import { splitUnifiedDiff } from '@libs/common/utils/split-unified-diff';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
@@ -1000,43 +1004,14 @@ export class ForgejoService implements Omit<
      * Returns a map of filename -> patch content.
      */
     private parseUnifiedDiff(diffContent: string): Map<string, string> {
-        const patchMap = new Map<string, string>();
-
-        if (!diffContent) {
-            return patchMap;
-        }
-
-        // Split by file diff headers (diff --git a/... b/...)
-        const fileDiffs = diffContent.split(/(?=^diff --git )/m);
-
-        for (const fileDiff of fileDiffs) {
-            if (!fileDiff.trim()) continue;
-
-            // Extract filename from the diff header
-            // Format: diff --git a/path/to/file b/path/to/file
-            const headerMatch = fileDiff.match(
-                /^diff --git a\/(.+?) b\/(.+?)$/m,
-            );
-            if (!headerMatch) continue;
-
-            // Use the 'b' path (new filename, handles renames)
-            const filename = headerMatch[2];
-
-            // Find where the actual patch starts (after the header lines)
-            // The patch starts at the first @@ line
-            const patchStartIndex = fileDiff.indexOf('@@');
-            if (patchStartIndex === -1) {
-                // No hunks - might be a binary file or mode change only
-                patchMap.set(filename, '');
-                continue;
-            }
-
-            // Extract just the patch part (from @@ onwards)
-            const patch = fileDiff.substring(patchStartIndex);
-            patchMap.set(filename, patch.trim());
-        }
-
-        return patchMap;
+        // The shared splitter reads the name from the ---/+++ lines first;
+        // the `diff --git` header is ambiguous for a path holding " b/"
+        return new Map(
+            splitUnifiedDiff(diffContent).map((file) => [
+                file.filename,
+                file.patch,
+            ]),
+        );
     }
 
     private transformCommit(commit: ForgejoCommit): Commit {
@@ -2236,7 +2211,8 @@ export class ForgejoService implements Omit<
             }));
         } catch (error) {
             // Let the job retry instead of reviewing a fileless PR
-            if (is429Error(error)) throw error;
+            // A transport failure is not an empty listing either: let the job retry
+            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message: 'Error getting files by PR ID',
                 context: ForgejoService.name,

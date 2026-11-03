@@ -2098,7 +2098,8 @@ export class BitbucketCloudService implements Omit<
         } catch (error) {
             // A rate limit is not a PR without files: let the job retry it
             // with backoff instead of reviewing nothing.
-            if (is429Error(error)) throw error;
+            // A transport failure is not an empty listing either: let the job retry
+            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message: `Error to get files by pull request id: ${params?.prNumber}`,
                 context: BitbucketCloudService.name,
@@ -2203,7 +2204,8 @@ export class BitbucketCloudService implements Omit<
 
             return changedFiles.filter(Boolean);
         } catch (error) {
-            if (is429Error(error)) throw error;
+            // A transport failure is not an empty listing either: let the job retry
+            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message:
                     'Error to get incremental changed files since last commit',

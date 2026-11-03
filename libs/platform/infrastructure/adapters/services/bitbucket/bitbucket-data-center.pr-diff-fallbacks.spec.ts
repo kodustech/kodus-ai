@@ -166,7 +166,7 @@ describe('BitbucketDataCenterService.getFilesByPullRequestId — file entries', 
     });
 
     it('keeps a file no read has a patch for, with zero counts and no patch', async () => {
-        const { list, logger } = makeHost({
+        const { list, logger, get } = makeHost({
             changes: [{ path: 'bin.png', type: 'MODIFY' }],
             wholeDiff: async () => ({ data: { diffs: [] } }),
             // The host answers with no body for a binary file
@@ -175,6 +175,11 @@ describe('BitbucketDataCenterService.getFilesByPullRequestId — file entries', 
 
         const files = await list();
 
+        // The whole diff was asked first; the per-file read only after it
+        expect(get.mock.calls.filter(([url]) => url === DIFF_URL)).toEqual([
+            [DIFF_URL],
+            [DIFF_URL, { params: { path: 'bin.png', limit: 1000 } }],
+        ]);
         expect(files).toEqual([
             expect.objectContaining({
                 filename: 'bin.png',
@@ -193,7 +198,11 @@ describe('BitbucketDataCenterService.getFilesByPullRequestId — file entries', 
             wholeDiff: async () => ({ data: { diffs: [] } }),
         });
         jest.spyOn(service as any, 'getAxiosInstance').mockReturnValue({
-            get: jest.fn().mockRejectedValue(new Error('socket hang up')),
+            get: jest
+                .fn()
+                .mockRejectedValue(
+                    new Error('Request failed with status code 500'),
+                ),
         });
 
         await expect(
@@ -211,6 +220,27 @@ describe('BitbucketDataCenterService.getFilesByPullRequestId — file entries', 
                 message: 'Error getting fully populated files for DC PR #7',
             }),
         );
+    });
+
+    it('lets a transport failure on the listing through: it is not a PR with no files', async () => {
+        const { service } = makeHost({
+            changes: [],
+            wholeDiff: async () => ({ data: { diffs: [] } }),
+        });
+        jest.spyOn(service as any, 'getAxiosInstance').mockReturnValue({
+            get: jest.fn().mockRejectedValue(new Error('socket hang up')),
+        });
+
+        await expect(
+            service.getFilesByPullRequestId({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 't',
+                },
+                repository: { id: 'r1', name: 'api' },
+                prNumber: 7,
+            }),
+        ).rejects.toThrow('socket hang up');
     });
 });
 
@@ -351,9 +381,21 @@ describe('BitbucketDataCenterService.getChangedFilesSinceLastCommit — listing 
         });
     });
 
+    it('lets a transport failure through: it is not "nothing changed" either', async () => {
+        const { run } = since(
+            jest.fn().mockRejectedValue(new Error('socket hang up')),
+        );
+
+        await expect(run()).rejects.toThrow('socket hang up');
+    });
+
     it('answers null and logs any other failure', async () => {
         const { run, logger } = since(
-            jest.fn().mockRejectedValue(new Error('socket hang up')),
+            jest
+                .fn()
+                .mockRejectedValue(
+                    new Error('Request failed with status code 500'),
+                ),
         );
 
         await expect(run()).resolves.toBeNull();

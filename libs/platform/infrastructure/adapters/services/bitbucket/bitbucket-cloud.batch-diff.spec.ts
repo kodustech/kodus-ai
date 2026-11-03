@@ -421,6 +421,14 @@ describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => 
 
         const files = await since(service);
 
+        // The whole-spec read was tried first, then each file on its own
+        expect(getDiff).toHaveBeenCalledTimes(3);
+        expect(getDiff.mock.calls[0][0]).toEqual({
+            repo_slug: '{repo-1}',
+            workspace: '{ws-1}',
+            spec: 'head..last',
+        });
+
         expect(files?.map((f) => f.filename)).toEqual(['src/a.ts', 'src/b.ts']);
     });
 
@@ -506,6 +514,16 @@ describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => 
                 }),
             }),
         );
+    });
+
+    it('lets a transport failure on the listing through, full and incremental', async () => {
+        const { service } = makeService(jest.fn());
+        jest.spyOn(service as any, 'getPaginatedResults').mockRejectedValue(
+            new TypeError('fetch failed'),
+        );
+
+        await expect(getFiles(service)).rejects.toThrow('fetch failed');
+        await expect(since(service)).rejects.toThrow('fetch failed');
     });
 
     it('incremental: answers null, not a throw, when listing fails for another reason', async () => {

@@ -3,7 +3,10 @@ import {
     isFileMatchingGlobCaseInsensitive,
 } from '@libs/common/utils/glob-utils';
 import { createLogger } from '@libs/core/log/logger';
-import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
+import {
+    is429Error,
+    isTransientFetchError,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
@@ -1365,7 +1368,8 @@ export class BitbucketDataCenterService implements Omit<
             });
         } catch (error) {
             // A rate-limited listing is not a PR with no files
-            if (is429Error(error)) throw error;
+            // A transport failure is not an empty listing either: let the job retry
+            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message: `Error getting fully populated files for DC PR #${params.prNumber}`,
                 context: BitbucketDataCenterService.name,
@@ -3510,7 +3514,8 @@ export class BitbucketDataCenterService implements Omit<
             }));
         } catch (error) {
             // A rate-limited listing is not "nothing changed": let the job retry
-            if (is429Error(error)) throw error;
+            // A transport failure is not an empty listing either: let the job retry
+            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message:
                     'Error fetching changed files since last commit in Data Center',
