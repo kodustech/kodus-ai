@@ -42,13 +42,51 @@ describe('resolveDeclaredEnvProvider', () => {
         },
     );
 
-    it('rejects a provider outside the five, listing the accepted ones', () => {
+    it('rejects a provider outside the declarable ones, listing them', () => {
         const result = resolveDeclaredEnvProvider(
             env({ API_LLM_PROVIDER: 'open_router', API_LLM_API_KEY: 'k' }),
         );
         expect(result).toEqual({
             kind: 'invalid',
-            reason: 'API_LLM_PROVIDER="open_router" is not supported. Use one of: openai, openai_compatible, anthropic, google_gemini, google_vertex.',
+            reason: 'API_LLM_PROVIDER="open_router" is not supported. Use one of: openai, openai_compatible, anthropic, anthropic_compatible, google_gemini, google_vertex.',
+        });
+    });
+
+    it('runs anthropic_compatible on its own endpoint, with the /v1 kept', () => {
+        expect(
+            resolveDeclaredEnvProvider(
+                env({
+                    API_LLM_PROVIDER: 'anthropic_compatible',
+                    API_LLM_API_KEY: 'k',
+                    API_LLM_BASE_URL: 'https://api.moonshot.ai/anthropic',
+                }),
+            ),
+        ).toEqual({
+            kind: 'declared',
+            config: {
+                provider: 'anthropic_compatible',
+                model: 'some-model',
+                apiKey: 'k',
+                baseURL: 'https://api.moonshot.ai/anthropic',
+            },
+            warnings: [],
+        });
+    });
+
+    it('rejects anthropic_compatible without a base URL: it has no endpoint of its own', () => {
+        expect(
+            resolveDeclaredEnvProvider(
+                env({
+                    API_LLM_PROVIDER: 'anthropic_compatible',
+                    API_LLM_API_KEY: 'k',
+                    // Not read for this provider: it is the OpenAI-named one.
+                    API_OPENAI_FORCE_BASE_URL:
+                        'https://api.moonshot.ai/anthropic',
+                }),
+            ),
+        ).toEqual({
+            kind: 'invalid',
+            reason: 'API_LLM_PROVIDER=anthropic_compatible has no endpoint of its own. Set API_LLM_BASE_URL.',
         });
     });
 

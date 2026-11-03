@@ -21,6 +21,7 @@ export type EnvLLMProviderId =
     | 'openai'
     | 'openai_compatible'
     | 'anthropic'
+    | 'anthropic_compatible'
     | 'google_gemini'
     | 'google_vertex';
 

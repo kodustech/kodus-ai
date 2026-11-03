@@ -27,6 +27,7 @@ export const DECLARABLE_ENV_PROVIDERS = [
     BYOKProvider.OPENAI,
     BYOKProvider.OPENAI_COMPATIBLE,
     BYOKProvider.ANTHROPIC,
+    BYOKProvider.ANTHROPIC_COMPATIBLE,
     BYOKProvider.GOOGLE_GEMINI,
     BYOKProvider.GOOGLE_VERTEX,
 ] as const;
@@ -158,7 +159,7 @@ export function resolveDeclaredEnvProvider(
     }
 
     const vars = envVarsOf(declared);
-    if (read(env, 'API_LLM_BASE_URL') && !vars.baseURLVar) {
+    if (read(env, 'API_LLM_BASE_URL') && !vars.baseURL) {
         return {
             kind: 'invalid',
             reason: `API_LLM_BASE_URL is not supported for API_LLM_PROVIDER=${declared}.`,
@@ -167,8 +168,13 @@ export function resolveDeclaredEnvProvider(
 
     const warnings: string[] = [];
     const key = pick(env, 'API_LLM_API_KEY', vars.apiKeyVars, warnings);
-    const rawBase = vars.baseURLVar
-        ? pick(env, 'API_LLM_BASE_URL', [vars.baseURLVar], warnings)
+    const rawBase = vars.baseURL
+        ? pick(
+              env,
+              'API_LLM_BASE_URL',
+              vars.baseURL.legacyVar ? [vars.baseURL.legacyVar] : [],
+              warnings,
+          )
         : {};
     const baseURL = repairBaseUrl(rawBase.value);
     if (baseURL !== rawBase.value) {
@@ -194,8 +200,15 @@ export function resolveDeclaredEnvProvider(
         };
     }
 
-    const endpoint = baseURL ?? vars.defaultBaseURL;
-    if (endpoint) config.baseURL = endpoint;
+    const endpoint = baseURL ?? vars.baseURL?.default;
+    if (endpoint) {
+        config.baseURL = endpoint;
+    } else if (vars.baseURL?.required) {
+        return {
+            kind: 'invalid',
+            reason: `API_LLM_PROVIDER=${declared} has no endpoint of its own. Set API_LLM_BASE_URL.`,
+        };
+    }
     if (declared === BYOKProvider.GOOGLE_VERTEX) {
         config.vertexLocation = vertexLocation || 'global';
     }

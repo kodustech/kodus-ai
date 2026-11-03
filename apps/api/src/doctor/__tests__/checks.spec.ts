@@ -418,7 +418,7 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             expect(results[0]).toMatchObject({
                 status: 'fail',
                 check: 'llm.configured',
-                title: 'The server LLM configuration is invalid: API_LLM_PROVIDER="openrouter" is not supported. Use one of: openai, openai_compatible, anthropic, google_gemini, google_vertex.',
+                title: 'The server LLM configuration is invalid: API_LLM_PROVIDER="openrouter" is not supported. Use one of: openai, openai_compatible, anthropic, anthropic_compatible, google_gemini, google_vertex.',
             });
             expect(deps.complete).not.toHaveBeenCalled();
             expectActionable(results);

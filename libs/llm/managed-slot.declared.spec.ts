@@ -18,6 +18,7 @@ import { BYOKProvider } from '@libs/llm/model-providers';
 import { getClassification } from './error-classifier';
 import {
     envManagedReasoningDescriptor,
+    declaredEnvModel,
     getModelName,
     hasManagedModelKey,
     resolveEnvProvider,
@@ -191,7 +192,7 @@ describe('declared env provider', () => {
         }
         expect(thrown).toBeInstanceOf(Error);
         expect(getClassification(thrown)?.friendlyMessage).toBe(
-            'The server LLM configuration is invalid: API_LLM_PROVIDER="openrouter" is not supported. Use one of: openai, openai_compatible, anthropic, google_gemini, google_vertex.',
+            'The server LLM configuration is invalid: API_LLM_PROVIDER="openrouter" is not supported. Use one of: openai, openai_compatible, anthropic, anthropic_compatible, google_gemini, google_vertex.',
         );
         // Attempted, not skipped: the reason has to reach someone.
         expect(hasManagedModelKey()).toBe(true);
@@ -205,6 +206,52 @@ describe('declared env provider', () => {
             API_LLM_API_KEY: 'sk-x',
         });
         expect(resolveEnvProvider()?.kind).toBe('invalid');
+    });
+
+    it('builds anthropic_compatible through the anthropic module, repairing the base URL', () => {
+        set({
+            API_LLM_PROVIDER_MODEL: 'kimi-k2.7-code',
+            API_LLM_PROVIDER: 'anthropic_compatible',
+            API_LLM_API_KEY: 'sk-kimi',
+            API_LLM_BASE_URL: 'https://api.moonshot.ai/anthropic/v1/messages',
+        });
+        expect(resolveManagedSlot('unused', {})).toEqual({
+            kind: 'slot',
+            slot: {
+                provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
+                apiKey: 'sk-kimi',
+                model: 'kimi-k2.7-code',
+                baseURL: 'https://api.moonshot.ai/anthropic/v1',
+            },
+        });
+        expect(envManagedReasoningDescriptor()).toEqual({
+            provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
+            model: 'kimi-k2.7-code',
+        });
+        expect(getModelName()).toBe('anthropic_compatible:kimi-k2.7-code');
+    });
+
+    it('exposes only a declared env model to the structured-call planner', () => {
+        set({
+            API_LLM_PROVIDER_MODEL: 'kimi-k2.7-code',
+            API_LLM_PROVIDER: 'anthropic_compatible',
+            API_LLM_API_KEY: 'sk-kimi',
+            API_LLM_BASE_URL: 'https://api.moonshot.ai/anthropic',
+        });
+        expect(declaredEnvModel()).toEqual({
+            provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
+            model: 'kimi-k2.7-code',
+        });
+
+        // Inferred installs keep the managed 'as-is' plan they always had.
+        delete process.env.API_LLM_PROVIDER;
+        delete process.env.API_LLM_API_KEY;
+        delete process.env.API_LLM_BASE_URL;
+        set({
+            API_OPEN_AI_API_KEY: 'sk-x',
+            API_OPENAI_FORCE_BASE_URL: 'https://api.moonshot.ai/v1',
+        });
+        expect(declaredEnvModel()).toBeUndefined();
     });
 
     it('hands the declared reasoning effort to the reasoning computation', () => {

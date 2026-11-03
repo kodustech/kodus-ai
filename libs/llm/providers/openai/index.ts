@@ -416,10 +416,12 @@ export const openaiModule: ProviderModule = {
         id === 'openai' || id === 'openai_compatible'
             ? {
                   apiKeyVars: ['API_OPEN_AI_API_KEY'],
-                  baseURLVar: 'API_OPENAI_FORCE_BASE_URL',
-                  // The native SDK's own default, spelled out because the
-                  // compatible SDK has none.
-                  defaultBaseURL: 'https://api.openai.com/v1',
+                  baseURL: {
+                      legacyVar: 'API_OPENAI_FORCE_BASE_URL',
+                      // The native SDK's own default, spelled out because the
+                      // compatible SDK has none.
+                      default: 'https://api.openai.com/v1',
+                  },
               }
             : null,
 };

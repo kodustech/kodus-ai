@@ -368,8 +368,13 @@ export interface ProviderModule {
 export interface SelfHostedEnvVars {
     /** Provider-named key vars, read in order. */
     apiKeyVars: readonly string[];
-    /** The var that moves the endpoint. Absent: the endpoint cannot be moved. */
-    baseURLVar?: string;
-    /** The endpoint when nothing sets one, for a transport that needs it spelled out. */
-    defaultBaseURL?: string;
+    /** Whether `API_LLM_BASE_URL` moves the endpoint. Absent: it cannot. */
+    baseURL?: {
+        /** Provider-named var read when `API_LLM_BASE_URL` is empty. */
+        legacyVar?: string;
+        /** The endpoint when nothing sets one, for a transport that needs it spelled out. */
+        default?: string;
+        /** No endpoint of its own: the config cannot run without one. */
+        required?: boolean;
+    };
 }

@@ -107,6 +107,14 @@ export type EnvProviderResolution = (
           baseURL?: string;
       }
     | {
+          // Declared only: an Anthropic-protocol upstream (Kimi, GLM,
+          // DeepSeek...) on its own endpoint, built like the BYOK slot.
+          kind: 'anthropic_compat';
+          name: 'anthropic_compatible';
+          apiKey: string;
+          baseURL: string;
+      }
+    | {
           kind: 'claude_vertex';
           name: 'google_vertex';
           apiKey: string;
@@ -186,6 +194,14 @@ function fromDeclared(config: DeclaredEnvModel): EnvProviderResolution {
                 baseURL: config.baseURL,
                 ...tags,
             };
+        case 'anthropic_compatible':
+            return {
+                kind: 'anthropic_compat',
+                name: 'anthropic_compatible',
+                apiKey,
+                baseURL: config.baseURL as string,
+                ...tags,
+            };
         case 'google_gemini':
             return {
                 kind: 'gemini_studio',
@@ -212,6 +228,23 @@ function fromDeclared(config: DeclaredEnvModel): EnvProviderResolution {
                 ...tags,
             };
     }
+}
+
+/**
+ * The declared env model (`API_LLM_PROVIDER` set and runnable) as the slot shape
+ * the provider modules answer for. Undefined when the provider is inferred: that
+ * path keeps the managed defaults it always had.
+ */
+export function declaredEnvModel():
+    | {
+          provider: BYOKProvider;
+          model: string;
+          reasoningEffort?: ReasoningEffort;
+      }
+    | undefined {
+    return resolveEnvProvider()?.declared
+        ? envManagedReasoningDescriptor()
+        : undefined;
 }
 
 /**
@@ -358,6 +391,7 @@ const ENV_KIND_TO_PROVIDER: Record<
     gemini_vertex: BYOKProvider.GOOGLE_VERTEX,
     claude_vertex: BYOKProvider.GOOGLE_VERTEX,
     claude_anthropic: BYOKProvider.ANTHROPIC,
+    anthropic_compat: BYOKProvider.ANTHROPIC_COMPATIBLE,
     openai_native: BYOKProvider.OPENAI,
     openai_compat: BYOKProvider.OPENAI_COMPATIBLE,
     vertex_adc: BYOKProvider.GOOGLE_VERTEX,
@@ -480,6 +514,15 @@ export function resolveManagedSlot(
                     {
                         baseURL: repairBaseUrl(env.baseURL),
                     },
+                );
+            case 'anthropic_compat':
+                // The anthropic module's compatible build: /v1 normalization,
+                // the unsigned-thinking repair, the brand reasoning rules.
+                return managedSlot(
+                    BYOKProvider.ANTHROPIC_COMPATIBLE,
+                    env.apiKey,
+                    envMode,
+                    { baseURL: repairBaseUrl(env.baseURL) },
                 );
             case 'openai_native':
                 // The openai module's native build: the SDK's own
