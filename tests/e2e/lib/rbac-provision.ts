@@ -82,11 +82,24 @@ async function provisionUserWithRole(
         `provisioning: no userId for ${email}. Members: ${list.raw.slice(0, 250)}`,
     );
 
+    // The invite link carries a sealed token, not the user id: get it the way
+    // the owner's "copy invite link" does.
+    const invitation = await http<{ data: { token: string } }>(
+        `${target.apiBaseUrl}/user/${userId}/invitation-token`,
+        { method: "GET", headers: authed, timeoutMs: 20_000 },
+    );
+    const token = invitation.body?.data?.token;
+    if (invitation.status < 200 || invitation.status >= 300 || !token) {
+        ctx.skip(
+            `provisioning: invitation token for ${role} failed (HTTP ${invitation.status}): ${invitation.raw.slice(0, 250)}`,
+        );
+    }
+
     const complete = await http(
         `${target.apiBaseUrl}/user/invite/complete-invitation`,
         {
             method: "POST",
-            body: { uuid: userId, name, password: RBAC_PASSWORD },
+            body: { token, name, password: RBAC_PASSWORD },
             timeoutMs: 20_000,
         },
     );
