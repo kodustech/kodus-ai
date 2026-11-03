@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { AzureReposService } from '../azureRepos/azureRepos.service';
 import { BitbucketCloudService } from '../bitbucket/bitbucket-cloud.service';
 import { BitbucketDataCenterService } from '../bitbucket/bitbucket-data-center.service';
+import { GitlabService } from '../gitlab.service';
 
 // Bitbucket Cloud's client: a token the API refuses, as Bitbucket does (401).
 jest.mock('bitbucket', () => ({
@@ -128,5 +129,37 @@ describe('authenticateWithToken logs a refused token without it', () => {
 
         expect(error).toHaveBeenCalled();
         expect(loggedFor(error)).not.toContain(PAT);
+    });
+
+    it('GitLab (repository check after the OAuth link)', async () => {
+        const { svc, error } = service(GitlabService);
+        svc.instanceGitlabApi = jest.fn(() => ({
+            Projects: {
+                all: jest.fn().mockRejectedValue(
+                    Object.assign(new Error('401 Unauthorized'), {
+                        status: 401,
+                    }),
+                ),
+            },
+        }));
+
+        await expect(
+            svc.checkRepositoryPermissions({
+                authDetails: {
+                    accessToken: PAT,
+                    refreshToken: 'secret-refresh-token',
+                    authMode: 'oauth',
+                    host: 'https://gitlab.example.test',
+                },
+            }),
+        ).resolves.toMatchObject({ success: false });
+
+        expect(error).toHaveBeenCalled();
+        expect(loggedFor(error)).not.toContain(PAT);
+        expect(loggedFor(error)).not.toContain('secret-refresh-token');
+        expect(error.mock.calls[0][0].metadata).toEqual({
+            host: 'https://gitlab.example.test',
+            authMode: 'oauth',
+        });
     });
 });

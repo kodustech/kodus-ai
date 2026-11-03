@@ -1310,7 +1310,12 @@ export class GitlabService implements Omit<
                     'Failed to list repositories when creating integration',
                 context: GitlabService.name,
                 error: error,
-                metadata: params,
+                // Named fields only: authDetails carries the access and
+                // refresh tokens.
+                metadata: {
+                    host: params?.authDetails?.host,
+                    authMode: params?.authDetails?.authMode,
+                },
             });
             return {
                 success: false,
