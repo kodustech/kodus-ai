@@ -761,6 +761,84 @@ describe('SandboxLeaseManager', () => {
             expect(manager.createCircuit.getState()).toBe('CLOSED');
         });
 
+        describe('after the breaker trips', () => {
+            const trip = async () => {
+                // The breaker keeps the Date.now it was built with; read the
+                // (fake) clock at call time instead
+                (manager.createCircuit as any).now = () => Date.now();
+                sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                    timeoutError(),
+                );
+                const orgs = ['a', 'b', 'c', 'a', 'b'] as const;
+                for (const [i, org] of orgs.entries()) {
+                    await manager
+                        .acquire(
+                            orgPrKeyFor(org, 600 + i),
+                            'review',
+                            undefined,
+                            cloneParamsFor(600 + i),
+                        )
+                        .catch(() => undefined);
+                }
+                expect(manager.createCircuit.getState()).toBe('OPEN');
+            };
+            const acquireOnce = (pr: number) =>
+                manager
+                    .acquire(
+                        orgPrKeyFor('d', pr),
+                        'review',
+                        undefined,
+                        cloneParamsFor(pr),
+                    )
+                    .catch((e) => e);
+
+            afterEach(() => jest.useRealTimers());
+
+            it('closes once the probe create succeeds, logging the step back as a log line', async () => {
+                jest.useFakeTimers({ now: 1_000_000 });
+                await trip();
+                const log = jest.spyOn((manager as any).logger, 'log');
+                jest.setSystemTime(1_000_000 + 2 * 60_000);
+                sandboxProvider.createSandboxWithRepo.mockReset();
+                sandboxProvider.createSandboxWithRepo.mockResolvedValue({
+                    sandboxId: 'sb-1',
+                } as any);
+
+                await acquireOnce(700);
+
+                expect(manager.createCircuit.getState()).toBe('CLOSED');
+                expect(log).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        message: expect.stringContaining(
+                            'sandbox creation circuit OPEN -> HALF_OPEN',
+                        ),
+                    }),
+                );
+            });
+
+            it('frees the probe for the next create when the probe hits a repository error', async () => {
+                jest.useFakeTimers({ now: 1_000_000 });
+                await trip();
+                jest.setSystemTime(1_000_000 + 2 * 60_000);
+                sandboxProvider.createSandboxWithRepo.mockReset();
+                sandboxProvider.createSandboxWithRepo
+                    .mockRejectedValueOnce(
+                        new Error('remote: Repository not found.'),
+                    )
+                    .mockResolvedValue({ sandboxId: 'sb-2' } as any);
+
+                await acquireOnce(701);
+                const next = await acquireOnce(702);
+
+                // The second create was admitted as the new probe
+                expect(next).not.toBeInstanceOf(SandboxCircuitOpenError);
+                expect(
+                    sandboxProvider.createSandboxWithRepo,
+                ).toHaveBeenCalledTimes(2);
+                expect(manager.createCircuit.getState()).toBe('CLOSED');
+            });
+        });
+
         it('does not count repository-specific failures toward the circuit', async () => {
             sandboxProvider.createSandboxWithRepo.mockRejectedValue(
                 new Error('remote: Repository not found.'),

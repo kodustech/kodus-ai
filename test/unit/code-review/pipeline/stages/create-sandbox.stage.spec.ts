@@ -5,6 +5,7 @@ import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
     AcquireResult,
+    SandboxCircuitOpenError,
     SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
@@ -268,6 +269,33 @@ describe('CreateSandboxStage', () => {
             // The review is moot, so it is not reported as one that lost its
             // checkout (#2066).
             expect(result.sandboxSuperseded).toBe(true);
+        });
+
+        it('continues without a sandbox on an open circuit, as a warn and not an error', async () => {
+            mockLeaseManager.acquire.mockRejectedValue(
+                new SandboxCircuitOpenError(
+                    '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:5',
+                    30_000,
+                ),
+            );
+            const context = createBaseContext({
+                changedFiles: [{ filename: 'test.ts' } as any],
+            });
+
+            const result = await (stage as any).executeStage(context);
+            const logger = (stage as any).logger;
+
+            expect(result.sandboxHandle).toBeUndefined();
+            expect(result.sandboxSuperseded).toBeUndefined();
+            expect(logger.error).not.toHaveBeenCalled();
+            expect(logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'Sandbox creation circuit open',
+                    ),
+                    metadata: expect.objectContaining({ prNumber: 42 }),
+                }),
+            );
         });
 
         it('does not retry acquire itself — retry+backoff lives inside the lease manager', async () => {

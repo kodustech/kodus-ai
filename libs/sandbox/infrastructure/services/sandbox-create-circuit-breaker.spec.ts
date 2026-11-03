@@ -165,9 +165,10 @@ describe('SandboxCreateCircuitBreaker', () => {
         fail('org-a', 'org-b', 'org-b');
         expect(breaker.getState()).toBe('OPEN');
 
-        // A create that passed tryAcquire() before the trip fails later
+        // Creates admitted before the trip fail later, enough of them from
+        // enough organizations to trip the breaker again
         advance(20_000);
-        fail('org-c');
+        fail('org-c', 'org-d', 'org-c');
         advance(10_000);
 
         // Still openMs after the trip, not after the late failure
@@ -215,11 +216,57 @@ describe('SandboxCreateCircuitBreaker', () => {
             },
         );
 
+        const logger = { error: jest.fn() };
+        (breaker as any).logger = logger;
+
         breaker.recordFailure('org-a', CLOSED_PERMIT);
         breaker.recordFailure('org-b', CLOSED_PERMIT);
         expect(() =>
             breaker.recordFailure('org-b', CLOSED_PERMIT),
         ).not.toThrow();
+        expect(breaker.getState()).toBe('OPEN');
+        // The lost transition is still reported
+        expect(logger.error).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    from: 'CLOSED',
+                    to: 'OPEN',
+                    distinctOrgs: 2,
+                }),
+            }),
+        );
+    });
+
+    it('works without a transition callback, and logs nothing', () => {
+        const breaker = new SandboxCreateCircuitBreaker(OPTIONS, () => 0);
+        const logger = { error: jest.fn() };
+        (breaker as any).logger = logger;
+
+        breaker.recordFailure('org-a', CLOSED_PERMIT);
+        breaker.recordFailure('org-b', CLOSED_PERMIT);
+        breaker.recordFailure('org-b', CLOSED_PERMIT);
+
+        expect(breaker.getState()).toBe('OPEN');
+        expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it('a success while CLOSED clears the failures counted so far', () => {
+        const { breaker, fail } = makeBreaker();
+
+        fail('org-a', 'org-b');
+        breaker.recordSuccess(CLOSED_PERMIT);
+        fail('org-a');
+
+        expect(breaker.getState()).toBe('CLOSED');
+    });
+
+    it('still counts a failure exactly windowMs old', () => {
+        const { breaker, fail, advance } = makeBreaker();
+
+        fail('org-a', 'org-b');
+        advance(60_000);
+        fail('org-c');
+
         expect(breaker.getState()).toBe('OPEN');
     });
 });
@@ -268,5 +315,40 @@ describe('sandbox failure classification', () => {
             isTimeoutSandboxFailure(new Error('Command timed out after 1ms')),
         ).toBe(true);
         expect(isTimeoutSandboxFailure(new Error('E2B 503'))).toBe(false);
+    });
+});
+
+describe('sandbox failure classification — inputs', () => {
+    it.each([
+        'connect timeout',
+        'Command timed out',
+        'request time out',
+        'context deadline exceeded',
+    ])('treats "%s" as a timeout', (message) => {
+        expect(isTimeoutSandboxFailure(new Error(message))).toBe(true);
+    });
+
+    it('treats a TimeoutError by name, and nothing that is not an error object', () => {
+        expect(
+            isTimeoutSandboxFailure(
+                Object.assign(new Error('x'), { name: 'TimeoutError' }),
+            ),
+        ).toBe(true);
+        expect(isTimeoutSandboxFailure('Command timed out')).toBe(false);
+        expect(isTimeoutSandboxFailure(undefined)).toBe(false);
+    });
+
+    it('reads a repository error from a string, and ignores non-string fields', () => {
+        expect(
+            isRepositorySpecificSandboxFailure('remote: Repository not found.'),
+        ).toBe(true);
+        expect(isRepositorySpecificSandboxFailure(undefined)).toBe(false);
+        expect(isRepositorySpecificSandboxFailure(404)).toBe(false);
+        expect(
+            isRepositorySpecificSandboxFailure({
+                message: 'exit status 128',
+                stderr: { text: 'Repository not found' },
+            }),
+        ).toBe(false);
     });
 });
