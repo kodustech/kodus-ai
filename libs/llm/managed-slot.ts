@@ -222,7 +222,7 @@ function fromDeclared(config: DeclaredEnvModel): EnvProviderResolution {
 export function invalidEnvConfigError(reason: string): Error {
     const message = `The server LLM configuration is invalid: ${reason}`;
     return attachClassification(new Error(message), {
-        category: LlmErrorCategory.UNKNOWN,
+        category: LlmErrorCategory.CONFIG_INVALID,
         rawMessage: message,
         friendlyMessage: message,
     });

@@ -35,6 +35,13 @@ export enum LlmErrorCategory {
      * provider. Like UNKNOWN, it is never cascaded to a fallback model.
      */
     REQUEST_REJECTED = 'REQUEST_REJECTED',
+    /**
+     * The self-hosted env model cannot be built (`API_LLM_PROVIDER` set but not
+     * runnable). Attached at the throw site only, so the reason reaches the PR
+     * comment whole instead of being cut like an unclassified message. Never
+     * cascaded to a fallback model.
+     */
+    CONFIG_INVALID = 'CONFIG_INVALID',
     UNKNOWN = 'UNKNOWN',
 }
 

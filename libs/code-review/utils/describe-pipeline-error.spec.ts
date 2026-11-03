@@ -3,6 +3,8 @@ import {
     attachClassification,
 } from '@libs/llm/error-classifier';
 
+import { invalidEnvConfigError } from '@libs/llm/managed-slot';
+
 import { describePipelineError } from './describe-pipeline-error';
 
 describe('describePipelineError', () => {
@@ -63,6 +65,16 @@ describe('describePipelineError', () => {
         );
 
         expect(text).toBe('first line second line');
+    });
+
+    it('keeps the whole reason of an invalid self-hosted env model (#1687)', () => {
+        const error = invalidEnvConfigError(
+            'API_LLM_PROVIDER=anthropic has no API key. Set API_LLM_API_KEY or API_ANTHROPIC_API_KEY or API_OPEN_AI_API_KEY.',
+        );
+
+        const { text, classified } = describePipelineError(wrap(error));
+        expect(classified).toBe(true);
+        expect(text).toContain('Set API_LLM_API_KEY');
     });
 
     it('returns empty for a missing error rather than throwing', () => {

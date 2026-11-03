@@ -108,6 +108,7 @@ export function shouldFailoverToNextModel(err: unknown): boolean {
         // REQUEST_REJECTED: the 400 may be the request we built, which the
         // fallback would refuse too.
         case LlmErrorCategory.REQUEST_REJECTED:
+        case LlmErrorCategory.CONFIG_INVALID:
             return false;
         case LlmErrorCategory.TRANSIENT:
             return true;
