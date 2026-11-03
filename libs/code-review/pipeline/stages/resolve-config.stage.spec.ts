@@ -104,6 +104,27 @@ describe('ResolveConfigStage — input contract', () => {
         expect(codeBaseConfig.getConfig).not.toHaveBeenCalled();
     });
 
+    it('skips as provider rate-limited when the diff read hits a 429, instead of blaming the config', async () => {
+        prManager.getChangedFilesMetadata.mockRejectedValue({
+            status: 429,
+            message: 'Too Many Requests',
+        });
+        const context = buildContext({
+            lastExecution: { lastAnalyzedCommit: 'sha-prev' },
+        } as any);
+
+        const result = await stage.execute(context);
+
+        expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
+        expect(result.statusInfo.message).toBe(
+            StageMessageHelper.skippedWithReason(
+                PipelineReasons.COMMITS.PROVIDER_RATE_LIMITED,
+                'Provider rate-limited the diff fetch (HTTP 429)',
+            ),
+        );
+        expect(codeBaseConfig.getConfig).not.toHaveBeenCalled();
+    });
+
     it('threads org + repo + PR into getChangedFilesMetadata with the last analyzed commit as base, and builds the config from those files', async () => {
         const context = buildContext({
             lastExecution: {

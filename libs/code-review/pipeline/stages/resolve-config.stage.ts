@@ -1,3 +1,4 @@
+import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { StageMessageHelper } from '@libs/core/infrastructure/pipeline/utils/stage-message.helper';
 import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pipeline-reasons.const';
 import { PullRequestChangesUnreadableError } from '@libs/code-review/domain/errors/pull-request-changes-unreadable.error';
@@ -137,6 +138,30 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                         message: StageMessageHelper.skippedWithReason(
                             PipelineReasons.FILES.UNREADABLE,
                             error.message,
+                        ),
+                    };
+                });
+            }
+            // A rate-limited diff read is not a config problem either; mapped
+            // as ValidateNewCommitsStage maps it.
+            if (is429Error(error)) {
+                this.logger.warn({
+                    message: `Skipping code review for PR#${context?.pullRequest?.number} — provider rate-limited the diff fetch (HTTP 429)`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationId:
+                            context?.organizationAndTeamData?.organizationId,
+                        prNumber: context?.pullRequest?.number,
+                        repositoryId: context?.repository?.id,
+                        reason: 'provider_rate_limited',
+                    },
+                });
+                return this.updateContext(context, (draft) => {
+                    draft.statusInfo = {
+                        status: AutomationStatus.SKIPPED,
+                        message: StageMessageHelper.skippedWithReason(
+                            PipelineReasons.COMMITS.PROVIDER_RATE_LIMITED,
+                            'Provider rate-limited the diff fetch (HTTP 429)',
                         ),
                     };
                 });
