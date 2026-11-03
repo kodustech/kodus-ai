@@ -20,6 +20,8 @@ import {
     isLinked,
     knowledgeBudgetNote,
     knowledgeItemFromPath,
+    knowledgeKey,
+    sameKnowledge,
     setKnowledgeLink,
 } from "@services/custom-agents/drafts";
 import { useResolveCustomAgent } from "@services/custom-agents/hooks";
@@ -27,6 +29,7 @@ import {
     KNOWLEDGE_MAIN_REVIEW_TARGET,
     type KnowledgeItem,
     type KnowledgeLinkTarget,
+    type KnowledgeSource,
 } from "@services/custom-agents/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
@@ -44,7 +47,14 @@ import {
     customAgentsSaveErrorToast,
     logCustomAgentsSaveError,
 } from "../../_utils/settings-save-conflict";
-import { KnowledgeStatusChips } from "../agents/[agentId]/_components/knowledge-card";
+import {
+    KnowledgeSourceChip,
+    KnowledgeStatusChips,
+    useKnowledgeSourceListing,
+} from "../agents/[agentId]/_components/knowledge-card";
+
+/** The listing source of this page: the reviewed repository. */
+const THIS_REPOSITORY: KnowledgeSource = {};
 
 function SkillsContent() {
     const {
@@ -72,6 +82,16 @@ function SkillsContent() {
         knowledge,
         discover: true,
     });
+    // Guides of another repository are for custom agents only, picked on
+    // each agent's page: this page adds from this repository.
+    const listing = useKnowledgeSourceListing({
+        teamId,
+        repositoryId,
+        source: THIS_REPOSITORY,
+        report: report.data,
+        reportFailed: report.isError,
+        enabled: repositoryId !== "global",
+    });
     const isGlobal = repositoryId === "global";
     const knowledgeReport =
         report.data?.knowledge.status === "ok" ? report.data.knowledge : null;
@@ -79,12 +99,11 @@ function SkillsContent() {
         ? `On ${report.data?.repository.branch}.`
         : report.isLoading
           ? "Reading the default branch…"
-          : report.isError
-            ? "Couldn't read the repository right now."
-            : "";
-    const registered = new Set(knowledge.map((item) => item.path));
-    const candidates = (knowledgeReport?.candidates ?? []).filter(
-        (candidate) => !registered.has(candidate.path),
+          : // A failed check is said below, where the list would be.
+            "";
+    const registered = new Set(knowledge.map(knowledgeKey));
+    const candidates = listing.candidates.filter(
+        (candidate) => !registered.has(knowledgeKey(candidate)),
     );
     // Doc tokens are only known by reading the docs on the branch, so a save
     // keeps a target over its budget and a review cuts its docs to it.
@@ -103,6 +122,13 @@ function SkillsContent() {
             color: agent.presentation.tag.color,
         })),
     ];
+    // A guide of another repository is for custom agents only: the main
+    // review has no quote gate to check a rule it cites. A link saved before
+    // stays visible so it can be unchecked; saving refuses it.
+    const offersTarget = (item: KnowledgeItem, target: KnowledgeLinkTarget) =>
+        !item.repository ||
+        target !== KNOWLEDGE_MAIN_REVIEW_TARGET ||
+        isLinked(item, target);
     const backHref = reviewScopeHref(repositoryId, directoryId);
 
     useUnsavedChangesGuard({
@@ -117,14 +143,21 @@ function SkillsContent() {
 
     // A file with an extension is a doc; a folder or a SKILL.md is a skill.
     const typedItem = knowledgeItemFromPath(path);
-    const register = (item: Pick<KnowledgeItem, "path" | "kind">) => {
-        if (registered.has(item.path)) return;
+    const register = (
+        item: Pick<KnowledgeItem, "path" | "kind" | "repository" | "ref">,
+    ) => {
+        if (registered.has(knowledgeKey(item))) return;
         setKnowledge([
             ...knowledge,
-            { path: item.path, kind: item.kind, linkedTo: [] },
+            {
+                path: item.path,
+                kind: item.kind,
+                ...(item.repository && { repository: item.repository }),
+                ...(item.repository && item.ref && { ref: item.ref }),
+                linkedTo: [],
+            },
         ]);
     };
-
     const onSave = async () => {
         try {
             const result = await save();
@@ -186,11 +219,12 @@ function SkillsContent() {
                     </Breadcrumb>
                     <Page.Title>Skills &amp; docs</Page.Title>
                     <Page.Description>
-                        Guides that live in the repository, linked here to the
-                        main review, with who follows what. Each custom agent
-                        picks its own on its page. Read from each pull
-                        request&apos;s target branch; skills open on demand,
-                        docs load whole, scripts never run.
+                        Guides linked here to the main review, with who follows
+                        what, read from each pull request&apos;s target branch.
+                        Each custom agent picks its own on its page, including
+                        guides of another repository (a team&apos;s rules
+                        repository). Skills open on demand, docs load whole,
+                        scripts never run.
                     </Page.Description>
                 </Page.TitleContainer>
                 <Page.SaveActions
@@ -233,11 +267,11 @@ function SkillsContent() {
                     )}
                     {knowledge.map((item) => {
                         const itemReport = knowledgeReport?.items.find(
-                            (entry) => entry.path === item.path,
+                            (entry) => sameKnowledge(entry, item),
                         );
                         return (
                             <div
-                                key={`${item.kind}:${item.path}`}
+                                key={knowledgeKey(item)}
                                 className="border-card-lv3/60 flex flex-col gap-2 border-t pt-3 first:border-t-0 first:pt-0">
                                 <div className="flex items-start gap-2">
                                     {item.kind === "skill" ? (
@@ -258,6 +292,10 @@ function SkillsContent() {
                                             </span>
                                         )}
                                         <span className="flex flex-wrap gap-1">
+                                            <KnowledgeSourceChip
+                                                item={item}
+                                                branch={itemReport?.branch}
+                                            />
                                             <KnowledgeStatusChips
                                                 report={itemReport}
                                             />
@@ -291,7 +329,9 @@ function SkillsContent() {
                                 </div>
                                 <div className="flex flex-wrap gap-x-4 gap-y-1.5 pl-6">
                                     {targets.map(({ target, label, color }) => {
-                                        const id = `link-${item.path}-${typeof target === "string" ? target : target.agentId}`;
+                                        if (!offersTarget(item, target))
+                                            return null;
+                                        const id = `link-${knowledgeKey(item)}-${typeof target === "string" ? target : target.agentId}`;
                                         return (
                                             <label
                                                 key={id}
@@ -299,7 +339,7 @@ function SkillsContent() {
                                                 className="text-text-secondary flex cursor-pointer items-center gap-1.5 text-xs">
                                                 <Checkbox
                                                     id={id}
-                                                    aria-label={`${itemReport?.name ?? item.path} for ${label}`}
+                                                    aria-label={`${itemReport?.name ?? (item.repository ? `${item.repository}:${item.path}` : item.path)} for ${label}`}
                                                     disabled={!canEdit}
                                                     checked={isLinked(
                                                         item,
@@ -334,6 +374,17 @@ function SkillsContent() {
                                         );
                                     })}
                                 </div>
+                                {item.repository &&
+                                    isLinked(
+                                        item,
+                                        KNOWLEDGE_MAIN_REVIEW_TARGET,
+                                    ) && (
+                                        <p className="text-warning pl-6 text-xs">
+                                            Guides of another repository are for
+                                            custom agents only. Uncheck Main
+                                            review to save.
+                                        </p>
+                                    )}
                             </div>
                         );
                     })}
@@ -352,15 +403,24 @@ function SkillsContent() {
                                 : "Found in the repository"}
                         </span>
                         <span className="text-text-secondary text-xs">
-                            {isGlobal ? "" : `${branchLine} `}Skills are folders
-                            with a SKILL.md; docs are Markdown guides.
+                            {isGlobal ? "" : `${branchLine} `}
+                            Skills are folders with a SKILL.md; docs are
+                            Markdown guides.
                         </span>
                     </span>
-                    {!isGlobal && report.isLoading && (
+                    {!isGlobal && listing.unavailable && (
+                        <p className="text-danger text-xs">
+                            {listing.unavailable}
+                        </p>
+                    )}
+                    {!isGlobal && listing.loading && (
                         <Spinner className="size-4" />
                     )}
                     {!isGlobal &&
+                        !listing.loading &&
+                        !listing.unavailable &&
                         knowledgeReport &&
+                        listing.discoveredIn?.available !== false &&
                         candidates.length === 0 && (
                             <p className="text-text-secondary text-xs">
                                 Nothing new found.
@@ -368,7 +428,7 @@ function SkillsContent() {
                         )}
                     {candidates.map((candidate) => (
                         <div
-                            key={candidate.path}
+                            key={knowledgeKey(candidate)}
                             className="flex items-start gap-2">
                             {candidate.kind === "skill" ? (
                                 <SparklesIcon className="text-text-tertiary mt-0.5 size-4 shrink-0" />

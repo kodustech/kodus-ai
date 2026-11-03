@@ -82,6 +82,59 @@ describe('custom agent resolve report', () => {
         );
     });
 
+    it('counts the same path in another repository as another doc, with its own tokens', () => {
+        const local = {
+            path: 'docs/ledger.md',
+            kind: 'doc' as const,
+            linkedTo: [{ agentId: 'ledger-agent' }],
+        };
+        const remote = { ...local, repository: 'greenhouse/irrigation-rules' };
+
+        const budgets = knowledgeBudgets([local, remote], [
+            { ...local, found: true, issues: [], tokens: 100 },
+            { ...remote, found: true, issues: [], tokens: 200 },
+        ] as any);
+
+        expect(budgets).toEqual([
+            expect.objectContaining({
+                target: 'agent:ledger-agent',
+                docs: 2,
+                docTokens: 300,
+            }),
+        ]);
+    });
+
+    it('counts a stored repository that is not a string as this repository, instead of throwing', () => {
+        const item = {
+            path: 'docs/ledger.md',
+            kind: 'doc',
+            repository: 42,
+            linkedTo: [{ agentId: 'ledger-agent' }],
+        } as any;
+
+        const budgets = knowledgeBudgets(
+            [item],
+            [
+                {
+                    path: 'docs/ledger.md',
+                    kind: 'doc',
+                    repository: 42,
+                    found: true,
+                    issues: [],
+                    tokens: 300,
+                } as any,
+            ],
+        );
+
+        expect(budgets).toEqual([
+            expect.objectContaining({
+                target: 'agent:ledger-agent',
+                docs: 1,
+                docTokens: 300,
+            }),
+        ]);
+    });
+
     it('sums skills, docs and doc tokens per target and flags each limit', () => {
         const docs = Array.from({ length: 11 }, (_, index) => ({
             path: `docs/ledger-${index}.md`,

@@ -1,0 +1,352 @@
+/**
+ * Rules kept in another repository (#2329): how a finding that applies one is
+ * cited in the comment, what a save of such a link must state, and how a
+ * directory overrides it.
+ * Fixture domain: an invented greenhouse-irrigation team and its rules repo.
+ */
+import { withDirectoryAgentLists } from '@libs/code-review/domain/custom-agents/directory-cascade';
+import { knowledgeBudgets } from '@libs/code-review/domain/custom-agents/resolve-report';
+import {
+    knowledgeItemSchema,
+    knowledgeSourceProblems,
+    parseKnowledgeSourcePath,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+
+import {
+    findingCitation,
+    repositoryFileUrl,
+} from './custom-agent-presentation';
+
+const RULES = 'greenhouse/irrigation-rules';
+const source = {
+    fullName: RULES,
+    id: '20',
+    name: 'irrigation-rules',
+    ref: 'trunk',
+    httpUrl: `https://github.com/${RULES}`,
+};
+const finding = (file: string) =>
+    ({
+        relevantFile: 'src/valves/open.ts',
+        customAgent: { id: 'valves', name: 'Valves' },
+        kind: 'convention',
+        source: {
+            file,
+            quote: 'Every valve handler must log the zone id.',
+        },
+    }) as any;
+
+describe('citing a rule of another repository', () => {
+    it('links the file at the ref it was read on and quotes the rule', () => {
+        expect(
+            findingCitation(
+                finding(`${RULES}:stack/node/rules/valves.md`),
+                [],
+                {
+                    sources: [{ ...source, visibility: 'public' }],
+                    platform: PlatformType.GITHUB,
+                    reviewedIsPublic: true,
+                },
+            ),
+        ).toBe(
+            `\n\n**Rule** ([\`${RULES}:stack/node/rules/valves.md\`](https://github.com/${RULES}/blob/trunk/stack/node/rules/valves.md)):\n> Every valve handler must log the zone id.`,
+        );
+    });
+
+    it('names a private rule without quoting it on a public repository', () => {
+        const citation = findingCitation(
+            finding(`${RULES}:stack/node/rules/valves.md`),
+            [],
+            {
+                sources: [{ ...source, visibility: 'private' }],
+                platform: PlatformType.GITHUB,
+                reviewedIsPublic: true,
+            },
+        );
+
+        expect(citation).toBe(
+            `\n\n**Rule**: [\`${RULES}:stack/node/rules/valves.md\`](https://github.com/${RULES}/blob/trunk/stack/node/rules/valves.md)`,
+        );
+        expect(citation).not.toContain('zone id');
+    });
+
+    it('quotes a private rule on a private repository', () => {
+        expect(
+            findingCitation(
+                finding(`${RULES}:stack/node/rules/valves.md`),
+                [],
+                {
+                    sources: [{ ...source, visibility: 'private' }],
+                    platform: PlatformType.GITHUB,
+                    reviewedIsPublic: false,
+                },
+            ),
+        ).toContain('> Every valve handler must log the zone id.');
+    });
+
+    it('does not quote a rule whose repository or reviewed repository has no known visibility', () => {
+        for (const sources of [
+            {
+                sources: [{ ...source }],
+                platform: PlatformType.GITHUB,
+                reviewedIsPublic: true,
+            },
+            {
+                sources: [{ ...source, visibility: 'private' as const }],
+                platform: PlatformType.GITHUB,
+            },
+        ]) {
+            const citation = findingCitation(
+                finding(`${RULES}:stack/node/rules/valves.md`),
+                [],
+                sources,
+            );
+            expect(citation).not.toContain('zone id');
+            expect(citation).toContain('**Rule**:');
+        }
+    });
+
+    it('cites a rule of the reviewed repository exactly as before', () => {
+        expect(findingCitation(finding('docs/valves.md'))).toBe(
+            '\n\n**Rule** (`docs/valves.md`):\n> Every valve handler must log the zone id.',
+        );
+    });
+
+    it.each([
+        [
+            PlatformType.GITLAB,
+            'https://gitlab.com/g/rules.git',
+            'https://gitlab.com/g/rules/-/blob/v3/a%20b/c.md',
+        ],
+        [
+            PlatformType.BITBUCKET,
+            'https://bitbucket.org/g/rules',
+            'https://bitbucket.org/g/rules/src/v3/a%20b/c.md',
+        ],
+        [
+            PlatformType.AZURE_REPOS,
+            'https://dev.azure.com/o/p/_git/rules',
+            'https://dev.azure.com/o/p/_git/rules?path=/a%20b/c.md&version=GBv3',
+        ],
+        [
+            PlatformType.BITBUCKET,
+            'https://git.example.com/scm/g/rules.git',
+            'https://git.example.com/projects/g/repos/rules/browse/a%20b/c.md?at=v3',
+        ],
+        [
+            PlatformType.FORGEJO,
+            'https://forge.example.com/g/rules.git',
+            'https://forge.example.com/g/rules/src/branch/v3/a%20b/c.md',
+        ],
+        [PlatformType.BITBUCKET, 'https://git.example.com/g/rules', undefined],
+        ['SVN', 'https://svn.example.com/g/rules', undefined],
+    ])(
+        'builds the %s file link only where the URL shape is known',
+        (platform, httpUrl, expected) => {
+            expect(
+                repositoryFileUrl({ httpUrl, ref: 'v3' }, 'a b/c.md', platform),
+            ).toBe(expected);
+        },
+    );
+});
+
+describe('saving a skill or doc of another repository', () => {
+    const item = (over: Record<string, unknown>) => ({
+        path: 'stack/node/rules/valves.md',
+        kind: 'doc',
+        linkedTo: [{ agentId: 'valves' }],
+        ...over,
+    });
+
+    it('accepts owner/repo (and subgroups) with an optional branch or tag', () => {
+        for (const repository of [
+            RULES,
+            'greenhouse/platform/rules',
+            'Org/My Project/rules',
+        ]) {
+            expect(
+                knowledgeItemSchema.safeParse(
+                    item({ repository, ref: 'release/v3' }),
+                ).success,
+            ).toBe(true);
+        }
+    });
+
+    it('rejects a repository or ref that could not name one', () => {
+        for (const repository of [
+            'rules',
+            'greenhouse/rules:main',
+            '-x/rules',
+            'greenhouse//rules',
+            // Invisible characters that would disguise owner/repo:path.
+            'greenhouse/rules\u202e',
+            'greenhouse/\u200brules',
+            'greenhouse/rules\u0085',
+        ]) {
+            expect(
+                knowledgeItemSchema.safeParse(item({ repository })).success,
+            ).toBe(false);
+        }
+        expect(
+            knowledgeItemSchema.safeParse(
+                item({ repository: RULES, ref: '--upload-pack=x' }),
+            ).success,
+        ).toBe(false);
+    });
+
+    it('rejects every invisible character by class, across all of Unicode', () => {
+        const invisible: string[] = [];
+        for (let code = 0; code <= 0x10ffff; code++) {
+            if (code >= 0xd800 && code <= 0xdfff) continue;
+            const char = String.fromCodePoint(code);
+            if (/[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/u.test(char)) {
+                invisible.push(char);
+            }
+        }
+        // C0, C1, bidi controls, zero-width, BOM, tag characters (U+E0000
+        // block) and variation selectors (U+E0100 block) among them.
+        expect(invisible).toEqual(
+            expect.arrayContaining([
+                '\u202e',
+                '\ufeff',
+                String.fromCodePoint(0xe0041),
+                String.fromCodePoint(0xe0100),
+            ]),
+        );
+        for (const char of invisible) {
+            expect(
+                knowledgeItemSchema.safeParse(
+                    item({ repository: `greenhouse/rul${char}es` }),
+                ).success,
+            ).toBe(false);
+        }
+    });
+
+    it('refuses a ref without a repository, two refs for one repository, and duplicates', () => {
+        expect(
+            knowledgeSourceProblems([
+                item({ ref: 'v3' }),
+                item({ repository: RULES }),
+                item({ repository: RULES, path: 'other.md', ref: 'v3' }),
+                item({ repository: RULES }),
+            ]),
+        ).toEqual([
+            "stack/node/rules/valves.md sets a ref but no repository; the reviewed repository is read on the pull request's target branch",
+            `${RULES} is read at both "its default branch" and "v3"; use one branch or tag per repository`,
+            `${RULES}:stack/node/rules/valves.md is listed twice`,
+        ]);
+    });
+
+    it('refuses a guide of another repository linked to the main review, and only that', () => {
+        expect(
+            knowledgeSourceProblems([
+                item({ repository: RULES, linkedTo: ['main-review'] }),
+                item({
+                    repository: RULES,
+                    path: 'stack/node/rules/pumps.md',
+                    linkedTo: [{ agentId: 'valves' }, 'main-review'],
+                }),
+                item({ linkedTo: ['main-review'] }),
+                item({ repository: RULES, path: 'stack/node/rules/drip.md' }),
+            ]),
+        ).toEqual([
+            `${RULES}:stack/node/rules/valves.md is a guide of another repository, which only custom agents follow; unlink it from the main review`,
+            `${RULES}:stack/node/rules/pumps.md is a guide of another repository, which only custom agents follow; unlink it from the main review`,
+        ]);
+    });
+
+    it('treats the same path in two repositories as two entries', () => {
+        expect(
+            knowledgeSourceProblems([item({}), item({ repository: RULES })]),
+        ).toEqual([]);
+    });
+
+    it('splits a qualified path back into repository and path', () => {
+        expect(
+            parseKnowledgeSourcePath(`${RULES}:stack/node/rules/valves.md`),
+        ).toEqual({
+            repository: RULES,
+            path: 'stack/node/rules/valves.md',
+        });
+        expect(parseKnowledgeSourcePath('docs/valves.md')).toBeNull();
+    });
+
+    it('counts doc tokens per repository, not per path', () => {
+        const items = [
+            item({ linkedTo: [{ agentId: 'valves' }] }),
+            item({ repository: RULES, linkedTo: [{ agentId: 'valves' }] }),
+        ] as any;
+        const [budget] = knowledgeBudgets(items, [
+            {
+                path: 'stack/node/rules/valves.md',
+                kind: 'doc',
+                found: true,
+                issues: [],
+                tokens: 100,
+            },
+            {
+                path: 'stack/node/rules/valves.md',
+                kind: 'doc',
+                found: true,
+                issues: [],
+                tokens: 7,
+                repository: RULES,
+            },
+        ]);
+
+        expect(budget.docTokens).toBe(107);
+    });
+});
+
+describe('a directory overriding knowledge', () => {
+    it('replaces only the entry of the same repository and path', () => {
+        const inherited = [
+            { path: 'docs/valves.md', kind: 'doc', linkedTo: ['main-review'] },
+            {
+                path: 'docs/valves.md',
+                kind: 'doc',
+                repository: RULES,
+                linkedTo: ['main-review'],
+            },
+        ];
+        const directory = [
+            {
+                path: 'docs/valves.md',
+                kind: 'doc',
+                repository: RULES,
+                linkedTo: [],
+            },
+        ];
+
+        const result = withDirectoryAgentLists(
+            {},
+            { knowledge: inherited },
+            { knowledge: directory },
+        ) as {
+            knowledge: unknown[];
+        };
+
+        expect(result.knowledge).toEqual([inherited[0], directory[0]]);
+    });
+
+    it('treats a stored repository or path of another type as absent instead of throwing', () => {
+        const inherited = [
+            { path: 'docs/valves.md', kind: 'doc', linkedTo: [] },
+        ];
+        const directory = [
+            { path: 'docs/valves.md', kind: 'doc', repository: 42 },
+            { path: 7, kind: 'doc' },
+        ];
+
+        const result = withDirectoryAgentLists(
+            {},
+            { knowledge: inherited },
+            { knowledge: directory },
+        ) as { knowledge: unknown[] };
+
+        // A repository that is not a string names none: the entry replaces
+        // the local one. A path that is not a string has no key: kept apart.
+        expect(result.knowledge).toEqual([directory[0], directory[1]]);
+    });
+});
