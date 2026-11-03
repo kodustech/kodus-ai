@@ -77,14 +77,29 @@ export interface BuildE2BRemoteCommandsOptions {
  * '..' traversal. Shared by every RemoteCommands implementation so the
  * path-isolation contract cannot silently diverge.
  */
-function resolveRepoPath(path: string): string {
+function resolveRepoPath(path: string, root: string = REPO_DIR): string {
     if (path.startsWith('/')) {
         throw new Error('Absolute paths are not allowed');
     }
     if (path.includes('..')) {
         throw new Error('Path traversal using ".." is not allowed');
     }
-    return `${REPO_DIR}/${path}`;
+    return `${root}/${path}`;
+}
+
+/** Linked repositories are cloned next to the PR's (resolve-linked-repositories). */
+const LINKED_DIR = '/home/user/_linked';
+
+function readRoot(root: string | undefined): string {
+    if (root === undefined || root === REPO_DIR) return REPO_DIR;
+    if (
+        root.startsWith(`${LINKED_DIR}/`) &&
+        !root.includes('..') &&
+        root.length > LINKED_DIR.length + 1
+    ) {
+        return root;
+    }
+    throw new Error(`Not a repository root of this sandbox: ${root}`);
 }
 
 /**
@@ -159,12 +174,14 @@ export function buildE2BRemoteCommands(
             path: string,
             start: number,
             end: number,
+            root?: string,
         ): Promise<string> => {
             // GNU sed rejects address 0, so start=end=0 means "whole file"
             // (cat). Neither follows a symlink the repository commits.
+            const base = readRoot(root);
             const cmd = readWithinRootCommand(
-                resolveRepoPath(path),
-                REPO_DIR,
+                resolveRepoPath(path, base),
+                base,
                 start,
                 end,
             );
