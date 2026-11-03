@@ -128,10 +128,7 @@ export class WorkerDrainService
      * registered meanwhile) instead of closing with live consumers.
      */
     private async cancelConsumers(): Promise<void> {
-        const timeoutMs = Math.min(
-            CANCEL_CONSUMERS_TIMEOUT_MS,
-            this.drainTimeoutMs,
-        );
+        const timeoutMs = Math.min(CANCEL_CONSUMERS_TIMEOUT_MS, this.drainTimeoutMs);
         let timer: NodeJS.Timeout | undefined;
         let consumerCount: number | undefined;
 
@@ -161,9 +158,7 @@ export class WorkerDrainService
                     );
                 }),
             ]);
-            const failed = results.filter(
-                (r) => r.status === 'rejected',
-            ).length;
+            const failed = results.filter((r) => r.status === 'rejected').length;
 
             this.logger.log({
                 message: 'Worker drain: RabbitMQ consumers cancelled',

@@ -21,9 +21,9 @@ describe('WorkerDrainService', () => {
             }),
         };
 
-        await new WorkerDrainService(
-            amqpConnection as any,
-        ).onApplicationShutdown('SIGTERM');
+        await new WorkerDrainService(amqpConnection as any).onApplicationShutdown(
+            'SIGTERM',
+        );
 
         expect(order).toEqual([
             'cancel:tag-webhook',
@@ -42,9 +42,9 @@ describe('WorkerDrainService', () => {
             close: jest.fn().mockResolvedValue(undefined),
         };
 
-        await new WorkerDrainService(
-            amqpConnection as any,
-        ).onApplicationShutdown('SIGTERM');
+        await new WorkerDrainService(amqpConnection as any).onApplicationShutdown(
+            'SIGTERM',
+        );
 
         expect(amqpConnection.cancelConsumer).toHaveBeenCalledTimes(2);
         expect(amqpConnection.close).toHaveBeenCalled();
@@ -80,9 +80,9 @@ describe('WorkerDrainService', () => {
             close: jest.fn().mockResolvedValue(undefined),
         };
 
-        await new WorkerDrainService(
-            amqpConnection as any,
-        ).onApplicationShutdown('SIGTERM');
+        await new WorkerDrainService(amqpConnection as any).onApplicationShutdown(
+            'SIGTERM',
+        );
 
         expect(amqpConnection.close).toHaveBeenCalled();
     });

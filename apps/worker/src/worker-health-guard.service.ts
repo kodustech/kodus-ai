@@ -68,15 +68,16 @@ export class WorkerHealthGuardService
     private deadChannelsSince?: number;
     private isShuttingDown = false;
 
-    constructor(@Optional() private readonly amqpConnection?: AmqpConnection) {}
+    constructor(
+        @Optional() private readonly amqpConnection?: AmqpConnection,
+    ) {}
 
     // ───────────────────── Startup assertion ─────────────────────
 
     async onApplicationBootstrap(): Promise<void> {
         if (!this.amqpConnection) {
             this.logger.warn({
-                message:
-                    'No AmqpConnection — RabbitMQ disabled, skipping health guard.',
+                message: 'No AmqpConnection — RabbitMQ disabled, skipping health guard.',
                 context: WorkerHealthGuardService.name,
                 metadata: { instanceId: this.instanceId },
             });
@@ -92,9 +93,7 @@ export class WorkerHealthGuardService
         });
 
         const managedChannels = this.amqpConnection.managedChannels;
-        const missing = expectedChannels.filter(
-            (name) => !managedChannels[name],
-        );
+        const missing = expectedChannels.filter((name) => !managedChannels[name]);
 
         if (missing.length > 0) {
             this.logger.error({
@@ -114,12 +113,7 @@ export class WorkerHealthGuardService
         // Wait for each channel to connect.
         const timeout = new Promise<never>((_, reject) =>
             setTimeout(
-                () =>
-                    reject(
-                        new Error(
-                            `Boot timeout after ${this.BOOT_TIMEOUT_MS}ms`,
-                        ),
-                    ),
+                () => reject(new Error(`Boot timeout after ${this.BOOT_TIMEOUT_MS}ms`)),
                 this.BOOT_TIMEOUT_MS,
             ),
         );
@@ -234,12 +228,8 @@ export class WorkerHealthGuardService
         });
 
         try {
-            const managedConnection = (this.amqpConnection as any)
-                .managedConnection;
-            if (
-                managedConnection &&
-                typeof managedConnection.reconnect === 'function'
-            ) {
+            const managedConnection = (this.amqpConnection as any).managedConnection;
+            if (managedConnection && typeof managedConnection.reconnect === 'function') {
                 managedConnection.reconnect();
                 this.logger.log({
                     message: 'Forced reconnect triggered.',
