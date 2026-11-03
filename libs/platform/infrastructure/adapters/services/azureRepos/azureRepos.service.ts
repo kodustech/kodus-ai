@@ -2802,8 +2802,11 @@ export class AzureReposService implements Omit<
                 message: 'Error to create auth integration',
                 context: this.createAuthIntegration.name,
                 error: err,
+                // Named fields only: params carries the PAT.
                 metadata: {
-                    params,
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    authMode: params?.authMode,
+                    host: params?.host ?? params?.orgUrl,
                 },
             });
             throw new BadRequestException(err);
@@ -2859,8 +2862,10 @@ export class AzureReposService implements Omit<
                 message: 'Error to authenticate with token',
                 context: this.authenticateWithToken.name,
                 error: err,
+                // Named fields only: params carries the PAT.
                 metadata: {
-                    params,
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    orgUrl: params?.orgUrl,
                 },
             });
             throw new BadRequestException(

@@ -190,6 +190,18 @@ describe('buildE2BRemoteCommands', () => {
             );
         });
 
+        it('rejects a grep path outside the checkout before running rg', async () => {
+            const run = jest.fn();
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await expect(rc.grep('TOKEN', '../secret')).rejects.toThrow(
+                'Path traversal using ".." is not allowed',
+            );
+            await expect(rc.grep('TOKEN', '/etc')).rejects.toThrow(
+                'Absolute paths are not allowed',
+            );
+            expect(run).not.toHaveBeenCalled();
+        });
+
         it('accepts a plain relative path (no throw)', async () => {
             const run = jest
                 .fn()
@@ -1062,9 +1074,9 @@ describe('E2B review user lockdown', () => {
             expect.objectContaining({ user: 'root' }),
         );
         // Nothing else of the review runs as root.
-        expect(
-            calls.filter(([, opts]) => opts?.user === 'root'),
-        ).toHaveLength(1);
+        expect(calls.filter(([, opts]) => opts?.user === 'root')).toHaveLength(
+            1,
+        );
         expect(instance.privilegesDropped).toBe(true);
         expect((Sandbox as any).create).toHaveBeenCalledWith(
             'tpl',

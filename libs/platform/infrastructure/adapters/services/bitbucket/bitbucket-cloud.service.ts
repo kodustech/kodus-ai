@@ -3271,8 +3271,11 @@ export class BitbucketCloudService implements Omit<
                 context: BitbucketCloudService.name,
                 serviceName: 'BitbucketCloudService createAuthIntegration',
                 error: err,
+                // Named fields only: params carries the PAT.
                 metadata: {
-                    params,
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    authMode: params?.authMode,
+                    host: params?.host,
                 },
             });
             throw new BadRequestException(err);
@@ -3998,8 +4001,10 @@ export class BitbucketCloudService implements Omit<
                 context: BitbucketCloudService.name,
                 serviceName: 'BitbucketCloudService authenticateWithToken',
                 error: err,
+                // Named fields only: params carries the PAT.
                 metadata: {
-                    params,
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    host: params?.host,
                 },
             });
             throw new BadRequestException(

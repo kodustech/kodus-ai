@@ -1,4 +1,7 @@
-import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
+import {
+    SealedTokenError,
+    sealedTokens,
+} from '@libs/common/utils/sealed-token';
 
 /**
  * Linking a GitHub App installation to a Kodus team needs proof that the
@@ -38,57 +41,39 @@ export function isInstallationId(value: unknown): value is string {
     return typeof value === 'string' && /^[1-9]\d{0,18}$/.test(value);
 }
 
-function stateKey(): Buffer {
-    const ikm = Buffer.from(process.env.API_CRYPTO_KEY ?? '', 'hex');
-    if (ikm.length !== 32) {
-        throw new Error('API_CRYPTO_KEY must be 32 bytes in hexadecimal.');
-    }
-    return Buffer.from(hkdfSync('sha256', ikm, Buffer.alloc(0), KEY_LABEL, 32));
-}
-
-const sign = (data: string) =>
-    createHmac('sha256', stateKey()).update(data).digest('base64url');
+const tokens = sealedTokens<InstallationAuthorizationState>(
+    KEY_LABEL,
+    INSTALLATION_STATE_TTL_MS,
+);
 
 export function sealInstallationState(
     state: InstallationAuthorizationState,
     now = Date.now(),
 ): string {
-    const data = Buffer.from(
-        JSON.stringify({
-            ...state,
-            expiresAt: now + INSTALLATION_STATE_TTL_MS,
-        }),
-    ).toString('base64url');
-    return `${data}.${sign(data)}`;
+    const { installationId, userId, organizationId } = state;
+    return tokens.seal({ installationId, userId, organizationId }, now);
 }
 
 export function openInstallationState(
     sealed: unknown,
     now = Date.now(),
 ): InstallationAuthorizationState {
-    const [data, signature] =
-        typeof sealed === 'string' ? sealed.split('.') : [];
-    if (!data || !signature) {
-        throw new InstallationAuthorizationError(
-            'The GitHub authorization is missing or invalid. Start the GitHub connection again.',
+    try {
+        const { installationId, userId, organizationId } = tokens.open(
+            sealed,
+            now,
         );
+        return { installationId, userId, organizationId };
+    } catch (err) {
+        if (err instanceof SealedTokenError) {
+            throw new InstallationAuthorizationError(
+                err.reason === 'expired'
+                    ? 'The GitHub authorization expired. Start the GitHub connection again.'
+                    : 'The GitHub authorization is missing or invalid. Start the GitHub connection again.',
+            );
+        }
+        throw err;
     }
-    const expected = Buffer.from(sign(data));
-    const given = Buffer.from(signature);
-    if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
-        throw new InstallationAuthorizationError(
-            'The GitHub authorization is missing or invalid. Start the GitHub connection again.',
-        );
-    }
-    const { installationId, userId, organizationId, expiresAt } = JSON.parse(
-        Buffer.from(data, 'base64url').toString('utf8'),
-    ) as InstallationAuthorizationState & { expiresAt: number };
-    if (now > expiresAt) {
-        throw new InstallationAuthorizationError(
-            'The GitHub authorization expired. Start the GitHub connection again.',
-        );
-    }
-    return { installationId, userId, organizationId };
 }
 
 /**

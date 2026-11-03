@@ -274,7 +274,11 @@ export class BitbucketDataCenterService implements Omit<
                 message: 'Error authenticating with Data Center token',
                 context: BitbucketDataCenterService.name,
                 error: err,
-                metadata: { params },
+                // Named fields only: params carries the PAT.
+                metadata: {
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    host: params?.host,
+                },
             });
             throw new BadRequestException(
                 'Error authenticating with Bitbucket Data Center.',
