@@ -13,6 +13,24 @@ vi.mock('../../utils/config.js', () => ({
     loadConfig: vi.fn(),
 }));
 
+vi.mock('../user-context.service.js', async (importOriginal) => {
+    const actual =
+        await importOriginal<typeof import('../user-context.service.js')>();
+    return {
+        ...actual,
+        userContextService: {
+            resolveCredential: vi.fn(),
+            resolve: vi.fn(),
+        },
+    };
+});
+
+vi.mock('../api/cockpit.api.js', () => ({
+    cockpitApi: {
+        listSelectedRepositories: vi.fn(),
+    },
+}));
+
 vi.mock('../git.service.js', () => ({
     gitService: {
         isGitRepository: vi.fn(),
@@ -24,6 +42,8 @@ vi.mock('../git.service.js', () => ({
 import { api } from '../api/index.js';
 import { loadConfig } from '../../utils/config.js';
 import { gitService } from '../git.service.js';
+import { cockpitApi } from '../api/cockpit.api.js';
+import { userContextService } from '../user-context.service.js';
 import { repoConfigService } from '../repo-config.service.js';
 import { CommandError } from '../../utils/command-errors.js';
 
@@ -168,11 +188,63 @@ describe('repoConfigService.listRepositories', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.unstubAllEnvs();
+        vi.mocked(userContextService.resolveCredential).mockResolvedValue({
+            kind: 'team-key',
+            accessToken: 'kodus_team_key',
+        });
         mockLoadConfig.mockResolvedValue({
             teamKey: 'kodus_team_key',
             teamName: 'Platform Team',
             organizationName: 'Kodus',
         } as any);
+    });
+
+    it('lists the team repositories from the web endpoint when logged in', async () => {
+        vi.mocked(userContextService.resolveCredential).mockResolvedValue({
+            kind: 'user',
+            accessToken: 'eyJ.user.token',
+        });
+        vi.mocked(userContextService.resolve).mockResolvedValue({
+            accessToken: 'eyJ.user.token',
+            organizationId: 'org-1',
+            teamId: 'team-2',
+            teamName: 'Mobile',
+        });
+        mockApiConfig.getSelectedRepositories = vi.fn();
+        vi.mocked(cockpitApi.listSelectedRepositories).mockResolvedValue([
+            { id: 'repo-1', name: 'cli', full_name: 'kodustech/cli' },
+            { id: 'repo-2', name: 'web', organizationName: 'kodustech' },
+            { id: 'repo-3', name: 'solo' },
+        ]);
+
+        const result = await repoConfigService.listRepositories({
+            team: 'mobile',
+        });
+
+        expect(userContextService.resolve).toHaveBeenCalledWith(
+            'Repository list',
+            { team: 'mobile' },
+        );
+        expect(cockpitApi.listSelectedRepositories).toHaveBeenCalledWith(
+            'eyJ.user.token',
+            'team-2',
+        );
+        expect(mockApiConfig.getSelectedRepositories).not.toHaveBeenCalled();
+        expect(result).toEqual([
+            { id: 'repo-1', fullName: 'kodustech/cli' },
+            { id: 'repo-2', fullName: 'kodustech/web' },
+            { id: 'repo-3', fullName: 'solo' },
+        ]);
+    });
+
+    it('rejects --team with a team key', async () => {
+        await expect(
+            repoConfigService.listRepositories({ team: 'mobile' }),
+        ).rejects.toEqual(
+            expect.objectContaining<Partial<CommandError>>({
+                code: 'AUTH_REQUIRED',
+            }),
+        );
     });
 
     it('lists selected repositories for the current team', async () => {

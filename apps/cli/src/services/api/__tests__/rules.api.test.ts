@@ -148,4 +148,81 @@ describe('RealRulesApi', () => {
             },
         });
     });
+
+    describe('logged-in user (web endpoints)', () => {
+        const bearer = { Authorization: 'Bearer eyJ.user.token' };
+
+        it('looks up one rule by uuid', async () => {
+            const requestWithRetry = vi.fn().mockResolvedValue([]);
+            const api = new RealRulesApi(requestWithRetry);
+
+            await api.findRulesAsUser('eyJ.user.token', {
+                ruleId: 'rule-1',
+                repositoryId: 'repo-1',
+            });
+
+            expect(requestWithRetry).toHaveBeenCalledWith(
+                '/kody-rules/find-rules-in-organization-by-filter?key=uuid&value=rule-1',
+                { headers: bearer },
+            );
+        });
+
+        it('lists rules of a repository', async () => {
+            const requestWithRetry = vi.fn().mockResolvedValue([]);
+            const api = new RealRulesApi(requestWithRetry);
+
+            await api.findRulesAsUser('eyJ.user.token', {
+                repositoryId: 'repo-1',
+            });
+
+            expect(requestWithRetry).toHaveBeenCalledWith(
+                '/kody-rules/find-rules-in-organization-by-filter?repositoryId=repo-1',
+                { headers: bearer },
+            );
+        });
+
+        it('saves through create-or-update', async () => {
+            const requestWithRetry = vi.fn().mockResolvedValue({});
+            const api = new RealRulesApi(requestWithRetry);
+            const payload = {
+                title: 'T',
+                rule: 'R',
+                type: 'standard',
+                severity: 'medium' as const,
+                teamId: 'team-1',
+            };
+
+            await api.saveRuleAsUser('eyJ.user.token', payload);
+
+            expect(requestWithRetry).toHaveBeenCalledWith(
+                '/kody-rules/create-or-update',
+                {
+                    method: 'POST',
+                    headers: bearer,
+                    body: JSON.stringify(payload),
+                },
+            );
+        });
+
+        it('changes status through change-status-kody-rules', async () => {
+            const requestWithRetry = vi.fn().mockResolvedValue([]);
+            const api = new RealRulesApi(requestWithRetry);
+            const payload = {
+                ruleIds: ['rule-1', 'rule-2'],
+                status: 'paused' as const,
+                teamId: 'team-1',
+            };
+
+            await api.changeStatusAsUser('eyJ.user.token', payload);
+
+            expect(requestWithRetry).toHaveBeenCalledWith(
+                '/kody-rules/change-status-kody-rules',
+                {
+                    method: 'POST',
+                    headers: bearer,
+                    body: JSON.stringify(payload),
+                },
+            );
+        });
+    });
 });

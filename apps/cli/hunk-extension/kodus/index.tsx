@@ -36,7 +36,7 @@ import {
     type KodusFinding,
     type KodusFindings,
     type KodusSeverity,
-} from './findings.js';
+} from './findings.ts';
 
 const VIEW_ID = 'findings';
 

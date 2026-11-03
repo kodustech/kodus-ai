@@ -17,6 +17,7 @@
  *   pnpm mongo:migrate <task> [--dry-run] [task-flags…]
  *   pnpm mongo:migrate token-usage-tu --indexes-only
  *   pnpm mongo:migrate kody-rules-origin --dry-run
+ *   pnpm mongo:migrate kody-rules-pr-scope --dry-run
  *   BATCH=5000 SLEEP_MS=100 SINCE=2026-01-01 pnpm mongo:migrate token-usage-tu
  *
  * Required env: API_MG_DB_* (or MONGODB_URI) — same Mongo connection as the API.
@@ -30,6 +31,7 @@ import { mongoMigrationClient } from '../libs/core/infrastructure/database/mongo
 import { ensureTokenUsageIndexes } from '../libs/core/infrastructure/database/mongo/token-usage/ensure-indexes';
 import { backfillTokenUsageTu } from '../libs/core/infrastructure/database/mongo/token-usage/backfill-tu';
 import { migrateKodyRulesOriginRequestType } from '../libs/core/infrastructure/database/mongo/kody-rules/migrate-origin-request-type';
+import { normalizeKodyRulesPullRequestScope } from '../libs/core/infrastructure/database/mongo/kody-rules/normalize-pull-request-scope';
 
 type TaskCtx = {
     db: Db;
@@ -59,6 +61,9 @@ const TASKS: Record<string, (ctx: TaskCtx) => Promise<void>> = {
     },
     'kody-rules-origin': async ({ db, dryRun, log }) => {
         await migrateKodyRulesOriginRequestType(db, { dryRun, log });
+    },
+    'kody-rules-pr-scope': async ({ db, dryRun, log }) => {
+        await normalizeKodyRulesPullRequestScope(db, { dryRun, log });
     },
 };
 
