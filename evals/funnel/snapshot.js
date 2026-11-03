@@ -44,7 +44,9 @@ if (!MODEL) {
 
 process.env.RECALL_MODEL = MODEL;
 const HEAVY = Boolean(args.heavy);
-if (HEAVY) process.env.RECALL_HEAVY = '1';
+// The flag alone decides the mode: an exported RECALL_HEAVY never turns a light
+// snapshot heavy.
+process.env.RECALL_HEAVY = HEAVY ? '1' : '';
 const NAME = `${MODEL.replace(/[^\w.@-]+/g, '-')}${HEAVY ? '-heavy' : ''}`;
 const { internals } = require(path.join(ROOT, 'evals/investigation/agent-provider'));
 const { reviewPullRequest } = require(path.join(ROOT, 'evals/shared/review-stage'));
