@@ -62,7 +62,13 @@ export interface IPullRequestManagerService {
         repository: { name: string; id: any; project?: { id: any } },
         pullRequest: any,
         previousHeadSha: string,
-    ): Promise<RebaseInterdiffResult | null>;
+    ): Promise<
+        | (RebaseInterdiffResult & {
+              /** The current PR diff the interdiff was read from. */
+              currentFiles: FileChange[];
+          })
+        | null
+    >;
 
     getNewCommitsSinceLastExecution(
         organizationAndTeamData: OrganizationAndTeamData,

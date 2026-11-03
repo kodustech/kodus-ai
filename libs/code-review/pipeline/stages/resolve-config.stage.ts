@@ -1,3 +1,4 @@
+import { PullRequestChangesUnreadableError } from '@libs/code-review/domain/errors/pull-request-changes-unreadable.error';
 import { Inject, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -114,6 +115,8 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                 draft.preliminaryFiles = preliminaryFiles;
             });
         } catch (error) {
+            // Not a configuration problem: the run fails with its own message.
+            if (error instanceof PullRequestChangesUnreadableError) throw error;
             this.logger.error({
                 message: `Error in ResolveConfigStage for PR#${context?.pullRequest?.number}`,
                 error,

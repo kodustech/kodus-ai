@@ -11,6 +11,7 @@ import { CacheService } from '@libs/core/cache/cache.service';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import { PullRequestAuthor } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 import { RebaseInterdiffResult, rebaseInterdiff } from './rebase-interdiff';
+import { PullRequestChangesUnreadableError } from '@libs/code-review/domain/errors/pull-request-changes-unreadable.error';
 
 @Injectable()
 export class PullRequestHandlerService implements IPullRequestManagerService {
@@ -384,19 +385,22 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         // push with one is reviewed whole, as ValidateNewCommitsStage does.
         const useInterdiff = !!interdiff && !interdiff.revertedFiles.length;
 
+        // With removals the interdiff has already read the whole PR.
         const files = useInterdiff
             ? interdiff.files
-            : await this.codeManagementService.getFilesByPullRequestId({
+            : (interdiff?.currentFiles ??
+              (await this.codeManagementService.getFilesByPullRequestId({
                   organizationAndTeamData,
                   repository,
                   prNumber: pullRequest?.number,
                   headSha: pullRequest?.head?.sha,
-              });
+              })));
         // Not `[]`: that would skip the review as a PR with nothing new.
         // Readers answer an unreadable whole-PR list with `[]` too.
         if (!files || (!useInterdiff && !files.length)) {
-            throw new Error(
-                `Could not read the changes of PR#${pullRequest?.number}: neither the diff since ${lastCommitSha} nor the whole PR was readable`,
+            throw new PullRequestChangesUnreadableError(
+                pullRequest?.number,
+                lastCommitSha,
             );
         }
 
@@ -426,7 +430,9 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         repository: { name: string; id: any; project?: { id: any } },
         pullRequest: any,
         previousHeadSha: string,
-    ): Promise<RebaseInterdiffResult | null> {
+    ): Promise<
+        (RebaseInterdiffResult & { currentFiles: FileChange[] }) | null
+    > {
         const previous =
             await this.codeManagementService.getPullRequestFilesAtCommit({
                 organizationAndTeamData,
@@ -445,7 +451,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         // An empty current diff is a failed read, not a PR with nothing in it.
         if (!current.length) return null;
 
-        return rebaseInterdiff(current, previous);
+        return { ...rebaseInterdiff(current, previous), currentFiles: current };
     }
 
     /**

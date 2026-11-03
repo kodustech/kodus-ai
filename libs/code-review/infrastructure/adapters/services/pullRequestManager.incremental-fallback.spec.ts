@@ -131,7 +131,7 @@ describe('PullRequestHandlerService — unreadable incremental diff', () => {
             filename: 'src/pay.ts',
             patch: '@@ -1,3 +1,4 @@\n function pay(order) {\n+    log(order.id);\n     charge(order);\n }',
         };
-        const { service, logger } = makeService({
+        const { service, codeManagementService, logger } = makeService({
             sinceLastCommit: null,
             atCommit: [reviewed],
             prFiles: [guardRemoved],
@@ -140,6 +140,10 @@ describe('PullRequestHandlerService — unreadable incremental diff', () => {
         await expect(metadata(service, lastCommit)).resolves.toEqual([
             guardRemoved,
         ]);
+        // The interdiff already read the whole PR; it is not read twice.
+        expect(
+            codeManagementService.getFilesByPullRequestId,
+        ).toHaveBeenCalledTimes(1);
         expect(logger.warn).toHaveBeenCalledWith(
             expect.objectContaining({
                 metadata: expect.objectContaining({

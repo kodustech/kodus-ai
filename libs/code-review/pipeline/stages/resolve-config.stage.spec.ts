@@ -1,3 +1,4 @@
+import { PullRequestChangesUnreadableError } from '@libs/code-review/domain/errors/pull-request-changes-unreadable.error';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ModuleRef } from '@nestjs/core';
 
@@ -77,6 +78,19 @@ describe('ResolveConfigStage — input contract', () => {
         }).compile();
 
         stage = module.get(ResolveConfigStage);
+    });
+
+    it('rethrows when the PR changes cannot be read, instead of blaming the config', async () => {
+        prManager.getChangedFilesMetadata.mockRejectedValue(
+            new PullRequestChangesUnreadableError(42, 'sha-prev'),
+        );
+        const context = buildContext({
+            lastExecution: { lastAnalyzedCommit: 'sha-prev' },
+        } as any);
+
+        await expect(stage.execute(context)).rejects.toBeInstanceOf(
+            PullRequestChangesUnreadableError,
+        );
     });
 
     it('threads org + repo + PR into getChangedFilesMetadata with the last analyzed commit as base, and builds the config from those files', async () => {
