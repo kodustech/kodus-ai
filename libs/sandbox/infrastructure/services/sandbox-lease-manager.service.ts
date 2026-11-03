@@ -21,8 +21,10 @@ import { randomUUID } from 'crypto';
 
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
 import {
+    DEFAULT_SANDBOX_CIRCUIT_OPTIONS,
     isRepositorySpecificSandboxFailure,
     isTimeoutSandboxFailure,
+    SandboxCircuitTransition,
     SandboxCreateCircuitBreaker,
 } from './sandbox-create-circuit-breaker';
 import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
@@ -145,7 +147,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * Fails sandbox creation fast while the infrastructure is degraded —
      * see SandboxCreateCircuitBreaker. Per process, like leaseIdToPrKey.
      */
-    readonly createCircuit = new SandboxCreateCircuitBreaker();
+    readonly createCircuit = new SandboxCreateCircuitBreaker(
+        DEFAULT_SANDBOX_CIRCUIT_OPTIONS,
+        Date.now,
+        (transition) => this.logCircuitTransition(transition),
+    );
 
     constructor(
         @Inject(SANDBOX_PROVIDER_TOKEN)
@@ -788,6 +794,24 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         }
 
         throw lastErr;
+    }
+
+    /**
+     * One line per breaker state change. OPEN is a warn: from then on this
+     * worker reviews without a sandbox until a probe succeeds. Search the
+     * logs for "sandbox creation circuit" to see how often it trips.
+     */
+    private logCircuitTransition(transition: SandboxCircuitTransition): void {
+        const payload = {
+            message: `SandboxLeaseManager: sandbox creation circuit ${transition.from} -> ${transition.to}`,
+            context: SandboxLeaseManager.name,
+            metadata: { ...transition },
+        };
+        if (transition.to === 'OPEN') {
+            this.logger.warn(payload);
+        } else {
+            this.logger.log(payload);
+        }
     }
 
     private async handleJoinerPath(

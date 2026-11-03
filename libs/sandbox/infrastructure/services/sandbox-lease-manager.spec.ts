@@ -666,6 +666,7 @@ describe('SandboxLeaseManager', () => {
             sandboxProvider.createSandboxWithRepo.mockRejectedValue(
                 timeoutError(),
             );
+            const warn = jest.spyOn((manager as any).logger, 'warn');
 
             // 5 timeouts across 3 distinct repos open the breaker
             const repos = ['repo-a', 'repo-b', 'repo-c', 'repo-a', 'repo-b'];
@@ -683,6 +684,17 @@ describe('SandboxLeaseManager', () => {
                 5,
             );
             expect(manager.createCircuit.getState()).toBe('OPEN');
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'sandbox creation circuit CLOSED -> OPEN',
+                    ),
+                    metadata: expect.objectContaining({
+                        failures: 5,
+                        distinctRepos: 3,
+                    }),
+                }),
+            );
 
             const err = await manager
                 .acquire(

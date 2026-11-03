@@ -13,9 +13,15 @@ const OPTIONS = {
 
 function makeBreaker() {
     let now = 1_000_000;
-    const breaker = new SandboxCreateCircuitBreaker(OPTIONS, () => now);
+    const onTransition = jest.fn();
+    const breaker = new SandboxCreateCircuitBreaker(
+        OPTIONS,
+        () => now,
+        onTransition,
+    );
     return {
         breaker,
+        onTransition,
         advance: (ms: number) => {
             now += ms;
         },
@@ -93,6 +99,57 @@ describe('SandboxCreateCircuitBreaker', () => {
 
         expect(breaker.getState()).toBe('HALF_OPEN');
         expect(breaker.tryAcquire()).toBe(true);
+    });
+
+    it('reports each state change once, with what tripped it', () => {
+        const { breaker, onTransition, advance } = makeBreaker();
+        const states = () =>
+            onTransition.mock.calls.map(([t]) => `${t.from}->${t.to}`);
+
+        breaker.recordSuccess();
+        expect(onTransition).not.toHaveBeenCalled();
+
+        breaker.recordFailure('org:a');
+        breaker.recordFailure('org:b');
+        breaker.recordFailure('org:b');
+        expect(onTransition).toHaveBeenLastCalledWith({
+            from: 'CLOSED',
+            to: 'OPEN',
+            failures: 3,
+            distinctRepos: 2,
+            openMs: 30_000,
+        });
+
+        advance(30_000);
+        breaker.tryAcquire();
+        breaker.getState();
+        breaker.recordFailure('org:c');
+        advance(30_000);
+        breaker.tryAcquire();
+        breaker.recordSuccess();
+
+        expect(states()).toEqual([
+            'CLOSED->OPEN',
+            'OPEN->HALF_OPEN',
+            'HALF_OPEN->OPEN',
+            'OPEN->HALF_OPEN',
+            'HALF_OPEN->CLOSED',
+        ]);
+    });
+
+    it('keeps working when the transition callback throws', () => {
+        const breaker = new SandboxCreateCircuitBreaker(
+            OPTIONS,
+            () => 0,
+            () => {
+                throw new Error('log sink down');
+            },
+        );
+
+        breaker.recordFailure('org:a');
+        breaker.recordFailure('org:b');
+        expect(() => breaker.recordFailure('org:b')).not.toThrow();
+        expect(breaker.getState()).toBe('OPEN');
     });
 });
 

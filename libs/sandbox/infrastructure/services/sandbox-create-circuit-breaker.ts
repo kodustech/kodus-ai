@@ -37,6 +37,17 @@ export const DEFAULT_SANDBOX_CIRCUIT_OPTIONS: SandboxCircuitBreakerOptions = {
     openMs: 2 * 60_000,
 };
 
+export interface SandboxCircuitTransition {
+    from: SandboxCircuitState;
+    to: SandboxCircuitState;
+    /** Failures in the window when the breaker opened from CLOSED. */
+    failures: number;
+    /** Distinct repositories behind those failures. */
+    distinctRepos: number;
+    /** How long the breaker stays OPEN (only meaningful when `to` is OPEN). */
+    openMs: number;
+}
+
 interface FailureRecord {
     at: number;
     repoKey: string;
@@ -51,6 +62,10 @@ export class SandboxCreateCircuitBreaker {
     constructor(
         private readonly options: SandboxCircuitBreakerOptions = DEFAULT_SANDBOX_CIRCUIT_OPTIONS,
         private readonly now: () => number = Date.now,
+        /** Called on every state change, so the owner can log it. */
+        private readonly onTransition?: (
+            transition: SandboxCircuitTransition,
+        ) => void,
     ) {}
 
     getState(): SandboxCircuitState {
@@ -80,8 +95,8 @@ export class SandboxCreateCircuitBreaker {
 
     recordSuccess(): void {
         this.probeInFlight = false;
-        this.state = 'CLOSED';
         this.failures = [];
+        this.transition('CLOSED', 0, 0);
     }
 
     /**
@@ -94,7 +109,7 @@ export class SandboxCreateCircuitBreaker {
 
         if (this.state === 'HALF_OPEN') {
             this.probeInFlight = false;
-            this.open(now);
+            this.open(now, 1, 1);
             return;
         }
 
@@ -106,7 +121,7 @@ export class SandboxCreateCircuitBreaker {
             this.failures.length >= this.options.failureThreshold &&
             distinctRepos >= this.options.minDistinctRepos
         ) {
-            this.open(now);
+            this.open(now, this.failures.length, distinctRepos);
         }
     }
 
@@ -119,10 +134,10 @@ export class SandboxCreateCircuitBreaker {
         this.probeInFlight = false;
     }
 
-    private open(now: number): void {
-        this.state = 'OPEN';
+    private open(now: number, failures: number, distinctRepos: number): void {
         this.openedAt = now;
         this.failures = [];
+        this.transition('OPEN', failures, distinctRepos);
     }
 
     private refreshState(): void {
@@ -130,8 +145,29 @@ export class SandboxCreateCircuitBreaker {
             this.state === 'OPEN' &&
             this.now() - this.openedAt >= this.options.openMs
         ) {
-            this.state = 'HALF_OPEN';
             this.probeInFlight = false;
+            this.transition('HALF_OPEN', 0, 0);
+        }
+    }
+
+    private transition(
+        to: SandboxCircuitState,
+        failures: number,
+        distinctRepos: number,
+    ): void {
+        const from = this.state;
+        this.state = to;
+        if (from === to) return;
+        try {
+            this.onTransition?.({
+                from,
+                to,
+                failures,
+                distinctRepos,
+                openMs: this.options.openMs,
+            });
+        } catch {
+            // A failing log sink must not break sandbox creation
         }
     }
 
