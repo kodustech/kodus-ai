@@ -1,4 +1,5 @@
 import {
+    BadRequestException,
     CanActivate,
     ExecutionContext,
     Inject,
@@ -76,13 +77,25 @@ export class KodyRulesTenantGuard implements CanActivate {
     }
 }
 
-/** Every non-empty value of `key` in the body and the query, once each. */
+/**
+ * Every value of `key` in the body and the query, once each, as a string.
+ * A handler receives the raw value and the sync routes match a number against
+ * a repository's id, so a number is checked as the id it names; anything else
+ * (an object, a boolean) is refused instead of being left out of the check.
+ */
 function namedIds(
-    request: { body?: Record<string, unknown>; query?: Record<string, unknown> },
+    request: {
+        body?: Record<string, unknown>;
+        query?: Record<string, unknown>;
+    },
     key: string,
 ): string[] {
-    const values = [request.body?.[key], request.query?.[key]]
-        .flat()
-        .filter((value): value is string => typeof value === 'string' && !!value);
-    return [...new Set(values)];
+    const ids = new Set<string>();
+    for (const value of [request.body?.[key], request.query?.[key]].flat()) {
+        if (value === undefined || value === null || value === '') continue;
+        if (typeof value === 'string') ids.add(value);
+        else if (Number.isFinite(value)) ids.add(String(value));
+        else throw new BadRequestException(`${key} must be a string`);
+    }
+    return [...ids];
 }

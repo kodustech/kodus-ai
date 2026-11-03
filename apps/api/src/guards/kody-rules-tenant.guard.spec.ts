@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    ForbiddenException,
+    NotFoundException,
+} from '@nestjs/common';
 
 import { Action } from '@libs/identity/domain/permissions/enums/permissions.enum';
 
@@ -14,15 +18,18 @@ describe('KodyRulesTenantGuard', () => {
     const user = { uuid: 'u1', organization: { uuid: 'org-1' } };
 
     const setup = () => {
-        const ensure = jest.fn(async ({ repoIds }: { repoIds: string[] }) => {
-            if (repoIds.some((id) => id !== ALLOWED)) {
-                throw new ForbiddenException('outside repository scope');
-            }
-        });
+        const ensure = jest.fn(
+            async ({ repoIds }: { repoIds: string[]; action?: Action }) => {
+                if (repoIds.some((id) => id !== ALLOWED)) {
+                    throw new ForbiddenException('outside repository scope');
+                }
+            },
+        );
         const guard = new KodyRulesTenantGuard(
             {
-                findOneOrganizationIdByTeamId: jest.fn(async (teamId: string) =>
-                    teamId === 'team-1' ? 'org-1' : 'org-2',
+                findOneOrganizationIdByTeamId: jest.fn(
+                    async (teamId: string) =>
+                        teamId === 'team-1' ? 'org-1' : 'org-2',
                 ),
             } as any,
             { ensure } as any,
@@ -66,7 +73,7 @@ describe('KodyRulesTenantGuard', () => {
         expect(ensure.mock.calls[1][0].action).toBe(Action.Create);
     });
 
-    it("hides a team of another organization as not found", async () => {
+    it('hides a team of another organization as not found', async () => {
         const { run, ensure } = setup();
 
         await expect(
@@ -94,6 +101,82 @@ describe('KodyRulesTenantGuard', () => {
         }
     });
 
+    it('refuses a request without an authenticated organization', async () => {
+        const { ensure } = setup();
+        const guard = new KodyRulesTenantGuard(
+            {
+                findOneOrganizationIdByTeamId: jest.fn(async () => 'org-1'),
+            } as any,
+            { ensure } as any,
+        );
+        for (const requestUser of [undefined, {}, { organization: {} }]) {
+            await expect(
+                guard.canActivate({
+                    switchToHttp: () => ({
+                        getRequest: () => ({
+                            user: requestUser,
+                            method: 'GET',
+                            query: { teamId: 'team-1' },
+                        }),
+                    }),
+                } as any),
+            ).rejects.toThrow(new NotFoundException('Team not found'));
+        }
+    });
+
+    // The sync routes match a numeric id against the repository's id: a
+    // number names a repository just as its string does.
+    it('checks a repository named by a number', async () => {
+        const { run, ensure } = setup();
+
+        await expect(
+            run({
+                method: 'POST',
+                body: { teamId: 'team-1', repositoryId: 12345 },
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        expect(ensure.mock.calls[0][0].repoIds).toEqual(['12345']);
+    });
+
+    // A JSON body can carry anything: a value that is not an id is refused,
+    // never dropped from the check while the handler still receives it.
+    it('refuses a team or repository that is neither a string nor a number', async () => {
+        const { run, ensure } = setup();
+
+        for (const repositoryId of [{ $ne: null }, true, [{ x: 1 }]]) {
+            await expect(
+                run({
+                    method: 'POST',
+                    body: { teamId: 'team-1', repositoryId },
+                }),
+            ).rejects.toThrow(
+                new BadRequestException('repositoryId must be a string'),
+            );
+        }
+        await expect(
+            run({ method: 'POST', body: { teamId: { $ne: null } } }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(ensure).not.toHaveBeenCalled();
+    });
+
+    it('does not check the repository scope of a request that names no repository', async () => {
+        const { run, ensure } = setup();
+
+        await expect(
+            run({ method: 'GET', query: { teamId: 'team-1' } }),
+        ).resolves.toBe(true);
+        // A form sends an unset field as null or ''.
+        for (const repositoryId of [null, '', undefined]) {
+            await expect(
+                run({
+                    method: 'POST',
+                    body: { teamId: 'team-1', repositoryId },
+                }),
+            ).resolves.toBe(true);
+        }
+        expect(ensure).not.toHaveBeenCalled();
+    });
+
     it('checks every team the request names', async () => {
         const { run } = setup();
 
@@ -103,6 +186,6 @@ describe('KodyRulesTenantGuard', () => {
                 body: { teamId: 'team-1' },
                 query: { teamId: 'team-of-org-2' },
             }),
-        ).rejects.toBeInstanceOf(NotFoundException);
+        ).rejects.toThrow(new NotFoundException('Team not found'));
     });
 });

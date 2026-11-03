@@ -108,6 +108,31 @@ describe('repository scope — kody rules', () => {
         await controller.generateKodyRules({ teamId: 'team-1' });
 
         expect(execute.mock.calls[0][0].repositoriesIds).toEqual([ALLOWED]);
+        expect(
+            controller.authorizationService.getRepositoryScope,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: Action.Create,
+                resource: ResourceType.KodyRules,
+                user: expect.objectContaining({ uuid: expect.anything() }),
+            }),
+        );
+    });
+
+    // No scope (null) is a member who reaches every repository: the use case
+    // gets the request as sent and generates for all of them.
+    it('POST /kody-rules/generate-kody-rules without a list keeps every repository for an unscoped member', async () => {
+        const execute = jest.fn();
+        const controller = make(KodyRulesController, {
+            generateKodyRulesUseCase: { execute },
+        });
+        controller.authorizationService.getRepositoryScope.mockResolvedValue(
+            null,
+        );
+
+        await controller.generateKodyRules({ teamId: 'team-1' });
+
+        expect(execute.mock.calls[0][0]).toEqual({ teamId: 'team-1' });
     });
 
     // An empty list means "every repository" to the use case, so a member
@@ -125,9 +150,11 @@ describe('repository scope — kody rules', () => {
             { teamId: 'team-1' },
             { teamId: 'team-1', repositoriesIds: [] },
         ]) {
-            await expect(
-                controller.generateKodyRules(body),
-            ).rejects.toBeInstanceOf(ForbiddenException);
+            await expect(controller.generateKodyRules(body)).rejects.toThrow(
+                new ForbiddenException(
+                    'No repository in your scope to generate rules for',
+                ),
+            );
         }
         expect(execute).not.toHaveBeenCalled();
     });
