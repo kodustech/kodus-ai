@@ -1693,12 +1693,31 @@ export class AzureReposService implements Omit<
                 targetCommitId,
             });
 
-            const fileChanges = diffResponse?.filter(
+            // A partial list can leave out every PR file, which reads as
+            // "nothing new" (#2268); the caller has to know it is unreadable.
+            if (!diffResponse.allChangesIncluded) {
+                this.logger.warn({
+                    message: `Diff of PR#${prNumber} since ${lastCommit.sha} was not read in full`,
+                    context: AzureReposService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        repositoryId: repository?.id,
+                        prNumber,
+                        baseCommit: lastCommit.sha,
+                        targetCommitId,
+                        entriesRead: diffResponse.changes.length,
+                        reason: 'diff_incomplete',
+                    },
+                });
+                return null;
+            }
+
+            const fileChanges = diffResponse.changes.filter(
                 (change) => change?.item?.gitObjectType === 'blob',
             );
 
-            if (!fileChanges?.length) {
-                return null;
+            if (!fileChanges.length) {
+                return [];
             }
 
             // Get the PR file list to filter out files that came from merge commits
@@ -1714,6 +1733,21 @@ export class AzureReposService implements Omit<
             );
 
             const lastIteration = iterations?.[iterations.length - 1];
+            // Without the PR's own files every merged-in blob would be diffed,
+            // one request each.
+            if (!lastIteration) {
+                this.logger.warn({
+                    message: `No iteration to filter the diff of PR#${prNumber} since ${lastCommit.sha}`,
+                    context: AzureReposService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        repositoryId: repository?.id,
+                        prNumber,
+                        reason: 'pr_files_unavailable',
+                    },
+                });
+                return null;
+            }
             let prFileNames: Set<string> | null = null;
 
             if (lastIteration) {
@@ -1774,6 +1808,7 @@ export class AzureReposService implements Omit<
 
             return changedFiles;
         } catch (error) {
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message: `Failed to get changed files since last commit for PR #${params.prNumber}`,
                 context: AzureReposService.name,
@@ -2805,8 +2840,11 @@ export class AzureReposService implements Omit<
                 message: 'Error to create auth integration',
                 context: this.createAuthIntegration.name,
                 error: err,
+                // Named fields only: params carries the PAT.
                 metadata: {
-                    params,
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    authMode: params?.authMode,
+                    host: params?.host ?? params?.orgUrl,
                 },
             });
             throw new BadRequestException(err);
@@ -2862,8 +2900,10 @@ export class AzureReposService implements Omit<
                 message: 'Error to authenticate with token',
                 context: this.authenticateWithToken.name,
                 error: err,
+                // Named fields only: params carries the PAT.
                 metadata: {
-                    params,
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    orgUrl: params?.orgUrl,
                 },
             });
             throw new BadRequestException(

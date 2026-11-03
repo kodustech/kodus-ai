@@ -10,6 +10,8 @@ import {
     AzureRepoChange,
     AzureRepoCommentType,
     AzureRepoCommit,
+    AzureRepoCommitDiff,
+    AzureRepoDiffChange,
     AzureRepoFileContent,
     AzureRepoFileItem,
     AzureRepoIteration,
@@ -47,6 +49,10 @@ export function getAzureDevOpsBaseURL(
         ? `https://vssps.dev.azure.com/${orgName}`
         : `https://dev.azure.com/${orgName}`;
 }
+
+/** `diffs/commits` returns 100 entries when `$top` is left out (#2268). */
+const DIFF_PAGE_SIZE = 1000;
+const DIFF_MAX_PAGES = 50;
 
 @Injectable()
 export class AzureReposRequestHelper {
@@ -670,7 +676,7 @@ export class AzureReposRequestHelper {
         baseCommit: string;
         targetCommitId: string;
         filePath?: string;
-    }): Promise<any[]> {
+    }): Promise<AzureRepoCommitDiff> {
         const instance = await this.azureRequest(params);
 
         const queryParams = [
@@ -688,8 +694,22 @@ export class AzureReposRequestHelper {
         const url = `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/diffs/commits?${queryParams.join('&')}`;
 
         try {
-            const { data } = await instance.get(url);
-            return data?.changes || [];
+            const changes: AzureRepoDiffChange[] = [];
+            // Azure leaves `allChangesIncluded` out of every page but the last.
+            for (let page = 0; page < DIFF_MAX_PAGES; page++) {
+                const { data } = await instance.get(
+                    `${url}&$top=${DIFF_PAGE_SIZE}&$skip=${changes.length}`,
+                );
+                if (!Array.isArray(data?.changes)) break;
+                const pageChanges: AzureRepoDiffChange[] = data.changes;
+                changes.push(...pageChanges);
+
+                if (data?.allChangesIncluded === true) {
+                    return { changes, allChangesIncluded: true };
+                }
+                if (!pageChanges.length) break;
+            }
+            return { changes, allChangesIncluded: false };
         } catch (error) {
             if (
                 error.response?.data?.message?.includes('TF401175') ||

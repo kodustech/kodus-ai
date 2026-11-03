@@ -33,6 +33,7 @@ import {
     isContainedRelativePath,
     SubmoduleGitHost,
 } from '@libs/sandbox/infrastructure/providers/submodule-fetch';
+import { sedLineRange } from '@libs/sandbox/infrastructure/providers/read-within-root';
 
 const execFileAsync = promisify(execFile);
 
@@ -493,8 +494,25 @@ export class LocalSandboxService implements ISandboxProvider {
                 path: string,
                 start: number,
                 end: number,
+                root?: string,
             ): Promise<string> => {
-                const safePath = await this.resolveSafePath(repoDir, path);
+                // A linked repository is cloned under the checkout
+                // (`<repoDir>/_linked/<slug>`); any other root is refused.
+                if (
+                    root !== undefined &&
+                    !this.isPathInside(
+                        await realpath(repoDir),
+                        await realpath(root),
+                    )
+                ) {
+                    throw new Error(
+                        `Not a repository root of this sandbox: ${root}`,
+                    );
+                }
+                const safePath = await this.resolveSafePath(
+                    root ?? repoDir,
+                    path,
+                );
                 // When start=0 and end=0, read the entire file (cat).
                 // GNU sed rejects address 0 so we must avoid `sed -n '0,0p'`.
                 if (start === 0 && end === 0) {
@@ -506,7 +524,7 @@ export class LocalSandboxService implements ISandboxProvider {
                 }
                 const { stdout } = await execFileAsync(
                     'sed',
-                    ['-n', `${start < 1 ? 1 : start},${end}p`, safePath],
+                    ['-n', sedLineRange(start, end), safePath],
                     { timeout: CMD_TIMEOUT_MS, maxBuffer: MAX_BUFFER },
                 );
                 return stdout;

@@ -39,6 +39,16 @@ onboarding, so rules generated for tier B can be shaped by traffic
 from tier A. Acceptable for the QA matrix where the
 license-attribution and per-seat gates are the real signal.
 
+## GitHub App tenants
+
+Linking a GitHub App installation needs GitHub's authorization of a user
+who can see the installation (GHSA-9r6j), done in a browser, so neither
+this seeder nor a matrix run can link one. Log in to the tenant on
+`qa.web.kodus.io`, connect GitHub with **Install GitHub app** and pick
+the test installation. Runs reuse that link
+(`registerIntegration` in `tests/e2e/lib/onboarding.ts`) for as long as
+it stays active; link it again after a QA reset or if a run deletes it.
+
 ## Flow per tenant
 
 1. **Signup** via `POST /auth/signUp` (idempotent — 409 on duplicate

@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -136,30 +135,7 @@ describe('agent tools — secret files of the repository', () => {
         fs.writeFileSync(path.join(root, '.env'), `API_TOKEN=${VALUE}\n`);
         fs.writeFileSync(path.join(root, 'ok.txt'), 'plain\n');
         fs.symlinkSync('.env', path.join(root, 'notes.txt'));
-        // Linked repositories are cloned in a remote sandbox, whose exec is
-        // a shell: here, a real one.
-        const shell = {
-            grep: async () => '',
-            read: async () => '',
-            listDir: async () => '',
-            exec: async (cmd: string) => {
-                try {
-                    return {
-                        stdout: execFileSync('sh', ['-c', cmd], {
-                            encoding: 'utf8',
-                        }),
-                        stderr: '',
-                        exitCode: 0,
-                    };
-                } catch (err: any) {
-                    return {
-                        stdout: String(err.stdout ?? ''),
-                        stderr: String(err.stderr ?? ''),
-                        exitCode: err.status ?? 1,
-                    };
-                }
-            },
-        };
+        // The linked clone sits under the checkout, as in the local layout.
         const linkedRepoAccess: any = {
             list: () => [
                 {
@@ -175,7 +151,7 @@ describe('agent tools — secret files of the repository', () => {
             }),
         };
         const tools = buildAgentTools(
-            shell,
+            rc,
             undefined,
             undefined,
             undefined,
@@ -194,7 +170,7 @@ describe('agent tools — secret files of the repository', () => {
         });
 
         expect(viaLink).not.toContain(VALUE);
-        expect(viaLink).toContain('symlink');
+        expect(viaLink).toMatch(/symlink/i);
         expect(plain).toContain('plain');
     });
 

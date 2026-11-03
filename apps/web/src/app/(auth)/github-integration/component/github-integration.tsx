@@ -16,16 +16,17 @@ import { ORGANIZATIONS_PATHS } from "@services/organizations";
 import { createCodeManagementIntegration } from "@services/codeManagement/fetch";
 import { useGetGithubIntegrationByInstallId } from "@services/setup/hooks";
 import { InstallationStatus } from "@services/setup/types";
-import { AxiosError } from "axios";
 import { getCookie, deleteCookie } from "cookies-next/client";
 import { CopyIcon } from "lucide-react";
+import { startGithubInstallationAuthorization } from "@services/setup/github-installation-authorization";
 import {
     GITHUB_CODE_PARAM,
+    GITHUB_ERROR_PARAM,
     GITHUB_STATE_PARAM,
-    githubAuthorizationReturnPath,
-    startGithubInstallationAuthorization,
+    githubAuthorizationErrorMessage,
 } from "src/core/integrations/github-installation-authorization";
 import { PlatformType } from "src/core/types";
+import { apiErrorMessage } from "src/core/utils/api-error";
 import { axiosAuthorized } from "src/core/utils/axios";
 
 type Step = "checking" | "creating" | "success" | "needs-login" | "failed";
@@ -34,12 +35,11 @@ export default function GithubIntegrationClient() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const installationId = searchParams.get("installation_id");
-    // GitHub's user authorization sends `code` and `state` back here; the
-    // page that started it gets them as github_code and github_state.
-    const returnedCode = searchParams.get("code");
-    const returnedState = searchParams.get("state");
+    // Back from GitHub's user authorization (see
+    // github-installation-authorization).
     const githubCode = searchParams.get(GITHUB_CODE_PARAM);
     const githubState = searchParams.get(GITHUB_STATE_PARAM);
+    const githubError = searchParams.get(GITHUB_ERROR_PARAM);
 
     const { data, isLoading, error } = useGetGithubIntegrationByInstallId(
         installationId ?? "",
@@ -49,11 +49,6 @@ export default function GithubIntegrationClient() {
     const [organizationName, setOrganizationName] = useState<string | undefined>();
     const [failureMessage, setFailureMessage] = useState<string | undefined>();
     const creatingRef = useRef(false);
-    // githubAuthorizationReturnPath consumes the saved return path, and the
-    // effect below runs again whenever the lookup settles before the
-    // navigation lands: send the user back once, or the second run loses
-    // the return path and the installation id.
-    const returningRef = useRef(false);
 
     function loginToDoIntegration() {
         router.push(`/setup/github?installation_id=${installationId}`);
@@ -71,13 +66,9 @@ export default function GithubIntegrationClient() {
     }
 
     useEffect(() => {
-        if (returnedCode && returnedState && !githubCode) {
-            if (!returningRef.current) {
-                returningRef.current = true;
-                router.replace(
-                    githubAuthorizationReturnPath(returnedCode, returnedState),
-                );
-            }
+        if (githubError) {
+            setFailureMessage(githubAuthorizationErrorMessage(githubError));
+            setStep("failed");
             return;
         }
 
@@ -109,15 +100,9 @@ export default function GithubIntegrationClient() {
             }
         })();
 
+        // An install started from the onboarding never lands here: proxy.ts
+        // leaves it on the setup page.
         if (!team?.uuid) {
-            // The onboarding starts the install without a selected team: the
-            // setup page links it to the team being set up.
-            if (getCookie("started-setup-from-new-setup-page")) {
-                router.replace(
-                    `/setup/github?installation_id=${encodeURIComponent(installationId)}`,
-                );
-                return;
-            }
             setStep("needs-login");
             return;
         }
@@ -131,6 +116,7 @@ export default function GithubIntegrationClient() {
                 `/github-integration?installation_id=${encodeURIComponent(installationId)}`,
             ).catch((err) => {
                 console.error("[GithubIntegration] authorization failed", err);
+                setFailureMessage(apiErrorMessage(err));
                 setStep("failed");
                 creatingRef.current = false;
             });
@@ -199,12 +185,7 @@ export default function GithubIntegrationClient() {
                 setStep("failed");
             } catch (err) {
                 console.error("[GithubIntegration] failed to create", err);
-                if (err instanceof AxiosError) {
-                    const backendMessage = (err.response?.data as {
-                        message?: string;
-                    })?.message;
-                    setFailureMessage(backendMessage);
-                }
+                setFailureMessage(apiErrorMessage(err));
                 setStep("failed");
             } finally {
                 creatingRef.current = false;
@@ -216,13 +197,12 @@ export default function GithubIntegrationClient() {
         installationId,
         isLoading,
         router,
-        returnedCode,
-        returnedState,
         githubCode,
         githubState,
+        githubError,
     ]);
 
-    if (step === "checking" || step === "creating" || isLoading) {
+    if (step === "checking" || step === "creating" || (isLoading && !githubError)) {
         return (
             <div className="flex h-full w-full items-center justify-center">
                 <Spinner />

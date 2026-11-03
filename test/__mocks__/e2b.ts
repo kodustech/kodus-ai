@@ -18,3 +18,18 @@ export const Sandbox = {
     setTimeout: jest.fn().mockResolvedValue(undefined),
     list: jest.fn(),
 };
+
+/** Same hierarchy and name as the SDK's, so `instanceof` checks hold. */
+export class SandboxError extends Error {
+    constructor(message?: string) {
+        super(message);
+        this.name = 'SandboxError';
+    }
+}
+
+export class RateLimitError extends SandboxError {
+    constructor(message?: string) {
+        super(message);
+        this.name = 'RateLimitError';
+    }
+}
