@@ -111,6 +111,9 @@ import {
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 import { listingFailed } from '../repository-listing';
 
+/** Bound on the pages `readAllPages` follows before calling a read incomplete. */
+const MAX_PAGES = 200;
+
 @Injectable()
 export class BitbucketCloudService implements Omit<
     ICodeManagementService,
@@ -2151,18 +2154,31 @@ export class BitbucketCloudService implements Omit<
                 .then((res) => res.data);
 
             // 📄 Lista todos os arquivos tocados no PR até agora
-            const allFilesInPR = await bitbucketAPI.pullrequests
+            const diffstat = await bitbucketAPI.pullrequests
                 .getDiffStat({
                     pull_request_id: prNumber,
                     repo_slug: `{${repo.id}}`,
                     workspace: `{${repo.workspaceId}}`,
                 })
                 .then((res) =>
-                    this.getPaginatedResults<Schema.Diffstat>(
-                        bitbucketAPI,
-                        res,
-                    ),
+                    this.readAllPages<Schema.Diffstat>(bitbucketAPI, res),
                 );
+            // A list cut short would leave PR files out as if unchanged (#2268).
+            if (!diffstat.complete) {
+                this.logger.warn({
+                    message: `Diffstat of PR#${prNumber} was not read in full`,
+                    context: BitbucketCloudService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        repositoryId: repository?.id,
+                        prNumber,
+                        filesRead: diffstat.values.length,
+                        reason: 'diff_incomplete',
+                    },
+                });
+                return null;
+            }
+            const allFilesInPR = diffstat.values;
 
             // ⚙️ Processa apenas arquivos que realmente mudaram desde o último commit
             const changedFiles = await Promise.all(
@@ -2212,6 +2228,7 @@ export class BitbucketCloudService implements Omit<
 
             return changedFiles.filter(Boolean);
         } catch (error) {
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message:
                     'Error to get incremental changed files since last commit',
@@ -4882,6 +4899,25 @@ export class BitbucketCloudService implements Omit<
         }
 
         return limit !== undefined ? allResults.slice(0, limit) : allResults;
+    }
+
+    /** Like `getPaginatedResults`, but a page without its `values` list
+     *  makes the read incomplete instead of ending it as if it were whole. */
+    private async readAllPages<T>(
+        bitbucketAPI: APIClient,
+        response: BitbucketResponse<{ values?: T[] }>,
+    ): Promise<{ values: T[]; complete: boolean }> {
+        let page = response.data;
+        const values: T[] = [];
+        for (let read = 1; read <= MAX_PAGES; read++) {
+            if (!Array.isArray(page?.values)) break;
+            values.push(...page.values);
+            if (!bitbucketAPI.hasNextPage(page))
+                return { values, complete: true };
+            if (read < MAX_PAGES)
+                page = (await bitbucketAPI.getNextPage(page)).data;
+        }
+        return { values, complete: false };
     }
 
     /** Bitbucket's API returns IDs with curly braces around them (e.g. "{123}").

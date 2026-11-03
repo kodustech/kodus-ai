@@ -2364,6 +2364,24 @@ export class GitlabService implements Omit<
             headSha,
         );
 
+        // GitLab leaves diffs out past its limits and says so here; a partial
+        // list can drop the MR's own files (#2268).
+        if (comparison.compare_timeout) {
+            this.logger.warn({
+                message: `Compare for MR!${prNumber} since ${baseSha} timed out`,
+                context: GitlabService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                    baseSha,
+                    headSha,
+                    reason: 'compare_timeout',
+                },
+            });
+            return null;
+        }
+
         const diffs = comparison.diffs || [];
 
         // 4. Get the MR diffs to filter out files that came from merge commits
