@@ -151,6 +151,56 @@ describe('PullRequestHandlerService — unreadable incremental diff', () => {
         );
     });
 
+    it('reads the whole PR when the PR was retargeted since the last review', async () => {
+        const { service, codeManagementService, logger } = makeService({
+            sinceLastCommit: null,
+            atCommit: [own],
+            prFiles: [ownNow],
+        });
+
+        // The earlier diff would be read against the new base branch.
+        const files = await service.getChangedFilesMetadata(
+            orgData,
+            repository,
+            pullRequest,
+            lastCommit,
+            'develop',
+        );
+
+        expect(files).toEqual([ownNow]);
+        expect(
+            codeManagementService.getPullRequestFilesAtCommit,
+        ).not.toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    fallback: 'full',
+                    retargeted: true,
+                }),
+            }),
+        );
+    });
+
+    it('keeps the interdiff when the last review saw the same base branch', async () => {
+        const { service, codeManagementService } = makeService({
+            sinceLastCommit: null,
+            atCommit: [own],
+            prFiles: [ownNow],
+        });
+
+        await service.getChangedFilesMetadata(
+            orgData,
+            repository,
+            pullRequest,
+            lastCommit,
+            'main',
+        );
+
+        expect(
+            codeManagementService.getPullRequestFilesAtCommit,
+        ).toHaveBeenCalledTimes(1);
+    });
+
     it('accepts the last reviewed commit as a bare sha', async () => {
         const { service, codeManagementService } = makeService({
             sinceLastCommit: null,

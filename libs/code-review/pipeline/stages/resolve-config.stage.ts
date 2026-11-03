@@ -72,6 +72,7 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                     context.repository,
                     context.pullRequest,
                     baseCommit,
+                    context.lastExecution?.reviewedBaseBranch,
                 ));
 
             if (!preliminaryFiles || preliminaryFiles.length === 0) {

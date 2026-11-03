@@ -21,6 +21,7 @@ export interface IPullRequestManagerService {
         pullRequest: any,
         ignorePaths: string[],
         lastCommit?: string,
+        reviewedBaseBranch?: string,
     ): Promise<FileChange[]>;
 
     /**
@@ -32,6 +33,8 @@ export interface IPullRequestManagerService {
         repository: { name: string; id: any; project?: { id: any } },
         pullRequest: any,
         lastCommit?: string,
+        /** Base branch of the last review; a retargeted PR is read whole. */
+        reviewedBaseBranch?: string,
     ): Promise<FileChange[]>;
 
     /**

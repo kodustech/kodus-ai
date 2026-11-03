@@ -65,6 +65,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         pullRequest: any,
         ignorePaths?: string[],
         lastCommit?: string,
+        reviewedBaseBranch?: string,
     ): Promise<FileChange[]> {
         try {
             let changedFiles: FileChange[];
@@ -75,6 +76,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                     repository,
                     pullRequest,
                     lastCommit,
+                    reviewedBaseBranch,
                 );
             } else {
                 // Retrieve all files changed in the pull request. Pass
@@ -294,6 +296,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         repository: { name: string; id: any },
         pullRequest: any,
         lastCommit?: string,
+        reviewedBaseBranch?: string,
     ): Promise<FileChange[]> {
         try {
             let changedFiles: FileChange[];
@@ -304,6 +307,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                     repository,
                     pullRequest,
                     lastCommit,
+                    reviewedBaseBranch,
                 );
             } else {
                 changedFiles =
@@ -345,6 +349,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         repository: { name: string; id: any; project?: { id: any } },
         pullRequest: any,
         lastCommit: string | Commit,
+        reviewedBaseBranch?: string,
     ): Promise<FileChange[]> {
         const lastCommitSha =
             typeof lastCommit === 'string' ? lastCommit : lastCommit?.sha;
@@ -361,14 +366,20 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
             });
         if (changedFiles) return changedFiles;
 
-        const interdiff = lastCommitSha
-            ? await this.getRebaseInterdiff(
-                  organizationAndTeamData,
-                  repository,
-                  pullRequest,
-                  lastCommitSha,
-              )
-            : null;
+        // The earlier diff would be read against the new base branch, as in
+        // ValidateNewCommitsStage.
+        const retargeted =
+            !!reviewedBaseBranch &&
+            reviewedBaseBranch !== pullRequest?.base?.ref;
+        const interdiff =
+            lastCommitSha && !retargeted
+                ? await this.getRebaseInterdiff(
+                      organizationAndTeamData,
+                      repository,
+                      pullRequest,
+                      lastCommitSha,
+                  )
+                : null;
         // #2319: an interdiff cannot show a removed reviewed change, so a
         // push with one is reviewed whole, as ValidateNewCommitsStage does.
         const useInterdiff = !!interdiff && !interdiff.revertedFiles.length;
@@ -400,6 +411,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                 lastCommitSha,
                 headSha: pullRequest?.head?.sha,
                 fallback: useInterdiff ? 'interdiff' : 'full',
+                retargeted,
                 revertedFiles: interdiff?.revertedFiles.length ?? 0,
                 files: files.length,
                 reason: 'incremental_diff_unavailable',

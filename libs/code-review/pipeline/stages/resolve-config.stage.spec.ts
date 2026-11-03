@@ -81,7 +81,10 @@ describe('ResolveConfigStage — input contract', () => {
 
     it('threads org + repo + PR into getChangedFilesMetadata with the last analyzed commit as base, and builds the config from those files', async () => {
         const context = buildContext({
-            lastExecution: { lastAnalyzedCommit: 'sha-prev' },
+            lastExecution: {
+                lastAnalyzedCommit: 'sha-prev',
+                reviewedBaseBranch: 'develop',
+            },
         } as any);
 
         const result = await stage.execute(context);
@@ -91,6 +94,7 @@ describe('ResolveConfigStage — input contract', () => {
             REPO,
             PR,
             'sha-prev',
+            'develop',
         );
         // The config the LLM review runs on is built from the resolved inputs.
         expect(codeBaseConfig.getConfig).toHaveBeenCalledWith(ORG, REPO, FILES);
@@ -110,6 +114,7 @@ describe('ResolveConfigStage — input contract', () => {
             ORG,
             REPO,
             PR,
+            undefined,
             undefined,
         );
     });
