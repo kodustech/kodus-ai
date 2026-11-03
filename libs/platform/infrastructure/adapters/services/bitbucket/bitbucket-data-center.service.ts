@@ -1375,7 +1375,6 @@ export class BitbucketDataCenterService implements Omit<
         }
     }
 
-    /** Data Center returns diffs as JSON hunks; rebuilds the unified patch. */
     /**
      * Patches for a PR's files keyed by path: the PR's whole diff in one
      * request, then a per-file read (at most PER_FILE_DIFF_CONCURRENCY at a
@@ -1471,6 +1470,7 @@ export class BitbucketDataCenterService implements Omit<
         return patches;
     }
 
+    /** Data Center returns diffs as JSON hunks; rebuilds the unified patch. */
     private toUnifiedPatch(diff: any): {
         patch: string;
         additions: number;

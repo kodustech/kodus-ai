@@ -134,6 +134,9 @@ describe('BitbucketCloudService — 429 backoff and wait budget', () => {
         expect(fetchMock).not.toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith(
             expect.objectContaining({
+                message: expect.stringMatching(
+                    /^Bitbucket rate gate: gave up after \d+ms waiting for a parked credential$/,
+                ),
                 metadata: expect.objectContaining({ gateKey }),
             }),
         );
@@ -188,6 +191,28 @@ describe('BitbucketCloudService — 429 backoff and wait budget', () => {
         await jest.advanceTimersByTimeAsync(2_900);
         expect(fetchMock).toHaveBeenCalledTimes(1);
         await jest.advanceTimersByTimeAsync(200);
+
+        await expect(result).resolves.toMatchObject({ status: 200 });
+    });
+
+    it('falls back to the backoff for a Retry-After date that is now', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-11-03T12:00:00Z'));
+        const fetchMock = jest
+            .fn()
+            .mockResolvedValueOnce(
+                respond(429, {
+                    'retry-after': 'Tue, 03 Nov 2026 12:00:00 GMT',
+                }),
+            )
+            .mockResolvedValueOnce(respond(200));
+        global.fetch = fetchMock as any;
+        const { service } = makeService();
+
+        const result = safeFetch(service);
+        await jest.advanceTimersByTimeAsync(9_000);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await jest.advanceTimersByTimeAsync(1_100);
 
         await expect(result).resolves.toMatchObject({ status: 200 });
     });

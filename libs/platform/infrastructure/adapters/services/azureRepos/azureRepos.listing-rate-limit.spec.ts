@@ -13,7 +13,10 @@ describe('AzureReposService listings under a rate limit', () => {
             response: { status: 429 },
         });
 
-    const makeService = (failOn: string) => {
+    const makeService = (
+        failOn: string,
+        failure: () => Error = rateLimited,
+    ) => {
         const helper = {
             getPullRequestDetails: jest.fn().mockResolvedValue({
                 lastMergeTargetCommit: { commitId: 'base' },
@@ -50,7 +53,7 @@ describe('AzureReposService listings under a rate limit', () => {
         const generate = jest
             .spyOn(service as any, '_generateFileDiffForAzure')
             .mockImplementation(async (p: any) => {
-                if (p.filePath === failOn) throw rateLimited();
+                if (p.filePath === failOn) throw failure();
                 return {
                     filename: p.filePath,
                     sha: p.targetCommitId,
@@ -98,5 +101,30 @@ describe('AzureReposService listings under a rate limit', () => {
         expect(generate).toHaveBeenCalledWith(
             expect.objectContaining({ rethrowRateLimit: true }),
         );
+    });
+
+    it('getFilesByPullRequestId drops a file that fails otherwise, and keeps the rest', async () => {
+        const { service } = makeService('/b.ts', () => new Error('boom'));
+
+        const files = await service.getFilesByPullRequestId({
+            organizationAndTeamData: org,
+            repository,
+            prNumber: 7,
+        } as any);
+
+        expect(files?.map((f: any) => f.filename)).toEqual(['/a.ts']);
+    });
+
+    it('getChangedFilesSinceLastCommit answers null for a failure that is not a rate limit', async () => {
+        const { service } = makeService('/a.ts', () => new Error('boom'));
+
+        await expect(
+            service.getChangedFilesSinceLastCommit({
+                organizationAndTeamData: org,
+                repository,
+                prNumber: 7,
+                lastCommit: { sha: 'last' },
+            } as any),
+        ).resolves.toBeNull();
     });
 });

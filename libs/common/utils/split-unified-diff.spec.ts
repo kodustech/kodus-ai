@@ -309,3 +309,105 @@ describe('splitUnifiedDiff — quoted paths', () => {
         ).toBe('say"');
     });
 });
+
+describe('splitUnifiedDiff — edge shapes of the name lines', () => {
+    const names = (...lines: string[]) =>
+        splitUnifiedDiff(lines.join('\n')).map((f) => f.filename);
+
+    it('reads --- only when +++ says the file is gone', () => {
+        expect(
+            names(
+                'diff --git a/header.ts b/header.ts',
+                '--- a/minus.ts',
+                '@@ -1 +1 @@',
+                '+y',
+            ),
+        ).toEqual(['header.ts']);
+    });
+
+    it('falls back to the git header when +++ is /dev/null and --- is missing or /dev/null too', () => {
+        expect(
+            names(
+                'diff --git a/h1.ts b/h1.ts',
+                '+++ /dev/null',
+                '@@ -1 +0,0 @@',
+            ),
+        ).toEqual(['h1.ts']);
+        expect(
+            names(
+                'diff --git a/h2.ts b/h2.ts',
+                '--- /dev/null',
+                '+++ /dev/null',
+                '@@ -1 +0,0 @@',
+            ),
+        ).toEqual(['h2.ts']);
+    });
+
+    it('drops only the trailing tab of a name, not one inside it', () => {
+        expect(
+            names(
+                'diff --git a/k.ts b/k.ts',
+                '+++ b/a\tb.ts\t',
+                '@@ -1 +1 @@',
+                '+y',
+            ),
+        ).toEqual(['a\tb.ts']);
+    });
+
+    it('drops a section whose git header names nothing', () => {
+        expect(
+            names(
+                'diff --git ',
+                'Binary files differ',
+                'diff --git a/kept.ts b/kept.ts',
+                'old mode 100644',
+                'new mode 100755',
+            ),
+        ).toEqual(['kept.ts']);
+    });
+
+    it('reads a quoted new path after an unquoted old one', () => {
+        expect(
+            names(
+                'diff --git a/plain.png "b/caf\\303\\251.png"',
+                'Binary files a/plain.png and "b/caf\\303\\251.png" differ',
+            ),
+        ).toEqual(['café.png']);
+    });
+
+    it('reads a quoted git header whose paths hold spaces', () => {
+        expect(
+            names(
+                'diff --git "a/my caf\\303\\251.png" "b/my caf\\303\\251.png"',
+                'Binary files differ',
+            ),
+        ).toEqual(['my café.png']);
+    });
+
+    it("splits in the middle only with git's a/ and b/ prefixes and two equal halves", () => {
+        // No a/ prefix: the last " b/" decides
+        expect(names('diff --git c/x b/y b/x b/y', 'old mode 100644')).toEqual([
+            'y',
+        ]);
+        // Equal halves around something other than " b/": nothing to name
+        expect(names('diff --git a/xx c/xx', 'old mode 100644')).toEqual([]);
+        // " b/" in the middle, but the halves differ
+        expect(names('diff --git a/x b/y b/z b/w', 'old mode 100644')).toEqual([
+            'w',
+        ]);
+    });
+
+    it('treats "" as an empty quoted name, and a name that only opens a quote as plain', () => {
+        expect(
+            names('diff --git a/k.ts b/k.ts', '+++ ""', '@@ -1 +1 @@', '+y'),
+        ).toEqual(['k.ts']);
+        expect(
+            names(
+                'diff --git a/k.ts b/k.ts',
+                '+++ "weird',
+                '@@ -1 +1 @@',
+                '+y',
+            ),
+        ).toEqual(['"weird']);
+    });
+});

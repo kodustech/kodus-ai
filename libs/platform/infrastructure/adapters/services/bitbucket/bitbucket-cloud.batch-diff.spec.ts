@@ -308,6 +308,8 @@ describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => 
             '@@ -1 +1 @@\n-old a\n+new a',
             '@@ -0,0 +1 @@\n+new b',
         ]);
+        // Every section was keyed: filling a gap is not worth a warning
+        expect(logger(service).warn).not.toHaveBeenCalled();
     });
 
     it('keys a removed file by its old path in the full listing', async () => {
@@ -374,6 +376,8 @@ describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => 
 
         expect(logger(service).warn).toHaveBeenCalledWith(
             expect.objectContaining({
+                message:
+                    'Whole-PR diff failed for spec head..base; falling back to per-file diffs',
                 metadata: expect.objectContaining({
                     organizationId: 'org-1',
                     teamId: 'team-1',
@@ -383,6 +387,8 @@ describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => 
                 }),
             }),
         );
+        // A failed read is not a parse mismatch: one warning, not two
+        expect(logger(service).warn).toHaveBeenCalledTimes(1);
     });
 
     it('lets a 429 on a per-file read through', async () => {
@@ -447,6 +453,8 @@ describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => 
         expect(files?.map((f) => f.filename)).toEqual(['src/a.ts', 'src/b.ts']);
         expect(logger(service).warn).toHaveBeenCalledWith(
             expect.objectContaining({
+                message:
+                    'Whole-PR diff for spec head..last did not key every file; reading 1 missing file(s) one by one',
                 metadata: expect.objectContaining({
                     organizationId: 'org-1',
                     missing: 1,
@@ -490,12 +498,23 @@ describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => 
 
         expect(logger(service).warn).toHaveBeenCalledWith(
             expect.objectContaining({
+                message:
+                    'Could not read the diff of src/b.ts for spec head..last',
                 metadata: expect.objectContaining({
                     organizationId: 'org-1',
                     path: 'src/b.ts',
                 }),
             }),
         );
+    });
+
+    it('incremental: answers null, not a throw, when listing fails for another reason', async () => {
+        const { service } = makeService(jest.fn());
+        jest.spyOn(service as any, 'getPaginatedResults').mockRejectedValue(
+            new Error('500 from Bitbucket'),
+        );
+
+        await expect(since(service)).resolves.toBeNull();
     });
 
     it('incremental: lets a 429 through instead of answering null', async () => {
