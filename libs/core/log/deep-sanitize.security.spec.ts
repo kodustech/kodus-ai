@@ -83,4 +83,20 @@ describe('deepSanitize — Bedrock AWS credential redaction (S1)', () => {
         expect(out.password).toBe('[REDACTED]');
         expect(out.authorization).toBe('[REDACTED]');
     });
+
+    it("redacts GitHub's authorization code and state on a logged integration request", () => {
+        const out = deepSanitize({
+            metadata: {
+                code: '4242',
+                token: 'ghp_pat',
+                githubCode: 'gh-oauth-code',
+                githubState: 'sealed.state',
+            },
+        });
+        expect(out.metadata.githubCode).toBe('[REDACTED]');
+        expect(out.metadata.githubState).toBe('[REDACTED]');
+        expect(out.metadata.token).toBe('[REDACTED]');
+        // The installation id is not a credential.
+        expect(out.metadata.code).toBe('4242');
+    });
 });
