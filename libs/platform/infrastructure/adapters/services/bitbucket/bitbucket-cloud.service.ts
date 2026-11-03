@@ -3683,9 +3683,7 @@ export class BitbucketCloudService implements Omit<
     // 429 back. Unbounded, a credential that kept answering 429 held one
     // review stage for 99 minutes; bounded, the job fails into its own
     // delayed retry instead.
-    private static readonly RATE_GATE_MAX_WAIT_MS = Number(
-        process.env.BITBUCKET_RATE_GATE_MAX_WAIT_MS ?? 300_000,
-    );
+    private static readonly RATE_GATE_MAX_WAIT_MS = 5 * 60_000;
 
     // Backoff for a 429 without Retry-After: starts at 10s and doubles per
     // 429 in a row on the same credential, up to a minute (Bitbucket's
