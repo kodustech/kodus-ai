@@ -129,11 +129,15 @@ describe('FetchChangedFilesStage', () => {
             context.repository,
             context.pullRequest,
             undefined,
+            undefined,
         );
     });
 
     it('passes lastAnalyzedCommit as the base of an incremental fetch', async () => {
-        context.lastExecution = { lastAnalyzedCommit: 'sha-prev' };
+        context.lastExecution = {
+            lastAnalyzedCommit: 'sha-prev',
+            reviewedBaseBranch: 'develop',
+        };
 
         mockPullRequestManagerService.getChangedFilesMetadata.mockResolvedValue(
             [],
@@ -148,6 +152,7 @@ describe('FetchChangedFilesStage', () => {
             context.repository,
             context.pullRequest,
             'sha-prev',
+            'develop',
         );
     });
 

@@ -1310,7 +1310,12 @@ export class GitlabService implements Omit<
                     'Failed to list repositories when creating integration',
                 context: GitlabService.name,
                 error: error,
-                metadata: params,
+                // Named fields only: authDetails carries the access and
+                // refresh tokens.
+                metadata: {
+                    host: params?.authDetails?.host,
+                    authMode: params?.authDetails?.authMode,
+                },
             });
             return {
                 success: false,
@@ -2358,6 +2363,24 @@ export class GitlabService implements Omit<
             baseSha,
             headSha,
         );
+
+        // GitLab leaves diffs out past its limits and says so here; a partial
+        // list can drop the MR's own files (#2268).
+        if (comparison.compare_timeout) {
+            this.logger.warn({
+                message: `Compare for MR!${prNumber} since ${baseSha} timed out`,
+                context: GitlabService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                    baseSha,
+                    headSha,
+                    reason: 'compare_timeout',
+                },
+            });
+            return null;
+        }
 
         const diffs = comparison.diffs || [];
 

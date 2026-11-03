@@ -34,7 +34,17 @@ export function withDirectoryAgentLists<T extends object>(
         result.knowledge = addOrReplace(
             inherited.knowledge,
             directory.knowledge,
-            (item) => (item as { path?: string } | undefined)?.path,
+            // The same path in another repository is another item.
+            // Stored JSON: only a string path is a key, and only a string
+            // repository names one.
+            (item) => {
+                const entry = item as
+                    { path?: unknown; repository?: unknown } | undefined;
+                const path = entry?.path;
+                if (typeof path !== 'string') return undefined;
+                const repository = entry?.repository;
+                return `${typeof repository === 'string' ? repository.toLowerCase() : ''}:${path}`;
+            },
         );
     }
     return result;

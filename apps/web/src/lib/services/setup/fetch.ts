@@ -4,6 +4,17 @@ import { axiosAuthorized } from "src/core/utils/axios";
 
 import { SETUP_PATHS } from ".";
 
+/** GitHub's authorization page for linking `installationId` (see github-installation-authorization). */
+export async function getGithubInstallationAuthorizationUrl(
+    installationId: string,
+): Promise<string> {
+    const response = await axiosAuthorized.fetcher<{ data: { url: string } }>(
+        SETUP_PATHS.GITHUB_INSTALLATION_AUTHORIZATION,
+        { params: { installationId } },
+    );
+    return response.data.url;
+}
+
 export function getConnectionsOnClient(teamId: string) {
     return axiosAuthorized
         .fetcher(SETUP_PATHS.CONNECTIONS, {

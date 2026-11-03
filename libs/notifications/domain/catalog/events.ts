@@ -111,8 +111,12 @@ export interface NotificationPayloadMap {
     };
 
     [NotificationEvent.TEAM_MEMBER_INVITED]: {
-        /** Full user object (with teamMember, organization relations). */
-        user: any;
+        /** What the invite email shows; never the user entity. */
+        user: {
+            email: string;
+            organization?: { name?: string };
+            teamMember?: Array<{ name?: string; team?: { name?: string } }>;
+        };
         inviterEmail: string;
         inviteLink: string;
     };

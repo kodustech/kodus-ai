@@ -209,6 +209,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     platformPr,
                     [],
                     lastAnalyzedCommit,
+                    lastExecution?.dataExecution?.reviewedBaseBranch,
                 );
 
             // 4. Construct Code Patch

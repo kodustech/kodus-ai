@@ -29,11 +29,11 @@ describe('deepSanitize — Bedrock AWS credential redaction (S1)', () => {
 
     it('redacts every Bedrock secret field name (any case / separators)', () => {
         const out = deepSanitize({
-            awsSecretAccessKey: AWS_SECRET,
-            awsBearerToken: 'ABSK-bearer-secret',
-            awsAccessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-            awsSessionToken: 'FQoGZXIvYXdzE-session-secret',
-            aws_secret_access_key: AWS_SECRET, // snake_case normalizes the same
+            'awsSecretAccessKey': AWS_SECRET,
+            'awsBearerToken': 'ABSK-bearer-secret',
+            'awsAccessKeyId': 'AKIAIOSFODNN7EXAMPLE',
+            'awsSessionToken': 'FQoGZXIvYXdzE-session-secret',
+            'aws_secret_access_key': AWS_SECRET, // snake_case normalizes the same
             'AWS-Bearer-Token': 'ABSK-bearer-secret', // header-style separators
         });
 
@@ -65,8 +65,7 @@ describe('deepSanitize — Bedrock AWS credential redaction (S1)', () => {
             },
         });
 
-        const settings =
-            out.metadata.configValue.credentials[0].settings;
+        const settings = out.metadata.configValue.credentials[0].settings;
         expect(settings.awsSecretAccessKey).toBe('[REDACTED]');
         // Non-secret metadata still passes through.
         expect(settings.awsRegion).toBe('us-east-1');
@@ -82,5 +81,33 @@ describe('deepSanitize — Bedrock AWS credential redaction (S1)', () => {
         expect(out.apiKey).toBe('[REDACTED]');
         expect(out.password).toBe('[REDACTED]');
         expect(out.authorization).toBe('[REDACTED]');
+    });
+
+    it("redacts GitHub's authorization code and state on a logged integration request", () => {
+        const out = deepSanitize({
+            metadata: {
+                code: '4242',
+                token: 'ghp_pat',
+                githubCode: 'gh-oauth-code',
+                githubState: 'sealed.state',
+            },
+        });
+        expect(out.metadata.githubCode).toBe('[REDACTED]');
+        expect(out.metadata.githubState).toBe('[REDACTED]');
+        expect(out.metadata.token).toBe('[REDACTED]');
+        // The installation id is not a credential.
+        expect(out.metadata.code).toBe('4242');
+    });
+
+    it("redacts GitHub's code and state inside a logged URL or JSON string", () => {
+        const out = deepSanitize({
+            url: '/setup/github?installation_id=42&github_code=gh-oauth-code&github_state=sealed.state',
+            body: '{"githubCode":"gh-oauth-code","installationId":"42"}',
+        });
+        expect(out.url).not.toContain('gh-oauth-code');
+        expect(out.url).not.toContain('sealed.state');
+        expect(out.url).toContain('installation_id=42');
+        expect(out.body).not.toContain('gh-oauth-code');
+        expect(out.body).toContain('"installationId":"42"');
     });
 });

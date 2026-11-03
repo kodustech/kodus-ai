@@ -16,27 +16,25 @@ export default async function InvitePage({
 }: {
     params: Promise<{ id: string }>;
 }) {
+    // The path segment is the sealed invitation token (see the API's
+    // invitation-token), not the user id.
     const { id } = await params;
-    const userData = await getInviteData(id).catch((error) => {
-        console.error(`Failed to get invite data for id ${id}:`, error);
-        return null;
-    });
+    const token = decodeSegment(id);
+    if (!token) return <InviteNotice {...INVALID} />;
+
+    let userData: Awaited<ReturnType<typeof getInviteData>>;
+    try {
+        userData = await getInviteData(token);
+    } catch (error) {
+        // Never the error itself: its message carries the URL, token included.
+        console.error("Failed to get invite data", {
+            statusCode: (error as { statusCode?: number })?.statusCode,
+        });
+        return <InviteNotice {...UNAVAILABLE} />;
+    }
 
     if (!userData?.uuid || !userData?.email) {
-        return (
-            <Page.Root className="flex h-full w-full flex-col items-center overflow-auto py-20">
-                <div className="flex w-[90%] flex-1 flex-col items-center justify-center gap-10 md:max-w-[500px]">
-                    <SvgKodus className="h-8" />
-                    <Heading variant="h2" className="text-center">
-                        Invalid or expired invitation
-                    </Heading>
-                    <p className="text-text-secondary text-center text-sm">
-                        This invitation link is no longer valid. Please contact
-                        your organization administrator for a new invitation.
-                    </p>
-                </div>
-            </Page.Root>
-        );
+        return <InviteNotice {...INVALID} />;
     }
 
     return (
@@ -68,11 +66,46 @@ export default async function InvitePage({
                     <Suspense>
                         <AcceptInviteForm
                             email={userData.email}
-                            inviteId={userData.uuid}
+                            inviteToken={token}
                             organizationName={userData.organization?.name}
                         />
                     </Suspense>
                 </Page.Content>
+            </div>
+        </Page.Root>
+    );
+}
+
+const INVALID = {
+    title: "Invalid or expired invitation",
+    body: "This invitation link is no longer valid. Please contact your organization administrator for a new invitation.",
+};
+
+const UNAVAILABLE = {
+    title: "We could not load this invitation",
+    body: "Kodus did not answer. Your link may still be valid: try again in a few minutes.",
+};
+
+/** The decoded path segment, or null for one that is not valid percent-encoding. */
+function decodeSegment(segment: string): string | null {
+    try {
+        return decodeURIComponent(segment);
+    } catch {
+        return null;
+    }
+}
+
+function InviteNotice({ title, body }: { title: string; body: string }) {
+    return (
+        <Page.Root className="flex h-full w-full flex-col items-center overflow-auto py-20">
+            <div className="flex w-[90%] flex-1 flex-col items-center justify-center gap-10 md:max-w-[500px]">
+                <SvgKodus className="h-8" />
+                <Heading variant="h2" className="text-center">
+                    {title}
+                </Heading>
+                <p className="text-text-secondary text-center text-sm">
+                    {body}
+                </p>
             </div>
         </Page.Root>
     );

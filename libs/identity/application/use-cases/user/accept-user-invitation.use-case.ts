@@ -16,6 +16,11 @@ import {
     PROFILE_SERVICE_TOKEN,
 } from '@libs/identity/domain/profile/contracts/profile.service.contract';
 
+import {
+    isInvitedEmail,
+    openInvitation,
+} from '@libs/identity/domain/user/invitation-token';
+
 @Injectable()
 export class AcceptUserInvitationUseCase implements IUseCase {
     constructor(
@@ -31,29 +36,36 @@ export class AcceptUserInvitationUseCase implements IUseCase {
         private readonly profileService: IProfileService,
     ) {}
     public async execute(user: AcceptUserInvitationDto): Promise<any> {
-        // This route is public and the uuid is the only input that names the
-        // account, so it may only finish an invitation that is still open: a
-        // PENDING user created by an invite, who has no profile yet (the
-        // profile is created below, and self sign-ups create one at sign-up).
-        // Anything else would let anyone set the password of any account.
-        const invited = user?.uuid
+        // This route is public. The sealed invitation names the account, and
+        // it may only finish an invitation that is still open: a PENDING user
+        // created by an invite, with the email it was sent to, who has no
+        // profile yet (the profile is created below, and self sign-ups create
+        // one at sign-up). Anything else would let anyone set the password
+        // of any account.
+        const invitation = openInvitation(user?.token);
+        const invited = invitation
             ? await this.usersService.findOne({
-                  uuid: user.uuid,
+                  uuid: invitation.userId,
                   status: STATUS.PENDING,
               })
             : null;
         const alreadyAccepted =
             invited &&
             (await this.profileService.findOne({
-                user: { uuid: user.uuid },
+                user: { uuid: invitation.userId },
             }));
-        if (!invited || alreadyAccepted) {
+        if (
+            !invited ||
+            !isInvitedEmail(invitation, invited.email) ||
+            alreadyAccepted
+        ) {
             throw new NotFoundException('User could not be found');
         }
+        const uuid = invitation.userId;
 
         const userUpdated = await this.usersService.update(
             {
-                uuid: user.uuid,
+                uuid,
                 status: STATUS.PENDING,
             },
             {
@@ -70,14 +82,14 @@ export class AcceptUserInvitationUseCase implements IUseCase {
         }
 
         await this.createProfileUseCase.execute({
-            user: { uuid: user.uuid },
+            user: { uuid },
             name: user.name,
             phone: user?.phone,
         });
 
         if (userUpdated.email) {
             void this.telemetry.userInvitationAccepted({
-                userId: user.uuid,
+                userId: uuid,
                 email: userUpdated.email,
                 name: user.name,
                 organizationId: userUpdated.organization?.uuid,

@@ -2057,6 +2057,17 @@
     }
   },
   {
+    "key": "user.controller.ts#getInvitationToken",
+    "httpMethod": "GET",
+    "urlPath": "/user/:targetUserId/invitation-token",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "user.controller.ts#joinOrganization",
     "httpMethod": "POST",
     "urlPath": "/user/join-organization",

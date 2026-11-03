@@ -190,6 +190,18 @@ describe('buildE2BRemoteCommands', () => {
             );
         });
 
+        it('rejects a grep path outside the checkout before running rg', async () => {
+            const run = jest.fn();
+            const rc = buildE2BRemoteCommands(makeSandbox(run));
+            await expect(rc.grep('TOKEN', '../secret')).rejects.toThrow(
+                'Path traversal using ".." is not allowed',
+            );
+            await expect(rc.grep('TOKEN', '/etc')).rejects.toThrow(
+                'Absolute paths are not allowed',
+            );
+            expect(run).not.toHaveBeenCalled();
+        });
+
         it('accepts a plain relative path (no throw)', async () => {
             const run = jest
                 .fn()
@@ -684,6 +696,17 @@ describe('syncE2BSandboxRepo', () => {
         );
     });
 
+    it('gives the reuse sync 5 min, not the 2-min create fetch budget', async () => {
+        // A sync that times out is swallowed and the review runs on the stale
+        // checkout (#1313), so it keeps a longer budget than the create path.
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        await syncE2BSandboxRepo(makeSandbox(run), baseParams);
+
+        expect(run.mock.calls[0][1].timeoutMs).toBe(300_000);
+    });
+
     it('omits the auth header entirely for an anonymous (public repo) sync', async () => {
         const run = jest
             .fn()
@@ -1062,9 +1085,9 @@ describe('E2B review user lockdown', () => {
             expect.objectContaining({ user: 'root' }),
         );
         // Nothing else of the review runs as root.
-        expect(
-            calls.filter(([, opts]) => opts?.user === 'root'),
-        ).toHaveLength(1);
+        expect(calls.filter(([, opts]) => opts?.user === 'root')).toHaveLength(
+            1,
+        );
         expect(instance.privilegesDropped).toBe(true);
         expect((Sandbox as any).create).toHaveBeenCalledWith(
             'tpl',
@@ -1135,5 +1158,20 @@ describe('E2B review user lockdown', () => {
             expect.objectContaining({ user: 'root' }),
         );
         expect(sbx.commands.run.mock.calls[1][1]?.user).toBeUndefined();
+    });
+});
+
+describe('E2BSandboxService.installDependencies', () => {
+    it('installs as root with the 5 min budget a cold apt-get needs', async () => {
+        const service = Object.create(E2BSandboxService.prototype);
+        service.logger = { log: jest.fn() };
+        const run = jest.fn().mockResolvedValue({ exitCode: 0, stderr: '' });
+
+        await service.installDependencies({ commands: { run } });
+
+        expect(run).toHaveBeenCalledWith(
+            expect.stringContaining('apt-get install'),
+            { timeoutMs: 300_000, user: 'root' },
+        );
     });
 });

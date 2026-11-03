@@ -25,7 +25,11 @@ import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 import { CodeReviewSettingsLogResponseDto } from '../dtos/code-review-settings-log-response.dto';
 import { BillingSignatureGuard } from '../guards/billing-signature.guard';
 
-/** Called by kodus-service-billing when a license seat changes. */
+/**
+ * Called by kodus-service-billing when a license seat changes. main.ts keeps
+ * the raw body of this route for the signature; a spec ties this path to the
+ * route's decorators, which stay literal for the RBAC manifest.
+ */
 export const USER_STATUS_CHANGE_PATH = '/user-log/status-change';
 
 @ApiTags('Code Review Logs')

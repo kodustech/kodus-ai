@@ -1,12 +1,17 @@
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { createLogger } from '@libs/core/log/logger';
 import {
     toBranchName,
     type SandboxInstance,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
+import { parseKnowledgeSourcePath } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+
 import { normalizeRepoPath } from './knowledge-path';
+
+const logger = createLogger('KnowledgeRepositories');
 
 /**
  * Read-only view of the PR's TARGET branch. Skills and docs are always read
@@ -21,6 +26,12 @@ export type BaseBranchReadResult =
 export interface BaseBranchReader {
     /** Branch name the reads resolve against (for messages). */
     readonly ref: string;
+    /** Branch a given path is read on, for messages: `ref`, except for a
+     *  skill or doc of another repository (`owner/repo:path`). */
+    refFor?(path: string): string;
+    /** The path names a file of another, linked repository (a reviewed
+     *  repository's path can hold a colon too). */
+    isOtherRepository?(path: string): boolean;
     readFile(path: string): Promise<BaseBranchReadResult>;
     /** Regular files under a directory, recursively, as repo-relative paths. */
     listFiles(dir: string): Promise<string[]>;
@@ -190,6 +201,84 @@ export interface KnowledgeCodeManagementPort {
         repository: { id: string; name: string };
         filters?: { branch?: string; filePatterns?: string[] };
     }): Promise<Array<{ path: string }>>;
+    /** The repositories the team's integration reaches, to find another
+     *  repository a skill or doc lives in. */
+    /** The provider's own answer for a repository's default branch; some
+     *  listings guess it (Bitbucket Data Center lists `master`). */
+    getDefaultBranch?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+    }): Promise<string | undefined>;
+    getRepositories?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+    }): Promise<KnowledgeRepositoryListing[]>;
+}
+
+/** What a repository listing carries that knowledge needs. */
+export interface KnowledgeRepositoryListing {
+    id: string | number;
+    name: string;
+    full_name?: string;
+    default_branch?: string;
+    visibility?: 'public' | 'private';
+    http_url?: string;
+    organizationName?: string;
+    project?: { name?: string };
+    /** Selected in the team's Git settings (providers spell it either way). */
+    selected?: boolean;
+    isSelected?: boolean;
+}
+
+/**
+ * A repository the team connected to Kodus (selected in its Git settings).
+ * Only these are read: Bitbucket and Azure resolve a file read through the
+ * saved selection, so a repository outside it cannot be read there.
+ */
+export const isConnectedRepository = (
+    repo: Pick<KnowledgeRepositoryListing, 'selected' | 'isSelected'>,
+): boolean => repo.selected === true || repo.isSelected === true;
+
+/**
+ * Every name a listed repository answers to, lowercased. Bitbucket and Azure
+ * list a bare `name` with no `full_name`, so `owner/repo` (and Azure's
+ * `org/project/repo`) is rebuilt from the organization and project.
+ */
+export function repositoryNames(repo: KnowledgeRepositoryListing): string[] {
+    const owner = repo.organizationName?.trim();
+    const project = repo.project?.name?.trim();
+    // Forgejo lists `name` already qualified (`owner/repo`).
+    const qualified = repo.name?.includes('/');
+    return [
+        repo.full_name,
+        owner && !qualified ? `${owner}/${repo.name}` : undefined,
+        owner && project ? `${owner}/${project}/${repo.name}` : undefined,
+        project ? `${project}/${repo.name}` : undefined,
+        repo.name,
+    ]
+        .filter((name): name is string => !!name)
+        .map((name) => name.toLowerCase());
+}
+
+/** The name a listed repository is offered and saved under (`owner/repo`). */
+export function repositoryFullName(repo: KnowledgeRepositoryListing): string {
+    const owner = repo.organizationName?.trim();
+    if (repo.full_name) return repo.full_name;
+    // Forgejo lists `name` already qualified (`owner/repo`).
+    if (repo.name?.includes('/')) return repo.name;
+    return owner ? `${owner}/${repo.name}` : repo.name;
+}
+
+/** Another repository skills or docs are read from, at one ref. */
+export interface KnowledgeRepositorySource {
+    /** `owner/repo` as the provider spells it. */
+    fullName: string;
+    id: string;
+    name: string;
+    /** Branch or tag the files are read at: the configured ref, else the
+     *  repository's default branch. */
+    ref: string;
+    visibility?: 'public' | 'private';
+    httpUrl?: string;
 }
 
 /**
@@ -230,7 +319,8 @@ export class CodeManagementBaseBranchReader implements BaseBranchReader {
             return { status: 'missing' };
         }
 
-        const data = response?.data;
+        // Most providers wrap the file in `data`; Forgejo returns it flat.
+        const data = response?.data ?? response;
         if (data?.type === 'symlink') {
             return { status: 'refused', reason: 'symbolic links are not read' };
         }
@@ -297,4 +387,232 @@ export function createBaseBranchReader(params: {
         repository: params.repository,
         baseBranch: params.baseBranch,
     });
+}
+
+/**
+ * The reviewed repository's reader plus one per other repository the linked
+ * skills and docs live in. A path `owner/repo:path` names a file of that
+ * repository, read through the provider API at its source's ref; anything
+ * else is a path of the reviewed repository. Only the repositories the
+ * config names can be reached: a qualified path to any other one is refused,
+ * so neither the model (readSkillFile) nor a quote can open a repository the
+ * team did not link.
+ */
+export class MultiRepositoryKnowledgeReader implements BaseBranchReader {
+    readonly ref: string;
+    private readonly byRepository = new Map<
+        string,
+        { source: KnowledgeRepositorySource; reader: BaseBranchReader }
+    >();
+
+    constructor(
+        private readonly local: BaseBranchReader,
+        sources: ReadonlyArray<{
+            source: KnowledgeRepositorySource;
+            reader: BaseBranchReader;
+        }>,
+    ) {
+        this.ref = local.ref;
+        for (const entry of sources) {
+            this.byRepository.set(entry.source.fullName.toLowerCase(), entry);
+        }
+    }
+
+    /** The other repository a qualified path names, when it is linked. */
+    sourceOf(path: string): KnowledgeRepositorySource | undefined {
+        const parsed = parseKnowledgeSourcePath(path);
+        return parsed
+            ? this.byRepository.get(parsed.repository.toLowerCase())?.source
+            : undefined;
+    }
+
+    get sources(): KnowledgeRepositorySource[] {
+        return [...this.byRepository.values()].map((entry) => entry.source);
+    }
+
+    refFor(path: string): string {
+        return (
+            this.sourceOf(path)?.ref ?? this.local.refFor?.(path) ?? this.ref
+        );
+    }
+
+    isOtherRepository(path: string): boolean {
+        return this.sourceOf(path) !== undefined;
+    }
+
+    async readFile(path: string): Promise<BaseBranchReadResult> {
+        const route = this.route(path);
+        if (route === 'refused') {
+            return {
+                status: 'refused',
+                reason: 'not a repository linked to these skills and docs',
+            };
+        }
+        return route
+            ? route.reader.readFile(route.path)
+            : this.local.readFile(path);
+    }
+
+    async listFiles(dir: string): Promise<string[]> {
+        const route = this.route(dir);
+        if (route === 'refused') return [];
+        if (!route) return this.local.listFiles(dir);
+        return (await route.reader.listFiles(route.path)).map(
+            (p) => `${route.prefix}${p}`,
+        );
+    }
+
+    async matchFiles(glob: string): Promise<string[]> {
+        const route = this.route(glob);
+        if (route === 'refused') return [];
+        if (!route) return this.local.matchFiles(glob);
+        return (await route.reader.matchFiles(route.path)).map(
+            (p) => `${route.prefix}${p}`,
+        );
+    }
+
+    private route(
+        path: string,
+    ):
+        | { reader: BaseBranchReader; path: string; prefix: string }
+        | 'refused'
+        | null {
+        const parsed = parseKnowledgeSourcePath(path);
+        if (!parsed) return null;
+        const entry = this.byRepository.get(parsed.repository.toLowerCase());
+        // Not a linked repository: the whole name is a path of the reviewed
+        // repository (`docs/payments:2024.md`). Another repository is never
+        // read unless the config links it.
+        if (!entry) return null;
+        return {
+            reader: entry.reader,
+            path: parsed.path,
+            // The spelling the config used, so paths read back match it.
+            prefix: `${path.slice(0, path.indexOf(':'))}:`,
+        };
+    }
+}
+
+/**
+ * Finds each repository the items name among the ones the integration
+ * reaches and builds its reader at the item's ref (else its default branch).
+ * A repository it cannot find is returned in `missing`; its items then read
+ * as not found.
+ */
+export async function resolveKnowledgeRepositories(params: {
+    items: ReadonlyArray<{ repository?: string; ref?: string }>;
+    codeManagement: KnowledgeCodeManagementPort;
+    organizationAndTeamData: OrganizationAndTeamData;
+}): Promise<{
+    sources: Array<{
+        source: KnowledgeRepositorySource;
+        reader: BaseBranchReader;
+    }>;
+    missing: string[];
+    listing: KnowledgeRepositoryListing[];
+    /** The provider could not list repositories: `missing` then means
+     *  "not checked", not "not reachable". */
+    listingFailed?: boolean;
+}> {
+    const wanted = new Map<string, { repository: string; ref?: string }>();
+    for (const item of params.items) {
+        if (!item.repository) continue;
+        const key = item.repository.toLowerCase();
+        const seen = wanted.get(key);
+        if (!seen)
+            wanted.set(key, { repository: item.repository, ref: item.ref });
+        // The last ref wins: a directory's items come after the levels it
+        // inherits, so its pin is the one read.
+        else if (item.ref) seen.ref = item.ref;
+    }
+    if (!wanted.size) return { sources: [], missing: [], listing: [] };
+
+    // No way to list is a failed listing too: `missing` then means "not
+    // checked", and the warning says so instead of "not connected".
+    let listingFailed = !params.codeManagement.getRepositories;
+    const listing: KnowledgeRepositoryListing[] =
+        (await params.codeManagement
+            .getRepositories?.({
+                organizationAndTeamData: params.organizationAndTeamData,
+            })
+            .catch((error: Error) => {
+                listingFailed = true;
+                logger.warn({
+                    message:
+                        "[AGENT] The integration's repositories could not be listed; skills and docs of other repositories were not read",
+                    context: 'resolveKnowledgeRepositories',
+                    error,
+                    metadata: {
+                        organizationAndTeamData: params.organizationAndTeamData,
+                        repositories: [...wanted.values()].map(
+                            (entry) => entry.repository,
+                        ),
+                    },
+                });
+                return undefined;
+            })) ?? [];
+    const byName = new Map<string, KnowledgeRepositoryListing>();
+    for (const repo of listing.filter(isConnectedRepository)) {
+        for (const name of repositoryNames(repo)) {
+            if (!byName.has(name)) byName.set(name, repo);
+        }
+    }
+
+    const sources: Array<{
+        source: KnowledgeRepositorySource;
+        reader: BaseBranchReader;
+    }> = [];
+    const missing: string[] = [];
+    for (const [key, { repository, ref }] of wanted) {
+        const repo = byName.get(key);
+        if (!repo) {
+            missing.push(repository);
+            continue;
+        }
+        const readAt =
+            ref ||
+            (await params.codeManagement
+                .getDefaultBranch?.({
+                    organizationAndTeamData: params.organizationAndTeamData,
+                    repository: { id: String(repo.id), name: repo.name },
+                })
+                .catch((error: Error) => {
+                    // Knowledge never fails a review: read at the branch the
+                    // listing names, and leave a trace of why.
+                    logger.warn({
+                        message: `[AGENT] Default branch of ${repository} could not be read; using the listing's`,
+                        context: 'resolveKnowledgeRepositories',
+                        error,
+                        metadata: {
+                            organizationAndTeamData:
+                                params.organizationAndTeamData,
+                            repository,
+                            repositoryId: String(repo.id),
+                            fallback: repo.default_branch || 'main',
+                        },
+                    });
+                    return undefined;
+                })) ||
+            repo.default_branch ||
+            'main';
+        const source: KnowledgeRepositorySource = {
+            fullName: repository,
+            id: String(repo.id),
+            name: repo.name,
+            // Azure answers its default branch as `refs/heads/main`: links,
+            // labels and reads take the plain name, as every other provider.
+            ref: toBranchName(readAt) ?? readAt,
+            visibility: repo.visibility,
+            httpUrl: repo.http_url,
+        };
+        sources.push({
+            source,
+            reader: new CodeManagementBaseBranchReader(params.codeManagement, {
+                organizationAndTeamData: params.organizationAndTeamData,
+                repository: { id: source.id, name: source.name },
+                baseBranch: readAt,
+            }),
+        });
+    }
+    return { sources, missing, listing, listingFailed };
 }
