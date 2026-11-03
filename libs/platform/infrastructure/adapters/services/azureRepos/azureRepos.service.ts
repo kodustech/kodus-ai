@@ -1730,6 +1730,21 @@ export class AzureReposService implements Omit<
             );
 
             const lastIteration = iterations?.[iterations.length - 1];
+            // Without the PR's own files every merged-in blob would be diffed,
+            // one request each.
+            if (!lastIteration) {
+                this.logger.warn({
+                    message: `No iteration to filter the diff of PR#${prNumber} since ${lastCommit.sha}`,
+                    context: AzureReposService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        repositoryId: repository?.id,
+                        prNumber,
+                        reason: 'pr_files_unavailable',
+                    },
+                });
+                return null;
+            }
             let prFileNames: Set<string> | null = null;
 
             if (lastIteration) {

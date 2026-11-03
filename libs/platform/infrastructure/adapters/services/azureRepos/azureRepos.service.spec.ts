@@ -780,6 +780,14 @@ describe('AzureReposService.getChangedFilesSinceLastCommit — complete vs unrea
         );
 
         expect(files?.map((f) => f.filename)).toEqual(['/src/own.ts']);
+        expect(azureReposRequestHelper.getDiff).toHaveBeenCalledWith({
+            orgName: 'fake-org',
+            token: 'fake-token',
+            projectId: 'proj-1',
+            repositoryId: 'repo-1',
+            baseCommit: 'reviewed-sha',
+            targetCommitId: 'head-sha',
+        });
     });
 
     it('returns [] when the complete diff holds no PR file', async () => {
@@ -809,6 +817,18 @@ describe('AzureReposService.getChangedFilesSinceLastCommit — complete vs unrea
             changes: [blob('/merged/a.ts')],
             allChangesIncluded: false,
         });
+
+        await expect(
+            service.getChangedFilesSinceLastCommit(params as any),
+        ).resolves.toBeNull();
+    });
+
+    it('returns null when the PR file list is unavailable, instead of reading every merged file', async () => {
+        azureReposRequestHelper.getDiff.mockResolvedValue({
+            changes: [blob('/merged/a.ts'), blob('/src/own.ts')],
+            allChangesIncluded: true,
+        });
+        azureReposRequestHelper.getIterations.mockResolvedValue([]);
 
         await expect(
             service.getChangedFilesSinceLastCommit(params as any),
