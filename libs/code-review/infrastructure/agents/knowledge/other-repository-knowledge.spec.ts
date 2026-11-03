@@ -438,6 +438,50 @@ describe('KnowledgeResolver with another repository', () => {
         );
     });
 
+    it('names a skill at the root of the rules repository after its folder', async () => {
+        const reader = new MultiRepositoryKnowledgeReader(
+            new InMemoryBaseBranchReader({}),
+            [
+                {
+                    source: {
+                        fullName: RULES,
+                        id: '20',
+                        name: 'irrigation-rules',
+                        ref: 'trunk',
+                    },
+                    reader: new InMemoryBaseBranchReader({
+                        'migrations/SKILL.md': skillMarkdown(
+                            'migrations',
+                            'How the team writes migrations.',
+                        ),
+                    }),
+                },
+            ],
+        );
+
+        const resolved = await new KnowledgeResolver(reader).resolve({
+            items: [
+                {
+                    kind: 'skill',
+                    repository: RULES,
+                    path: 'migrations',
+                    linkedTo: [{ agentId: 'valves' }],
+                },
+            ],
+            target: { agentId: 'valves' },
+        });
+
+        expect(resolved.warnings).toEqual([]);
+        expect(resolved.skills).toEqual([
+            expect.objectContaining({
+                name: 'migrations',
+                path: `${RULES}:migrations/SKILL.md`,
+                folder: `${RULES}:migrations`,
+                ref: 'trunk',
+            }),
+        ]);
+    });
+
     it("keeps a reviewed-repository path with a colon as this repository's file", async () => {
         // `docs/payments:2024.md` parses like owner/repo:path, but names no
         // linked repository: it is read here, and the prompt says nothing of
