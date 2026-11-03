@@ -139,6 +139,39 @@ describe('invitation flow', () => {
         expect(users[0].password).toBeUndefined();
     });
 
+    it('refuses a token sealed under another key', async () => {
+        const { users, copyLink, open, accept } = setup();
+        const { token } = await copyLink.execute('invited', 'org-1');
+
+        process.env.API_CRYPTO_KEY = 'cd'.repeat(32);
+        try {
+            expect(await open.execute(token)).toEqual({});
+            await expect(
+                accept.execute({ token, name: 'x', password: 'y' } as any),
+            ).rejects.toBeInstanceOf(NotFoundException);
+        } finally {
+            process.env.API_CRYPTO_KEY = 'ab'.repeat(32);
+        }
+        expect(users[0].status).toBe(STATUS.PENDING);
+    });
+
+    it('fails closed without API_CRYPTO_KEY: nothing opens or is accepted', async () => {
+        const { users, copyLink, open, accept } = setup();
+        const { token } = await copyLink.execute('invited', 'org-1');
+
+        delete process.env.API_CRYPTO_KEY;
+        try {
+            await expect(open.execute(token)).rejects.toThrow('API_CRYPTO_KEY');
+            await expect(
+                accept.execute({ token, name: 'x', password: 'y' } as any),
+            ).rejects.toThrow('API_CRYPTO_KEY');
+        } finally {
+            process.env.API_CRYPTO_KEY = 'ab'.repeat(32);
+        }
+        expect(users[0].status).toBe(STATUS.PENDING);
+        expect(users[0].password).toBeUndefined();
+    });
+
     it('gives an owner of another organization no link to copy', async () => {
         const { copyLink } = setup();
 
