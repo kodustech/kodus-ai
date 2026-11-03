@@ -1617,7 +1617,11 @@ describe('KodyRulesSyncService.syncFromChangedFiles — renamed rule file', () =
 
     const makeService = (
         rules: any[],
-        opts: { centralized?: boolean; content?: string } = {},
+        opts: {
+            centralized?: boolean;
+            content?: string;
+            converted?: { kind: 'skipped'; reason: string };
+        } = {},
     ) => {
         const store = rules.map((r) => ({ ...r }));
         const write = (dto: any) => {
@@ -1632,6 +1636,12 @@ describe('KodyRulesSyncService.syncFromChangedFiles — renamed rule file', () =
             })),
             createOrUpdate: jest.fn(async (_org: unknown, dto: any) =>
                 write(dto),
+            ),
+            updateRuleSourceFileIssue: jest.fn(
+                async (_org: unknown, uuid: string, issue: string) => {
+                    const hit = store.find((r) => r.uuid === uuid);
+                    if (hit) hit.sourceFileIssue = issue;
+                },
             ),
         };
         const createOrUpdateKodyRulesUseCase = {
@@ -1650,10 +1660,12 @@ describe('KodyRulesSyncService.syncFromChangedFiles — renamed rule file', () =
         jest.spyOn(service, 'getMergedFileContent').mockResolvedValue(
             opts.content ?? 'body',
         );
-        jest.spyOn(service, 'templateFileToRule').mockResolvedValue({
-            kind: 'rule',
-            rule: { title: 't', rule: 'r', path: '**/*.ts' },
-        });
+        jest.spyOn(service, 'templateFileToRule').mockResolvedValue(
+            opts.converted ?? {
+                kind: 'rule',
+                rule: { title: 't', rule: 'r', path: '**/*.ts' },
+            },
+        );
         jest.spyOn(service, 'resolveDirectoryForFile').mockResolvedValue(null);
         jest.spyOn(service, 'processContextReferences').mockResolvedValue(
             undefined,
@@ -1765,6 +1777,38 @@ describe('KodyRulesSyncService.syncFromChangedFiles — renamed rule file', () =
 
         expect(live(store, OLD)).toEqual([]);
         expect(live(store, NEW)).toEqual([]);
+    });
+
+    it('a rename to a file that imports nothing (disabled) retires both paths', async () => {
+        const { service, store } = makeService(
+            [
+                record('a', '2026-01-01T00:00:00Z'),
+                record('stale', '2026-01-02T00:00:00Z', { sourcePath: NEW }),
+            ],
+            {
+                converted: {
+                    kind: 'skipped',
+                    reason: 'disabled via frontmatter',
+                },
+            },
+        );
+
+        await sync(service);
+
+        expect(live(store, OLD)).toEqual([]);
+        expect(live(store, NEW)).toEqual([]);
+    });
+
+    it('a rename to a file that no longer parses keeps the rule and flags it', async () => {
+        const { service, store } = makeService(
+            [record('a', '2026-01-01T00:00:00Z')],
+            { converted: { kind: 'skipped', reason: 'not a rule template' } },
+        );
+
+        await sync(service);
+
+        expect(live(store, OLD).map((r) => r.uuid)).toEqual(['a']);
+        expect(store[0].sourceFileIssue).toBe('not_a_rule_template');
     });
 });
 

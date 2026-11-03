@@ -760,6 +760,17 @@ export class KodyRulesSyncService {
                     rule: existing,
                     sourcePath: filePath,
                 });
+            } else if (previousPath) {
+                // A rename whose new file imports nothing (disabled via
+                // frontmatter, for example): the old file is gone and nothing
+                // replaced its rule, so retire both paths.
+                for (const sourcePath of [previousPath, filePath]) {
+                    await this.deleteRuleBySourcePath({
+                        organizationAndTeamData,
+                        repositoryId: repository.id,
+                        sourcePath,
+                    });
+                }
             }
             return { outcome: 'skipped', reason: converted.reason };
         }
