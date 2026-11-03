@@ -73,15 +73,31 @@ function newPath(head: string): string | null {
     );
 }
 
-function markerPath(head: string, marker: '+++' | '---'): string | null {
-    const escaped = marker.replace(/[+]/g, '\\+');
-    const raw = head.match(new RegExp(`^${escaped} (.+)$`, 'm'))?.[1];
+const MARKER_LINE = {
+    '+++': /^\+\+\+ (.+)$/m,
+    '---': /^--- (.+)$/m,
+} as const;
+
+const EXTENDED_HEADER_LINE = {
+    'rename from': /^rename from (.+)$/m,
+    'rename to': /^rename to (.+)$/m,
+    'copy to': /^copy to (.+)$/m,
+} as const;
+
+function markerPath(
+    head: string,
+    marker: keyof typeof MARKER_LINE,
+): string | null {
+    const raw = head.match(MARKER_LINE[marker])?.[1];
     // git ends the name with a tab when it contains a space
     return raw === undefined ? null : unquote(raw.replace(/\t$/, ''));
 }
 
-function extendedHeaderPath(head: string, label: string): string | undefined {
-    const raw = head.match(new RegExp(`^${label} (.+)$`, 'm'))?.[1];
+function extendedHeaderPath(
+    head: string,
+    label: keyof typeof EXTENDED_HEADER_LINE,
+): string | undefined {
+    const raw = head.match(EXTENDED_HEADER_LINE[label])?.[1];
     return raw === undefined ? undefined : unquote(raw);
 }
 
