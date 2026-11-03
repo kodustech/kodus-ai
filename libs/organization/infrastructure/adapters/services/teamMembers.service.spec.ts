@@ -560,6 +560,47 @@ describe('TeamMemberService — deterministic logic', () => {
         });
     });
 
+    describe('sendInvitations — the notification carries only what the email shows', () => {
+        it('never puts the user entity (password hash, status, ids) in the payload', async () => {
+            const invited = {
+                uuid: 'insider',
+                email: 'insider@acme.dev',
+                password: '$2b$10$hash-of-the-temporary-password',
+                status: 'pending',
+                role: 'contributor',
+                organization: { uuid: 'org-1', name: 'Acme' },
+                teamMember: [
+                    {
+                        name: 'Insider',
+                        organization: { uuid: 'org-1' },
+                        team: { uuid: 'team-1', name: 'Platform' },
+                    },
+                ],
+            };
+            const notificationService = { emit: jest.fn() };
+            const service = makeService(
+                {},
+                { findOne: jest.fn(async () => invited) },
+                notificationService,
+            );
+
+            await service.sendInvitations(
+                [{ uuid: 'insider' }] as any,
+                { organizationId: 'org-1', teamId: 'team-1' },
+                'admin@acme.dev',
+            );
+
+            const { payload } = notificationService.emit.mock.calls[0][0];
+            expect(payload.user).toEqual({
+                email: 'insider@acme.dev',
+                organization: { name: 'Acme' },
+                teamMember: [{ name: 'Insider', team: { name: 'Platform' } }],
+            });
+            expect(JSON.stringify(payload)).not.toContain('$2b$10$');
+            expect(payload.inviterEmail).toBe('admin@acme.dev');
+        });
+    });
+
     describe('sendInvitations — the link carries a sealed invitation', () => {
         it('never puts the bare user id in the invitation link', async () => {
             const cryptoKey = process.env.API_CRYPTO_KEY;

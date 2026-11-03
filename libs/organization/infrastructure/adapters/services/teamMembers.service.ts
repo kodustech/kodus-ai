@@ -522,7 +522,17 @@ export class TeamMemberService implements ITeamMemberService {
             await this.notificationService.emit({
                 event: NotificationEvent.TEAM_MEMBER_INVITED,
                 payload: {
-                    user,
+                    // Only what the email shows: the payload is stored with
+                    // the outbox message and the delivery record, and the
+                    // entity carries the password hash.
+                    user: {
+                        email: user.email,
+                        organization: { name: user.organization?.name },
+                        teamMember: (user.teamMember ?? []).map((member) => ({
+                            name: member.name,
+                            team: { name: member.team?.name },
+                        })),
+                    },
                     inviterEmail: senderEmail,
                     inviteLink,
                 },
