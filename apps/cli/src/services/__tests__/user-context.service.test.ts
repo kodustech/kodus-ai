@@ -11,6 +11,7 @@ vi.mock('../api/index.js', () => ({
 vi.mock('../auth.service.js', () => ({
     authService: {
         getValidToken: vi.fn(),
+        getUserToken: vi.fn(),
     },
 }));
 
@@ -25,6 +26,7 @@ import {
 
 const mockGetTeams = vi.mocked(api.config.getTeams);
 const mockGetValidToken = vi.mocked(authService.getValidToken);
+const mockGetUserToken = vi.mocked(authService.getUserToken);
 
 function jwtFor(payload: Record<string, unknown>): string {
     const encode = (value: unknown) =>
@@ -38,10 +40,13 @@ describe('userContextService', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockGetValidToken.mockResolvedValue(USER_TOKEN);
+        mockGetUserToken.mockResolvedValue(USER_TOKEN);
     });
 
     it('rejects a team key with a login hint', async () => {
         mockGetValidToken.mockResolvedValue('kodus_team_key');
+        // Only a team key is configured: no user credential.
+        mockGetUserToken.mockResolvedValue(null);
 
         await expect(userContextService.resolve('Cockpit')).rejects.toEqual(
             expect.objectContaining({
@@ -98,7 +103,7 @@ describe('userContextService', () => {
     });
 
     it('fails when the token carries no organization', async () => {
-        mockGetValidToken.mockResolvedValue(jwtFor({ sub: 'user-1' }));
+        mockGetUserToken.mockResolvedValue(jwtFor({ sub: 'user-1' }));
 
         await expect(userContextService.resolve('Cockpit')).rejects.toEqual(
             expect.objectContaining({ code: 'AUTH_REQUIRED' }),

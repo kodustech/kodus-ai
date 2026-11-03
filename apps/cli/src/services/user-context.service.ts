@@ -123,10 +123,14 @@ class UserContextService {
         };
     }
 
-    /** For the logged-in-only commands: the user's token, whatever else is set. */
+    /**
+     * For the logged-in-only commands: KODUS_TOKEN or the stored login. A team
+     * key (in the environment or stored) is never used here, and does not
+     * hide a login that exists.
+     */
     async requireUserToken(feature: string): Promise<string> {
-        const accessToken = await authService.getValidToken();
-        if (isTeamKey(accessToken)) {
+        const accessToken = await authService.getUserToken();
+        if (!accessToken) {
             throw new CommandError(
                 'AUTH_REQUIRED',
                 `${feature} requires a logged-in user. ${LOGIN_REQUIRED_HINT}`,
