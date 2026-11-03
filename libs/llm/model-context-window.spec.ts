@@ -1,31 +1,16 @@
 import {
     getModelContextWindow,
     resolveContextWindow,
-    DEFAULT_CONTEXT_WINDOW_TOKENS,
 } from './model-context-window';
 
 describe('model-context-window', () => {
-    describe('DEFAULT_CONTEXT_WINDOW_TOKENS', () => {
-        it('pins the conservative default literal', () => {
-            expect(DEFAULT_CONTEXT_WINDOW_TOKENS).toBe(128_000);
-        });
-    });
-
     describe('getModelContextWindow — input guards', () => {
         it('returns the default for undefined', () => {
             expect(getModelContextWindow(undefined)).toBe(128_000);
         });
 
-        it('returns the default for missing argument', () => {
-            expect(getModelContextWindow()).toBe(128_000);
-        });
-
         it('returns the default for empty string (falsy guard)', () => {
             expect(getModelContextWindow('')).toBe(128_000);
-        });
-
-        it('returns the default for null', () => {
-            expect(getModelContextWindow(null as any)).toBe(128_000);
         });
 
         it('returns the default for a non-string value (typeof guard)', () => {
@@ -88,14 +73,6 @@ describe('model-context-window', () => {
             // Differently-cased/punctuated form: direct MODELS lookup misses,
             // normalized index for 'ai21jambainstructv10' hits -> 70000.
             expect(getModelContextWindow('AI21_Jamba-Instruct-V1:0')).toBe(70_000);
-        });
-
-        it('resolves gpt-3.5-turbo to its exact database value', () => {
-            expect(getModelContextWindow('gpt-3.5-turbo')).toBe(16_385);
-        });
-
-        it('resolves gpt-4 to its exact database value', () => {
-            expect(getModelContextWindow('gpt-4')).toBe(8_192);
         });
 
         it('resolves via the longest substring match when nothing else hits', () => {

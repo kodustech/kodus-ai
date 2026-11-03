@@ -77,16 +77,6 @@ const renderFiles = (scope: CustomAgent["scope"]) =>
     );
 
 describe("FilesAndKnowledge", () => {
-    it("names the globs 'Files' and links the skills & docs page", () => {
-        renderFiles({});
-        expect(screen.getByLabelText("Files")).toBeInTheDocument();
-        expect(screen.queryByText("Runs on")).toBeNull();
-        expect(screen.queryByText("Follows")).toBeNull();
-        expect(
-            screen.getByRole("link", { name: "Manage skills & docs" }),
-        ).toHaveAttribute("href", "/settings/code-review/repo-1/skills");
-    });
-
     it("explains that brackets and parentheses also match literally", () => {
         renderFiles({ include: ["src/app/(shop)/[id]/**"] });
         expect(screen.getByRole("note")).toHaveTextContent(

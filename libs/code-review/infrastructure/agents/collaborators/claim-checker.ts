@@ -27,7 +27,7 @@
  * without a sandbox.
  */
 import type { LogArguments } from '@libs/core/log/logger';
-import { GREP_NO_MATCHES } from './repo-lookup';
+import { GREP_NO_MATCHES, toRepoPath } from './repo-lookup';
 import type { RepoLookup } from './repo-lookup';
 import { SHARD_CONCURRENCY_DEFAULT } from './kody-rules-sharded.judge';
 import type { ShardViolation } from './kody-rules-sharded.judge';
@@ -84,7 +84,8 @@ const DEFAULT_TIMEOUT_MS = 5_000;
 /** What `RemoteCommands.grep` returns when ripgrep matched nothing. */
 const NO_MATCHES = GREP_NO_MATCHES;
 
-const normalizePath = (p: string): string => p.replace(/^\.\//, '').trim();
+/** Grep answers repo-relative; Azure Repos names files with a leading "/". */
+const normalizePath = (p: string): string => toRepoPath(p.trim());
 
 /**
  * Whether a claimed path names a file rather than a directory.
@@ -333,7 +334,7 @@ function restates(violation: ShardViolation, claim: Claim): boolean {
 
 /** Identity of a claim, so one repository check serves every finding making it. */
 const claimKeyOf = (claim: Claim): string =>
-    `${claim.kind}::${claim.symbol ?? ''}::${claim.path ?? ''}`;
+    `${claim.kind}::${claim.symbol ?? ''}::${normalizePath(claim.path ?? '')}`;
 
 /**
  * The group's own lines, as one span. `refute` excludes a finding's own lines

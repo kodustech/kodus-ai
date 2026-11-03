@@ -3,6 +3,10 @@ import type {
     ToolResult,
 } from '@libs/agent-harness/domain/contracts/tool.contract';
 import { RunToolCache } from '@libs/code-review/infrastructure/agents/adapters/run-tool-cache';
+import {
+    isSecretFilePath,
+    secretFileRefusal,
+} from '@libs/code-review/infrastructure/agents/engine/secret-files';
 
 import type { BaseBranchReader } from './base-branch-reader';
 import { resolveInsideFolder } from './knowledge-path';
@@ -156,6 +160,9 @@ export function buildKnowledgeTools(
                     output: `"${input?.path}" is not a file of skill "${skill.name}". Files: ${skill.files.join(', ') || '(none)'}`,
                     isError: true,
                 };
+            }
+            if (isSecretFilePath(relative)) {
+                return { output: secretFileRefusal(relative), isError: true };
             }
 
             const result = await cache.getOrRun(

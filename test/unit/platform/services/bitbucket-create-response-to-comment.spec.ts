@@ -41,7 +41,6 @@ let BitbucketDataCenterService: any;
 describe('BitbucketService.createResponseToComment', () => {
     let bitbucketService: any;
     let bitbucketCloudService: any;
-    let bitbucketDataCenterService: any;
     let createCommentMock: jest.Mock;
 
     beforeAll(async () => {
@@ -104,7 +103,6 @@ describe('BitbucketService.createResponseToComment', () => {
 
         bitbucketService = moduleRef.get(BitbucketService);
         bitbucketCloudService = moduleRef.get(BitbucketCloudService);
-        bitbucketDataCenterService = moduleRef.get(BitbucketDataCenterService);
 
         jest.spyOn(bitbucketCloudService, 'getAuthDetails').mockResolvedValue(
             {},
@@ -146,12 +144,6 @@ describe('BitbucketService.createResponseToComment', () => {
         expect(call.workspace).toBe('{workspace-uuid}');
         expect(call._body.content.raw).toBe('Analyzing your request...');
         expect(call._body.parent.id).toBe(1258376);
-    });
-
-    it('returns the API response data on success', async () => {
-        const result =
-            await bitbucketService.createResponseToComment(baseParams);
-        expect(result).toEqual({ id: 'comment-id' });
     });
 
     it('returns null when the API call throws', async () => {

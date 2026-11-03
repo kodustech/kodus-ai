@@ -2,13 +2,11 @@
  * Vertex BUILD + SHAPE contract — the half of this provider no live call reaches.
  *
  * WHY THIS FILE EXISTS
- * `vertex.spec.ts` next door is about usage normalization, and its one
- * end-to-end case deliberately passes `apiKey: 'not-a-service-account-json'`,
- * which means it exercises the AI-Studio FALLBACK rather than Vertex. So the
- * Vertex path itself — the Service Account decode, the choice between the Gemini
- * and the Anthropic-MaaS builder, the location default — had no test at all,
- * while the live tier that would have covered it is parked behind a GCP quota
- * grant we do not hold (see byok-reasoning.live.spec.ts).
+ * The conformance sweep (kernel/registry.spec.ts) deliberately passes
+ * `apiKey: 'not-a-service-account-json'`, which exercises the AI-Studio FALLBACK
+ * rather than Vertex, and the live tier is parked behind a GCP quota grant we do
+ * not hold (see byok-reasoning.live.spec.ts). The builder choice itself
+ * (Gemini vs Anthropic MaaS, location default) is pinned in model-builders.spec.ts.
  *
  * That combination is what this file closes. None of it needs a project, a
  * credential or a network: `vertexModelFromSaJson` only requires a parseable SA
@@ -44,7 +42,7 @@ import { createVertexAnthropic as rawCreateVertexAnthropic } from '@ai-sdk/googl
 import { createGoogleGenerativeAI as rawCreateGoogleGenerativeAI } from '@ai-sdk/google';
 
 import { vertexModule } from './index';
-import { parseSaCredentials, vertexModelFromSaJson } from '../../model-builders';
+import { parseSaCredentials } from '../../model-builders';
 
 const createVertex = rawCreateVertex as unknown as jest.Mock;
 const createVertexAnthropic = rawCreateVertexAnthropic as unknown as jest.Mock;
@@ -81,57 +79,6 @@ describe('parseSaCredentials — both encodings a customer can paste', () => {
             const parsed = parseSaCredentials(bad);
             expect(parsed?.project_id).toBeUndefined();
         }
-    });
-});
-
-describe('vertexModelFromSaJson — which builder, and with what settings', () => {
-    it('routes a claude-* id through Anthropic MaaS, not the Gemini builder', () => {
-        vertexModelFromSaJson(SA_B64, 'claude-sonnet-5', 'global');
-
-        expect(createVertexAnthropic).toHaveBeenCalledTimes(1);
-        expect(createVertex).not.toHaveBeenCalled();
-        expect(createVertexAnthropic).toHaveBeenCalledWith(
-            expect.objectContaining({ project: 'kodus-test-project', location: 'global' }),
-        );
-    });
-
-    it('routes a gemini id through the Gemini builder', () => {
-        vertexModelFromSaJson(SA_B64, 'gemini-3.1-pro-preview', 'global');
-
-        expect(createVertex).toHaveBeenCalledTimes(1);
-        expect(createVertexAnthropic).not.toHaveBeenCalled();
-    });
-
-    it('defaults the location to `global` when the slot omits it', () => {
-        // Regional endpoints do not serve current Claude at all — us-east5
-        // answers 404 for a bare `claude-sonnet-4-6`, measured 2026-09-17. The
-        // default is what keeps a slot with no location working.
-        vertexModelFromSaJson(SA_B64, 'claude-sonnet-5');
-
-        expect(createVertexAnthropic).toHaveBeenCalledWith(
-            expect.objectContaining({ location: 'global' }),
-        );
-    });
-
-    it('honours an explicit region instead of the default', () => {
-        vertexModelFromSaJson(SA_B64, 'gemini-2.5-pro', 'us-central1');
-
-        expect(createVertex).toHaveBeenCalledWith(
-            expect.objectContaining({ location: 'us-central1' }),
-        );
-    });
-
-    it('passes the parsed credentials to googleAuthOptions', () => {
-        vertexModelFromSaJson(SA_B64, 'claude-sonnet-5', 'global');
-
-        const settings = createVertexAnthropic.mock.calls[0][0] as any;
-        expect(settings.googleAuthOptions.credentials.client_email).toBe(SA.client_email);
-    });
-
-    it('returns null — never a half-built model — when the value is not an SA', () => {
-        expect(vertexModelFromSaJson('AIzaSyD-not-a-service-account', 'gemini-2.5-pro')).toBeNull();
-        expect(createVertex).not.toHaveBeenCalled();
-        expect(createVertexAnthropic).not.toHaveBeenCalled();
     });
 });
 
@@ -248,5 +195,13 @@ describe('vertexModule.temperaturePolicy — where the bands really diverge', ()
         expect(policy('claude-sonnet-4-6')).toEqual({ kind: 'adjustable' });
         expect(policy('claude-haiku-4-5')).toEqual({ kind: 'adjustable' });
         expect(policy('gemini-3.1-pro-preview')).toEqual({ kind: 'adjustable' });
+    });
+});
+
+describe('vertexModule.capabilities', () => {
+    it("declares structuredOutput 'json_schema'", () => {
+        expect(
+            vertexModule.capabilities('gemini-2.5-flash').structuredOutput,
+        ).toBe('json_schema');
     });
 });

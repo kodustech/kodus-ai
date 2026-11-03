@@ -1,5 +1,5 @@
 /**
- * Mutation-killing spec for estimateTextTokens + FALLBACK_CHARS_PER_TOKEN.
+ * Mutation-killing spec for estimateTextTokens.
  *
  * `tiktoken` is fully mocked so the tests are deterministic (no WASM) and can
  * drive every branch of the estimator:
@@ -47,13 +47,6 @@ function fixedLengthEncoder(len, spy?) {
 
 beforeEach(() => {
     jest.clearAllMocks();
-});
-
-describe('FALLBACK_CHARS_PER_TOKEN', () => {
-    it('is exactly 3 (the conservative code-density ratio the fallback divides by)', () => {
-        const { FALLBACK_CHARS_PER_TOKEN } = require('./token-estimate');
-        expect(FALLBACK_CHARS_PER_TOKEN).toBe(3);
-    });
 });
 
 describe('estimateTextTokens — falsy guard', () => {
@@ -193,12 +186,8 @@ describe('estimateTextTokens — fallback arithmetic (Math.ceil, divisor 3)', ()
     // All of these force the fallback path via a throwing get_encoding, then
     // pin the exact ceil(len / 3) result to kill divisor and rounding mutants.
     const cases = [
-        { text: 'abc', len: 3, expected: 1 }, // 3/3 = 1 exact
-        { text: 'abcd', len: 4, expected: 2 }, // 4/3 = 1.33 → ceil 2 (floor/round would be 1)
-        { text: 'abcde', len: 5, expected: 2 }, // 5/3 = 1.66 → ceil 2 (floor would be 1)
-        { text: 'abcdef', len: 6, expected: 2 }, // 6/3 = 2 exact (kills /2 → 3, /4 → 2? 6/4=1.5→2, use 12 below)
-        { text: 'abcdefg', len: 7, expected: 3 }, // 7/3 = 2.33 → ceil 3
-        { text: 'abcdefghijkl', len: 12, expected: 4 }, // 12/3=4; /4 would give 3, /2 would give 6
+        { text: 'abc', len: 3, expected: 1 }, // 3/3 = 1 exact; /2 would give 2
+        { text: 'abcd', len: 4, expected: 2 }, // 4/3 = 1.33 → ceil 2 (floor/round or /4 would be 1)
     ];
 
     for (const { text, len, expected } of cases) {

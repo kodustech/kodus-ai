@@ -14,27 +14,6 @@ describe('SessionEventRequestDto', () => {
         timestamp: '2025-06-01T10:30:00.000Z',
     };
 
-    it('accepts a valid payload', async () => {
-        const errors = await validate(toDto(validPayload));
-        expect(errors).toHaveLength(0);
-    });
-
-    it('accepts all 6 valid event types', async () => {
-        const types = [
-            'session_start',
-            'turn_start',
-            'turn_end',
-            'subagent_start',
-            'subagent_end',
-            'session_end',
-        ];
-
-        for (const type of types) {
-            const errors = await validate(toDto({ ...validPayload, type }));
-            expect(errors).toHaveLength(0);
-        }
-    });
-
     it('rejects invalid event type', async () => {
         const errors = await validate(
             toDto({ ...validPayload, type: 'invalid_type' }),

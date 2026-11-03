@@ -119,6 +119,7 @@ import {
     EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { AzureReposRequestHelper } from './azure-repos-request-helper';
+import { listingFailed } from '../repository-listing';
 
 // Sequence for the webhook-pass id in the instrumentation logs, so
 // successive passes over the same selection can be told apart.
@@ -942,7 +943,7 @@ export class AzureReposService implements Omit<
                 return null;
             }
 
-            let state: PullRequestReviewState | null = null;
+            let state: PullRequestReviewState = PullRequestReviewState.NONE;
             for (const reviewer of reviewers || []) {
                 if (
                     reviewer.id === currentUserId &&
@@ -1014,6 +1015,54 @@ export class AzureReposService implements Omit<
         }
     }
 
+    /**
+     * Removes the token user's approval when a later review holds it.
+     * Returns how many approvals were removed (0 or 1).
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(
+                `Could not read Kody's approval on PR #${prNumber}`,
+            );
+        }
+        if (state !== PullRequestReviewState.APPROVED) return 0;
+        const { orgName, token } = await this.getAuthDetails(
+            organizationAndTeamData,
+        );
+        const [projectId, reviewerId] = await Promise.all([
+            this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            ),
+            this.azureReposRequestHelper.getAuthenticatedUserId({
+                orgName,
+                token,
+            }),
+        ]);
+        if (!reviewerId) throw new Error('Unable to identify reviewer from PAT.');
+        await this.azureReposRequestHelper.votePullRequest({
+            orgName,
+            token,
+            projectId,
+            repositoryId: repository.id,
+            prId: prNumber,
+            reviewerId,
+            vote: AzurePullRequestVote.NoVote,
+        });
+        return 1;
+    }
+
     async approvePullRequest(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
@@ -1064,7 +1113,9 @@ export class AzureReposService implements Omit<
                 context: AzureReposService.name,
                 serviceName: 'AzureReposService approvePullRequest',
                 error,
-                metadata: { params },
+                // Azure says why it refused the vote (TF… code) only in the
+                // body; without it a 400 repeated by the cron can't be read.
+                metadata: { params, azureError: error?.response?.data },
             });
             return null;
         }
@@ -1482,6 +1533,108 @@ export class AzureReposService implements Omit<
                 serviceName: 'AzureReposService',
                 error,
                 metadata: { params },
+            });
+            return null;
+        }
+    }
+
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ): Promise<FileChange[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            baseBranch,
+            headSha,
+        } = params;
+
+        try {
+            const { orgName, token } = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            const projectId = await this.getProjectIdFromRepository(
+                organizationAndTeamData,
+                repository.id,
+            );
+            if (!projectId) {
+                throw new Error('Repository project not found');
+            }
+
+            // Every push is an iteration that keeps its own source commit and
+            // merge base, so the earlier head is still readable after a rebase.
+            const iterations = await this.azureReposRequestHelper.getIterations(
+                {
+                    orgName,
+                    token,
+                    projectId,
+                    repositoryId: repository.id,
+                    prId: prNumber,
+                },
+            );
+            const iteration = [...(iterations ?? [])]
+                .reverse()
+                .find((it) => it?.sourceRefCommit?.commitId === headSha);
+            const baseCommitId =
+                iteration?.commonRefCommit?.commitId ??
+                iteration?.targetRefCommit?.commitId;
+            if (!iteration || !baseCommitId) {
+                throw new Error('No PR iteration had this head');
+            }
+
+            const changes = await this.azureReposRequestHelper.getChanges({
+                orgName,
+                token,
+                projectId,
+                repositoryId: repository.id,
+                pullRequestId: prNumber,
+                iterationId: iteration.id,
+            });
+            const entries = (changes ?? []).filter(
+                (change) => change.item?.path || change?.originalPath,
+            );
+
+            const limit = pLimit(AzureReposService.FILE_CONTENT_CONCURRENCY);
+            const files = await Promise.all(
+                entries.map((change) =>
+                    limit(() =>
+                        this._generateFileDiffForAzure({
+                            orgName,
+                            token,
+                            projectId,
+                            repositoryId: repository.id,
+                            filePath: change.item?.path || change?.originalPath,
+                            baseCommitId,
+                            targetCommitId: headSha,
+                            changeType: change.changeType,
+                            rethrowRateLimit: true,
+                        }),
+                    ),
+                ),
+            );
+            if (files.some((file) => !file)) {
+                throw new Error('Some file diffs could not be built');
+            }
+
+            return files as FileChange[];
+        } catch (error) {
+            // A rate limit is not a missing diff: the caller must not answer it
+            // with a full review.
+            if (is429Error(error)) throw error;
+            this.logger.warn({
+                message: `Could not read the diff of PR#${prNumber} at ${headSha}`,
+                context: AzureReposService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                    baseBranch,
+                    headSha,
+                    reason: 'compare_failed',
+                },
             });
             return null;
         }
@@ -3847,7 +4000,7 @@ export class AzureReposService implements Omit<
                             AzureReposService['_generateFileDiffForAzure']
                         >
                     >
-                >
+                > & { previous_filename?: string }
             > = [];
             const failedFiles: Array<{ filePath: string; reason: string }> = [];
 
@@ -3857,7 +4010,16 @@ export class AzureReposService implements Omit<
                     validEntries[idx]?.originalPath;
                 if (result.status === 'fulfilled') {
                     if (result.value !== null) {
-                        successfulFiles.push(result.value);
+                        const { item, originalPath } = validEntries[idx];
+                        successfulFiles.push({
+                            ...result.value,
+                            previous_filename:
+                                item?.path &&
+                                originalPath &&
+                                originalPath !== item.path
+                                    ? originalPath
+                                    : undefined,
+                        });
                     }
                     // `value === null` means `_generateFileDiffForAzure`
                     // swallowed its own error and already logged it — no
@@ -3932,6 +4094,8 @@ export class AzureReposService implements Omit<
         baseCommitId: string | null; // Can be null for new files
         targetCommitId: string;
         changeType: string; // Azure's change type (e.g., 'add', 'edit', 'delete')
+        /** Let a rate limit through instead of answering null. */
+        rethrowRateLimit?: boolean;
     }): Promise<{
         filename: string;
         sha: string; // Added missing sha property
@@ -4079,6 +4243,7 @@ export class AzureReposService implements Omit<
                 content: modifiedFileContent, // Added content
             };
         } catch (error: any) {
+            if (params.rethrowRateLimit && is429Error(error)) throw error;
             this.logger.error({
                 message: `Error generating diff for file "${filePath}" between commits "${baseCommitId}" and "${targetCommitId}"`,
                 context: this._generateFileDiffForAzure.name,
@@ -5675,6 +5840,7 @@ export class AzureReposService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -5694,7 +5860,10 @@ export class AzureReposService implements Omit<
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Azure Repos authentication details not found',
+                );
             }
 
             const { orgName, token } = authDetails;
@@ -5711,7 +5880,10 @@ export class AzureReposService implements Omit<
                     metadata: params,
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Project ID not found for repository',
+                );
             }
 
             const {
@@ -5735,7 +5907,10 @@ export class AzureReposService implements Omit<
                         metadata: params,
                     });
 
-                    return [];
+                    return listingFailed(
+                        params.throwOnError,
+                        'Default branch not found',
+                    );
                 }
             }
 
@@ -5808,7 +5983,11 @@ export class AzureReposService implements Omit<
                 metadata: { params },
             });
 
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 
@@ -6023,6 +6202,7 @@ export class AzureReposService implements Omit<
             targetRefName: pr?.targetRefName ?? '', // TODO: remove, legacy, use base.ref
             base: {
                 ref: pr?.targetRefName?.replace('refs/heads/', ''),
+                sha: pr?.lastMergeTargetCommit?.commitId ?? '',
                 repo: {
                     id: pr?.repository?.id ?? '',
                     name: pr?.repository?.name ?? '',

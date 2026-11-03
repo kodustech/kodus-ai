@@ -28,6 +28,7 @@ const buildStrategy = (): CodeReviewPipelineStrategy =>
         mockStage('ValidateSuggestionsStage') as any,
         mockStage('CreateFileCommentsStage') as any,
         mockStage('AggregateResultsStage') as any,
+        mockStage('DecidePrApprovalStage') as any,
         mockStage('UpdateCommentsAndGenerateSummaryStage') as any,
         mockStage('RequestChangesOrApproveStage') as any,
     );
@@ -52,15 +53,9 @@ const EXPECTED_ORDER = [
     'ValidateSuggestionsStage',
     'CreateFileCommentsStage',
     'AggregateResultsStage',
+    'DecidePrApprovalStage',
     'UpdateCommentsAndGenerateSummaryStage',
     'RequestChangesOrApproveStage',
-];
-
-const REMOVED_EE_STAGES = [
-    'CollectCrossFileContextStage',
-    'KodyFineTuningStage',
-    'PRLevelReviewStage',
-    'FileAnalysisStage',
 ];
 
 describe('CodeReviewPipelineStrategy', () => {
@@ -69,14 +64,5 @@ describe('CodeReviewPipelineStrategy', () => {
             .configureStages()
             .map((s) => s.stageName);
         expect(names).toEqual(EXPECTED_ORDER);
-    });
-
-    it('contains no EE-engine stages', () => {
-        const names = buildStrategy()
-            .configureStages()
-            .map((s) => s.stageName);
-        for (const ee of REMOVED_EE_STAGES) {
-            expect(names).not.toContain(ee);
-        }
     });
 });

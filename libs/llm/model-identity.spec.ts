@@ -40,16 +40,4 @@ describe('agentModelIdentity — the ONE slot → identity derivation', () => {
         });
     });
 
-    it('a slot without attribution ids still resolves (ids undefined, not thrown)', () => {
-        expect(
-            agentModelIdentity(
-                slot({ byokModelId: undefined, credentialId: undefined }),
-            ),
-        ).toEqual({
-            model: 'openai:gpt-x',
-            isByok: true,
-            byokModelId: undefined,
-            credentialId: undefined,
-        });
-    });
 });

@@ -123,6 +123,20 @@ describe('GitHubRateLimitGateService', () => {
         expect(githubService.getAuthenticatedOctokit).not.toHaveBeenCalled();
     });
 
+    // #1541: the CLI used to default an uninferable self-managed host to
+    // GITHUB; an unknown platform must pass through without touching the bucket.
+    it('passes through an unknown platform without reading the bucket', async () => {
+        const githubService = {
+            getAuthenticatedOctokit: jest.fn(),
+        } as unknown as GithubService;
+        const { cache } = makeCacheStore();
+        const gate = new GitHubRateLimitGateService(githubService, cache);
+
+        await expect(gate.check(ORG, undefined)).resolves.toBeUndefined();
+        expect(cache.getFromCache).not.toHaveBeenCalled();
+        expect(githubService.getAuthenticatedOctokit).not.toHaveBeenCalled();
+    });
+
     // H1
     it('graceful-fails when /rate_limit itself throws — job should proceed', async () => {
         const githubService = {

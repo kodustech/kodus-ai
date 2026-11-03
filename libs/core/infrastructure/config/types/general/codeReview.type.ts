@@ -147,6 +147,15 @@ export type AIAnalysisResultPrLevel = {
     codeSuggestions: ISuggestionByPR[];
 };
 
+/** The enrichment's answer on a suggestion's fix (enrich-content.ts). */
+export const FIX_STATUSES = [
+    'local',
+    'needs-wider-change',
+    'insufficient-context',
+    'no-code-fix',
+] as const;
+export type FixStatus = (typeof FIX_STATUSES)[number];
+
 export type CodeSuggestion = {
     id?: string;
     relevantFile: string;
@@ -155,6 +164,8 @@ export type CodeSuggestion = {
     existingCode?: string;
     improvedCode: string;
     oneSentenceSummary?: string;
+    /** The enrichment's answer on the fix; anything but `local` leaves `improvedCode` empty on purpose. */
+    fixStatus?: FixStatus;
     /** The finder's whole explanation, labels stripped; `suggestionContent` is the short body shown to people. */
     fullExplanation?: string;
     relevantLinesStart?: number;
@@ -727,6 +738,14 @@ export type CodeReviewConfig = {
     kodyMemoryRules?: Partial<IKodyRule>[];
     suggestionControl?: SuggestionControlConfig;
     pullRequestApprovalActive: boolean;
+    /** Optional approval scope. Each list is OR internally; both lists together require both matches. */
+    approvalLabels?: string[];
+    approvalAuthors?: string[];
+    /** When enabled, only a low-risk judgment on the reviewed head can approve. */
+    approvalRiskActive?: boolean;
+    approvalRiskInstructions?: string;
+    /** Explicit team vetoes, independent of the calculated area map. */
+    approvalSensitivePaths?: string[];
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive?: boolean;
     kodyRulesGeneratorEnabled?: boolean;

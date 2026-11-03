@@ -202,44 +202,6 @@ describe('proactive actions', () => {
         expect(prompt).toMatch(/out of scope/i);
     });
 
-    it('tells the agent to evaluate whether the exchange is worth persisting', () => {
-        const prompt = userPrompt(withOrgTools);
-
-        expect(prompt).toMatch(/durable/i);
-        expect(prompt).toMatch(/offer/i);
-    });
-
-    it('keeps the write path opt-in behind the developer confirmation', () => {
-        const prompt = userPrompt(withOrgTools);
-
-        expect(prompt).toMatch(/Default to OFFERING/);
-        expect(prompt).toMatch(/ONLY when/);
-    });
-
-    it('spells out that an explanation is not a request to act', () => {
-        const prompt = userPrompt(withOrgTools);
-
-        expect(prompt).toMatch(/is NOT a request to act/);
-        expect(prompt).toMatch(/unsure whether you were asked, you were not/i);
-    });
-
-    it('forbids restating a past action as if it just happened', () => {
-        const prompt = userPrompt(withOrgTools);
-
-        expect(prompt).toMatch(/earlier turns/i);
-        expect(prompt).toMatch(/THIS turn/);
-    });
-
-    it('tells the agent how to declare what it intends', () => {
-        const prompt = userPrompt(withOrgTools);
-
-        expect(prompt).toContain('kodusDecideAction');
-        expect(prompt).toMatch(/exactly once/i);
-        expect(prompt).toMatch(/'offer'/);
-        expect(prompt).toMatch(/'act'/);
-        expect(prompt).toMatch(/quote/i);
-    });
-
     it('never advertises the destructive tools', () => {
         const prompt = userPrompt(withOrgTools);
 

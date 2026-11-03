@@ -16,7 +16,9 @@ jest.mock('ai', () => {
     const actual = jest.requireActual('ai');
     return { ...actual, generateText: jest.fn() };
 });
-jest.mock('@libs/llm/model-invocation', () => ({ resolveModelConfig: jest.fn() }));
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: jest.fn(),
+}));
 jest.mock('@libs/llm/reasoning-options', () => ({
     buildReasoningProviderOptions: jest.fn(() => ({})),
     reasoningEffortWasDropped: jest.fn(() => false),
@@ -35,6 +37,8 @@ const slot = () =>
         model: 'stub',
         baseURL: 'https://stub.invalid/v1',
     }) as any;
+
+afterEach(() => jest.useRealTimers());
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -58,12 +62,15 @@ describe('probeSlotCall — an unanswering provider must still produce a verdict
 
         // What it must never do is leave the caller waiting forever. Whether
         // the verdict arrives as a resolved failure or a throw is the probe's
-        // business; settling at all is the contract under test.
-        const settled = await probeSlotCall(slot(), { timeoutMs: 40 }).then(
+        // business; settling at all is the contract under test. `hardTimeout`
+        // adds a 5s grace to the 40ms ceiling; fake timers cross it at once.
+        jest.useFakeTimers();
+        const settled = probeSlotCall(slot(), { timeoutMs: 40 }).then(
             () => 'resolved',
             (e: Error) => e.message,
         );
+        await jest.advanceTimersByTimeAsync(40 + 5_000);
 
-        expect(settled).toMatch(/resolved|\[HARD-TIMEOUT\]/);
-    }, 15000);
+        expect(await settled).toMatch(/resolved|\[HARD-TIMEOUT\]/);
+    });
 });

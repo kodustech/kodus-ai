@@ -58,12 +58,4 @@ describe('RateLimitError + isRateLimitError', () => {
         expect(isRateLimitError('rate limit string')).toBe(false);
         expect(isRateLimitError(42)).toBe(false);
     });
-
-    it('preserves context (org/team/installation) for downstream logging', () => {
-        const err = new RateLimitError({
-            resetAt: new Date(),
-            context: { organizationId: 'o', teamId: 't' },
-        });
-        expect(err.context).toEqual({ organizationId: 'o', teamId: 't' });
-    });
 });

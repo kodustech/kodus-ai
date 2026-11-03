@@ -47,6 +47,7 @@ import {
     normalizeSdkUsage,
 } from '../kernel/usage';
 import { reasoningEffortFromWire } from '../kernel/override-wire-spelling';
+import { EFFORT_TO_BUDGET } from '../kernel/effort-budget';
 
 /**
  * Native OpenAI model families that honor strict `response_format: json_schema`
@@ -288,8 +289,15 @@ export const openaiModule: ProviderModule = {
                 // gateway upstream rejects the field (OpenCode Go's glm-5.3-flash,
                 // 2026-09-30: `json: unknown field "thinking"`). OpenCode's own
                 // client sends no reasoning options to GLM-5.3 either.
+                const budget = traits.thinkingCarriesBudget
+                    ? EFFORT_TO_BUDGET[effort as keyof typeof EFFORT_TO_BUDGET]
+                    : undefined;
                 const payload: Record<string, any> = traits.canDisableThinking
-                    ? { thinking: { type: 'enabled' } }
+                    ? {
+                          thinking: budget
+                              ? { type: 'enabled', budget_tokens: budget }
+                              : { type: 'enabled' },
+                      }
                     : {};
                 // Only brands documented to accept the PAIR get an effort.
                 // DeepSeek REQUIRES `thinking` + `reasoning_effort` together and

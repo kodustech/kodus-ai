@@ -174,6 +174,8 @@ export function createMCPAdapter(config: MCPAdapterConfig): MCPAdapter {
                 inputSchema: tool?.inputSchema,
                 outputSchema: tool?.outputSchema,
                 annotations: tool?.annotations,
+                _meta: tool?._meta,
+                serverName: tool?.serverName,
                 title: tool?.title,
                 execute: async (args: unknown, _ctx: unknown) => {
                     return registry.executeTool(

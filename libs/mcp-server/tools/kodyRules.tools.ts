@@ -27,7 +27,11 @@ import {
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { buildKodyRuleCentralizedMutationRequest } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
 import { buildKodyRuleAppLink } from '@libs/ee/kodyRules/utils/build-rule-link';
-import { BaseResponse, McpToolDefinition } from '../types/mcp-tool.interface';
+import {
+    BaseResponse,
+    McpToolDefinition,
+    PROACTIVE_HINT_META_KEY,
+} from '../types/mcp-tool.interface';
 import { wrapToolHandler } from '../utils/mcp-protocol.utils';
 
 type KodyRuleInput = Required<
@@ -106,11 +110,32 @@ function serializeKodyRule(rule: Partial<IKodyRule>): SerializedKodyRule {
     const { createdAt, updatedAt, ...rest } = rule;
     const toIso = (value?: Date | string) =>
         value instanceof Date ? value.toISOString() : value;
+    const normalized: Partial<IKodyRule> = { ...rest };
+
+    // Older embedded rules may store null where the MCP list contract has an
+    // optional field. Omit those values; reason and directoryId are the two
+    // fields whose output schema explicitly permits null.
+    const optionalNonNullableFields = [
+        'uuid',
+        'title',
+        'rule',
+        'path',
+        'status',
+        'severity',
+        'label',
+        'type',
+        'examples',
+        'repositoryId',
+        'scope',
+    ] as const;
+    for (const key of optionalNonNullableFields) {
+        if (normalized[key] === null) delete normalized[key];
+    }
 
     return {
-        ...rest,
-        ...(createdAt !== undefined && { createdAt: toIso(createdAt) }),
-        ...(updatedAt !== undefined && { updatedAt: toIso(updatedAt) }),
+        ...normalized,
+        ...(createdAt != null && { createdAt: toIso(createdAt) }),
+        ...(updatedAt != null && { updatedAt: toIso(updatedAt) }),
     };
 }
 
@@ -436,7 +461,9 @@ export class KodyRulesTools {
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
-                proactiveHint:
+            },
+            _meta: {
+                [PROACTIVE_HINT_META_KEY]:
                     'the developer states a standard the team wants enforced from now on, or repeats the same explanation across threads',
             },
             description:
@@ -687,7 +714,9 @@ export class KodyRulesTools {
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
-                proactiveHint:
+            },
+            _meta: {
+                [PROACTIVE_HINT_META_KEY]:
                     'the developer says an existing rule is wrong, outdated or too broad — narrow its scope or lower its severity (look the rule up first)',
             },
             description:
@@ -977,8 +1006,10 @@ export class KodyRulesTools {
             annotations: {
                 readOnlyHint: false,
                 destructiveHint: false,
-                proactiveHint:
-                    'the developer explains a team convention, or why a finding is a false positive — record it so future reviews stop repeating it',
+            },
+            _meta: {
+                [PROACTIVE_HINT_META_KEY]:
+                    'the developer explains, in their own words, a team convention or why a finding is a false positive — record it so future reviews stop repeating it. Not when they accept the finding and fix it',
             },
             description:
                 'Capture a memory, preference, or coding rule derived from context to influence future interactions or code generation. Invoke this tool whenever the user demonstrates an explicit or implicit intent to save a memory, establish a convention, or note a preference. Focus on capturing the user intent rather than strictly evaluating it as a permanent architectural rule. After execution, ALWAYS inform the user of: (1) final decision/action (created or updated), (2) whether approval is required in UI, and (3) the provided link to navigate in UI. If status is pending, use the returned general memories page link (without ruleId/teamId); do not claim direct memory details link will work. AVOID: Transient task instructions ("Fix this now"), debugging chatter ("I see an error"), questions ("What is the deadline?"), or vague statements without clear actionable information. If centralized config is enabled the memory rule will be published to a pull request pending to be approved.',

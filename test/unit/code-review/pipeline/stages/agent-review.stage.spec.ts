@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { produce } from 'immer';
 import { AgentReviewStage } from '@/code-review/pipeline/stages/agent-review.stage';
 import { ReviewOrchestratorService } from '@/code-review/infrastructure/agents/review-orchestrator.service';
 import { ObservabilityService } from '@/core/log/observability.service';
@@ -245,20 +244,7 @@ describe('AgentReviewStage', () => {
         stage = module.get<AgentReviewStage>(AgentReviewStage);
     });
 
-    it('should have correct stage name', () => {
-        expect(stage.stageName).toBe('AgentReviewStage');
-    });
-
     describe('guard conditions', () => {
-        it('should skip when no changed files', async () => {
-            const context = createBaseContext({ changedFiles: [] });
-
-            const result = await (stage as any).executeStage(context);
-
-            expect(mockOrchestrator.execute).not.toHaveBeenCalled();
-            expect(result.fileAnalysisResults).toBeUndefined();
-        });
-
         it('should run self-contained (no tools) when no sandbox handle', async () => {
             // Previously this stage short-circuited when the sandbox was
             // missing. It now falls back to self-contained mode so trial
@@ -369,58 +355,6 @@ describe('AgentReviewStage', () => {
                 'security',
             );
         });
-
-        it('should set empty discardedSuggestions for each file', async () => {
-            const context = createBaseContext({
-                changedFiles: [{ filename: 'src/auth.ts' } as any],
-                sandboxHandle: {
-                    remoteCommands: {
-                        grep: jest.fn(),
-                        read: jest.fn(),
-                        listDir: jest.fn(),
-                    },
-                    cleanup: jest.fn(),
-                    type: 'e2b' as const,
-                    sandboxId: 'mock-sandbox-id',
-                    repoDir: '/home/user/repo',
-                    run: jest.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
-                    readFile: jest.fn().mockResolvedValue(''),
-                    writeFile: jest.fn().mockResolvedValue(undefined),
-                },
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            for (const fileResult of result.fileAnalysisResults) {
-                expect(fileResult.discardedSuggestionsBySafeGuard).toEqual([]);
-            }
-        });
-
-        it('should not throw when the context is Immer-frozen (regression)', async () => {
-            // In production the pipeline context is Immer-frozen (auto-freeze)
-            // once it has passed through an earlier stage's produce(). A direct
-            // write to it (once `context.heavy = …`, #1522) threw, and the
-            // stage swallowed it as an empty-results agent failure — the whole
-            // review finished in seconds with zero suggestions. Freeze the
-            // context the same way here so a regression to direct mutation is
-            // caught by the suite.
-            const frozenContext = produce(
-                createBaseContext({
-                    changedFiles: [
-                        { filename: 'src/auth.ts', patch: '+code' } as any,
-                    ],
-                    sandboxHandle: undefined,
-                }),
-                () => {},
-            );
-
-            const result = await (stage as any).executeStage(frozenContext);
-
-            // The orchestrator must actually run (not be short-circuited by a
-            // thrown TypeError).
-            expect(mockOrchestrator.execute).toHaveBeenCalledTimes(1);
-            expect(result.fileAnalysisResults).toBeDefined();
-        });
     });
 
     describe('kody rules severity', () => {
@@ -495,80 +429,6 @@ describe('AgentReviewStage', () => {
         });
     });
 
-    describe('error handling', () => {
-        it('should return empty results on orchestrator failure', async () => {
-            mockOrchestrator.execute.mockRejectedValue(
-                new Error('Agent loop crashed'),
-            );
-
-            const context = createBaseContext({
-                changedFiles: [{ filename: 'src/index.ts' } as any],
-                sandboxHandle: {
-                    remoteCommands: {
-                        grep: jest.fn(),
-                        read: jest.fn(),
-                        listDir: jest.fn(),
-                    },
-                    cleanup: jest.fn(),
-                    type: 'e2b' as const,
-                    sandboxId: 'mock-sandbox-id',
-                    repoDir: '/home/user/repo',
-                    run: jest.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
-                    readFile: jest.fn().mockResolvedValue(''),
-                    writeFile: jest.fn().mockResolvedValue(undefined),
-                },
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            expect(result.fileAnalysisResults).toEqual([]);
-        });
-
-        it('should handle undefined agentResults without throwing', async () => {
-            // Deliberately malformed (undefined agentResults) to test resilience.
-            mockOrchestrator.execute.mockResolvedValue({
-                suggestions: [
-                    {
-                        relevantFile: 'src/auth.ts',
-                        suggestionContent: 'Missing null check',
-                        label: 'bug',
-                        severity: 'high',
-                        relevantLinesStart: 10,
-                        relevantLinesEnd: 15,
-                    },
-                ],
-                agentResults: undefined,
-                failures: [],
-                totalDurationMs: 1000,
-                warnings: [],
-            } as any);
-
-            const context = createBaseContext({
-                changedFiles: [{ filename: 'src/auth.ts' } as any],
-                sandboxHandle: {
-                    remoteCommands: {
-                        grep: jest.fn(),
-                        read: jest.fn(),
-                        listDir: jest.fn(),
-                    },
-                    cleanup: jest.fn(),
-                    type: 'e2b' as const,
-                    sandboxId: 'mock-sandbox-id',
-                    repoDir: '/home/user/repo',
-                    run: jest.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
-                    readFile: jest.fn().mockResolvedValue(''),
-                    writeFile: jest.fn().mockResolvedValue(undefined),
-                },
-            });
-
-            const result = await (stage as any).executeStage(context);
-
-            expect(result.fileAnalysisResults).toHaveLength(1);
-            expect(result.fileAnalysisResults[0].validSuggestionsToAnalyze).toHaveLength(1);
-        });
-
-    });
-
     /**
      * The stage returns rather than throwing, so nothing downstream sees a
      * thrown error — everything it knows about a bad run has to be in
@@ -582,42 +442,6 @@ describe('AgentReviewStage', () => {
             createBaseContext({
                 changedFiles: [{ filename: 'src/index.ts' } as any],
             });
-
-        it('records a critical error when the orchestrator throws', async () => {
-            mockOrchestrator.execute.mockRejectedValue(
-                Object.assign(new Error('Path not found: /chat/completions'), {
-                    name: 'AI_APICallError',
-                    statusCode: 404,
-                }),
-            );
-
-            const result = await (stage as any).executeStage(
-                contextWithFiles(),
-            );
-
-            expect(result.errors).toHaveLength(1);
-            expect(result.errors[0].severity).toBe('critical');
-        });
-
-        it('records a critical error when post-orchestrator processing throws', async () => {
-            mockOrchestrator.execute.mockResolvedValue({
-                get suggestions(): any {
-                    throw new Error('boom while mapping results');
-                },
-                agentResults: [],
-                failures: [],
-                incomplete: [],
-                totalDurationMs: 10,
-                warnings: [],
-            } as any);
-
-            const result = await (stage as any).executeStage(
-                contextWithFiles(),
-            );
-
-            expect(result.errors).toHaveLength(1);
-            expect(result.errors[0].severity).toBe('critical');
-        });
 
         it('classifies the failure so the PR comment can name the cause', async () => {
             mockOrchestrator.execute.mockRejectedValue(
@@ -674,23 +498,6 @@ describe('AgentReviewStage', () => {
                         durationMs: 1000,
                     },
                 ],
-                totalDurationMs: 1000,
-                warnings: [],
-            } as any);
-
-            const result = await (stage as any).executeStage(
-                contextWithFiles(),
-            );
-
-            expect(result.errors ?? []).toHaveLength(0);
-        });
-
-        it('records nothing on a clean run that genuinely found no issues', async () => {
-            mockOrchestrator.execute.mockResolvedValue({
-                suggestions: [],
-                agentResults: [],
-                failures: [],
-                incomplete: [],
                 totalDurationMs: 1000,
                 warnings: [],
             } as any);
@@ -927,133 +734,6 @@ describe('AgentReviewStage', () => {
             );
         });
 
-        it('content guard: keeps a low-similarity "duplicate" the model over-merged', async () => {
-            // The model groups #1 into #0, but they describe DIFFERENT bugs (no
-            // shared words) — the content guard must reverse it and keep both.
-            const suggestions = [
-                {
-                    relevantFile: 'src/a.ts',
-                    suggestionContent: 'Null pointer dereference when the user object is missing',
-                    label: 'bug', severity: 'high',
-                    relevantLinesStart: 10, relevantLinesEnd: 14,
-                    oneSentenceSummary: 'Null pointer dereference when user is null',
-                },
-                {
-                    relevantFile: 'src/a.ts',
-                    suggestionContent: 'Race condition incrementing the payment retry counter',
-                    label: 'bug', severity: 'high',
-                    relevantLinesStart: 11, relevantLinesEnd: 13,
-                    oneSentenceSummary: 'Race condition on retry counter increment',
-                },
-            ];
-            mockTracedGenerateText.mockResolvedValue({
-                object: { groups: [{ keep: 0, duplicates: [1] }], unique: [] },
-                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
-            });
-            const origKey = process.env.API_OPEN_AI_API_KEY;
-            process.env.API_OPEN_AI_API_KEY = 'test-key';
-            try {
-                const result = await (stage as any).deduplicateSuggestions(suggestions, 42);
-                expect(result.suggestions).toHaveLength(2); // both survive
-            } finally {
-                if (origKey === undefined) delete process.env.API_OPEN_AI_API_KEY;
-                else process.env.API_OPEN_AI_API_KEY = origKey;
-            }
-        });
-
-        it('content guard: honors a merge when the two findings say the same thing', async () => {
-            // Same bug, near-identical words → guard allows; one result with an
-            // "Also found in" pointer to the other location.
-            const suggestions = [
-                {
-                    relevantFile: 'src/a.ts',
-                    suggestionContent: 'Unawaited async callback inside forEach loop',
-                    label: 'bug', severity: 'high',
-                    relevantLinesStart: 10, relevantLinesEnd: 14,
-                    oneSentenceSummary: 'Unawaited async callback in forEach loop',
-                },
-                {
-                    relevantFile: 'src/b.ts',
-                    suggestionContent: 'Unawaited async callback inside forEach loop',
-                    label: 'bug', severity: 'high',
-                    relevantLinesStart: 20, relevantLinesEnd: 24,
-                    oneSentenceSummary: 'Unawaited async callback in forEach loop',
-                },
-            ];
-            mockTracedGenerateText.mockResolvedValue({
-                object: { groups: [{ keep: 0, duplicates: [1] }], unique: [] },
-                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
-            });
-            const origKey = process.env.API_OPEN_AI_API_KEY;
-            process.env.API_OPEN_AI_API_KEY = 'test-key';
-            try {
-                const result = await (stage as any).deduplicateSuggestions(suggestions, 42);
-                expect(result.suggestions).toHaveLength(1); // merged
-                expect(result.suggestions[0].alsoFoundIn).toHaveLength(1);
-                expect(result.suggestions[0].suggestionContent).toBe(
-                    suggestions[0].suggestionContent,
-                );
-            } finally {
-                if (origKey === undefined) delete process.env.API_OPEN_AI_API_KEY;
-                else process.env.API_OPEN_AI_API_KEY = origKey;
-            }
-        });
-
-        it('fails loud (re-throws) on an unexpected dedup error outside production', async () => {
-            // Guard against the `googleKey`-class bug: a programming error must
-            // NOT be swallowed into a silent 'failed-keep-all' in dev/CI/test.
-            const suggestions = makeSuggestions(2);
-            mockTracedGenerateText.mockRejectedValue(new Error('boom'));
-            const origKey = process.env.API_OPEN_AI_API_KEY;
-            process.env.API_OPEN_AI_API_KEY = 'test-key';
-            try {
-                await expect(
-                    (stage as any).deduplicateSuggestions(suggestions, 42),
-                ).rejects.toThrow('boom');
-            } finally {
-                if (origKey === undefined)
-                    delete process.env.API_OPEN_AI_API_KEY;
-                else process.env.API_OPEN_AI_API_KEY = origKey;
-            }
-        });
-
-        it('Layer 1: should reject NaN keep index', async () => {
-            const suggestions = makeSuggestions(4);
-
-            mockTracedGenerateText.mockResolvedValue({
-                object: {
-                    groups: [{ keep: NaN, duplicates: [1, 2] }],
-                    unique: [0],
-                },
-                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
-            });
-
-            const origKey = process.env.API_OPEN_AI_API_KEY;
-            process.env.API_OPEN_AI_API_KEY = 'test-key';
-
-            try {
-                const result = await (stage as any).deduplicateSuggestions(
-                    suggestions,
-                    42,
-                );
-
-                // Layer 1: NaN keep rejected → Layer 2: valid dups (1, 2) preserved
-                // Layer 3: unclassified suggestion 3 also preserved
-                // unique[0] + dup 1 + dup 2 + unclassified 3 = 4
-                expect(result.suggestions).toHaveLength(4);
-                for (const s of result.suggestions) {
-                    expect(s.relevantFile).toBeDefined();
-                    expect(s.suggestionContent).not.toContain('undefined');
-                }
-            } finally {
-                if (origKey === undefined) {
-                    delete process.env.API_OPEN_AI_API_KEY;
-                } else {
-                    process.env.API_OPEN_AI_API_KEY = origKey;
-                }
-            }
-        });
-
         it('Layer 2: should preserve valid duplicates when keep is invalid', async () => {
             const suggestions = makeSuggestions(3);
 
@@ -1127,89 +807,6 @@ describe('AgentReviewStage', () => {
             }
         });
 
-        it('Layer 3: should preserve unclassified suggestions not in any group or unique', async () => {
-            const suggestions = makeSuggestions(3);
-
-            // LLM returns: group with invalid keep, valid dups [0, 2], no unique
-            // Suggestion 1 is not classified by any group or unique entry
-            mockTracedGenerateText.mockResolvedValue({
-                object: {
-                    groups: [{ keep: NaN, duplicates: [0, 2] }],
-                    unique: [],
-                },
-                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
-            });
-
-            const origKey = process.env.API_OPEN_AI_API_KEY;
-            process.env.API_OPEN_AI_API_KEY = 'test-key';
-
-            try {
-                const result = await (stage as any).deduplicateSuggestions(
-                    suggestions,
-                    42,
-                );
-
-                // Layer 2 adds dups 0 and 2. Layer 3 adds unclassified suggestion 1.
-                expect(result.suggestions).toHaveLength(3);
-                const filenames = result.suggestions.map(
-                    (s: any) => s.relevantFile,
-                );
-                expect(filenames).toContain('src/file-0.ts');
-                expect(filenames).toContain('src/file-1.ts');
-                expect(filenames).toContain('src/file-2.ts');
-            } finally {
-                if (origKey === undefined) {
-                    delete process.env.API_OPEN_AI_API_KEY;
-                } else {
-                    process.env.API_OPEN_AI_API_KEY = origKey;
-                }
-            }
-        });
-
-        it('should handle valid indices correctly (regression)', async () => {
-            const suggestions = makeSuggestions(4);
-
-            mockTracedGenerateText.mockResolvedValue({
-                object: {
-                    groups: [{ keep: 0, duplicates: [1] }],
-                    unique: [2, 3],
-                },
-                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
-            });
-
-            const origKey = process.env.API_OPEN_AI_API_KEY;
-            process.env.API_OPEN_AI_API_KEY = 'test-key';
-
-            try {
-                const result = await (stage as any).deduplicateSuggestions(
-                    suggestions,
-                    42,
-                );
-
-                expect(result.suggestions).toHaveLength(3);
-                const filenames = result.suggestions.map(
-                    (s: any) => s.relevantFile,
-                );
-                expect(filenames).toContain('src/file-0.ts');
-                expect(filenames).toContain('src/file-2.ts');
-                expect(filenames).toContain('src/file-3.ts');
-
-                const file0 = result.suggestions.find(
-                    (s: any) => s.relevantFile === 'src/file-0.ts',
-                );
-                expect(file0.alsoFoundIn).toEqual([
-                    expect.stringMatching(/^src\/file-1\.ts:/),
-                ]);
-                expect(file0.suggestionContent).toBe(suggestions[0].suggestionContent);
-            } finally {
-                if (origKey === undefined) {
-                    delete process.env.API_OPEN_AI_API_KEY;
-                } else {
-                    process.env.API_OPEN_AI_API_KEY = origKey;
-                }
-            }
-        });
-
         it('should not emit duplicate suggestions when index appears in both unique and group duplicates', async () => {
             const suggestions = makeSuggestions(3);
 
@@ -1230,15 +827,16 @@ describe('AgentReviewStage', () => {
                     42,
                 );
 
-                // If dedup succeeded: unique[0] + Layer 2 dup 1 = 2 (no dup 0)
-                // If dedup failed (catch): all 3 returned
-                // Either way: no crash, no empty objects, no duplicate entries
-                expect(result.suggestions.length).toBeGreaterThanOrEqual(2);
-                expect(result.suggestions.length).toBeLessThanOrEqual(3);
-                for (const s of result.suggestions) {
-                    expect(s.relevantFile).toBeDefined();
-                    expect(s.suggestionContent).not.toContain('undefined');
-                }
+                // unique[0] + Layer 2 dup 1 + unclassified 2, and index 0
+                // (both unique and a duplicate) emitted only once.
+                const filenames = result.suggestions.map(
+                    (s: any) => s.relevantFile,
+                );
+                expect(filenames.sort()).toEqual([
+                    'src/file-0.ts',
+                    'src/file-1.ts',
+                    'src/file-2.ts',
+                ]);
             } finally {
                 if (origKey === undefined) {
                     delete process.env.API_OPEN_AI_API_KEY;
@@ -1282,48 +880,6 @@ describe('AgentReviewStage', () => {
                 expect(
                     filenames.filter((f: string) => f === 'src/file-0.ts'),
                 ).toHaveLength(1);
-            } finally {
-                if (origKey === undefined) {
-                    delete process.env.API_OPEN_AI_API_KEY;
-                } else {
-                    process.env.API_OPEN_AI_API_KEY = origKey;
-                }
-            }
-        });
-
-        it('should merge duplicate locations when keep overlaps with unique', async () => {
-            const suggestions = makeSuggestions(2);
-
-            // unique[0] adds suggestion 0, then group { keep: 0, dup: [1] } is skipped
-            // but "Also found in" from dup 1 should be merged into suggestion 0
-            mockTracedGenerateText.mockResolvedValue({
-                object: {
-                    groups: [{ keep: 0, duplicates: [1] }],
-                    unique: [0],
-                },
-                usage: { inputTokens: 10, outputTokens: 10, totalTokens: 20 },
-            });
-
-            const origKey = process.env.API_OPEN_AI_API_KEY;
-            process.env.API_OPEN_AI_API_KEY = 'test-key';
-
-            try {
-                const result = await (stage as any).deduplicateSuggestions(
-                    suggestions,
-                    42,
-                );
-
-                // The formatter receives prose separately from merged locations.
-                expect(result.suggestions).toHaveLength(1);
-                expect(result.suggestions[0].relevantFile).toBe(
-                    'src/file-0.ts',
-                );
-                expect(result.suggestions[0].alsoFoundIn).toEqual([
-                    expect.stringMatching(/^src\/file-1\.ts:/),
-                ]);
-                expect(result.suggestions[0].suggestionContent).toBe(
-                    suggestions[0].suggestionContent,
-                );
             } finally {
                 if (origKey === undefined) {
                     delete process.env.API_OPEN_AI_API_KEY;

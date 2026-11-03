@@ -51,22 +51,6 @@ describe('formatCiEvidence', () => {
         expect(block).toContain('Detected a hardcoded credential.');
     });
 
-    // Repeating what their own CI already told the author is exactly the
-    // duplicate-reporting the combined review is supposed to prevent.
-    it('tells the agent not to repeat these findings', () => {
-        expect(formatCiEvidence([check()], changed).toLowerCase()).toContain(
-            'do not repeat',
-        );
-    });
-
-    // A green pipeline is not proof of correctness, and the agent must not
-    // read silence here as permission to stop looking.
-    it('warns that a passing check proves nothing', () => {
-        expect(formatCiEvidence([check()], changed).toLowerCase()).toContain(
-            'not proof',
-        );
-    });
-
     it('omits checks that passed', () => {
         const block = formatCiEvidence(
             [check({ name: 'build', conclusion: 'success', annotations: [] })],

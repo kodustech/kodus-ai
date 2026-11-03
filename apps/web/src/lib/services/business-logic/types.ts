@@ -115,6 +115,8 @@ export type BusinessLogicTestResult = {
         kind: string;
         source: "command" | "title" | "branch" | "body";
         intent: "closes" | "part_of" | "mentions";
+        /** A lower-case key in prose (`gpt-5`): a task only where a tracker has that team. */
+        loose?: boolean;
     }>;
     attempts: Array<{
         reference: string;

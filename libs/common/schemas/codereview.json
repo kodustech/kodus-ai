@@ -244,6 +244,34 @@
             "default": false,
             "description": "Indicates whether pull request approvals are currently active. A value of true means that pull request approvals are enabled, while false means they are disabled."
         },
+        "approvalLabels": {
+            "type": "array",
+            "maxItems": 50,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "A PR must carry at least one of these labels to be eligible for automatic approval."
+        },
+        "approvalAuthors": {
+            "type": "array",
+            "maxItems": 50,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "A PR must be opened by one of these provider logins to be eligible for automatic approval."
+        },
+        "approvalRiskActive": {
+            "type": "boolean",
+            "default": false,
+            "description": "Only approve after Kody assesses the PR as low risk."
+        },
+        "approvalRiskInstructions": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "Team-specific guidance for assessing approval risk."
+        },
+        "approvalSensitivePaths": {
+            "type": "array",
+            "maxItems": 100,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Glob patterns for paths that require human approval."
+        },
         "isRequestChangesActive": {
             "type": "boolean",
             "default": false,

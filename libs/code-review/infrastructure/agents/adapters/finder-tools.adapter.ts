@@ -29,6 +29,10 @@ import {
     buildAgentTools,
     type DocumentationSearchAdapter,
 } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
+import {
+    isSecretFilePath,
+    secretFileRefusal,
+} from '@libs/code-review/infrastructure/agents/engine/secret-files';
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 
@@ -133,7 +137,12 @@ export function buildFinderToolRegistry(options: FinderToolRegistryOptions): {
             tool.name === 'readFile' &&
             options.remoteCommands?.read
                 ? new OutlineFirstReadTool(tool, {
-                      readFull: (p) => options.remoteCommands!.read(p, 0, 0),
+                      // A secret file is never read here: the decorator then
+                      // falls back to the guarded readFile, which refuses it.
+                      readFull: (p) =>
+                          isSecretFilePath(p)
+                              ? Promise.reject(new Error(secretFileRefusal(p)))
+                              : options.remoteCommands!.read(p, 0, 0),
                   })
                 : tool;
         return READ_ONLY_NAV_TOOLS.has(tool.name)

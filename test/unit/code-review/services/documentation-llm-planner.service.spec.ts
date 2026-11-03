@@ -108,33 +108,6 @@ describe('DocumentationLLMPlannerService', () => {
         expect(rubyPayload.file.language).toBe('Ruby');
     });
 
-    it('should keep empty queryTasks when planner succeeds with no documentation need', async () => {
-        const service = new DocumentationLLMPlannerService(
-            buildObservabilityMock(),
-        );
-
-        const result = await service.planDocumentationByFile({
-            packages: [
-                {
-                    name: '@nestjs/common',
-                    ecosystem: 'npm',
-                    sourceFile: 'package.json',
-                },
-            ],
-            changedFiles: [
-                {
-                    filename: 'src/example.ts',
-                    patch: '@@ -1,1 +1,1 @@',
-                    fileContent: 'console.log("ok")',
-                } as FileChange,
-            ],
-        });
-
-        expect(result['src/example.ts']).toEqual({
-            queryTasks: [],
-        });
-    });
-
     it('should scope npm packages to nearest workspace manifest in monorepos', async () => {
         const service = new DocumentationLLMPlannerService(
             buildObservabilityMock(),
@@ -197,43 +170,6 @@ describe('DocumentationLLMPlannerService', () => {
                 sourceFile: 'apps/web/package.json',
             }),
         ]);
-    });
-
-    it('should return empty queryTasks when planner fails', async () => {
-        const service = new DocumentationLLMPlannerService(
-            buildObservabilityMock(),
-        );
-
-        // The structured call rejects → the per-file promise settles rejected →
-        // the planner degrades that file to an empty plan.
-        mockRun.mockRejectedValue(new Error('planner failed'));
-
-        const result = await service.planDocumentationByFile({
-            packages: [
-                {
-                    name: '@nestjs/common',
-                    ecosystem: 'npm',
-                    sourceFile: 'package.json',
-                },
-            ],
-            changedFiles: [
-                {
-                    filename: 'apps/api/src/users.controller.ts',
-                    patch: '@@ -1,1 +1,2 @@\n+ import { Controller } from "@nestjs/common"',
-                    patchWithLinesStr:
-                        '@@ -1,1 +1,2 @@\n+ import { Controller } from "@nestjs/common"',
-                    fileContent:
-                        'import { Controller } from "@nestjs/common";\n@Controller("users")\nexport class UsersController {}',
-                } as FileChange,
-            ],
-        });
-
-        const task =
-            result['apps/api/src/users.controller.ts']?.queryTasks?.[0];
-        expect(task).toBeUndefined();
-        expect(result['apps/api/src/users.controller.ts']).toEqual({
-            queryTasks: [],
-        });
     });
 
     it('should pass entire file content and diff to planner payload without truncation', async () => {

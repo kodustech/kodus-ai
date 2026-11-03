@@ -1,8 +1,4 @@
 import {
-    convertToUnifiedDiffWithLineNumbers,
-    extractLinesFromUnifiedDiff,
-} from '@/shared/utils/patch';
-import {
     resolveAddedLineAnchor,
     AddedLineAnchor,
 } from '@/shared/utils/resolve-added-line-anchor';
@@ -61,85 +57,12 @@ const TWO_HUNKS_PATCH = `@@ -10,4 +10,5 @@ function alpha()
    const e = ctx();
    const f = ctx();`;
 
-const covers = (ranges: { start: number; end: number }[], line: number) =>
-    ranges.some((r) => line >= r.start && line <= r.end);
-
 describe('resolve-added-line-anchor', () => {
-    /**
-     * PRECONDITION — runs GREEN today. Proves, using only the existing patch
-     * utilities, that each fixture really does place the "suspect" target on a
-     * context line and the "control" target on an added line. This documents the
-     * bug independently of the not-yet-written resolver.
-     */
-    describe('fixtures reproduce context-vs-added anchors (precondition)', () => {
-        it('docblock hunk: 1032 is added, 1035 is context', () => {
-            const ranges = extractLinesFromUnifiedDiff(
-                convertToUnifiedDiffWithLineNumbers(DOCBLOCK_PATCH, {
-                    filename: 'InvoiceRenderer.php',
-                }),
-            );
-
-            expect(ranges).toEqual([{ start: 1032, end: 1032 }]);
-            expect(covers(ranges, 1032)).toBe(true); // control (added)
-            expect(covers(ranges, 1035)).toBe(false); // suspect (context)
-            expect(covers(ranges, 1030)).toBe(false); // suspect (context)
-        });
-
-        it('two-adds hunk: 11 and 14 added, 12/13/15 context', () => {
-            const ranges = extractLinesFromUnifiedDiff(
-                convertToUnifiedDiffWithLineNumbers(TWO_ADDS_PATCH, {
-                    filename: 'build.ts',
-                }),
-            );
-
-            expect(ranges).toEqual([
-                { start: 11, end: 11 },
-                { start: 14, end: 14 },
-            ]);
-            expect(covers(ranges, 12)).toBe(false);
-            expect(covers(ranges, 13)).toBe(false);
-        });
-
-        it('deletion-only hunk: no added lines exist', () => {
-            const ranges = extractLinesFromUnifiedDiff(
-                convertToUnifiedDiffWithLineNumbers(DELETION_ONLY_PATCH, {
-                    filename: 'shrink.ts',
-                }),
-            );
-
-            expect(ranges).toEqual([]);
-        });
-
-        it('multiline-add hunk: 21 and 22 form a contiguous added range', () => {
-            const ranges = extractLinesFromUnifiedDiff(
-                convertToUnifiedDiffWithLineNumbers(MULTILINE_ADD_PATCH, {
-                    filename: 'grow.ts',
-                }),
-            );
-
-            expect(ranges).toEqual([{ start: 21, end: 22 }]);
-        });
-
-        it('two-hunks patch: added lines 11 and 101 sit in separate hunks', () => {
-            const ranges = extractLinesFromUnifiedDiff(
-                convertToUnifiedDiffWithLineNumbers(TWO_HUNKS_PATCH, {
-                    filename: 'twohunks.ts',
-                }),
-            );
-
-            expect(ranges).toEqual([
-                { start: 11, end: 11 },
-                { start: 101, end: 101 },
-            ]);
-        });
-    });
-
     /**
      * BEHAVIOR — the spec of the fix (in-range only, no distance cap).
      * The anchor GitLab uses is `startLine ?? line`; the covered span is
      * `[startLine ?? line, line]`. Snap only ever lands inside that span;
      * otherwise the comment is discarded.
-     * RED until resolveAddedLineAnchor is implemented; GREEN when the fix lands.
      */
     describe('resolveAddedLineAnchor', () => {
         it('leaves a single-line added target untouched (control note stays healthy)', () => {

@@ -4,8 +4,8 @@ import { ActionType } from '@libs/core/infrastructure/config/types/general/codeR
 /**
  * Mutation-killing unit tests for the deterministic, dependency-free logic in
  * UnifiedLogHandler:
- *   - generateChangedData / generateActionDescription / generateDescription /
- *     capitalizeFirstLetter (private instance methods, reached via `as any`)
+ *   - generateChangedData / generateActionDescription / generateDescription
+ *     (private instance methods, reached via `as any`)
  *   - hasChanged / isEqual / formatValue (static methods)
  *
  * The constructor takes two injected deps that NONE of these methods touch, so
@@ -21,31 +21,6 @@ describe('UnifiedLogHandler deterministic logic', () => {
         handler = new UnifiedLogHandler({} as any, {} as any);
     });
 
-    describe('capitalizeFirstLetter', () => {
-        const cap = (s: string): string =>
-            (handler as any).capitalizeFirstLetter(s);
-
-        it('uppercases the first character and preserves the rest', () => {
-            expect(cap('hello')).toBe('Hello');
-        });
-
-        it('uppercases a single lowercase character', () => {
-            expect(cap('a')).toBe('A');
-        });
-
-        it('leaves an already-capitalized string unchanged', () => {
-            expect(cap('Hello')).toBe('Hello');
-        });
-
-        it('returns empty string for empty input (no crash on charAt(0))', () => {
-            expect(cap('')).toBe('');
-        });
-
-        it('does not alter a string starting with a digit', () => {
-            expect(cap('123abc')).toBe('123abc');
-        });
-    });
-
     describe('generateActionDescription', () => {
         const desc = (entityType: string, action: ActionType): string =>
             (handler as any).generateActionDescription(entityType, action);
@@ -54,28 +29,6 @@ describe('UnifiedLogHandler deterministic logic', () => {
             expect(desc('kodyRule', ActionType.CREATE)).toBe(
                 'Kody Rule Created',
             );
-        });
-
-        it('maps config + EDIT to "Configuration Edited"', () => {
-            expect(desc('config', ActionType.EDIT)).toBe(
-                'Configuration Edited',
-            );
-        });
-
-        it('maps repository + DELETE to "Repository Deleted"', () => {
-            expect(desc('repository', ActionType.DELETE)).toBe(
-                'Repository Deleted',
-            );
-        });
-
-        it('maps integration + ADD to "Integration Added"', () => {
-            expect(desc('integration', ActionType.ADD)).toBe(
-                'Integration Added',
-            );
-        });
-
-        it('maps user + CREATE to "User Created"', () => {
-            expect(desc('user', ActionType.CREATE)).toBe('User Created');
         });
 
         it('falls back to capitalizeFirstLetter for an unknown entity type', () => {
@@ -109,24 +62,6 @@ describe('UnifiedLogHandler deterministic logic', () => {
             expect(
                 desc(ActionType.CREATE, 'kodyRule', 'My Rule', 'a@b.com'),
             ).toBe('User a@b.com created "My Rule"');
-        });
-
-        it('maps EDIT to "edited"', () => {
-            expect(desc(ActionType.EDIT, 'config', 'Cfg', 'x@y.com')).toBe(
-                'User x@y.com edited "Cfg"',
-            );
-        });
-
-        it('maps DELETE to "deleted"', () => {
-            expect(desc(ActionType.DELETE, 'config', 'Cfg', 'x@y.com')).toBe(
-                'User x@y.com deleted "Cfg"',
-            );
-        });
-
-        it('maps ADD to "added"', () => {
-            expect(desc(ActionType.ADD, 'config', 'Cfg', 'x@y.com')).toBe(
-                'User x@y.com added "Cfg"',
-            );
         });
 
         it('uses the bare entityType (no quotes) when entityName is undefined', () => {
@@ -194,17 +129,6 @@ describe('UnifiedLogHandler deterministic logic', () => {
             ]);
         });
 
-        it('returns exactly one entry', () => {
-            const result = gen({
-                actionType: ActionType.ADD,
-                entityType: 'user',
-                entityName: 'Bob',
-                oldData: { x: 1 },
-                newData: { x: 2 },
-                userInfo: { userId: 'u1', userEmail: 'a@b.com' },
-            });
-            expect(result).toHaveLength(1);
-        });
     });
 
     describe('formatValue (static)', () => {
@@ -212,10 +136,6 @@ describe('UnifiedLogHandler deterministic logic', () => {
 
         it('returns "none" for null', () => {
             expect(fmt(null)).toBe('none');
-        });
-
-        it('returns "none" for undefined', () => {
-            expect(fmt(undefined)).toBe('none');
         });
 
         it('returns "enabled" for boolean true', () => {

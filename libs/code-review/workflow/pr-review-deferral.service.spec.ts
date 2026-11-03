@@ -71,15 +71,6 @@ describe('PrReviewDeferralService', () => {
             expect(service.next(withDeferrals(0), almostUp)).toBeNull();
         });
 
-        it('keeps going while the holder is still comfortably visible', () => {
-            const plentyLeft = new Date(Date.now() + GATE_LOOKBACK_MS);
-
-            expect(service.next(withDeferrals(0), plentyLeft)).toEqual({
-                deferredCount: 1,
-                delayMs: BASE_DELAY_MS,
-            });
-        });
-
         // The deadline is anchored to the HOLDER's start, not to the
         // collision, so a command arriving late into a long review gets a
         // correspondingly smaller budget than one arriving immediately.
@@ -111,11 +102,16 @@ describe('PrReviewDeferralService', () => {
     });
 
     describe('defer', () => {
-        it('reschedules the job instead of failing it', async () => {
-            await service.defer(makeJob(), {
-                deferredCount: 1,
-                delayMs: BASE_DELAY_MS,
-            });
+        it('reschedules the job instead of failing it, carrying the count and prior metadata', async () => {
+            await service.defer(
+                makeJob({
+                    metadata: {
+                        somethingElse: 'keep-me',
+                        prReviewDeferral: { deferredCount: 1 },
+                    },
+                }),
+                { deferredCount: 2, delayMs: BASE_DELAY_MS * 2 },
+            );
 
             expect(jobRepository.update).toHaveBeenCalledWith(
                 'job-1',
@@ -124,25 +120,8 @@ describe('PrReviewDeferralService', () => {
                     scheduledAt: expect.any(Date),
                 }),
             );
-        });
-
-        it('carries the deferral count forward', async () => {
-            await service.defer(
-                withDeferrals(1),
-                { deferredCount: 2, delayMs: BASE_DELAY_MS * 2 },
-            );
-
             const [, update] = jobRepository.update.mock.calls[0];
             expect(update.metadata.prReviewDeferral.deferredCount).toBe(2);
-        });
-
-        it('preserves unrelated job metadata', async () => {
-            await service.defer(
-                makeJob({ metadata: { somethingElse: 'keep-me' } }),
-                { deferredCount: 1, delayMs: BASE_DELAY_MS },
-            );
-
-            const [, update] = jobRepository.update.mock.calls[0];
             expect(update.metadata.somethingElse).toBe('keep-me');
         });
 

@@ -789,6 +789,50 @@ describe('TriggerBusinessValidationUseCase.testOnPullRequest', () => {
         expect(result.previewToken).toEqual(expect.any(String));
     });
 
+    it('marks a lower-case key in the title as loose, so the screen does not call it the task', async () => {
+        const { useCase, service } = build();
+        service.validate.mockImplementationOnce(
+            async () =>
+                ({
+                    outcome: {
+                        kind: 'skipped',
+                        reason: 'no_task',
+                        message: 'x',
+                    },
+                    references: [
+                        {
+                            kind: 'key',
+                            id: 'GPT-5',
+                            raw: 'gpt-5',
+                            source: 'title',
+                            intent: 'closes',
+                            loose: true,
+                        },
+                        {
+                            kind: 'key',
+                            id: 'SAA-96',
+                            raw: 'SAA-96',
+                            source: 'body',
+                            intent: 'closes',
+                        },
+                    ],
+                    attempts: [],
+                    trackers: [],
+                }) as any,
+        );
+
+        const result = await useCase.testOnPullRequest({
+            organizationAndTeamData,
+            prUrl,
+        });
+
+        expect(result.references[0]).toMatchObject({
+            raw: 'gpt-5',
+            loose: true,
+        });
+        expect(result.references[1]).not.toHaveProperty('loose');
+    });
+
     it('posts the result the preview showed, sealed, without running it again', async () => {
         const { useCase, publisher, service } = build();
         const preview = await useCase.testOnPullRequest({

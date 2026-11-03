@@ -7,6 +7,7 @@ import { apiProxyPath } from "src/core/utils/api-proxy";
 import { axiosApi, axiosAuthorized } from "src/core/utils/axios";
 import { pathToApiUrl } from "src/core/utils/helpers";
 import { isServerSide } from "src/core/utils/server-side";
+import type { FirstTouchPayload } from "src/lib/attribution/first-touch";
 
 import { AuthProviders } from "./types";
 
@@ -41,6 +42,7 @@ export const registerUser = (payload: {
     email: string;
     password: string;
     organizationId?: string;
+    firstTouch?: FirstTouchPayload;
 }): Promise<{
     data: {
         statusCode: number;
@@ -121,12 +123,14 @@ export const loginOAuth = (
     email: string,
     refreshToken: string,
     authProvider: AuthProviders,
+    firstTouch?: FirstTouchPayload,
 ): Promise<TODO> => {
     return axiosApi.post(authUrl(API_ROUTES.loginOAuth), {
         name,
         email,
         refreshToken,
         authProvider,
+        firstTouch,
     });
 };
 

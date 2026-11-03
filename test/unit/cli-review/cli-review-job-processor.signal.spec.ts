@@ -9,6 +9,13 @@ import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { IWorkflowJobRepository } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
 import { ExecuteCliReviewUseCase } from '@libs/cli-review/application/use-cases/execute-cli-review.use-case';
 
+// The processor only needs the use case as a constructor token (a mock is
+// injected below); the real module loads the whole review pipeline (~2s).
+jest.mock(
+    '@libs/cli-review/application/use-cases/execute-cli-review.use-case',
+    () => ({ ExecuteCliReviewUseCase: class ExecuteCliReviewUseCase {} }),
+);
+
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),

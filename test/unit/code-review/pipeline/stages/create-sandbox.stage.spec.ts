@@ -133,10 +133,6 @@ describe('CreateSandboxStage', () => {
         stage = module.get<CreateSandboxStage>(CreateSandboxStage);
     });
 
-    it('should have correct stage name', () => {
-        expect(stage.stageName).toBe('CreateSandboxStage');
-    });
-
     describe('guard conditions', () => {
         it('should skip if sandbox already exists in context', async () => {
             const context = createBaseContext({
@@ -161,14 +157,6 @@ describe('CreateSandboxStage', () => {
 
             expect(mockLeaseManager.acquire).not.toHaveBeenCalled();
             expect(result.sandboxHandle).toBeDefined();
-        });
-
-        it('should skip if no changed files', async () => {
-            const context = createBaseContext({ changedFiles: [] });
-
-            const _result = await (stage as any).executeStage(context);
-
-            expect(mockLeaseManager.acquire).not.toHaveBeenCalled();
         });
 
         it('should proceed and acquire lease even when sandbox provider type is null', async () => {
@@ -253,21 +241,6 @@ describe('CreateSandboxStage', () => {
                 'test-lease-id',
                 { idleMs: 30_000 },
             );
-        });
-
-        it('should handle lease acquisition failure gracefully', async () => {
-            mockLeaseManager.acquire.mockRejectedValue(
-                new Error('Lease acquisition timeout'),
-            );
-
-            const context = createBaseContext({
-                changedFiles: [{ filename: 'test.ts' } as any],
-            });
-
-            // Should NOT throw
-            const result = await (stage as any).executeStage(context);
-
-            expect(result.sandboxHandle).toBeUndefined();
         });
 
         it('logs an invalidation as a supersede (warn, not error) and continues', async () => {

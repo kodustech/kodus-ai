@@ -55,6 +55,8 @@ export interface RepeatCheckResult<T> {
     kept: T[];
     /** Not posted: an earlier comment already raised them. */
     repeats: RepeatOf<T>[];
+    /** Kept findings the model identified as caused by an earlier suggestion. */
+    revisions: Array<{ finding: T; earlier: PrDecisionRecord }>;
     /** `failed` keeps every finding the model had to judge. */
     model: 'not-needed' | 'ok' | 'failed' | 'no-model';
 }
@@ -87,7 +89,8 @@ const REPEAT_CHECK_TIMEOUT_MS = 120_000;
 const normalizePath = (path?: string) =>
     (path || '').trim().replace(/^\.?\//, '');
 
-const normalizeCode = (code?: string) => (code || '').replace(/\s+/g, ' ').trim();
+const normalizeCode = (code?: string) =>
+    (code || '').replace(/\s+/g, ' ').trim();
 
 const clip = (text: string, max: number) =>
     text.length > max ? `${text.slice(0, max)}…` : text;
@@ -189,7 +192,7 @@ export const REPEAT_CHECK_SCHEMA = {
                     earlierId: {
                         type: ['string', 'null'],
                         description:
-                            'The id of the <Earlier> comment the verdict is about, one of that finding\'s own; null for different_problem.',
+                            "The id of the <Earlier> comment the verdict is about, one of that finding's own; null for different_problem.",
                     },
                 },
                 required: ['finding', 'verdict', 'earlierId'],
@@ -274,29 +277,52 @@ Compare the code each one points at. A finding about different code is never the
 ${blocks.join('\n\n')}`;
 }
 
-function parseRepeats(
+function parseVerdicts(
     output: unknown,
     batch: Array<{ finding: unknown; candidates: PrDecisionRecord[] }>,
-): Map<number, PrDecisionRecord> {
-    const matches = new Map<number, PrDecisionRecord>();
+): {
+    repeats: Map<number, PrDecisionRecord>;
+    revisions: Map<number, PrDecisionRecord>;
+} {
+    const repeats = new Map<number, PrDecisionRecord>();
+    const revisions = new Map<number, PrDecisionRecord>();
     // A non-strict model may wrap, stringify or bare-array the answer (#1786).
     const verdicts = (
         normalizeEnvelope(output, 'verdicts', ['results', 'findings'], {
             liftEmptyArray: true,
         }) as { verdicts?: unknown }
     )?.verdicts;
-    if (!Array.isArray(verdicts)) return matches;
+    if (!Array.isArray(verdicts)) return { repeats, revisions };
     for (const entry of verdicts) {
-        const e = entry as { finding?: unknown; verdict?: unknown; earlierId?: unknown };
-        if (e?.verdict !== 'same_occurrence') continue;
+        const e = entry as {
+            finding?: unknown;
+            verdict?: unknown;
+            earlierId?: unknown;
+        };
+        if (
+            e?.verdict !== 'same_occurrence' &&
+            e?.verdict !== 'caused_by_earlier'
+        )
+            continue;
+        if (
+            typeof e.finding !== 'number' &&
+            (typeof e.finding !== 'string' || !/^\d+$/.test(e.finding))
+        )
+            continue;
         const n = Number(e.finding);
         if (!Number.isInteger(n) || n < 0 || n >= batch.length) continue;
         // Only an id offered for THAT finding counts.
         const id = String(e.earlierId ?? '');
         const earlier = batch[n].candidates.find((c) => c.suggestionId === id);
-        if (earlier && !matches.has(n)) matches.set(n, earlier);
+        if (!earlier) continue;
+        if (e.verdict === 'same_occurrence') {
+            if (!repeats.has(n)) repeats.set(n, earlier);
+            revisions.delete(n);
+        } else if (!repeats.has(n) && !revisions.has(n)) {
+            revisions.set(n, earlier);
+        }
     }
-    return matches;
+    return { repeats, revisions };
 }
 
 /**
@@ -312,6 +338,7 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
     const result: RepeatCheckResult<T> = {
         kept: [],
         repeats: [],
+        revisions: [],
         model: 'not-needed',
     };
     if (!history?.length || !findings.length) {
@@ -329,6 +356,7 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
     }
 
     const matchOf = new Map<T, RepeatOf<T>>();
+    const revisionOf = new Map<T, PrDecisionRecord>();
     const toJudge: Array<{ finding: T; candidates: PrDecisionRecord[] }> = [];
     for (const finding of findings) {
         const candidates = repeatCandidates(finding, history);
@@ -392,10 +420,13 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
                     });
                     return;
                 }
-                const matches = parseRepeats(outcome.value, batches[b]);
-                for (const [n, earlier] of matches) {
+                const verdicts = parseVerdicts(outcome.value, batches[b]);
+                for (const [n, earlier] of verdicts.repeats) {
                     const { finding } = batches[b][n];
                     matchOf.set(finding, { finding, earlier, by: 'model' });
+                }
+                for (const [n, earlier] of verdicts.revisions) {
+                    revisionOf.set(batches[b][n].finding, earlier);
                 }
             });
         }
@@ -404,7 +435,11 @@ export async function checkRepeats<T extends RepeatCheckFinding>(
     for (const finding of findings) {
         const match = matchOf.get(finding);
         if (match) result.repeats.push(match);
-        else result.kept.push(finding);
+        else {
+            result.kept.push(finding);
+            const earlier = revisionOf.get(finding);
+            if (earlier) result.revisions.push({ finding, earlier });
+        }
     }
     return result;
 }

@@ -1,8 +1,5 @@
 import { MODULE_METADATA } from '@nestjs/common/constants';
 
-import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
-import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
-
 import { WebhookHandlerModule } from './webhook-handler.module';
 
 // The real SharedConfigModule validates the env (API_PORT, …) at import time,
@@ -22,13 +19,18 @@ describe('WebhookHandlerModule boot graph', () => {
         Reflect.getMetadata(MODULE_METADATA.IMPORTS, WebhookHandlerModule) ??
         [];
 
-    const moduleOf = (entry: any) => entry?.module ?? entry;
+    // Compared by class name: importing KodyRulesModule / SharedMongoModule
+    // here just to compare identity would load the very graph this guards
+    // against and made the suite take ~5s.
+    const importedNames = imports.map(
+        (entry: any) => (entry?.module ?? entry)?.name,
+    );
 
     it('does not boot the Kody Rules graph', () => {
-        expect(imports.map(moduleOf)).not.toContain(KodyRulesModule);
+        expect(importedNames).not.toContain('KodyRulesModule');
     });
 
     it('does not open a Mongo connection', () => {
-        expect(imports.map(moduleOf)).not.toContain(SharedMongoModule);
+        expect(importedNames).not.toContain('SharedMongoModule');
     });
 });

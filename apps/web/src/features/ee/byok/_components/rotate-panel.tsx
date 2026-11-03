@@ -167,6 +167,7 @@ export function RotatePanel({
                 : await testBYOKModel({
                       provider: credential.provider,
                       model: probeModelId,
+                      credentialId: credential.id,
                       // No new secret was typed, so the stored ciphertext is
                       // re-used server-side. Only the SAFE region/location edits
                       // ride along (a baseURL change is gated above to require the

@@ -1,6 +1,8 @@
 import {
     collectRepoInstructions,
     quotesRepoInstruction,
+    citesRepoInstruction,
+    isRepoInstructionFile,
     REPO_INSTRUCTIONS_LIMITS,
     selectGoverningFiles,
     shouldCollectRepoInstructions,
@@ -202,10 +204,13 @@ describe('collectRepoInstructions', () => {
         ]);
     });
 
-    it('truncates a long file and stops at the total budget', async () => {
+    it('truncates a long file and stops at the total budget, dropping the furthest first', async () => {
         const big = 'x'.repeat(REPO_INSTRUCTIONS_LIMITS.maxBytesPerFile + 500);
-        const map: Record<string, string> = { 'CLAUDE.md': big };
-        for (let i = 0; i < 10; i++) {
+        const map: Record<string, string> = {
+            'CLAUDE.md': 'Use pnpm.',
+            'pkg0/AGENTS.md': big,
+        };
+        for (let i = 1; i < 10; i++) {
             map[`pkg${i}/AGENTS.md`] = 'y'.repeat(9_000);
         }
         const repo = files(map);
@@ -215,8 +220,9 @@ describe('collectRepoInstructions', () => {
             changedFiles: Array.from({ length: 10 }, (_, i) => `pkg${i}/a.ts`),
         });
 
-        expect(result.files[0].truncated).toBe(true);
-        expect(Buffer.byteLength(result.files[0].content)).toBeLessThanOrEqual(
+        const long = result.files.find((f) => f.path === 'pkg0/AGENTS.md')!;
+        expect(long.truncated).toBe(true);
+        expect(Buffer.byteLength(long.content)).toBeLessThanOrEqual(
             REPO_INSTRUCTIONS_LIMITS.maxBytesPerFile,
         );
         const total = result.files.reduce(
@@ -229,7 +235,7 @@ describe('collectRepoInstructions', () => {
         expect(result.files.length).toBeLessThanOrEqual(
             REPO_INSTRUCTIONS_LIMITS.maxFiles,
         );
-        expect(result.dropped.length).toBeGreaterThan(0);
+        expect(result.dropped).toContain('CLAUDE.md');
         expect(result.truncated).toBe(true);
     });
 
@@ -255,6 +261,38 @@ describe('collectRepoInstructions', () => {
         expect(result.error).toBe('rate limited');
     });
 
+    // A host can list one file twice (overlapping directory scans); it must
+    // still take one slot of the budget and be read once.
+    it('lists a file the host returned twice once', async () => {
+        const repo = {
+            listFiles: jest
+                .fn()
+                .mockResolvedValue([
+                    '.github/instructions/api.instructions.md',
+                    'CLAUDE.md',
+                    '/.github/instructions/api.instructions.md',
+                    '.github/instructions/api.instructions.md',
+                ]),
+            readFile: jest
+                .fn()
+                .mockImplementation(async (p: string) =>
+                    p === 'CLAUDE.md' ? 'Use pnpm.' : 'Use the logger.',
+                ),
+        };
+
+        const result = await collectRepoInstructions({
+            ...repo,
+            changedFiles: ['a.ts'],
+        });
+
+        expect(result.files.map((f) => f.path)).toEqual([
+            '.github/instructions/api.instructions.md',
+            'CLAUDE.md',
+        ]);
+        expect(result.indexedCount).toBe(2);
+        expect(repo.readFile).toHaveBeenCalledTimes(2);
+    });
+
     it('keeps the files it could read when one read fails', async () => {
         const result = await collectRepoInstructions({
             listFiles: jest
@@ -271,6 +309,42 @@ describe('collectRepoInstructions', () => {
 
         expect(result.files.map((f) => f.path)).toEqual(['CLAUDE.md']);
         expect(result.unreadable).toEqual(['AGENTS.md: 404']);
+    });
+
+    // When the budget is full, the files nearest the change win: a large root
+    // file and everything a root file imports must not push out the CLAUDE.md
+    // next to the changed code. The prompt still lists them root first.
+    it('keeps the files nearest the change when the budget is full', async () => {
+        const map: Record<string, string> = {
+            '.github/copilot-instructions.md': 'x'.repeat(200_000),
+            'AGENTS.md': Array.from(
+                { length: REPO_INSTRUCTIONS_LIMITS.maxFiles },
+                (_, i) => `@docs/guide${i}.md`,
+            ).join('\n'),
+            'services/billing/CLAUDE.md': 'Amounts are integer cents.',
+            'services/billing/AGENTS.md': '@../../docs/billing-guide.md',
+            'docs/billing-guide.md': 'Refunds go through the ledger.',
+        };
+        for (let i = 0; i < REPO_INSTRUCTIONS_LIMITS.maxFiles; i++) {
+            map[`docs/guide${i}.md`] = `Root rule ${i}.`;
+        }
+
+        const result = await collectRepoInstructions({
+            ...files(map),
+            changedFiles: ['services/billing/pay.ts'],
+        });
+        const paths = result.files.map((f) => f.path);
+
+        expect(paths).toContain('services/billing/CLAUDE.md');
+        // A pointer's target takes its source's place.
+        expect(paths).toContain('docs/billing-guide.md');
+        expect(paths).toHaveLength(REPO_INSTRUCTIONS_LIMITS.maxFiles);
+        // Root first, the billing files last.
+        expect(paths[0]).toBe('.github/copilot-instructions.md');
+        expect(paths.slice(-2)).toEqual([
+            'docs/billing-guide.md',
+            'services/billing/CLAUDE.md',
+        ]);
     });
 
     it('stops reading once the file budget is full and lists the rest as dropped', async () => {
@@ -593,5 +667,125 @@ describe('collectRepoInstructions — pointers to another file', () => {
 
         expect(result.files).toHaveLength(REPO_INSTRUCTIONS_LIMITS.maxFiles);
         expect(result.dropped.length).toBeGreaterThan(0);
+    });
+});
+
+describe('citesRepoInstruction', () => {
+    const context = {
+        files: [
+            {
+                path: 'docs/shared-guide.md',
+                content: 'Errors are DomainErrors.',
+                appliesTo: '**',
+                truncated: false,
+            },
+        ],
+        otherFiles: [],
+        dropped: [],
+        truncated: false,
+        indexedCount: 1,
+    };
+    const finding = (
+        suggestionContent: string,
+        code: { existingCode?: string; improvedCode?: string } = {},
+    ) => ({ suggestionContent, ...code });
+
+    // The finding reasons from the file: it is the authority for the claim.
+    it.each([
+        'apps/billing/CLAUDE.md says "Amounts are integer cents."',
+        'This breaks `AGENTS.md`.',
+        'Per .cursor/rules/style.mdc, no default exports.',
+        'As .github/copilot-instructions.md requires, use the logger.',
+        'console.warn in src/ violates the src/shared/AGENTS.md logging rule.',
+        'Throw a DomainError subclass, per the rule in `docs/shared-guide.md`.',
+    ])('finds a citation in %p', (text) => {
+        expect(citesRepoInstruction(finding(text), context)).toBe(true);
+    });
+
+    it('finds a file the review collected, such as a pointer target', () => {
+        const text = finding('Per docs/shared-guide.md, throw a DomainError.');
+        expect(citesRepoInstruction(text, context)).toBe(true);
+        expect(citesRepoInstruction(text, undefined)).toBe(false);
+    });
+
+    // A bug in code that handles these files names them without reasoning
+    // from them; it is a bug like any other.
+    it.each([
+        finding(
+            'The glob `**/AGENTS.md` misses nested AGENTS.md files, so loadInstructions() returns [] for apps/*.',
+            {
+                existingCode:
+                    "const files = glob.sync('**/AGENTS.md', { deep: 1 });",
+            },
+        ),
+        finding(
+            "readFileSync('CLAUDE.md') throws ENOENT when the repo has no CLAUDE.md; wrap it in existsSync.",
+            { existingCode: "const text = readFileSync('CLAUDE.md', 'utf8');" },
+        ),
+        finding(
+            'The parser drops .cursor/rules/api.mdc frontmatter when globs is unquoted.',
+        ),
+    ])('finds no citation in a bug about the files themselves (%#)', (f) => {
+        expect(citesRepoInstruction(f, context)).toBe(false);
+    });
+
+    // improvedCode is the model's own suggestion; a comment there citing the
+    // file does not make the finding about code that handles it.
+    it('finds one whose suggested code repeats the citation', () => {
+        expect(
+            citesRepoInstruction(
+                finding('CLAUDE.md requires the structured logger here.', {
+                    existingCode: "console.log('charge')",
+                    improvedCode:
+                        "// CLAUDE.md requires the logger\nlogger.info('charge')",
+                }),
+                context,
+            ),
+        ).toBe(true);
+    });
+
+    it('still finds one when another sentence reasons from a file the code names', () => {
+        expect(
+            citesRepoInstruction(
+                finding(
+                    'readFileSync on CLAUDE.md runs at import. AGENTS.md requires lazy reads of config files.',
+                    { existingCode: "readFileSync('CLAUDE.md')" },
+                ),
+                context,
+            ),
+        ).toBe(true);
+    });
+
+    it.each([
+        'See README.md for the API.',
+        'The claude client in src/claude.ts leaks the key.',
+        'The loop reads past the end of the array.',
+    ])('finds nothing in %p', (text) => {
+        expect(citesRepoInstruction(finding(text), context)).toBe(false);
+    });
+});
+
+describe('isRepoInstructionFile', () => {
+    it('is true for a coding-agent file or a collected file, false otherwise', () => {
+        expect(isRepoInstructionFile('services/api/AGENTS.md', undefined)).toBe(
+            true,
+        );
+        expect(
+            isRepoInstructionFile('docs/guide.md', {
+                files: [
+                    {
+                        path: 'docs/guide.md',
+                        content: 'x',
+                        appliesTo: '**',
+                        truncated: false,
+                    },
+                ],
+                otherFiles: [],
+                dropped: [],
+                truncated: false,
+                indexedCount: 1,
+            }),
+        ).toBe(true);
+        expect(isRepoInstructionFile('src/a.ts', undefined)).toBe(false);
     });
 });

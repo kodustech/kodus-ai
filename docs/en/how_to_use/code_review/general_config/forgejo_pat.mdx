@@ -36,6 +36,8 @@ The token must include **all** of the following permissions for full functionali
 | `notification` | **Read** | View notifications |
 | `user` | **Read** | Read basic user information |
 
+The token user must also be an **admin of each repository** Kody reviews. Forgejo only lets a repository admin create webhooks and dismiss reviews, so without it Kody cannot register the webhook automatically or withdraw its approval when a later review holds it.
+
 ---
 
 ## Adding the Token to Kody

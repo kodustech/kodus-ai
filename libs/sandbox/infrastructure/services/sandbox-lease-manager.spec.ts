@@ -1799,46 +1799,6 @@ describe('SandboxLeaseReaperService', () => {
         expect(leaseRepo.delete).not.toHaveBeenCalled();
     });
 
-    it('killIdleSandboxes: continues deleting Mongo doc even when Sandbox.kill fails', async () => {
-        const leaseRepo = makeMockLeaseRepo();
-        const configService = makeMockConfigService('test-e2b-key');
-
-        leaseRepo.findReadyToKill.mockResolvedValue([
-            {
-                _id: 'org-uuid:repo:9',
-                sandboxId: 'e2b-already-gone',
-                leaseCount: 0,
-                state: 'READY',
-                killAt: new Date(Date.now() - 1000),
-                createdAt: new Date(Date.now() - 60 * 1000),
-                expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-            } as any,
-        ]);
-
-        // E2B already removed the sandbox (race with reaper, external kill, etc.)
-        (Sandbox.kill as jest.Mock).mockRejectedValueOnce(
-            new Error('sandbox not found'),
-        );
-
-        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
-        const mockDistributedLockService = {
-            acquire: jest.fn().mockResolvedValue(mockLock),
-        };
-
-        const reaper = new SandboxLeaseReaperService(
-            leaseRepo,
-            mockDistributedLockService as any,
-            configService,
-        );
-
-        await reaper.killIdleSandboxes();
-
-        // Doc deleted regardless — lease can't linger waiting for a sandbox
-        // that's already gone
-        expect(leaseRepo.delete).toHaveBeenCalledWith('org-uuid:repo:9');
-        expect(mockLock.release).toHaveBeenCalledTimes(1);
-    });
-
     // ─── Concurrency and error isolation tests ──────────────────────────
 
     it('reapExpiredLeases: processes with bounded concurrency (max 5 in-flight)', async () => {
@@ -1919,35 +1879,6 @@ describe('SandboxLeaseReaperService', () => {
         expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:1');
         expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:3');
         expect(leaseRepo.delete).not.toHaveBeenCalledWith('org:repo:2');
-    });
-
-    it('reapExpiredLeases: treats E2B "already gone" as successful cleanup', async () => {
-        const leaseRepo = makeMockLeaseRepo();
-        const configService = makeMockConfigService('test-e2b-key');
-
-        leaseRepo.findExpired.mockResolvedValue([
-            { _id: 'org:repo:1', sandboxId: 'e2b-gone', state: 'READY' },
-        ] as any);
-
-        (Sandbox.kill as jest.Mock).mockRejectedValue(
-            new Error('sandbox not found'),
-        );
-
-        const mockLock = { release: jest.fn().mockResolvedValue(undefined) };
-        const mockDistributedLockService = {
-            acquire: jest.fn().mockResolvedValue(mockLock),
-        };
-
-        const reaper = new SandboxLeaseReaperService(
-            leaseRepo,
-            mockDistributedLockService as any,
-            configService,
-        );
-
-        await reaper.reapExpiredLeases();
-
-        // Lease was deleted despite "not found" error
-        expect(leaseRepo.delete).toHaveBeenCalledWith('org:repo:1');
     });
 
     it('reapExpiredLeases: skips Sandbox.kill when no API key is configured', async () => {

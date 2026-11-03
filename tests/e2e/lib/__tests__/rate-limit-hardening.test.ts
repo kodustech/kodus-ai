@@ -5,7 +5,8 @@ import {
     registerIntegration,
     registerRepo,
 } from "../onboarding.js";
-import { isGithubRateLimit } from "../runner.js";
+import { describeRateLimitHeaders } from "../http.js";
+import { isGithubRateLimit, rateLimitOwner } from "../runner.js";
 import { GitHubProvider } from "../../providers/github.js";
 import type { KodusSession, Provider, TargetContext } from "../types.js";
 import { json, startMockServer } from "./mock-server.js";
@@ -287,4 +288,29 @@ test("pollForReview: GitHub rate-limit envelope surfaces as an explicit rate-lim
         }
         await ghServer.close();
     }
+});
+
+// A gitlab cell reported "GitHub rate limit" on 2026-10-28, and its 429 lines
+// carried nothing that said which limit was hit or how far over it was.
+test("rate-limit skips name the cell's own provider", () => {
+    assert.equal(rateLimitOwner("gitlab"), "GitLab");
+    assert.equal(rateLimitOwner("github"), "GitHub");
+    assert.equal(rateLimitOwner("azure-devops"), "Azure DevOps");
+    assert.equal(rateLimitOwner("unknown"), "unknown");
+});
+
+test("429 log lines carry the provider's rate-limit headers", () => {
+    const headers = new Headers({
+        "retry-after": "44",
+        "ratelimit-name": "throttle_authenticated_api",
+        "ratelimit-observed": "2004",
+        "ratelimit-limit": "2000",
+        "content-type": "application/json",
+    });
+
+    assert.equal(
+        describeRateLimitHeaders(headers),
+        " [retry-after=44 ratelimit-name=throttle_authenticated_api ratelimit-limit=2000 ratelimit-observed=2004]",
+    );
+    assert.equal(describeRateLimitHeaders(new Headers()), "");
 });

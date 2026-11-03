@@ -82,7 +82,10 @@ const findings = {
     },
 };
 
-const tag = (s: any) => String(s?.oneSentenceSummary ?? '').slice(0, 2);
+// The parse schema (#1821) drops oneSentenceSummary from finder findings;
+// Kody Rules keep it (their PR-level content gets a location prefix).
+const tag = (s: any) =>
+    String(s?.oneSentenceSummary || s?.suggestionContent || '').slice(0, 2);
 
 const buildStages = () => {
     const reviewOrchestrator = { execute: jest.fn() };
@@ -156,7 +159,15 @@ const buildStages = () => {
     };
     const pullRequests = {
         addPrLevelSuggestions: jest.fn(
-            async (_n: any, _r: any, suggestions: any[]) => {
+            // The signature is (number, repositoryId, repositoryName,
+            // suggestions, organizationAndTeamData): the mock has to skip the
+            // name too, or the suggestions slot receives it (#2076 review).
+            async (
+                _n: any,
+                _r: any,
+                _name: any,
+                suggestions: any[],
+            ) => {
                 saved.prLevel.push(...suggestions);
             },
         ),

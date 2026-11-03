@@ -51,10 +51,6 @@ describe('GithubChecksService', () => {
         service = module.get<GithubChecksService>(GithubChecksService);
     });
 
-    it('should be defined', () => {
-        expect(service).toBeDefined();
-    });
-
     describe('findCheckRun', () => {
         const findParams = {
             organizationAndTeamData: mockOrganizationAndTeamData,

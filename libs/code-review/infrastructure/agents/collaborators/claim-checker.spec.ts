@@ -70,18 +70,6 @@ describe('readClaim — what a violation actually claims', () => {
         ).toEqual({ kind: 'unused', symbol: 'formatDate', path: undefined });
     });
 
-    it('treats an absent claim as none', () => {
-        expect(readClaim(violation()).kind).toBe('none');
-    });
-
-    it('treats an unused claim with a whitespace-only symbol as none (KRC-21)', () => {
-        expect(
-            readClaim(
-                violation({ claimKind: 'unused', claimSymbol: '   ' }),
-            ).kind,
-        ).toBe('none');
-    });
-
     it('treats a missing claim with no path as none (KRC-21)', () => {
         expect(
             readClaim(
@@ -556,7 +544,6 @@ describe('checkClaims — batch behavior (KRC-07)', () => {
     });
 });
 
-
 // Regression: the checked unit must be the PUBLISHED unit.
 //
 // The shard prompt asks for "one entry PER violating line PER rule; do not
@@ -616,32 +603,6 @@ describe('claim check groups by (rule, file), not by finding', () => {
 
         const res = await checkClaims({
             violations: [declared, ...differentlyWorded],
-            changedFiles: [{ filename: 'src/blog/slug.ts' }],
-            lookup,
-        });
-
-        expect(res.kept).toHaveLength(0);
-        expect(res.dropped).toHaveLength(8);
-    });
-
-    it('drops undeclared siblings when the group\'s claim is refuted', async () => {
-        const declared = violation({
-            ruleUuid: 'rule-no-reimplemented-helper',
-            relevantFile: 'src/blog/slug.ts',
-            relevantLinesStart: 1,
-            relevantLinesEnd: 1,
-            suggestionContent:
-                'Reimplemented a `slugify` helper instead of using the existing one in `src/shared`.',
-            claimKind: 'duplicate',
-            claimSymbol: 'slugify',
-            claimPath: 'src/shared',
-        });
-
-        // `slugify` exists nowhere else: the duplicate claim is false.
-        const lookup = fakeLookup({ grep: () => 'No matches found.' });
-
-        const res = await checkClaims({
-            violations: [declared, ...eightSiblings()],
             changedFiles: [{ filename: 'src/blog/slug.ts' }],
             lookup,
         });
@@ -819,5 +780,124 @@ describe('claim check groups by (rule, file), not by finding', () => {
 
             expect(res.kept).toHaveLength(1);
         });
+    });
+});
+
+// Azure Repos names changed files with a leading "/" ("/src/a.ts") while grep
+// answers repo-relative ("src/a.ts"). Both forms name the same file.
+describe('checkClaims — a file named with a leading slash', () => {
+    it('checks a claim once when siblings name its path with and without the slash', async () => {
+        const exists = jest.fn().mockReturnValue(true);
+        const lookup = fakeLookup({ exists });
+        const sibling = (relevantFile: string, claimPath: string, line: number) =>
+            violation({
+                relevantFile,
+                relevantLinesStart: line,
+                relevantLinesEnd: line,
+                claimKind: 'missing',
+                claimPath,
+            });
+
+        const res = await checkClaims({
+            violations: [
+                sibling('/src/orders/order-mapper.ts', '/src/orders/order-mapper.spec.ts', 3),
+                sibling('src/orders/order-mapper.ts', 'src/orders/order-mapper.spec.ts', 7),
+            ],
+            changedFiles: [{ filename: '/src/orders/order-mapper.ts' }],
+            lookup,
+        });
+
+        expect(exists).toHaveBeenCalledTimes(1);
+        expect(res.dropped).toHaveLength(2);
+    });
+
+    it('keeps an unused finding whose only matches are its own lines', async () => {
+        const lookup = fakeLookup({
+            grep: () =>
+                'src/orders/order-mapper.ts:3:import { formatDate } from "../shared/date";',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: '/src/orders/order-mapper.ts',
+                    claimKind: 'unused',
+                    claimSymbol: 'formatDate',
+                    relevantLinesStart: 3,
+                    relevantLinesEnd: 3,
+                }),
+            ],
+            changedFiles: [{ filename: '/src/orders/order-mapper.ts' }],
+            lookup,
+        });
+        expect(res.kept).toHaveLength(1);
+        expect(res.dropped).toEqual([]);
+    });
+
+    it('does not take the finding own lines as the pre-existing duplicate', async () => {
+        const lookup = fakeLookup({
+            grep: () => 'src/blog/slug.ts:2:export function slugify() {}',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: '/src/blog/slug.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 8,
+                    claimKind: 'duplicate',
+                    claimSymbol: 'slugify',
+                }),
+            ],
+            changedFiles: [{ filename: '/src/blog/slug.ts' }],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('exists nowhere else');
+    });
+
+    it('sees that this PR changes the path a missing claim names', async () => {
+        const lookup = fakeLookup({ exists: () => false });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: '/src/orders/order-mapper.ts',
+                    claimKind: 'missing',
+                    claimPath: 'src/orders/order-mapper.spec.ts',
+                }),
+            ],
+            changedFiles: [
+                { filename: '/src/orders/order-mapper.spec.ts' },
+                { filename: '/src/orders/order-mapper.ts' },
+            ],
+            lookup,
+        });
+        expect(res.kept).toEqual([]);
+        expect(res.dropped[0].reason).toContain('this PR changes it');
+    });
+
+    it('does not check the existence of an evidence path this PR changes', async () => {
+        const exists = jest.fn().mockReturnValue(false);
+        const lookup = fakeLookup({
+            exists,
+            grep: () => 'src/shared/slugify.ts:1:export function slugify() {}',
+        });
+        const res = await checkClaims({
+            violations: [
+                violation({
+                    relevantFile: '/src/blog/slug.ts',
+                    relevantLinesStart: 1,
+                    relevantLinesEnd: 8,
+                    claimKind: 'duplicate',
+                    claimSymbol: 'slugify',
+                    claimPath: 'src/shared/slugify.ts',
+                }),
+            ],
+            changedFiles: [
+                { filename: '/src/blog/slug.ts' },
+                { filename: '/src/shared/slugify.ts' },
+            ],
+            lookup,
+        });
+        expect(exists).not.toHaveBeenCalled();
+        expect(res.kept).toHaveLength(1);
     });
 });

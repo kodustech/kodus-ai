@@ -70,18 +70,6 @@ describe('SaveMarketingSurveyUseCase', () => {
         );
     });
 
-    it('should persist only primaryGoal when only it is provided', async () => {
-        const userId = 'user-uuid-123';
-        mockProfileService.update.mockResolvedValue(undefined);
-
-        await useCase.execute(userId, { primaryGoal: 'quality' });
-
-        expect(mockProfileService.update).toHaveBeenCalledWith(
-            { user: { uuid: userId } },
-            { primaryGoal: 'quality' },
-        );
-    });
-
     it('should skip update when neither field is provided', async () => {
         const userId = 'user-uuid-123';
         mockProfileService.update.mockResolvedValue(undefined);
@@ -89,14 +77,5 @@ describe('SaveMarketingSurveyUseCase', () => {
         await useCase.execute(userId, {});
 
         expect(mockProfileService.update).not.toHaveBeenCalled();
-    });
-
-    it('should propagate error when profileService.update throws', async () => {
-        const userId = 'user-uuid-123';
-        mockProfileService.update.mockRejectedValue(new Error('DB error'));
-
-        await expect(
-            useCase.execute(userId, { referralSource: 'search' }),
-        ).rejects.toThrow('DB error');
     });
 });

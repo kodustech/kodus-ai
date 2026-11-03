@@ -411,6 +411,17 @@ export class BitbucketService implements Omit<
         return impl.getChangedFilesSinceLastCommit(params);
     }
 
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ) {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.getPullRequestFilesAtCommit(params);
+    }
+
     async createReviewComment(params: any) {
         const impl = await this.getImplementation(
             params.organizationAndTeamData,
@@ -625,6 +636,13 @@ export class BitbucketService implements Omit<
             params.organizationAndTeamData,
         );
         return impl.approvePullRequest(params);
+    }
+
+    async dismissOwnPullRequestApprovals(params: any): Promise<number> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.dismissOwnPullRequestApprovals(params);
     }
 
     async requestChangesPullRequest(params: any) {

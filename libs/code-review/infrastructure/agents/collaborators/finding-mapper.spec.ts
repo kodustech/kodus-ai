@@ -33,28 +33,29 @@ describe('resolveSuggestionLabel', () => {
             'security',
         );
     });
-    it('mixed agent falls back to first allowed for an invalid label', () => {
-        expect(resolveSuggestionLabel({ label: 'style' }, mixedPolicy)).toBe(
-            'bug',
+    it('mixed agent passes a label off the list through and fills a missing one', () => {
+        expect(resolveSuggestionLabel({ label: 'Style' }, mixedPolicy)).toBe(
+            'style',
         );
+        expect(resolveSuggestionLabel({}, mixedPolicy)).toBe('bug');
+        expect(resolveSuggestionLabel({ label: null } as any, mixedPolicy)).toBe('bug');
     });
-    it('keeps repo_instruction only when the run allows it', () => {
-        expect(
-            resolveSuggestionLabel({ label: 'repo_instruction' }, mixedPolicy),
-        ).toBe('bug');
+    it('mixed agent passes a known label this run does not allow through, for the category step to discard', () => {
         expect(
             resolveSuggestionLabel(
-                { label: 'repo_instruction' },
-                {
-                    ...mixedPolicy,
-                    allowedLabels: [
-                        'bug',
-                        'security',
-                        'performance',
-                        'repo_instruction',
-                    ],
-                },
+                { label: 'security' },
+                { ...mixedPolicy, allowedLabels: ['performance'] },
             ),
+        ).toBe('security');
+    });
+    it('mixed agent cannot claim kody_rules', () => {
+        expect(
+            resolveSuggestionLabel({ label: 'kody_rules' }, mixedPolicy),
+        ).toBe('bug');
+    });
+    it('passes repo_instruction through, for the category step to decide', () => {
+        expect(
+            resolveSuggestionLabel({ label: 'repo_instruction' }, mixedPolicy),
         ).toBe('repo_instruction');
     });
 });
@@ -157,6 +158,111 @@ describe('mapAgentFindings', () => {
         expect(r.suggestions[0].relevantFile).toBe('src/a.ts'); // provider's original
         expect(r.suggestions[0].label).toBe('bug');
         expect(r.suggestions[0].severity).toBe('medium');
+    });
+
+    it('completes a path tail that matches exactly one changed file', () => {
+        const r = mapAgentFindings(
+            {
+                findings: {
+                    suggestions: [
+                        {
+                            suggestionContent: 'x',
+                            relevantFile: 'EventManager.ts',
+                        },
+                        {
+                            suggestionContent: 'y',
+                            relevantFile: 'core/EventManager.ts',
+                        },
+                        { suggestionContent: 'z', relevantFile: 'Manager.ts' },
+                    ],
+                },
+            },
+            ctx({
+                changedFiles: [
+                    file('packages/core/EventManager.ts'),
+                    file('src/a.ts'),
+                ],
+            }),
+        );
+        expect(r.suggestions.map((s) => s.relevantFile)).toEqual([
+            'packages/core/EventManager.ts',
+            'packages/core/EventManager.ts',
+        ]);
+    });
+
+    it('logs a completed path at log level with the review ids', () => {
+        const logger = { warn: jest.fn(), log: jest.fn() };
+        mapAgentFindings(
+            {
+                findings: {
+                    suggestions: [
+                        { suggestionContent: 'x', relevantFile: 'EventManager.ts' },
+                    ],
+                },
+            },
+            ctx({
+                changedFiles: [file('packages/core/EventManager.ts')],
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                logger,
+            }),
+        );
+        expect(logger.warn).not.toHaveBeenCalled();
+        expect(logger.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                }),
+            }),
+        );
+    });
+
+    it('gives a lean agent only the lean fields, and a full one everything', () => {
+        const finding = {
+            suggestionContent: 'x',
+            relevantFile: 'src/a.ts',
+            relevantLinesStart: 1,
+            relevantLinesEnd: 2,
+            label: 'bug',
+            language: 'ts',
+            existingCode: 'a',
+            improvedCode: 'b',
+            severity: 'high',
+        };
+        const map = (leanOutput: boolean) =>
+            mapAgentFindings(
+                { findings: { suggestions: [finding as any] } },
+                ctx({ changedFiles: [file('src/a.ts')], leanOutput }),
+            ).suggestions[0];
+        expect(Object.keys(map(true)).sort()).toEqual(
+            [
+                'label',
+                'llmPrompt',
+                'relevantFile',
+                'relevantLinesEnd',
+                'relevantLinesStart',
+                'severity',
+                'suggestionContent',
+            ].sort(),
+        );
+        expect(map(false)).toMatchObject({ existingCode: 'a', improvedCode: 'b', language: 'ts' });
+    });
+
+    it('drops a path tail shared by more than one changed file', () => {
+        const r = mapAgentFindings(
+            {
+                findings: {
+                    suggestions: [
+                        { suggestionContent: 'x', relevantFile: 'index.ts' },
+                    ],
+                },
+            },
+            ctx({
+                changedFiles: [file('a/index.ts'), file('b/index.ts')],
+            }),
+        );
+        expect(r.suggestions).toHaveLength(0);
     });
 
     it('kody-rules: attributes a uuid-less suggestion to the SINGLE selected rule', () => {

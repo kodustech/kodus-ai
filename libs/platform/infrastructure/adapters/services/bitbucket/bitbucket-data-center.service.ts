@@ -1,4 +1,9 @@
+import {
+    isFileMatchingGlob,
+    isFileMatchingGlobCaseInsensitive,
+} from '@libs/common/utils/glob-utils';
 import { createLogger } from '@libs/core/log/logger';
+import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
@@ -41,7 +46,10 @@ import {
     PullRequestReviewState,
     PullRequestWithFiles,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
-import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    FileChange,
+    Repository,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { RepositoryFile } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositoryFile.type';
 import {
     isDeniedStatus,
@@ -65,6 +73,10 @@ import {
     GetIssueParams,
     ListIssuesParams,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import { listingFailed } from '../repository-listing';
+
+const FILES_PAGE_SIZE = 1000;
+const MAX_FILE_PAGES = 200;
 
 @Injectable()
 export class BitbucketDataCenterService implements Omit<
@@ -110,7 +122,9 @@ export class BitbucketDataCenterService implements Omit<
     // Bitbucket Cloud-only feature; Server users track work in Jira). These
     // satisfy the contract for the routing wrapper and return empty so the
     // generic issues MCP degrades gracefully on Server.
-    async listIssues(_params: ListIssuesParams): Promise<CodeManagementIssue[]> {
+    async listIssues(
+        _params: ListIssuesParams,
+    ): Promise<CodeManagementIssue[]> {
         this.logger.warn({
             message:
                 'listIssues called on Bitbucket Data Center, which has no issue tracker',
@@ -119,7 +133,9 @@ export class BitbucketDataCenterService implements Omit<
         return [];
     }
 
-    async getIssue(_params: GetIssueParams): Promise<CodeManagementIssue | null> {
+    async getIssue(
+        _params: GetIssueParams,
+    ): Promise<CodeManagementIssue | null> {
         this.logger.warn({
             message:
                 'getIssue called on Bitbucket Data Center, which has no issue tracker',
@@ -853,6 +869,7 @@ export class BitbucketDataCenterService implements Omit<
             sourceRefName: pr.fromRef?.displayId || '',
             head: {
                 ref: pr.fromRef?.displayId || '',
+                sha: pr.fromRef?.latestCommit || '',
                 repo: {
                     id: pr.fromRef?.repository?.id?.toString() || '',
                     name: pr.fromRef?.repository?.slug || '',
@@ -863,6 +880,7 @@ export class BitbucketDataCenterService implements Omit<
             targetRefName: pr.toRef?.displayId || '',
             base: {
                 ref: pr.toRef?.displayId || '',
+                sha: pr.toRef?.latestCommit || '',
                 repo: {
                     id: pr.toRef?.repository?.id?.toString() || '',
                     name: pr.toRef?.repository?.slug || '',
@@ -1183,6 +1201,43 @@ export class BitbucketDataCenterService implements Omit<
         }
     }
 
+    /**
+     * Removes the token user's approval when a later review holds it.
+     * Returns how many approvals were removed (0 or 1).
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(
+                `Could not read Kody's approval on PR #${prNumber}`,
+            );
+        }
+        if (state !== PullRequestReviewState.APPROVED) return 0;
+        const authDetails = await this.getAuthDetails(organizationAndTeamData);
+        const repoConfig = await this.getRepoConfig(
+            organizationAndTeamData,
+            repository.id || repository.name,
+        );
+        if (!authDetails || !repoConfig) {
+            throw new Error('Bitbucket Data Center repository not found');
+        }
+        await this.getAxiosInstance(authDetails).put(
+            `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/pull-requests/${prNumber}/participants/${authDetails.username}`,
+            { status: 'UNAPPROVED' },
+        );
+        return 1;
+    }
+
     async approvePullRequest(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
@@ -1312,31 +1367,10 @@ export class BitbucketDataCenterService implements Omit<
                         const diffs = diffRes.data.diffs || [];
 
                         for (const diff of diffs) {
-                            const hunks = diff.hunks || [];
-
-                            for (const hunk of hunks) {
-                                // Construct standard Unified Diff hunk header
-                                patch += `@@ -${hunk.sourceLine || 0},${hunk.sourceSpan || 0} +${hunk.destinationLine || 0},${hunk.destinationSpan || 0} @@\n`;
-
-                                const segments = hunk.segments || [];
-                                for (const segment of segments) {
-                                    const prefix =
-                                        segment.type === 'ADDED'
-                                            ? '+'
-                                            : segment.type === 'REMOVED'
-                                              ? '-'
-                                              : ' ';
-
-                                    if (segment.type === 'ADDED')
-                                        additions += segment.lines?.length || 0;
-                                    if (segment.type === 'REMOVED')
-                                        deletions += segment.lines?.length || 0;
-
-                                    for (const line of segment.lines || []) {
-                                        patch += `${prefix}${line.line}\n`;
-                                    }
-                                }
-                            }
+                            const unified = this.toUnifiedPatch(diff);
+                            patch += unified.patch;
+                            additions += unified.additions;
+                            deletions += unified.deletions;
                         }
                     } catch (err) {
                         this.logger.error({
@@ -1349,6 +1383,7 @@ export class BitbucketDataCenterService implements Omit<
 
                     return {
                         filename: filePath,
+                        previous_filename: file.srcPath?.toString,
                         sha: sourceCommit,
                         status:
                             file.type === 'MODIFY'
@@ -1374,6 +1409,134 @@ export class BitbucketDataCenterService implements Omit<
                 message: `Error getting fully populated files for DC PR #${params.prNumber}`,
                 context: BitbucketDataCenterService.name,
                 error,
+            });
+            return null;
+        }
+    }
+
+    /** Data Center returns diffs as JSON hunks; rebuilds the unified patch. */
+    private toUnifiedPatch(diff: any): {
+        patch: string;
+        additions: number;
+        deletions: number;
+    } {
+        let patch = '';
+        let additions = 0;
+        let deletions = 0;
+
+        for (const hunk of diff?.hunks || []) {
+            patch += `@@ -${hunk.sourceLine || 0},${hunk.sourceSpan || 0} +${hunk.destinationLine || 0},${hunk.destinationSpan || 0} @@\n`;
+
+            for (const segment of hunk.segments || []) {
+                const prefix =
+                    segment.type === 'ADDED'
+                        ? '+'
+                        : segment.type === 'REMOVED'
+                          ? '-'
+                          : ' ';
+
+                if (segment.type === 'ADDED')
+                    additions += segment.lines?.length || 0;
+                if (segment.type === 'REMOVED')
+                    deletions += segment.lines?.length || 0;
+
+                for (const line of segment.lines || []) {
+                    patch += `${prefix}${line.line}\n`;
+                }
+            }
+        }
+
+        return { patch, additions, deletions };
+    }
+
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ): Promise<FileChange[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            baseBranch,
+            headSha,
+        } = params;
+        const metadata = {
+            organizationId: organizationAndTeamData?.organizationId,
+            repositoryId: repository?.id,
+            prNumber,
+            baseBranch,
+            headSha,
+        };
+
+        try {
+            const authDetails = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            const repoConfig = await this.getRepoConfig(
+                organizationAndTeamData,
+                repository.id || repository.name,
+            );
+            if (!authDetails || !repoConfig) return null;
+
+            const axiosClient = this.getAxiosInstance(authDetails);
+            const repoPath = `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}`;
+
+            const prResponse = await axiosClient.get(
+                `${repoPath}/pull-requests/${prNumber}`,
+            );
+            const target = prResponse.data?.toRef?.latestCommit;
+            if (!target) {
+                throw new Error('PR has no target commit');
+            }
+
+            // What `from` has that `to` does not: the PR's own changes.
+            const { data } = await axiosClient.get(`${repoPath}/compare/diff`, {
+                params: { from: headSha, to: target },
+            });
+
+            const diffs = data?.diffs || [];
+            if (data?.truncated || diffs.some((diff) => diff?.truncated)) {
+                this.logger.warn({
+                    message: `Compare for PR#${prNumber} at ${headSha} was truncated`,
+                    context: BitbucketDataCenterService.name,
+                    metadata: { ...metadata, reason: 'compare_truncated' },
+                });
+                return null;
+            }
+
+            return diffs.map((diff) => {
+                const source = diff.source?.toString;
+                const destination = diff.destination?.toString;
+                const unified = this.toUnifiedPatch(diff);
+                return {
+                    filename: destination ?? source,
+                    previous_filename:
+                        source && destination && source !== destination
+                            ? source
+                            : undefined,
+                    status: !source
+                        ? 'added'
+                        : !destination
+                          ? 'removed'
+                          : source !== destination
+                            ? 'renamed'
+                            : 'modified',
+                    additions: unified.additions,
+                    deletions: unified.deletions,
+                    changes: unified.additions + unified.deletions,
+                    patch: unified.patch,
+                } as FileChange;
+            });
+        } catch (error) {
+            // A rate limit is not a missing diff: the caller must not answer it
+            // with a full review.
+            if (is429Error(error)) throw error;
+            this.logger.warn({
+                message: `Could not read the diff of PR#${prNumber} at ${headSha}`,
+                context: BitbucketDataCenterService.name,
+                error,
+                metadata: { ...metadata, reason: 'compare_failed' },
             });
             return null;
         }
@@ -2348,8 +2511,12 @@ export class BitbucketDataCenterService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }): Promise<any[]> {
         const comments = await this.getPullRequestReviewComments(params);
+        if (!comments && params.failOnError) {
+            throw new Error('Could not load pull request comments');
+        }
         return comments || [];
     }
 
@@ -2629,21 +2796,22 @@ export class BitbucketDataCenterService implements Omit<
             );
 
             const pr = response.data;
-            const reviewers = pr.reviewers || [];
+            // approvePullRequest approves through /participants/{user}, which
+            // lists a user who is not a designated reviewer under
+            // `participants`, so both lists are read.
+            const userReview = [
+                ...(pr.reviewers || []),
+                ...(pr.participants || []),
+            ].find((r: any) => r.user?.name === currentUser.id);
 
-            // Find the current user in the reviewers list
-            const userReview = reviewers.find(
-                (r: any) => r.user?.name === currentUser.id,
-            );
-
-            if (!userReview) return null;
+            if (!userReview) return PullRequestReviewState.NONE;
 
             if (userReview.status === 'APPROVED')
                 return PullRequestReviewState.APPROVED;
             if (userReview.status === 'NEEDS_WORK')
                 return PullRequestReviewState.CHANGES_REQUESTED;
 
-            return null;
+            return PullRequestReviewState.NONE;
         } catch (error) {
             this.logger.error({
                 message: `Error getting review status for PR #${params.prNumber} in Data Center`,
@@ -3000,6 +3168,7 @@ export class BitbucketDataCenterService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -3015,7 +3184,11 @@ export class BitbucketDataCenterService implements Omit<
                 repository.id || repository.name,
             );
 
-            if (!authDetails || !repoConfig) return [];
+            if (!authDetails || !repoConfig)
+                return listingFailed(
+                    params.throwOnError,
+                    'Bitbucket Data Center authentication or repository config not found',
+                );
 
             const axiosClient = this.getAxiosInstance(authDetails);
 
@@ -3027,18 +3200,36 @@ export class BitbucketDataCenterService implements Omit<
                 });
             }
 
-            // DC provides a flat /files endpoint which is extremely efficient for getting all paths
-            const response = await axiosClient.get(
-                `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/files`,
-                {
-                    params: {
-                        limit: 100000,
-                        at: branch,
+            // A flat /files listing, in pages: the server caps `limit`, so
+            // follow `nextPageStart` until `isLastPage`.
+            const allFilePaths: string[] = [];
+            let start = 0;
+            let isLastPage = false;
+            for (let page = 0; page < MAX_FILE_PAGES && !isLastPage; page++) {
+                const response = await axiosClient.get(
+                    `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}/files`,
+                    { params: { limit: FILES_PAGE_SIZE, at: branch, start } },
+                );
+                allFilePaths.push(...(response.data?.values || []));
+                isLastPage =
+                    response.data?.isLastPage !== false ||
+                    response.data?.nextPageStart === undefined;
+                start = response.data?.nextPageStart ?? start;
+            }
+            if (!isLastPage) {
+                this.logger.warn({
+                    message: `Repository has more than ${MAX_FILE_PAGES * FILES_PAGE_SIZE} files; the listing stops there`,
+                    context: BitbucketDataCenterService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData?.organizationId,
+                        teamId: organizationAndTeamData?.teamId,
+                        repositoryId: repository.id,
+                        branch,
+                        files: allFilePaths.length,
                     },
-                },
-            );
+                });
+            }
 
-            const allFilePaths: string[] = response.data.values || [];
             const { filePatterns, excludePatterns, maxFiles = 1000 } = filters;
 
             const filteredFiles: RepositoryFile[] = [];
@@ -3046,19 +3237,18 @@ export class BitbucketDataCenterService implements Omit<
             for (const filePath of allFilePaths) {
                 if (maxFiles > 0 && filteredFiles.length >= maxFiles) break;
 
-                // Simple pattern matching fallback if glob utils aren't perfectly aligned
-                if (filePatterns && filePatterns.length > 0) {
-                    const matchesInclude = filePatterns.some((pattern) =>
-                        filePath.includes(pattern.replace(/\*/g, '')),
-                    );
-                    if (!matchesInclude) continue;
+                if (
+                    filePatterns?.length &&
+                    !isFileMatchingGlobCaseInsensitive(filePath, filePatterns)
+                ) {
+                    continue;
                 }
 
-                if (excludePatterns && excludePatterns.length > 0) {
-                    const matchesExclude = excludePatterns.some((pattern) =>
-                        filePath.includes(pattern.replace(/\*/g, '')),
-                    );
-                    if (matchesExclude) continue;
+                if (
+                    excludePatterns?.length &&
+                    isFileMatchingGlob(filePath, excludePatterns)
+                ) {
+                    continue;
                 }
 
                 filteredFiles.push({
@@ -3077,7 +3267,11 @@ export class BitbucketDataCenterService implements Omit<
                 context: BitbucketDataCenterService.name,
                 error,
             });
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 
@@ -3380,9 +3574,7 @@ export class BitbucketDataCenterService implements Omit<
         return null;
     }
 
-    async getUsersByUsername(
-        _params: any,
-    ): Promise<Map<string, any> | null> {
+    async getUsersByUsername(_params: any): Promise<Map<string, any> | null> {
         // Not implemented for Bitbucket Data Center — callers fall
         // back to per-user `getUserByUsername`.
         return null;

@@ -11,7 +11,10 @@ import {
 } from '@libs/organization/domain/organization/contracts/organization.repository.contract';
 import { IOrganizationService } from '@libs/organization/domain/organization/contracts/organization.service.contract';
 import { OrganizationEntity } from '@libs/organization/domain/organization/entities/organization.entity';
-import { IOrganization } from '@libs/organization/domain/organization/interfaces/organization.interface';
+import {
+    CreateOrganization,
+    IOrganization,
+} from '@libs/organization/domain/organization/interfaces/organization.interface';
 
 @Injectable()
 export class OrganizationService implements IOrganizationService {
@@ -46,11 +49,11 @@ export class OrganizationService implements IOrganizationService {
     }
 
     async createOrganizationWithTenant(
-        organizationData: Partial<IOrganization>,
+        organizationData: Partial<CreateOrganization>,
     ): Promise<OrganizationEntity> {
         const payload = {
             ...organizationData,
-        } as Omit<IOrganization, 'uuid'>;
+        } as Omit<CreateOrganization, 'uuid'>;
 
         const savedOrganization = await this.create(payload);
 
@@ -58,7 +61,7 @@ export class OrganizationService implements IOrganizationService {
     }
 
     public async create(
-        payload: Omit<IOrganization, 'uuid'>,
+        payload: Omit<CreateOrganization, 'uuid'>,
     ): Promise<OrganizationEntity> {
         const uuid = uuidv4();
 

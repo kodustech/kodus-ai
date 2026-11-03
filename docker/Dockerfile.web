@@ -48,7 +48,6 @@ RUN --mount=type=cache,target=/pnpm-store,sharing=private \
 #   - libs/common/utils/safe-regex.ts — the Business Logic settings preview
 #     runs the same ReDoS guard (isRegexSafe) the server applies to a team's
 #     task id pattern. A zero-dependency leaf, so only the file is copied.
-#   - release/features-snapshot.json — read at runtime by the lib loader
 # Anything else in the repo (apps/api, libs/code-review, etc.) would just
 # bloat the build context without being touched by Next.
 COPY apps/web ./apps/web
@@ -56,7 +55,6 @@ COPY libs/feature-gate ./libs/feature-gate
 COPY libs/identity/domain/permissions ./libs/identity/domain/permissions
 COPY libs/llm/llm-tasks.ts ./libs/llm/llm-tasks.ts
 COPY libs/common/utils/safe-regex.ts ./libs/common/utils/safe-regex.ts
-COPY release/features-snapshot.json ./release/features-snapshot.json
 
 WORKDIR /usr/src/app/apps/web
 # Turbopack persists its compiler artifacts to .next/cache, and since Next 16.3

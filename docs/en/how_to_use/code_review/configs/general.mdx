@@ -52,6 +52,11 @@ reviewCadence:
     timeWindow: 15 # minutes
     pushesToTrigger: 3
 pullRequestApprovalActive: false
+approvalLabels: []
+approvalAuthors: []
+approvalRiskActive: false
+approvalRiskInstructions: ''
+approvalSensitivePaths: []
 isRequestChangesActive: false # not available on GitLab
 runOnDraft: true
 ignorePaths:
@@ -163,7 +168,10 @@ commits:
 ### PR Workflow
 
 #### Auto-approve PRs
-**Enable Pull Request Approval** — Kody approves PRs when no issues are found.
+**Automatic PR approval** — Kody approves a PR after a clean review, or once every comment it
+left is resolved. It never merges. **Conditional approval (Beta)** limits which PRs Kody may
+approve and when a person must approve instead. See
+[Auto-approve](/en/how_to_use/code_review/configs/auto_approve).
 
 **Platforms:** GitHub, GitLab, Bitbucket, Azure Repos, Forgejo
 

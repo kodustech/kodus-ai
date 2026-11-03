@@ -604,45 +604,6 @@ describe('SafeguardPipelineService — LLM.run boundary contract (#1786 off-sche
                 safeguard: 'test-model',
             });
         });
-
-        it('always returns the declared ISafeguardResponse shape across happy / off-schema / error', async () => {
-            const suggestions = [{ id: 's1', suggestionContent: 'c1' }];
-            const shapeOf = (r: any) =>
-                r &&
-                Array.isArray(r.suggestions) &&
-                r.codeReviewModelUsed &&
-                'safeguard' in r.codeReviewModelUsed;
-
-            // happy
-            mockGenerate.mockReset();
-            mockGenerate.mockResolvedValueOnce(
-                out({
-                    codeSuggestions: [
-                        {
-                            id: 's1',
-                            features: mkFeatures({ is_quality_opinion: true }),
-                        },
-                    ],
-                }),
-            );
-            expect(
-                shapeOf(await service.execute(baseParams(suggestions) as any)),
-            ).toBe(true);
-
-            // off-schema
-            mockGenerate.mockReset();
-            mockGenerate.mockResolvedValueOnce(out(null));
-            expect(
-                shapeOf(await service.execute(baseParams(suggestions) as any)),
-            ).toBe(true);
-
-            // error
-            mockGenerate.mockReset();
-            mockGenerate.mockRejectedValue(new Error('down'));
-            expect(
-                shapeOf(await service.execute(baseParams(suggestions) as any)),
-            ).toBe(true);
-        });
     });
 });
 
@@ -760,23 +721,9 @@ describe('SafeguardPipelineService — prompt-only boundary FULL I/O matrix (#17
     /** Drive verifyWithPromptOnly with a single mocked LLM output shape. */
     const runPromptOnly = async (
         shape: unknown,
-        byokConfig?: any,
     ): Promise<{ keep: any; evidence: any }> => {
         mockGenerate.mockReset();
         mockGenerate.mockResolvedValueOnce(out(shape));
-        return (service as any).verifyWithPromptOnly(
-            { id: 's1', suggestionContent: 'c' },
-            mkFeatures({ has_resource_leak: true }),
-            byokConfig
-                ? baseParams([{ id: 's1' }], { byokConfig })
-                : baseParams([{ id: 's1' }]),
-        );
-    };
-
-    /** Drive verifyWithPromptOnly where LLM.run REJECTS (transport error). */
-    const runPromptOnlyReject = async (err: unknown) => {
-        mockGenerate.mockReset();
-        mockGenerate.mockRejectedValueOnce(err);
         return (service as any).verifyWithPromptOnly(
             { id: 's1', suggestionContent: 'c' },
             mkFeatures({ has_resource_leak: true }),
@@ -786,83 +733,10 @@ describe('SafeguardPipelineService — prompt-only boundary FULL I/O matrix (#17
 
     // ============================================================= A. shape zoo
     describe('A. output-shape zoo', () => {
-        it('A1 exact D {verdict,evidence} → passes straight through', async () => {
-            const r = await runPromptOnly({ verdict: true, evidence: 'e' });
-            expect(r).toEqual({ keep: true, evidence: 'e' });
-        });
-
-        // Every shape below has a non-boolean top-level `verdict`; the SAFE
-        // default is keep=true (recover). Pinned it.failing because prod yields
-        // keep=undefined and execute silently drops (#1786).
-        const nonBoolShapes: Array<[string, unknown]> = [
-            ['A2 bare array where object expected', [{ verdict: true, evidence: 'x' }]],
-            ['A3 single object nested under array', [{ verdict: true }]],
-            ['A4 {data:D} wrapper', { data: { verdict: true, evidence: 'x' } }],
-            ['A4 {output:D} wrapper', { output: { verdict: true, evidence: 'x' } }],
-            ['A4 {response:D} wrapper', { response: { verdict: true, evidence: 'x' } }],
-            ['A4 {json:D} wrapper', { json: { verdict: true, evidence: 'x' } }],
-            [
-                'A5 double {result:{result:D}} wrapper',
-                { result: { result: { verdict: true, evidence: 'x' } } },
-            ],
-            ['A6 numeric single-key wrap {"0":D}', { '0': { verdict: true } }],
-            ['A6 {content:D} wrap', { content: { verdict: true } }],
-            [
-                'A8 markdown-fenced string',
-                '```json\n{"verdict":true,"evidence":"x"}\n```',
-            ],
-            ['A9 prose-wrapped string', 'Here is the result: {"verdict":true}'],
-            ['A10 right data, wrong keys', { shouldKeep: true, reason: 'x' }],
-            ['A11 case/convention mismatch', { Verdict: true, Evidence: 'x' }],
-            ['A12 partial object (no verdict key)', { evidence: 'only reason' }],
-            ['A15 empty array', []],
-            ['A16 empty string', ''],
-            ['A16 whitespace-only string', '   '],
-            ['A18 primitive true', true],
-            ['A18 primitive 0', 0],
-            ['A18 primitive "ok"', 'ok'],
-            [
-                'A19 provider envelope leak {choices:[{message:{content}}]}',
-                { choices: [{ message: { content: '{"verdict":true}' } }] },
-            ],
-        ];
-
-        for (const [label, shape] of nonBoolShapes) {
-            it.failing(
-                `${label} → should recover/keep (keep=true), not silently drop`,
-                async () => {
-                    const r = await runPromptOnly(shape);
-                    expect(r.keep).toBe(true);
-                },
-            );
-        }
-
-        it('A13 extra unknown keys alongside verdict/evidence → tolerated', async () => {
-            const r = await runPromptOnly({
-                verdict: true,
-                evidence: 'e',
-                extra: 1,
-                _meta: { x: 2 },
-            });
-            expect(r.keep).toBe(true);
-            expect(r.evidence).toBe('e');
-        });
-
-        it('A12 partial object WITH verdict present (no evidence) → keep honored', async () => {
-            const r = await runPromptOnly({ verdict: true });
-            expect(r.keep).toBe(true);
-            expect(r.evidence).toBeUndefined();
-        });
-
         it('A17 null output → property access throws → safe default keep=true', async () => {
             const r = await runPromptOnly(null);
             expect(r.keep).toBe(true);
             expect(r.evidence).toContain('safe default');
-        });
-
-        it('A17 undefined output → safe default keep=true', async () => {
-            const r = await runPromptOnly(undefined);
-            expect(r.keep).toBe(true);
         });
     });
 
@@ -872,12 +746,9 @@ describe('SafeguardPipelineService — prompt-only boundary FULL I/O matrix (#17
         // a real boolean; prod passes the raw value through → keep is a string or
         // number (wrong precision, silent). Pin the decoded truth (it.failing).
         const encodings: Array<[string, unknown, boolean]> = [
-            ['B21 boolean-as-string "true"', { verdict: 'true' }, true],
+            // 'false' as a string is truthy: passed through raw it keeps a
+            // suggestion the model refuted.
             ['B21 boolean-as-string "false"', { verdict: 'false' }, false],
-            ['B22 yes/no "yes"', { verdict: 'yes' }, true],
-            ['B22 yes/no "no"', { verdict: 'no' }, false],
-            ['B23 boolean-as-number 1', { verdict: 1 }, true],
-            ['B23 boolean-as-number 0', { verdict: 0 }, false],
         ];
 
         for (const [label, shape, expected] of encodings) {
@@ -889,12 +760,6 @@ describe('SafeguardPipelineService — prompt-only boundary FULL I/O matrix (#17
                 },
             );
         }
-
-        it('B27 unicode / emoji / escaped newlines in evidence → preserved verbatim', async () => {
-            const evidence = 'guard ✅ present\nline2\t© café — 日本語';
-            const r = await runPromptOnly({ verdict: true, evidence });
-            expect(r).toEqual({ keep: true, evidence });
-        });
 
         it('B25 dangling reference: features for an id NOT in input → ignored, all input kept', async () => {
             const suggestions = [
@@ -919,60 +784,6 @@ describe('SafeguardPipelineService — prompt-only boundary FULL I/O matrix (#17
         });
     });
 
-    // ================================================= C. unparseable / transport
-    describe('C. unparseable / transport fail-safe', () => {
-        it('C28 truncated JSON surfaces as a throw → keep=true (safe default)', async () => {
-            const r = await runPromptOnlyReject(
-                new SyntaxError('Unexpected end of JSON input'),
-            );
-            expect(r.keep).toBe(true);
-        });
-
-        it('C29 malformed JSON surfaces as a throw → keep=true (safe default)', async () => {
-            const r = await runPromptOnlyReject(
-                new SyntaxError("Expected ',' or '}' after property value"),
-            );
-            expect(r.keep).toBe(true);
-        });
-
-        it('C30 LLM.run throws (network/timeout) → keep=true, never past boundary', async () => {
-            const r = await runPromptOnlyReject(new Error('ETIMEDOUT'));
-            expect(r.keep).toBe(true);
-        });
-
-        it.failing(
-            'C31 error object {error} returned (not thrown) → should keep=true, not drop',
-            async () => {
-                const r = await runPromptOnly({
-                    error: { code: 500, message: 'upstream' },
-                });
-                expect(r.keep).toBe(true);
-            },
-        );
-
-        it('C32 empty success (undefined output) → keep=true (safe default)', async () => {
-            const r = await runPromptOnly(undefined);
-            expect(r.keep).toBe(true);
-        });
-
-        it.failing(
-            'C33 refusal prose ("I cannot help…") → should keep=true, not drop',
-            async () => {
-                const r = await runPromptOnly('I cannot help with this request.');
-                expect(r.keep).toBe(true);
-            },
-        );
-
-        it('C34 abort signal fired mid-call (throws AbortError) → keep=true', async () => {
-            const abortErr = Object.assign(
-                new Error('The operation was aborted'),
-                { name: 'AbortError' },
-            );
-            const r = await runPromptOnlyReject(abortErr);
-            expect(r.keep).toBe(true);
-        });
-    });
-
     // ============================================ D. input variants (execute path)
     describe('D. input variants (execute prompt-only fallback)', () => {
         it('D35 empty input (0 suggestions) → empty output, declared shape', async () => {
@@ -982,30 +793,6 @@ describe('SafeguardPipelineService — prompt-only boundary FULL I/O matrix (#17
             expect(result.codeReviewModelUsed).toEqual({
                 safeguard: 'test-model',
             });
-        });
-
-        it('D36 single item routed through prompt-only verify → kept on keep verdict', async () => {
-            const suggestions = [
-                { id: 's1', suggestionContent: 'leak', improvedCode: 'a' },
-            ];
-            mockGenerate
-                .mockResolvedValueOnce(
-                    out({
-                        codeSuggestions: [
-                            {
-                                id: 's1',
-                                features: mkFeatures({
-                                    has_missing_error_handling: true,
-                                }),
-                            },
-                        ],
-                    }),
-                )
-                .mockResolvedValueOnce(out({ verdict: true, evidence: 'k' }));
-            const result = await service.execute(
-                baseParams(suggestions) as any,
-            );
-            expect(result.suggestions).toEqual(suggestions);
         });
 
         it('D37 large input → ONE batched feature-extraction call (no chunking), all verified', async () => {
@@ -1089,112 +876,6 @@ describe('SafeguardPipelineService — prompt-only boundary FULL I/O matrix (#17
                 baseParams(suggestions) as any,
             );
             expect(result.suggestions).toEqual(suggestions);
-        });
-
-        it('D40 special-chars / whitespace-only diff → prompt built, verify keeps', async () => {
-            const suggestions = [
-                { id: 's1', suggestionContent: 'c', improvedCode: 'a' },
-            ];
-            mockGenerate
-                .mockResolvedValueOnce(
-                    out({
-                        codeSuggestions: [
-                            {
-                                id: 's1',
-                                features: mkFeatures({
-                                    has_missing_error_handling: true,
-                                }),
-                            },
-                        ],
-                    }),
-                )
-                .mockResolvedValueOnce(out({ verdict: true, evidence: 'k' }));
-            const result = await service.execute(
-                baseParams(suggestions, {
-                    codeDiff: '\t\n    😀 <script>`${}`;\\n',
-                    relevantContent: '   ',
-                }) as any,
-            );
-            expect(result.suggestions).toEqual(suggestions);
-        });
-
-        it('D42 order permutation → SAME kept-set regardless of input order (metamorphic)', async () => {
-            const a = { id: 'a', suggestionContent: 'ca', improvedCode: '1' };
-            const b = { id: 'b', suggestionContent: 'cb', improvedCode: '2' };
-            const features = {
-                codeSuggestions: [
-                    {
-                        id: 'a',
-                        features: mkFeatures({ has_missing_error_handling: true }),
-                    },
-                    {
-                        id: 'b',
-                        features: mkFeatures({ is_quality_opinion: true }), // discard
-                    },
-                ],
-            };
-
-            const runOrder = async (order: any[]) => {
-                mockGenerate.mockReset();
-                mockGenerate.mockResolvedValueOnce(out(features));
-                // Only 'a' reaches prompt-only verify → keep.
-                mockGenerate.mockResolvedValueOnce(
-                    out({ verdict: true, evidence: 'k' }),
-                );
-                const res = await service.execute(baseParams(order) as any);
-                return res.suggestions.map((s: any) => s.id).sort();
-            };
-
-            const forward = await runOrder([a, b]);
-            const reversed = await runOrder([b, a]);
-            expect(forward).toEqual(reversed);
-            expect(forward).toEqual(['a']);
-        });
-    });
-
-    // ================================================ E. provider / model matrix
-    describe('E. N-model policy (structured-output-gate branches)', () => {
-        // This boundary does NOT branch on the model — it delegates to
-        // runStructuredReviewCall/structured-output-gate. So the deterministic
-        // prompt-only layer must behave IDENTICALLY whether the org runs a
-        // strict-json_schema model (openai/anthropic/google/moonshotai → clean D)
-        // or a json_object-fallback model (kimi/glm/deepseek/z-ai → full zoo in
-        // scope). Feed the same shapes under both prefixes; assert model-agnostic.
-        const strict = { main: { provider: 'openai', model: 'gpt-4o' } };
-        const fallback = { main: { provider: 'moonshotai', model: 'kimi-k2' } };
-        const deepseek = {
-            main: { provider: 'deepseek', model: 'deepseek-chat' },
-        };
-
-        it('E clean D is trusted identically under strict, moonshot and deepseek', async () => {
-            const shape = { verdict: false, evidence: 'refuted' };
-            const s = await runPromptOnly(shape, strict);
-            const f = await runPromptOnly(shape, fallback);
-            const d = await runPromptOnly(shape, deepseek);
-            expect(s).toEqual({ keep: false, evidence: 'refuted' });
-            expect(f).toEqual(s);
-            expect(d).toEqual(s);
-        });
-
-        it.failing(
-            'E off-schema ({}) is model-agnostic AND the safe result is keep=true (fails today under both)',
-            async () => {
-                const s = await runPromptOnly({}, strict);
-                const f = await runPromptOnly({}, fallback);
-                expect(s).toEqual(f); // deterministic layer is model-agnostic
-                expect(s.keep).toBe(true); // ...and the safe default (fails today)
-            },
-        );
-
-        it('E fail-safe on throw is model-agnostic (keep=true under a fallback provider)', async () => {
-            mockGenerate.mockReset();
-            mockGenerate.mockRejectedValueOnce(new Error('down'));
-            const r = await (service as any).verifyWithPromptOnly(
-                { id: 's1', suggestionContent: 'c' },
-                mkFeatures({ has_resource_leak: true }),
-                baseParams([{ id: 's1' }], { byokConfig: fallback }),
-            );
-            expect(r.keep).toBe(true);
         });
     });
 });

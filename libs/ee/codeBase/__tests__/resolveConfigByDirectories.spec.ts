@@ -12,66 +12,18 @@
  *   - PR touches no groups → fall back to repository config (undefined)
  */
 
-// Extracted logic matching CodeBaseConfigService.resolveConfigByDirectories
-function resolveConfigByDirectories(
-    repoConfig: any,
-    affectedPaths: string[],
-) {
-    if (!repoConfig?.directories) {
-        return undefined;
-    }
+import CodeBaseConfigService from '@libs/ee/codeBase/codeBaseConfig.service';
 
-    const normalizePath = (path: string): string => {
-        return path.startsWith('/') ? path.substring(1) : path;
-    };
+// Exercise the real (private) method — this spec used to test a pasted copy of
+// it, which kept passing whatever the service did.
+const service = Object.create(CodeBaseConfigService.prototype) as any;
 
-    const isPathCoveredByDirectory = (
-        normalizedDir: string,
-        normalizedFile: string,
-    ): boolean => {
-        if (normalizedDir === '') {
-            return true;
-        }
-
-        return (
-            normalizedFile === normalizedDir ||
-            normalizedFile.startsWith(normalizedDir + '/')
-        );
-    };
-
-    const groupMatchers = repoConfig.directories.flatMap((group: any) => {
-        const folders =
-            group.folders?.length > 0
-                ? group.folders
-                : group.path
-                  ? [{ path: group.path }]
-                  : [];
-        return folders.map((folder: any) => ({
-            group,
-            normalizedPath: normalizePath(folder.path),
-        }));
-    });
-
-    const matchingEntries = groupMatchers.filter(
-        ({ normalizedPath }: any) =>
-            affectedPaths.some((filePath: string) => {
-                const normalizedFile = normalizePath(filePath);
-                return isPathCoveredByDirectory(normalizedPath, normalizedFile);
-            }),
+function resolveConfigByDirectories(repoConfig: any, affectedPaths: string[]) {
+    return service.resolveConfigByDirectories(
+        { organizationId: 'org-1', teamId: 'team-1' },
+        repoConfig,
+        affectedPaths,
     );
-
-    const matchingGroupIds = new Set(
-        matchingEntries.map(({ group }: any) => group.id),
-    );
-    const matchingGroups = repoConfig.directories.filter((g: any) =>
-        matchingGroupIds.has(g.id),
-    );
-
-    if (matchingGroups.length === 1) {
-        return matchingGroups[0];
-    }
-
-    return undefined;
 }
 
 const groupABC = {

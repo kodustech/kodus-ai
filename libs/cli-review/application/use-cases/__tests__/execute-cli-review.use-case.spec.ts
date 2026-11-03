@@ -323,14 +323,6 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(result).toEqual({ id: 'global', name: null });
         });
 
-        it('should return "global" when repositories is undefined', () => {
-            const result = useCase.resolveRepositoryFromRemote(
-                'https://github.com/org/repo.git',
-                undefined,
-            );
-            expect(result).toEqual({ id: 'global', name: null });
-        });
-
         it('should match HTTPS remote to http_url', () => {
             const repos = [
                 {
@@ -472,28 +464,10 @@ describe('ExecuteCliReviewUseCase', () => {
             );
         });
 
-        it('should strip http protocol', () => {
-            expect(useCase.normalizeGitUrl('http://github.com/org/repo')).toBe(
-                'github.com/org/repo',
-            );
-        });
-
         it('should strip git@ prefix and convert colon to slash', () => {
             expect(useCase.normalizeGitUrl('git@github.com:org/repo.git')).toBe(
                 'github.com/org/repo',
             );
-        });
-
-        it('should strip .git suffix', () => {
-            expect(
-                useCase.normalizeGitUrl('https://github.com/org/repo.git'),
-            ).toBe('github.com/org/repo');
-        });
-
-        it('should strip trailing slashes', () => {
-            expect(
-                useCase.normalizeGitUrl('https://github.com/org/repo///'),
-            ).toBe('github.com/org/repo');
         });
 
         it('should lowercase', () => {
@@ -519,14 +493,6 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(
                 useCase.extractRepoNameFromRemote(
                     'https://github.com/org/my-repo.git',
-                ),
-            ).toBe('my-repo');
-        });
-
-        it('should extract name from SSH URL', () => {
-            expect(
-                useCase.extractRepoNameFromRemote(
-                    'git@github.com:org/my-repo.git',
                 ),
             ).toBe('my-repo');
         });

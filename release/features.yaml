@@ -1,6 +1,6 @@
 # Kodus feature catalog — single source of truth for feature lifecycle.
 #
-# - `key`: the PostHog feature flag key the runtime calls (e.g. `agent-review`).
+# - `key`: the feature gate key (and PostHog flag key for alpha/legacy rollout).
 # - `stage`: lifecycle. draft | concept | alpha | beta | general-availability.
 # - `audience`: where the feature can run. Subset of [cloud, self-hosted].
 # - `description`: customer-facing copy. Used as seed for the LLM-generated
@@ -14,6 +14,7 @@
 #
 # Promotion is a PR with CODEOWNERS approval. Any change here triggers
 # `yarn feature-gate:snapshot:check` in CI to verify the snapshot is up to date.
+# Cloud beta is enabled by release track; it does not require a PostHog flag.
 
 schema_version: 1
 
@@ -44,6 +45,24 @@ features:
             Define your own reviewers with their instructions, the files they
             look at, the tools they may use and how their comments appear,
             and run them next to Kody on every pull request.
+
+    conditional-pr-approval:
+        name: "Conditional PR approval"
+        stage: beta
+        audience: [cloud, self-hosted]
+        description: >-
+            Limit automatic approval by PR label or author, require a person
+            for sensitive paths, and let Kody assess risk using the change and
+            available code history. Available on Teams and Enterprise plans.
+
+    heavy-review:
+        name: "Heavy review (deeper pass)"
+        stage: alpha
+        audience: [cloud, self-hosted]
+        description: >-
+            An opt-in deeper review that re-runs the finder multiple times to
+            surface more real bugs, for the changes where catching everything
+            matters more than speed.
 
     kodus-trace-review-context:
         name: "Kodus Trace review context"

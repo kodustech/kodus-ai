@@ -13,6 +13,7 @@ import {
 } from '@libs/core/infrastructure/http/per-key-rate-gate';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
+import { splitUnifiedDiff } from '@libs/common/utils/split-unified-diff';
 import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
@@ -108,6 +109,7 @@ import {
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
+import { listingFailed } from '../repository-listing';
 
 @Injectable()
 export class BitbucketCloudService implements Omit<
@@ -2088,6 +2090,10 @@ export class BitbucketCloudService implements Omit<
 
             return prFilesWithDiffAndContents.map((file) => ({
                 filename: file.new?.path ?? file.old?.path,
+                previous_filename:
+                    file.new?.path && file.old?.path !== file.new.path
+                        ? file.old?.path
+                        : undefined,
                 sha: pr.source?.commit?.hash,
                 status: file.status,
                 additions: file.lines_added,
@@ -2213,6 +2219,82 @@ export class BitbucketCloudService implements Omit<
                 serviceName: 'getIncrementalChangedFilesSinceLastCommit',
                 error,
                 metadata: { params },
+            });
+            return null;
+        }
+    }
+
+    async getPullRequestFilesAtCommit(
+        params: Parameters<
+            ICodeManagementService['getPullRequestFilesAtCommit']
+        >[0],
+    ): Promise<FileChange[] | null> {
+        const {
+            organizationAndTeamData,
+            repository,
+            prNumber,
+            baseBranch,
+            headSha,
+        } = params;
+
+        try {
+            const bitbucketAuthDetails = await this.getAuthDetails(
+                organizationAndTeamData,
+            );
+            if (!bitbucketAuthDetails) return null;
+
+            const repo = await this.getRepoById(
+                organizationAndTeamData,
+                repository.id,
+            );
+            const bitbucketAPI =
+                this.instanceBitbucketApi(bitbucketAuthDetails);
+
+            const pr = await bitbucketAPI.pullrequests
+                .get({
+                    pull_request_id: prNumber,
+                    repo_slug: `{${repo.id}}`,
+                    workspace: `{${repo.workspaceId}}`,
+                })
+                .then((res) => res.data);
+            const destination = pr.destination?.commit?.hash;
+            if (!destination) {
+                throw new Error('PR has no destination commit');
+            }
+
+            // `head..destination` is a topic diff: from their merge base to
+            // `head`, the same spec the PR's own diff is read with.
+            const diff = await bitbucketAPI.commits
+                .getDiff({
+                    repo_slug: `{${repo.id}}`,
+                    workspace: `{${repo.workspaceId}}`,
+                    spec: `${headSha}..${destination}`,
+                })
+                .then((res) => res.data as string);
+
+            return splitUnifiedDiff(diff).map(
+                (file) =>
+                    ({
+                        ...file,
+                        changes: file.additions + file.deletions,
+                    }) as FileChange,
+            );
+        } catch (error) {
+            // A rate limit is not a missing diff: the caller must not answer it
+            // with a full review.
+            if (is429Error(error)) throw error;
+            this.logger.warn({
+                message: `Could not read the diff of PR#${prNumber} at ${headSha}`,
+                context: BitbucketCloudService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    repositoryId: repository?.id,
+                    prNumber,
+                    baseBranch,
+                    headSha,
+                    reason: 'compare_failed',
+                },
             });
             return null;
         }
@@ -4178,13 +4260,14 @@ export class BitbucketCloudService implements Omit<
             };
 
             const userUuid = currentUserRes?.data?.uuid;
+            if (!userUuid) return null;
             const activities =
                 await this.getPaginatedResults<BitbucketActivity>(
                     bitbucketAPI,
                     activitiesRes,
                 );
 
-            let state: PullRequestReviewState | null = null;
+            let state: PullRequestReviewState = PullRequestReviewState.NONE;
             for (const activity of activities) {
                 if (activity.approval?.user?.uuid === userUuid) {
                     state = PullRequestReviewState.APPROVED;
@@ -4283,6 +4366,44 @@ export class BitbucketCloudService implements Omit<
             });
             return null;
         }
+    }
+
+    /**
+     * Removes the token user's approval when a later review holds it.
+     * Returns how many approvals were removed (0 or 1).
+     */
+    async dismissOwnPullRequestApprovals(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, repository, prNumber } = params;
+        const state = await this.getReviewStatusByPullRequest({
+            organizationAndTeamData,
+            repository,
+            prNumber,
+        });
+        if (state === null) {
+            throw new Error(
+                `Could not read Kody's approval on PR #${prNumber}`,
+            );
+        }
+        if (state !== PullRequestReviewState.APPROVED) return 0;
+        const workspace = await this.getWorkspaceFromRepository(
+            organizationAndTeamData,
+            repository.id,
+        );
+        if (!workspace) throw new Error('Bitbucket workspace not found');
+        const bitbucketAPI = this.instanceBitbucketApi(
+            await this.getAuthDetails(organizationAndTeamData),
+        );
+        await bitbucketAPI.pullrequests.deleteApproval({
+            pull_request_id: prNumber,
+            repo_slug: `{${repository.id}}`,
+            workspace: `{${workspace}}`,
+        });
+        return 1;
     }
 
     async approvePullRequest(params: {
@@ -4438,6 +4559,7 @@ export class BitbucketCloudService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         prNumber: number;
+        failOnError?: boolean;
     }) {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -4483,6 +4605,7 @@ export class BitbucketCloudService implements Omit<
                 error: error.message,
                 metadata: params,
             });
+            if (params.failOnError) throw error;
             return [];
         }
     }
@@ -5541,6 +5664,7 @@ export class BitbucketCloudService implements Omit<
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]> {
         try {
             const {
@@ -5556,7 +5680,10 @@ export class BitbucketCloudService implements Omit<
                     metadata: { organizationAndTeamData, repository },
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Repository ID is required',
+                );
             }
 
             const bitbucketAuthDetails = await this.getAuthDetails(
@@ -5570,7 +5697,10 @@ export class BitbucketCloudService implements Omit<
                     metadata: { organizationAndTeamData, repository },
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Bitbucket authentication details not found',
+                );
             }
 
             const workspace = await this.getWorkspaceFromRepository(
@@ -5585,7 +5715,10 @@ export class BitbucketCloudService implements Omit<
                     metadata: { organizationAndTeamData, repository },
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'Workspace not found for repository',
+                );
             }
 
             const bitbucketAPI =
@@ -5606,7 +5739,10 @@ export class BitbucketCloudService implements Omit<
                         metadata: { organizationAndTeamData, repository },
                     });
 
-                    return [];
+                    return listingFailed(
+                        params.throwOnError,
+                        'Default branch not found',
+                    );
                 }
             }
 
@@ -5626,7 +5762,10 @@ export class BitbucketCloudService implements Omit<
                     metadata: { organizationAndTeamData, repository, branch },
                 });
 
-                return [];
+                return listingFailed(
+                    params.throwOnError,
+                    'No commit found on the branch',
+                );
             }
 
             const fileResponse = await bitbucketAPI.source.read({
@@ -5695,7 +5834,11 @@ export class BitbucketCloudService implements Omit<
                 },
             });
 
-            return [];
+            return listingFailed(
+                params.throwOnError,
+                'Failed to get repository files',
+                error,
+            );
         }
     }
 
@@ -5936,6 +6079,7 @@ export class BitbucketCloudService implements Omit<
             targetRefName: pullRequest?.destination?.branch?.name ?? '', // TODO: remove, legacy, use base.ref
             base: {
                 ref: pullRequest?.destination?.branch?.name ?? '',
+                sha: pullRequest?.destination?.commit?.hash ?? '',
                 repo: {
                     id:
                         this.sanitizeUUID(

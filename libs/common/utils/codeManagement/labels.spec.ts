@@ -19,6 +19,17 @@ describe('labels', () => {
         );
     });
 
+    it('renders a multi-word label with underscores in the badge path', () => {
+        expect(getLabelShield('performance_and_optimization')).toBe(
+            '![Performance and Optimization](https://img.shields.io/badge/Performance_and_Optimization-00C853)',
+        );
+    });
+
+    it('returns an empty string for an unknown or missing label', () => {
+        expect(getLabelShield('invalid_label')).toBe('');
+        expect(getLabelShield('')).toBe('');
+    });
+
     describe('getSuggestionShield', () => {
         it("shows a custom agent's own name and color", () => {
             expect(

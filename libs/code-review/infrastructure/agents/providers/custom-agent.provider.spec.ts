@@ -130,11 +130,6 @@ beforeEach(() => {
 });
 
 describe('CustomAgentProvider', () => {
-    it('builds one provider per config from the factory', () => {
-        expect(provider()).toBeInstanceOf(CustomAgentProvider);
-        expect(provider().config.id).toBe('agent-ledger');
-    });
-
     it("puts the team's instructions in the prompt and keeps them inside their block", async () => {
         await provider().execute(input());
 
@@ -253,7 +248,10 @@ describe('CustomAgentProvider', () => {
         const runCall = resolveModelMock.mock.calls.find(
             ([, , task]) => task === LLM_TASK.customAgent,
         );
-        expect(runCall[0].byokModelId).toBe('byok-model-run');
+        // The pin goes alongside the repository override, which stays as the
+        // fallback for a pin whose model was deleted.
+        expect(runCall[3]).toBe('byok-model-run');
+        expect(runCall[0].byokModelId).toBe('repo-override');
     });
 });
 
@@ -670,12 +668,6 @@ describe('buildCustomAgentPrompt', () => {
             }),
         );
         expect(withPlugins).toContain('<TeamSystems>');
-        expect(withPlugins).toMatch(/ticket|issue|work item/);
-        // A requirement the change breaks is reported even when the code
-        // never mentions the record: the record is the evidence.
-        expect(withPlugins).toContain(
-            'is a finding even when the code never mentions it',
-        );
 
         expect(buildCustomAgentPrompt(config())).not.toContain('<TeamSystems>');
         expect(
@@ -683,6 +675,20 @@ describe('buildCustomAgentPrompt', () => {
                 config({ tools: { mcp: [{ integrationId: 'x', tools: [] }] } }),
             ),
         ).not.toContain('<TeamSystems>');
+    });
+});
+
+describe('buildCustomAgentPrompt — no sandbox', () => {
+    it('does not ask an agent without the repository to investigate it', () => {
+        expect(buildCustomAgentPrompt(config())).toContain(
+            'Investigate the codebase before reporting',
+        );
+        const prompt = buildCustomAgentPrompt(config(), undefined, {
+            readsRepository: false,
+        });
+        expect(prompt).not.toContain('Investigate the codebase');
+        expect(prompt).toContain('evidence visible in the diff');
+        expect(prompt).toContain('returned by the tools you are given');
     });
 });
 

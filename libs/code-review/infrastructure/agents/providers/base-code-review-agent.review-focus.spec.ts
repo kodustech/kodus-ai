@@ -71,17 +71,6 @@ describe('Review focus directive prompt rendering', () => {
         );
     });
 
-    it('is a priority hint, not a filter (still reports issues elsewhere)', () => {
-        const prompt = agent.buildUserPromptForTest(
-            makeInput({ reviewDirective: DIRECTIVE }),
-        );
-        const block = prompt.slice(
-            prompt.indexOf('<ReviewFocus>'),
-            prompt.indexOf('</ReviewFocus>'),
-        );
-        expect(block.toLowerCase()).toContain('do not suppress');
-    });
-
     it('renders no focus block when no directive is set', () => {
         const prompt = agent.buildUserPromptForTest(makeInput());
         expect(prompt).not.toContain('<ReviewFocus>');

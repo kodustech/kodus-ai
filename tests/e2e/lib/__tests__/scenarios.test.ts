@@ -12,6 +12,7 @@ test("allScenarios: includes the registered release-gate scenarios", () => {
         "command-review",
         "command-review-focus",
         "command-review-while-busy",
+        "conditional-approval-provider",
         "conversation-anthropic-byok",
         "conversation-implicit-reply",
         "conversation-vertex-byok",

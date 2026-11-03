@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { estimateTokens } from '@libs/code-review/infrastructure/adapters/services/utils/token-estimator';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
+import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { MessageTemplateProcessor } from '@libs/code-review/infrastructure/adapters/services/messageTemplateProcessor.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -34,16 +35,28 @@ jest.mock('@libs/core/log/logger', () => ({
  * token" file measured a few dozen and nothing in this file ever exceeded a
  * budget again.
  *
- * Varied text tokenizes the way a real patch does, and the loop grows it until
- * the tokenizer agrees, so the fixture means what its name says regardless of
- * what the estimator does next.
+ * Varied text tokenizes the way a real patch does, and the patch is the fewest
+ * repeats of `unit` the tokenizer agrees reach `patchTokens`, so the fixture
+ * means what its name says regardless of what the estimator does next. Found by
+ * binary search: growing one unit at a time re-tokenized the whole patch on
+ * every step and made this suite take ~11s.
  */
 function makeFile(filename: string, patchTokens: number): Partial<FileChange> {
     const unit = `const ${filename.replace(/\W/g, '_')} = compute(value, index); // note\n`;
-    let patch = '';
-    while (estimateTokens(patch) < patchTokens) {
-        patch += unit;
+    let hi = 1;
+    while (estimateTokens(unit.repeat(hi)) < patchTokens) {
+        hi *= 2;
     }
+    let lo = 0;
+    while (lo < hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (estimateTokens(unit.repeat(mid)) < patchTokens) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    const patch = unit.repeat(lo);
     return {
         filename,
         patch,
@@ -68,6 +81,7 @@ describe('CommentManagerService – chunkChangedFilesForSummary', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 { provide: MessageTemplateProcessor, useValue: {} },
                 { provide: ObservabilityService, useValue: {} },
@@ -456,6 +470,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CommentManagerService,
+                { provide: PULL_REQUESTS_SERVICE_TOKEN, useValue: {} },
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 { provide: MessageTemplateProcessor, useValue: {} },
                 {

@@ -109,7 +109,15 @@ describe('RunAnalyzersStage', () => {
             ]);
         const tool = makeTool({ selectFiles });
 
-        await run(makeStage([tool]), makeContext());
+        await run(
+            makeStage([tool]),
+            makeContext({
+                changedFiles: [
+                    { filename: 'src/db/orders.go', patch: patchAdding(10, 3) },
+                    { filename: 'README.md', patch: patchAdding(1, 1) },
+                ],
+            } as never),
+        );
 
         expect(tool.run).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -192,13 +200,6 @@ describe('RunAnalyzersStage', () => {
 
             expect(tool.run).not.toHaveBeenCalled();
             expect(result.analyzerRouting).toBeUndefined();
-        });
-
-        it('runs no tool when none is registered', async () => {
-            const result = await run(makeStage([]), makeContext());
-
-            expect(result.analyzerRouting).toEqual([]);
-            expect(result.analyzerFindings).toBeUndefined();
         });
     });
 

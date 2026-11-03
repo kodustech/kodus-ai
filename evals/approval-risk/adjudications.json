@@ -1,0 +1,2406 @@
+{
+  "schemaVersion": 1,
+  "rubricVersion": 1,
+  "cases": [
+    {
+      "id": "astropy/astropy#14111",
+      "decision": "eligible",
+      "snapshotSha": "ee87e6d2c305370e578d01ea34299f3de45f51a9",
+      "snapshotAt": "2022-12-06T14:45:51+00:00",
+      "adjudicator": "codex",
+      "rationale": "The snapshot only exports four already-imported spline fitter symbols from the public module; it changes no fitting logic or security boundary.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/256ddafeda9e4ae66de37e0ff411110f4b257642...ee87e6d2c305370e578d01ea34299f3de45f51a9",
+        "https://github.com/astropy/astropy/pull/14111"
+      ]
+    },
+    {
+      "id": "astropy/astropy#15492",
+      "decision": "hold",
+      "snapshotSha": "75ce7180e64cd39159b2b2720c6b8e64515297b0",
+      "snapshotAt": "2023-10-17T15:25:01+00:00",
+      "adjudicator": "codex",
+      "rationale": "Removing manylinux2010 overrides changes the wheel compatibility floor for older Linux users, an explicit distribution policy decision that needs human approval.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/6288c8520cd89ad3935eafd959b2c965c928c066...75ce7180e64cd39159b2b2720c6b8e64515297b0",
+        "https://github.com/astropy/astropy/pull/15492"
+      ]
+    },
+    {
+      "id": "astropy/astropy#17961",
+      "decision": "eligible",
+      "snapshotSha": "75e3e2f93da7de022db555aaaf368ce7f53b4be2",
+      "snapshotAt": "2025-03-31T16:22:41+00:00",
+      "adjudicator": "codex",
+      "rationale": "The single-line change updates setuptools only inside a weekly exotic-architecture CI job; it does not alter shipped code or release wheel configuration.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/2382a9912a025c71eb9802c2efe566457b524a7c...75e3e2f93da7de022db555aaaf368ce7f53b4be2",
+        "https://github.com/astropy/astropy/pull/17961"
+      ]
+    },
+    {
+      "id": "astropy/astropy#14782",
+      "decision": "hold",
+      "snapshotSha": "0a722fd1eba098784009e52b7f19c096ba417c09",
+      "snapshotAt": "2023-05-07T01:59:06+00:00",
+      "adjudicator": "codex",
+      "rationale": "The snapshot removes a deprecated public import shim and its compatibility test, so downstream imports can break even though removal is intentional.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/dd0317de9fff2b5d3b12f6d488ae3ebdf58c3596...0a722fd1eba098784009e52b7f19c096ba417c09",
+        "https://github.com/astropy/astropy/pull/14782"
+      ]
+    },
+    {
+      "id": "astropy/astropy#17461",
+      "decision": "hold",
+      "snapshotSha": "076e164019ba3fb52207a1c45fc3bf9c893a51ac",
+      "snapshotAt": "2024-11-26T20:49:34+00:00",
+      "adjudicator": "codex",
+      "rationale": "Caching configuration values on a shared descriptor changes reload and temporary-setting semantics; reviewers later flagged exception handling and parallelism concerns.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/9818492021c57ba2a879fd810c6e6cd1d1f3d8fe...076e164019ba3fb52207a1c45fc3bf9c893a51ac",
+        "https://github.com/astropy/astropy/pull/17461"
+      ]
+    },
+    {
+      "id": "astropy/astropy#16539",
+      "decision": "hold",
+      "snapshotSha": "fd80b0adbaa3ec7521446d381ebec7e815deb326",
+      "snapshotAt": "2024-06-04T18:33:03+00:00",
+      "adjudicator": "codex",
+      "rationale": "The workflow replaces an immutable action commit with a mutable v1 tag while granting GITHUB_TOKEN; this changes supply-chain trust and needs human approval.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/68f5119d1603581aedc5a0abab80567cd099a365...fd80b0adbaa3ec7521446d381ebec7e815deb326",
+        "https://github.com/astropy/astropy/pull/16539"
+      ]
+    },
+    {
+      "id": "astropy/astropy#11764",
+      "decision": "hold",
+      "snapshotSha": "ce8cceeb13924332b30dec45d19516d0c3aff0b9",
+      "snapshotAt": "2021-05-20T18:13:56+00:00",
+      "adjudicator": "codex",
+      "rationale": "The stale-bot settings alter automated issue and PR closure, and the snapshot message still promises activity will clear staleness even though the new setting disables that behavior.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/03f6ac5f79569fb9572f75c10d6fd82611f33c0d...ce8cceeb13924332b30dec45d19516d0c3aff0b9",
+        "https://github.com/astropy/astropy/pull/11764#pullrequestreview-664717544"
+      ]
+    },
+    {
+      "id": "astropy/astropy#14682",
+      "decision": "hold",
+      "snapshotSha": "379dce6faf77c5eb35eaa682e2e95b60539e22d1",
+      "snapshotAt": "2023-04-24T16:37:01+00:00",
+      "adjudicator": "codex",
+      "rationale": "Updating Ruff with automatic fixes triggered a pre-commit failure and required manual rule exclusions, so this snapshot should not be approved without reviewing the CI impact.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/e4c203ceb5cfe89c4b4d816591576ca00cdd8538...379dce6faf77c5eb35eaa682e2e95b60539e22d1",
+        "https://github.com/astropy/astropy/pull/14682#issuecomment-1520668005"
+      ]
+    },
+    {
+      "id": "astropy/astropy#14149",
+      "decision": "eligible",
+      "snapshotSha": "17f61fa61ec559f38e8423590264ba361f18df0c",
+      "snapshotAt": "2022-12-08T22:35:53+00:00",
+      "adjudicator": "codex",
+      "rationale": "The diff corrects an image-test tox command to match the existing hash-file name and ignores generated test images; it changes no runtime behavior.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/4d19c88898e9a55b7cb7da957ca2b3aa8f6aaa5c...17f61fa61ec559f38e8423590264ba361f18df0c",
+        "https://github.com/astropy/astropy/pull/14149#issuecomment-1343467652"
+      ]
+    },
+    {
+      "id": "astropy/astropy#11480",
+      "decision": "eligible",
+      "snapshotSha": "eabe7f6adaa9eea31c0a64b66fe7c493520cf17b",
+      "snapshotAt": "2021-04-05T14:45:12+00:00",
+      "adjudicator": "codex",
+      "rationale": "Both edits only replace outdated documentation links for CDS units; no parser logic or unit mapping changes.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/7f9507ea491ea530b83d65ad12ee071ea9cc2740...eabe7f6adaa9eea31c0a64b66fe7c493520cf17b",
+        "https://github.com/astropy/astropy/pull/11480#pullrequestreview-628048421"
+      ]
+    },
+    {
+      "id": "astropy/astropy#11846",
+      "decision": "hold",
+      "snapshotSha": "e79b12d15670ab532b9336ef8a2844c6751e592d",
+      "snapshotAt": "2021-06-14T21:52:30+00:00",
+      "adjudicator": "codex",
+      "rationale": "The snapshot retargets the CI push trigger from main to a release branch, changing which pushes receive tests; the reviewer requested additional trigger changes.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/c5a3d4958f3582cbe70fa2e1e14a064035b8c548...e79b12d15670ab532b9336ef8a2844c6751e592d",
+        "https://github.com/astropy/astropy/pull/11846#discussion_r651306451"
+      ]
+    },
+    {
+      "id": "astropy/astropy#14437",
+      "decision": "hold",
+      "snapshotSha": "bb2ed692615ade4eb9c85f7e59553315a39f07f6",
+      "snapshotAt": "2023-02-22T21:00:01+00:00",
+      "adjudicator": "codex",
+      "rationale": "The unit-format refactor changes public to_string behavior and introduces API parameters; reviewers explicitly questioned the API and changelog implications.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/92a3af78b409543aa85c8d82de17e81062347284...bb2ed692615ade4eb9c85f7e59553315a39f07f6",
+        "https://github.com/astropy/astropy/pull/14437#discussion_r1116309766"
+      ]
+    },
+    {
+      "id": "astropy/astropy#17278",
+      "decision": "eligible",
+      "snapshotSha": "1412b92d66b92625ba8ebdfd7366b1c3589f1262",
+      "snapshotAt": "2024-10-29T14:31:01+00:00",
+      "adjudicator": "codex",
+      "rationale": "At this pre-review head the sole changed file removes a dead documentation URL from a docstring, with no code or public API behavior changed.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/27694782493b9bbc60a0a24ef5e85574a6f8df53...1412b92d66b92625ba8ebdfd7366b1c3589f1262",
+        "https://github.com/astropy/astropy/pull/17278"
+      ]
+    },
+    {
+      "id": "astropy/astropy#15612",
+      "decision": "hold",
+      "snapshotSha": "22ce0c644c6bd9315bce10f8cbfcc44be72eacc1",
+      "snapshotAt": "2023-11-14T10:15:09+00:00",
+      "adjudicator": "codex",
+      "rationale": "The one-line correction changes barycentric position calculations, and a regression test required separately merged ephemeris data after this snapshot.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/bc80072326ba18732aa12eff11d5d76dcdd3e6d0...22ce0c644c6bd9315bce10f8cbfcc44be72eacc1",
+        "https://github.com/astropy/astropy/pull/15612#issuecomment-1810007516"
+      ]
+    },
+    {
+      "id": "astropy/astropy#14854",
+      "decision": "hold",
+      "snapshotSha": "4e973a5d7fdaa34a635cacd2f7c35938dfc0ce49",
+      "snapshotAt": "2023-05-22T19:17:05+00:00",
+      "adjudicator": "codex",
+      "rationale": "The snapshot consolidates release notes across 78 files and removes many changelog fragments immediately before tagging a release; release-content signoff is needed.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/15c182e3bc602be2b7522eb362f30edb7f7e5efe...4e973a5d7fdaa34a635cacd2f7c35938dfc0ce49",
+        "https://github.com/astropy/astropy/pull/14854#issuecomment-1557894621"
+      ]
+    },
+    {
+      "id": "astropy/astropy#17155",
+      "decision": "hold",
+      "snapshotSha": "64d80c85791edcb041a0ea74dc67299e851763ea",
+      "snapshotAt": "2024-10-10T16:56:03+00:00",
+      "adjudicator": "codex",
+      "rationale": "The snapshot removes deprecated FITS classes, arguments, and automatic tile-shape correction, breaking existing callers and changing validation behavior.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/bc6d9ba7d3dfbd2a423fdbb54a948e44753bf0b2...64d80c85791edcb041a0ea74dc67299e851763ea",
+        "https://github.com/astropy/astropy/pull/17155"
+      ]
+    },
+    {
+      "id": "astropy/astropy#17800",
+      "decision": "hold",
+      "snapshotSha": "fbe3a35c2ef821238f2060bd86b954ca9d3fd6ca",
+      "snapshotAt": "2025-02-20T09:25:06+00:00",
+      "adjudicator": "codex",
+      "rationale": "The change alters a statistical fitness calculation and input validation for scientific results; the later review notes prior iteration on this bug, so independent numerical review is warranted.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/60aa54bc65f59f97c02b26d7c00063a3fa5a52a1...fbe3a35c2ef821238f2060bd86b954ca9d3fd6ca",
+        "https://github.com/astropy/astropy/pull/17800#issuecomment-2670921028"
+      ]
+    },
+    {
+      "id": "astropy/astropy#14607",
+      "decision": "hold",
+      "snapshotSha": "9ea5ddae91430b79f1314424f50c967d93c2c947",
+      "snapshotAt": "2023-04-03T16:41:19+00:00",
+      "adjudicator": "codex",
+      "rationale": "Updating Ruff and Black triggered new lint findings and required a manual noqa decision, so the pre-commit update was not clean at this snapshot.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/aaf8975dd12d512a046ce11e6a404ed47372d7a8...9ea5ddae91430b79f1314424f50c967d93c2c947",
+        "https://github.com/astropy/astropy/pull/14607#discussion_r1156273766"
+      ]
+    },
+    {
+      "id": "astropy/astropy#16703",
+      "decision": "eligible",
+      "snapshotSha": "249d7a3c76bc895f65ad6a49aca849cd89fbd339",
+      "snapshotAt": "2024-07-10T21:59:48+00:00",
+      "adjudicator": "codex",
+      "rationale": "The snapshot only restructures unit formatter tests and adds stable test IDs and standard-set counts; it changes no runtime formatter implementation.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/00f2bbab9a2bbb7f79858539120ad1170c1d315f...249d7a3c76bc895f65ad6a49aca849cd89fbd339",
+        "https://github.com/astropy/astropy/pull/16703#pullrequestreview-2171934415"
+      ]
+    },
+    {
+      "id": "astropy/astropy#10370",
+      "decision": "hold",
+      "snapshotSha": "b83a3f7e49bebfbd397840dd1698c1d6eaae7e7f",
+      "snapshotAt": "2020-05-19T13:37:20+00:00",
+      "adjudicator": "codex",
+      "rationale": "The release-note snapshot still contains literal placeholder counts for issues, PRs, and contributors; the author later said it was not ready to merge yet.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/c657bb0e8bfbfd10995f7bc5450934b6564a0d7d...b83a3f7e49bebfbd397840dd1698c1d6eaae7e7f",
+        "https://github.com/astropy/astropy/pull/10370#issuecomment-631087773"
+      ]
+    },
+    {
+      "id": "astropy/astropy#12649",
+      "decision": "hold",
+      "snapshotSha": "10fe547358c55d9bbf297cf4886a1070352ebfae",
+      "snapshotAt": "2021-12-28T20:03:21+00:00",
+      "adjudicator": "codex",
+      "rationale": "The parser replacement changes version comparison semantics without a focused test, and the first review exposed an incomplete distutils migration with failing CI.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/8ad88653665ed9bbdbdec70b7757d69222b8abbf...10fe547358c55d9bbf297cf4886a1070352ebfae",
+        "https://github.com/astropy/astropy/pull/12649#pullrequestreview-841079167"
+      ]
+    },
+    {
+      "id": "astropy/astropy#13841",
+      "decision": "hold",
+      "snapshotSha": "75fe3e75c17ce86ab7ea4558dbbdcd761f34def8",
+      "snapshotAt": "2022-10-17T16:30:31+00:00",
+      "adjudicator": "codex",
+      "rationale": "The pyupgrade version change generated additional source edits after this snapshot and raised a backport question, so the isolated tool bump needs human review of its effects.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/96dde46c854cd34cf3fd4b485d1250e32a78648e...75fe3e75c17ce86ab7ea4558dbbdcd761f34def8",
+        "https://github.com/astropy/astropy/pull/13841#issuecomment-1281166434"
+      ]
+    },
+    {
+      "id": "astropy/astropy#10256",
+      "decision": "hold",
+      "snapshotSha": "c0dfd1fa92089069f201a837dae62829e0b881e2",
+      "snapshotAt": "2020-05-01T20:59:23+00:00",
+      "adjudicator": "codex",
+      "rationale": "This snapshot upgrades 17 files of bundled CFITSIO C code, including decompression and file handling; reviewers explicitly deferred source review and checked integration tests.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/6e4fb1af5e02bfb12bcb54543d80e37ba950612e...c0dfd1fa92089069f201a837dae62829e0b881e2",
+        "https://github.com/astropy/astropy/pull/10256#pullrequestreview-404401667"
+      ]
+    },
+    {
+      "id": "astropy/astropy#16735",
+      "decision": "hold",
+      "snapshotSha": "158059bfd23544595dabea01db4fd8a7c71818ba",
+      "snapshotAt": "2024-07-16T15:31:36+00:00",
+      "adjudicator": "codex",
+      "rationale": "The delimiter parser change could reject valid headers with trailing whitespace; a reviewer found that edge case and the author corrected it after this snapshot.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/155f43cd07ed56fb8ebb102fc6de77fb9ae5ae23...158059bfd23544595dabea01db4fd8a7c71818ba",
+        "https://github.com/astropy/astropy/pull/16735#discussion_r1679740496"
+      ]
+    },
+    {
+      "id": "astropy/astropy#12747",
+      "decision": "hold",
+      "snapshotSha": "a43d7bfbff043dae5f8f3a8f45223b1bee8c5cd2",
+      "snapshotAt": "2022-01-18T20:47:59+00:00",
+      "adjudicator": "codex",
+      "rationale": "The documentation backport references substitutions unavailable on the release branch and later failed the docs build until another commit was cherry-picked.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/139b4e942ba55eacc8a9da723291b8e15619aedf...a43d7bfbff043dae5f8f3a8f45223b1bee8c5cd2",
+        "https://github.com/astropy/astropy/pull/12747#issuecomment-1016859803"
+      ]
+    },
+    {
+      "id": "astropy/astropy#17268",
+      "decision": "hold",
+      "snapshotSha": "2b353063dac10ee473ebf1e5d338c9ee4cae9b3c",
+      "snapshotAt": "2024-10-28T21:15:53+00:00",
+      "adjudicator": "codex",
+      "rationale": "The new broad ImportError handler can misreport failures inside ipydatagrid as missing dependencies, and reviewers requested the correct extras guidance before approval.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/01d19722a0baab1173950f475f1bc25717d33eba...2b353063dac10ee473ebf1e5d338c9ee4cae9b3c",
+        "https://github.com/astropy/astropy/pull/17268#pullrequestreview-2400281715"
+      ]
+    },
+    {
+      "id": "astropy/astropy#15549",
+      "decision": "eligible",
+      "snapshotSha": "460723f2770805a548ed377f3acda805c4d59b83",
+      "snapshotAt": "2023-10-28T03:36:41+00:00",
+      "adjudicator": "codex",
+      "rationale": "The snapshot only moves and removes cosmology parameter tests; no production code or public API changes, and discussion concerned test organization.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/1f67898272c164b6293f7726a34e792ef9284cc8...460723f2770805a548ed377f3acda805c4d59b83",
+        "https://github.com/astropy/astropy/pull/15549#discussion_r1376792634"
+      ]
+    },
+    {
+      "id": "astropy/astropy#16872",
+      "decision": "hold",
+      "snapshotSha": "20943c3293ed2d818e965a6646cfb333db6f288b",
+      "snapshotAt": "2024-08-23T06:32:52+00:00",
+      "adjudicator": "codex",
+      "rationale": "The documentation example seeks one byte past a 2880-byte FITS block, creating a noncompliant file; a reviewer caught the off-by-one after this snapshot.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/f72f8664c32f4fb84a15d242c8f516e2fd057fd4...20943c3293ed2d818e965a6646cfb333db6f288b",
+        "https://github.com/astropy/astropy/pull/16872#discussion_r1729268846"
+      ]
+    },
+    {
+      "id": "astropy/astropy#15723",
+      "decision": "hold",
+      "snapshotSha": "8feb2d3cb433b3eaaa0f252e67984c9a96f3d6d0",
+      "snapshotAt": "2023-12-12T16:12:15+00:00",
+      "adjudicator": "codex",
+      "rationale": "The labeler schema and pull_request_target workflow change automated triage, and the author could not verify behavior until after merge; a person must approve that policy change.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/cf357278b932d1c1b720621afc72b652240c3398...8feb2d3cb433b3eaaa0f252e67984c9a96f3d6d0",
+        "https://github.com/astropy/astropy/pull/15723#issuecomment-1852358630"
+      ]
+    },
+    {
+      "id": "astropy/astropy#16207",
+      "decision": "hold",
+      "snapshotSha": "035218f74a1838c77c5b9585e0846534d3dfbb1f",
+      "snapshotAt": "2024-03-17T19:26:06+00:00",
+      "adjudicator": "codex",
+      "rationale": "Exiting the benchmark workflow immediately on regression can prevent artifact upload, which a later reviewer identified as necessary for diagnosing failures.",
+      "evidence": [
+        "https://github.com/astropy/astropy/compare/f52a09b6a98c19742c59f3420c65d240c03756f5...035218f74a1838c77c5b9585e0846534d3dfbb1f",
+        "https://github.com/astropy/astropy/pull/16207#discussion_r1528986163"
+      ]
+    },
+    {
+      "id": "django/django#16040",
+      "decision": "hold",
+      "snapshotSha": "bb0a5c582286bae84717bb4211d5342f067c9534",
+      "snapshotAt": "2022-09-09T04:31:53+00:00",
+      "adjudicator": "codex",
+      "rationale": "The SQL compiler snapshot drops ordering parameters from the outer query; a reviewer found that parameterized ordering would execute incorrectly and a test was missing.",
+      "evidence": [
+        "https://github.com/django/django/compare/0c3981eb5094419fe200eb46c71b5376a2266166...bb0a5c582286bae84717bb4211d5342f067c9534",
+        "https://github.com/django/django/pull/16040#discussion_r971651188"
+      ]
+    },
+    {
+      "id": "django/django#18803",
+      "decision": "hold",
+      "snapshotSha": "771d3ac3d7ce2d640ab45db1d70f801e6f1496bc",
+      "snapshotAt": "2024-11-13T07:44:38+00:00",
+      "adjudicator": "codex",
+      "rationale": "The widget snapshot marks widgets as fieldsets without updating the admin template or tests, and a reviewer identified widgets that should not get this attribute.",
+      "evidence": [
+        "https://github.com/django/django/compare/b9aa3239ab1328c915684d89b87a49459cabd30b...771d3ac3d7ce2d640ab45db1d70f801e6f1496bc",
+        "https://github.com/django/django/pull/18803#pullrequestreview-2432275469"
+      ]
+    },
+    {
+      "id": "django/django#14697",
+      "decision": "eligible",
+      "snapshotSha": "ce1908c91deac946320e3dd76abb75ce602d4b31",
+      "snapshotAt": "2021-07-26T07:35:15+00:00",
+      "adjudicator": "codex",
+      "rationale": "The three-file snapshot only changes capitalization of internet and email in prose documentation; no code or deployment instruction meaning changes.",
+      "evidence": [
+        "https://github.com/django/django/compare/00ea883ef56fb5e092cbe4a6f7ff2e7470886ac4...ce1908c91deac946320e3dd76abb75ce602d4b31",
+        "https://github.com/django/django/pull/14697"
+      ]
+    },
+    {
+      "id": "django/django#15910",
+      "decision": "eligible",
+      "snapshotSha": "32d3ade2b2b79d849be0c100ea1f7bf2c3ae5b5f",
+      "snapshotAt": "2022-08-03T15:51:55+00:00",
+      "adjudicator": "codex",
+      "rationale": "The sole edit fixes a misspelled field name in a release-note example and does not change any executable code.",
+      "evidence": [
+        "https://github.com/django/django/compare/4e13b40a764cfdae50416338c5d077e9d9a6d0f1...32d3ade2b2b79d849be0c100ea1f7bf2c3ae5b5f",
+        "https://github.com/django/django/pull/15910"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#17851",
+      "decision": "hold",
+      "snapshotSha": "d3c674caa8a2c5401cfb9c16b950dd20ddb220ef",
+      "snapshotAt": "2020-07-07T17:16:22+00:00",
+      "adjudicator": "codex",
+      "rationale": "The new zip(paths, zs) silently truncates mismatched input lengths where broadcasting previously raised, a behavior regression later identified in review.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/45d27c9fade4c6f184a6b9c94db905b250840f16...d3c674caa8a2c5401cfb9c16b950dd20ddb220ef",
+        "https://github.com/matplotlib/matplotlib/pull/17851#discussion_r466816848"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#17105",
+      "decision": "hold",
+      "snapshotSha": "da82639fd132f48d869ae9fb52c162232d6ec675",
+      "snapshotAt": "2020-04-12T00:17:19+00:00",
+      "adjudicator": "codex",
+      "rationale": "This adds a public toolbar control across several GUI backends and a large new widget without complete backend coverage; review found failure with multiple subplots.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/ac0bd8f4462e2036b802d6c3ae0b8d5d7a85a6d6...da82639fd132f48d869ae9fb52c162232d6ec675",
+        "https://github.com/matplotlib/matplotlib/pull/17105#discussion_r407212780"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#19131",
+      "decision": "eligible",
+      "snapshotSha": "725e908542a20100ef3e0a49c884bb26f304132b",
+      "snapshotAt": "2020-12-16T23:12:22+00:00",
+      "adjudicator": "codex",
+      "rationale": "The two guarded WebSocket sends remove messages before the socket opens; users confirmed the fix and no unrelated runtime surface changed.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/a02ffbcd898793c95de66d3bdb4dc0a8b6c5a3d0...725e908542a20100ef3e0a49c884bb26f304132b",
+        "https://github.com/matplotlib/matplotlib/pull/19131#pullrequestreview-554277133"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#28625",
+      "decision": "hold",
+      "snapshotSha": "7aefebaa986649022c36e9a3917d2a1293875ac6",
+      "snapshotAt": "2024-07-29T18:06:28+00:00",
+      "adjudicator": "codex",
+      "rationale": "The stub promises that twinx returns the same subclass and adds an unnecessary runtime dependency; maintainers later identified the typing claim as inaccurate.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/6e69939fdc3e13872b1e8bf24d6a95cc9c7fc440...7aefebaa986649022c36e9a3917d2a1293875ac6",
+        "https://github.com/matplotlib/matplotlib/pull/28625#issuecomment-2261455537"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#25993",
+      "decision": "hold",
+      "snapshotSha": "b59214e5fe7859d5b138979be83f0f9282eb5227",
+      "snapshotAt": "2023-05-28T10:57:22+00:00",
+      "adjudicator": "codex",
+      "rationale": "The snapshot removes the Sphinx gallery docstring, breaking the documentation build, and later review found unnatural text spacing.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/18b16f3906203d7645560982a0bec8dd4bdf2a50...b59214e5fe7859d5b138979be83f0f9282eb5227",
+        "https://github.com/matplotlib/matplotlib/pull/25993#discussion_r1208569206"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#19709",
+      "decision": "eligible",
+      "snapshotSha": "0a6009699c4e02addfdc3fb048fd1e8fb0d6c6f2",
+      "snapshotAt": "2021-03-15T10:57:36+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only grammatical comments in a gallery example change; the reviewer confirmed unrelated CI failures and no executable behavior is affected.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/541768296a2da5dc484a7224d15a279bb41de49c...0a6009699c4e02addfdc3fb048fd1e8fb0d6c6f2",
+        "https://github.com/matplotlib/matplotlib/pull/19709#pullrequestreview-612617957"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#23027",
+      "decision": "hold",
+      "snapshotSha": "7dafd2db444b7b41363850f5afd545d76525e674",
+      "snapshotAt": "2022-05-09T21:02:16+00:00",
+      "adjudicator": "codex",
+      "rationale": "The example changes coordinates and text placement without addressing scale invariance; review explicitly requested a different approach.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/5971febe6cd0c0fb525b2fcb12d1d17ce1a6f130...7dafd2db444b7b41363850f5afd545d76525e674",
+        "https://github.com/matplotlib/matplotlib/pull/23027#pullrequestreview-968176396"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#21263",
+      "decision": "hold",
+      "snapshotSha": "76f1516736b0de6f3dfbd644a19b0b01e0298856",
+      "snapshotAt": "2021-10-01T23:20:39+00:00",
+      "adjudicator": "codex",
+      "rationale": "The build script changes C compiler selection and cross-compilation host settings for bundled FreeType, requiring platform build validation before approval.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/f657b37ec575351b8da57a72fc0cde8eddebf3a4...76f1516736b0de6f3dfbd644a19b0b01e0298856",
+        "https://github.com/matplotlib/matplotlib/pull/21263"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#17068",
+      "decision": "eligible",
+      "snapshotSha": "7a9bc5ebbcba336b7946cf5def12040353665137",
+      "snapshotAt": "2020-04-08T11:55:22+00:00",
+      "adjudicator": "codex",
+      "rationale": "The sole change removes an expired GSoC announcement from the documentation layout; it changes neither shipped code nor documentation build logic.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/5a64dda3e20e31aa33b75f3c34a428f0453e11f9...7a9bc5ebbcba336b7946cf5def12040353665137",
+        "https://github.com/matplotlib/matplotlib/pull/17068"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#18395",
+      "decision": "hold",
+      "snapshotSha": "8fa82048551d7f28bcb941901bb5bb23547daf08",
+      "snapshotAt": "2020-09-02T16:19:04+00:00",
+      "adjudicator": "codex",
+      "rationale": "The Tk toolbar synchronization only deselects buttons; review found keyboard-activated modes still fail to select the matching button.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/f7ae15780857c9ddedd09dd614b68069bcb668cb...8fa82048551d7f28bcb941901bb5bb23547daf08",
+        "https://github.com/matplotlib/matplotlib/pull/18395#discussion_r482457026"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#25737",
+      "decision": "eligible",
+      "snapshotSha": "8b3577910c6cc22c84293c2a024a1e61b8ba5bb6",
+      "snapshotAt": "2023-04-20T19:45:13+00:00",
+      "adjudicator": "codex",
+      "rationale": "This only adds an issue-link reminder to the PR template, with no runtime or CI effect; subsequent discussion concerned wording and form layout.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/ddb31638bae4088f5aa0c944fa533299a19ed338...8b3577910c6cc22c84293c2a024a1e61b8ba5bb6",
+        "https://github.com/matplotlib/matplotlib/pull/25737"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#17257",
+      "decision": "hold",
+      "snapshotSha": "746c691eb7db542bcb07a4ed8a38f6500a311956",
+      "snapshotAt": "2020-04-28T19:29:09+00:00",
+      "adjudicator": "codex",
+      "rationale": "The backport changes PostScript, LaTeX, DVI and ticker behavior across seven files plus image baselines, so compatibility and rendering need human verification.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/687531dcad6729719c97f597167d9d84f8fe9787...746c691eb7db542bcb07a4ed8a38f6500a311956",
+        "https://github.com/matplotlib/matplotlib/pull/17257"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#23066",
+      "decision": "hold",
+      "snapshotSha": "2bea21b2b86275d8a0bf70b7ff881e0e73735c67",
+      "snapshotAt": "2022-05-18T12:47:07+00:00",
+      "adjudicator": "codex",
+      "rationale": "The added C++ helper attempts to return PyErr_SetString, which returns void; the review identified this compile error in the original snapshot.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/fa24348d9d1a0d91e73f68b0db83b5b7f8ff1d04...2bea21b2b86275d8a0bf70b7ff881e0e73735c67",
+        "https://github.com/matplotlib/matplotlib/pull/23066#discussion_r876077543"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#27128",
+      "decision": "hold",
+      "snapshotSha": "0f61895102a2645dff3960d2a1884800cd89ca06",
+      "snapshotAt": "2023-10-17T22:10:51+00:00",
+      "adjudicator": "codex",
+      "rationale": "The test decorator adds an executable artifact and a wrapper with incorrect signature handling; reviewers requested a different implementation.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/1d6f09f4079f9d79e0f2fa05b842df4e1582e4a1...0f61895102a2645dff3960d2a1884800cd89ca06",
+        "https://github.com/matplotlib/matplotlib/pull/27128#pullrequestreview-1683537411"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#23942",
+      "decision": "eligible",
+      "snapshotSha": "d0b6b2721135c0515ddf0c94bbe7606c614234a2",
+      "snapshotAt": "2022-09-18T22:08:09+00:00",
+      "adjudicator": "codex",
+      "rationale": "The diff removes one obsolete documentation version from the JSON switcher; no runtime, build, or security behavior changes.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/352f99abb42c80243c8f0c14099feda05efb6d4e...d0b6b2721135c0515ddf0c94bbe7606c614234a2",
+        "https://github.com/matplotlib/matplotlib/pull/23942"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#25692",
+      "decision": "hold",
+      "snapshotSha": "ca420212a5ba3fa02fab63b20ca6e03fe04d4293",
+      "snapshotAt": "2023-04-15T06:27:23+00:00",
+      "adjudicator": "codex",
+      "rationale": "The mathtext check treats every dollar sign as math, whereas existing parser rules are more complex; review pointed to the correct helper.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/3f4d4c10d40c1c60e9572b5e4702a463e2a06747...ca420212a5ba3fa02fab63b20ca6e03fe04d4293",
+        "https://github.com/matplotlib/matplotlib/pull/25692#discussion_r1167446533"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#16710",
+      "decision": "hold",
+      "snapshotSha": "bfaa38266e40d4fe6792d71e056c01bacde6009a",
+      "snapshotAt": "2020-03-08T09:42:41+00:00",
+      "adjudicator": "codex",
+      "rationale": "This alters native macOS backend Objective-C view sizing and ownership without platform-specific test evidence; even approval requested someone on macOS to test it.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/d0fc2e960f0c23653431d6536810141e29993756...bfaa38266e40d4fe6792d71e056c01bacde6009a",
+        "https://github.com/matplotlib/matplotlib/pull/16710#pullrequestreview-370829367"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#19606",
+      "decision": "eligible",
+      "snapshotSha": "d2e15b9bf5c29d7330af3147cebc6c167d1e39cc",
+      "snapshotAt": "2021-03-01T06:59:09+00:00",
+      "adjudicator": "codex",
+      "rationale": "The diff removes old versionadded annotations and corrects a link in docstrings; executable statements and public call signatures are unchanged.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/2e248f522205d9b56979c018edbc8bd66d916ac2...d2e15b9bf5c29d7330af3147cebc6c167d1e39cc",
+        "https://github.com/matplotlib/matplotlib/pull/19606"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#27267",
+      "decision": "hold",
+      "snapshotSha": "ed46a19e9b804a3484c5cad1a9ef9e3eb670c9e5",
+      "snapshotAt": "2023-11-05T00:05:19+00:00",
+      "adjudicator": "codex",
+      "rationale": "The new Transform support captures a static inverted transform, so later changes to the input transform are not reflected; review called this dangerous.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/4524fdbdcabb5e986ad4fd6709ee5e607f3826df...ed46a19e9b804a3484c5cad1a9ef9e3eb670c9e5",
+        "https://github.com/matplotlib/matplotlib/pull/27267#discussion_r1385835168"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#18454",
+      "decision": "hold",
+      "snapshotSha": "840035ce918889273937ff43c1083a8637fb8bc0",
+      "snapshotAt": "2020-09-11T03:31:33+00:00",
+      "adjudicator": "codex",
+      "rationale": "Notebook figure closure now depends on a different OutputArea event and removes the old DOM listener; lifecycle behavior needs interactive verification.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/ec45ec780148bf928c7f24811fc69836e964ef36...840035ce918889273937ff43c1083a8637fb8bc0",
+        "https://github.com/matplotlib/matplotlib/pull/18454"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#25853",
+      "decision": "hold",
+      "snapshotSha": "8864085960b7672fc0a6b533d7a5d1fa3667a578",
+      "snapshotAt": "2023-05-10T22:37:25+00:00",
+      "adjudicator": "codex",
+      "rationale": "The layout-grid ownership and constraint changes affect figure layout and memory lifetime; the reviewer asked about a regression test for reference cycles.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/04586cd96e470b88bce295650874236d510b6321...8864085960b7672fc0a6b533d7a5d1fa3667a578",
+        "https://github.com/matplotlib/matplotlib/pull/25853#pullrequestreview-1421626522"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#27750",
+      "decision": "hold",
+      "snapshotSha": "c144ab881be5c7a6984e231e9af36fbc7b8d235b",
+      "snapshotAt": "2024-02-05T19:15:37+00:00",
+      "adjudicator": "codex",
+      "rationale": "This upgrades the CI wheel builder and changes Codecov from v3 to v4 across workflows; release and coverage jobs need a successful run before unreviewed approval.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/e470c70e99995b47555402e53a98fb6c815d4dce...c144ab881be5c7a6984e231e9af36fbc7b8d235b",
+        "https://github.com/matplotlib/matplotlib/pull/27750"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#29725",
+      "decision": "hold",
+      "snapshotSha": "a1fabd80b91fc5c245ae36a3a360f1a0aaf2eb02",
+      "snapshotAt": "2025-03-10T16:34:04+00:00",
+      "adjudicator": "codex",
+      "rationale": "A new WebAgg Jupyter backend is introduced without tests or demonstrated compatibility; it creates a public integration surface needing human review.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/8c4600bdaf55b36abae2d68675ea4180b7f8628d...a1fabd80b91fc5c245ae36a3a360f1a0aaf2eb02",
+        "https://github.com/matplotlib/matplotlib/pull/29725"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#19110",
+      "decision": "hold",
+      "snapshotSha": "f10ec60394b8065eaa2dcfc92a75ee05a5bdda49",
+      "snapshotAt": "2020-12-14T06:02:01+00:00",
+      "adjudicator": "codex",
+      "rationale": "The new labelfont property changes Axis and Line2D public behavior, and review questioned why text font state belongs on lines at all.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/7a5458b9a8cf3e4b7d1c471ad755d65ac5660b35...f10ec60394b8065eaa2dcfc92a75ee05a5bdda49",
+        "https://github.com/matplotlib/matplotlib/pull/19110#pullrequestreview-551943425"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#22696",
+      "decision": "hold",
+      "snapshotSha": "14090b8f9858190e1ea6693f084152d75626cf36",
+      "snapshotAt": "2022-03-24T08:21:58+00:00",
+      "adjudicator": "codex",
+      "rationale": "The backport calls set_mouseover on a release branch where that method does not exist, a concrete compatibility error flagged with changes requested.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/560681c01e917864aad6f103b37a5a5498d7df7f...14090b8f9858190e1ea6693f084152d75626cf36",
+        "https://github.com/matplotlib/matplotlib/pull/22696#discussion_r834048999"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#23130",
+      "decision": "hold",
+      "snapshotSha": "fb84a0fa24478ba554e89da43af802928fc05b3c",
+      "snapshotAt": "2022-05-25T01:51:59+00:00",
+      "adjudicator": "codex",
+      "rationale": "Removing the nightly pytest warning filter changes which deprecations fail CI; this test policy change requires human judgment about signal and noise.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/e49d6b6e81f4a550f0684df4249f3d504a4ffba9...fb84a0fa24478ba554e89da43af802928fc05b3c",
+        "https://github.com/matplotlib/matplotlib/pull/23130"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#24674",
+      "decision": "hold",
+      "snapshotSha": "687c833388d95e60c12f1eb935e1b985088878eb",
+      "snapshotAt": "2022-12-09T05:56:09+00:00",
+      "adjudicator": "codex",
+      "rationale": "The figure DPI setter now mutates parent state through set_dpi and changes original-DPI tracking; the runtime behavior deserves rendering regression review.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/a5f5af30abf09e62bd70c4dbbf4af921d73ab88a...687c833388d95e60c12f1eb935e1b985088878eb",
+        "https://github.com/matplotlib/matplotlib/pull/24674"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#21705",
+      "decision": "hold",
+      "snapshotSha": "74b45ffcba5a98fc083cd9a8609eb70699b99519",
+      "snapshotAt": "2021-11-22T00:08:47+00:00",
+      "adjudicator": "codex",
+      "rationale": "The Python 3.11 stack-walk workaround changes shared print_figure error handling and deprecation timing; compatibility across supported versions requires review.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/8ddeea17d486f54af01aeffe84f628ec36c6f228...74b45ffcba5a98fc083cd9a8609eb70699b99519",
+        "https://github.com/matplotlib/matplotlib/pull/21705"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#21039",
+      "decision": "hold",
+      "snapshotSha": "c8f80022f4f6827a3d71a92a43b603aaacbe06aa",
+      "snapshotAt": "2021-09-10T13:04:47+00:00",
+      "adjudicator": "codex",
+      "rationale": "Hexbin log normalization and marginal bin behavior change without a linear-scale marginal test; the reviewer requested that missing case.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/ad4585b2214accf040bfade9bc34b729151ab550...c8f80022f4f6827a3d71a92a43b603aaacbe06aa",
+        "https://github.com/matplotlib/matplotlib/pull/21039#discussion_r711927679"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#20265",
+      "decision": "hold",
+      "snapshotSha": "155ae9f4a89993c59275291942680a1194b04894",
+      "snapshotAt": "2021-05-19T19:43:05+00:00",
+      "adjudicator": "codex",
+      "rationale": "The legend handler changes color selection logic and fallback behavior; review asked whether additional affected cases needed tests.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/69b51f1f4e7f8bab684fdf925ef8e2f94bbf2031...155ae9f4a89993c59275291942680a1194b04894",
+        "https://github.com/matplotlib/matplotlib/pull/20265#discussion_r635619863"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#17382",
+      "decision": "eligible",
+      "snapshotSha": "9b6c4904766954d49e557164dd807aa05abfba47",
+      "snapshotAt": "2020-05-11T22:12:50+00:00",
+      "adjudicator": "codex",
+      "rationale": "A single accessor reads the Figure already attached to GridSpec rather than reaching it through a cell; review approved the narrowly scoped correction.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/dec272cce32476b9d0df980fe6adb39f6a481038...9b6c4904766954d49e557164dd807aa05abfba47",
+        "https://github.com/matplotlib/matplotlib/pull/17382#pullrequestreview-410433877"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#17499",
+      "decision": "hold",
+      "snapshotSha": "1a56e1235e611de385abc66e40e7f74f9cfe3a6f",
+      "snapshotAt": "2020-05-23T17:04:31+00:00",
+      "adjudicator": "codex",
+      "rationale": "Scatter color shape handling changes a documented special case and error paths; review raised ambiguity over the array form to support.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/fb9e72309aeefb51d1a56ecbdb1e7399d105ff06...1a56e1235e611de385abc66e40e7f74f9cfe3a6f",
+        "https://github.com/matplotlib/matplotlib/pull/17499#discussion_r429562296"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#28677",
+      "decision": "eligible",
+      "snapshotSha": "fe1043ec37862348372c69080f59e9b7a63ba0de",
+      "snapshotAt": "2024-08-08T00:30:40+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only titles are added to a gallery example; the later discussion concerns style preference and the plotted data remains unchanged.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/3d37d7a0cb32298680828a29b5d98e59c753ef92...fe1043ec37862348372c69080f59e9b7a63ba0de",
+        "https://github.com/matplotlib/matplotlib/pull/28677"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#19359",
+      "decision": "hold",
+      "snapshotSha": "86183a499a5e3155f5c59a567a940c9c914f48af",
+      "snapshotAt": "2021-01-25T17:07:33+00:00",
+      "adjudicator": "codex",
+      "rationale": "Seven runnable examples are migrated from pyplot state to object methods, including event handlers; visual and interactive parity needs review.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/1eef019109b64ee4085732544cb5e310e69451ab...86183a499a5e3155f5c59a567a940c9c914f48af",
+        "https://github.com/matplotlib/matplotlib/pull/19359"
+      ]
+    },
+    {
+      "id": "matplotlib/matplotlib#26005",
+      "decision": "hold",
+      "snapshotSha": "db3477c60059c09c0ea3705858b482335d622a32",
+      "snapshotAt": "2023-05-30T04:37:41+00:00",
+      "adjudicator": "codex",
+      "rationale": "This changes CI dependency exclusions and marks backend tests as expected failures, potentially hiding regressions; human verification of the test policy is needed.",
+      "evidence": [
+        "https://github.com/matplotlib/matplotlib/compare/3d3a1afd6d7c83ea79670b7c0b3568f92496b906...db3477c60059c09c0ea3705858b482335d622a32",
+        "https://github.com/matplotlib/matplotlib/pull/26005"
+      ]
+    },
+    {
+      "id": "mwaskom/seaborn#2146",
+      "decision": "hold",
+      "snapshotSha": "cb78487475d1a822da48f39e42bfe54995cf1ea5",
+      "snapshotAt": "2020-06-23T19:20:04+00:00",
+      "adjudicator": "codex",
+      "rationale": "Parallelizing all test targets with pytest-xdist changes test isolation and coverage collection; review raised an unresolved CI setup question.",
+      "evidence": [
+        "https://github.com/mwaskom/seaborn/compare/ceee0324f9b352c6d4aa9eb145d6ad3f5bcaad41...cb78487475d1a822da48f39e42bfe54995cf1ea5",
+        "https://github.com/mwaskom/seaborn/pull/2146#discussion_r446637571"
+      ]
+    },
+    {
+      "id": "mwaskom/seaborn#1948",
+      "decision": "hold",
+      "snapshotSha": "e4569a4be76f44ce66d0bf429eb90b20a57cf7f5",
+      "snapshotAt": "2020-01-27T13:11:46+00:00",
+      "adjudicator": "codex",
+      "rationale": "The heatmap colormap copy now sets under, over, and bad colors, changing visual output for out-of-range and missing data.",
+      "evidence": [
+        "https://github.com/mwaskom/seaborn/compare/6a8398c031105858700d0c889936a15c78298551...e4569a4be76f44ce66d0bf429eb90b20a57cf7f5",
+        "https://github.com/mwaskom/seaborn/pull/1948"
+      ]
+    },
+    {
+      "id": "mwaskom/seaborn#2347",
+      "decision": "hold",
+      "snapshotSha": "9c52efb8cc46e80c62a22c81178729b8c08b0859",
+      "snapshotAt": "2020-11-12T14:49:29+00:00",
+      "adjudicator": "codex",
+      "rationale": "The sharex and sharey conditions invert behavior for false values and may hide axis labels, a regression identified by review.",
+      "evidence": [
+        "https://github.com/mwaskom/seaborn/compare/29f5807efdf0544b16c088beac7c1c5eda174084...9c52efb8cc46e80c62a22c81178729b8c08b0859",
+        "https://github.com/mwaskom/seaborn/pull/2347#discussion_r522227615"
+      ]
+    },
+    {
+      "id": "mwaskom/seaborn#2359",
+      "decision": "eligible",
+      "snapshotSha": "b59451f189f6523f81d899ed96bffb606dbfeca0",
+      "snapshotAt": "2020-11-18T20:38:18+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only a malformed Sphinx role in one tutorial notebook is corrected; the executable notebook cells and runtime code do not change.",
+      "evidence": [
+        "https://github.com/mwaskom/seaborn/compare/29f5807efdf0544b16c088beac7c1c5eda174084...b59451f189f6523f81d899ed96bffb606dbfeca0",
+        "https://github.com/mwaskom/seaborn/pull/2359"
+      ]
+    },
+    {
+      "id": "mwaskom/seaborn#3447",
+      "decision": "hold",
+      "snapshotSha": "39504727836b66a9ac3a69630a4ff548e3ac2a62",
+      "snapshotAt": "2023-08-25T03:05:26+00:00",
+      "adjudicator": "codex",
+      "rationale": "Warning cleanup spans plotting, grouping and tests across ten files; changes to observed grouping and uniqueness can alter results.",
+      "evidence": [
+        "https://github.com/mwaskom/seaborn/compare/b3e6b8d62194577deabebaa595520a13d55cf269...39504727836b66a9ac3a69630a4ff548e3ac2a62",
+        "https://github.com/mwaskom/seaborn/pull/3447"
+      ]
+    },
+    {
+      "id": "mwaskom/seaborn#2417",
+      "decision": "hold",
+      "snapshotSha": "b64f9d7f7bb13666c3cc90cbd31d2cb5e587238a",
+      "snapshotAt": "2021-01-05T17:48:29+00:00",
+      "adjudicator": "codex",
+      "rationale": "The null-data conversion path now drops values and reconstructs indexes, affecting plot alignment and Pandas compatibility.",
+      "evidence": [
+        "https://github.com/mwaskom/seaborn/compare/aad96f8d2e36ceceb82a42b69aa3a8f47ef7210d...b64f9d7f7bb13666c3cc90cbd31d2cb5e587238a",
+        "https://github.com/mwaskom/seaborn/pull/2417"
+      ]
+    },
+    {
+      "id": "pallets/flask#4061",
+      "decision": "eligible",
+      "snapshotSha": "b3584634fc41a161975c80642908815e19e1c503",
+      "snapshotAt": "2021-05-15T23:07:15+00:00",
+      "adjudicator": "codex",
+      "rationale": "A short contribution-guide section explains how to upgrade pip and setuptools; there is no executable or policy change.",
+      "evidence": [
+        "https://github.com/pallets/flask/compare/14921608871f15f8c34d48026473293e225ad608...b3584634fc41a161975c80642908815e19e1c503",
+        "https://github.com/pallets/flask/pull/4061"
+      ]
+    },
+    {
+      "id": "psf/requests#5779",
+      "decision": "hold",
+      "snapshotSha": "a608e97f7305d31361e448e191958b4b440f5c4c",
+      "snapshotAt": "2021-03-19T13:50:35+00:00",
+      "adjudicator": "codex",
+      "rationale": "Replacing the default request timeout with 1000 seconds changes behavior for every caller and can break long-running requests.",
+      "evidence": [
+        "https://github.com/psf/requests/compare/54336568789e0ec41f70c800a96384e4fac58dd9...a608e97f7305d31361e448e191958b4b440f5c4c",
+        "https://github.com/psf/requests/pull/5779"
+      ]
+    },
+    {
+      "id": "pydata/xarray#7022",
+      "decision": "hold",
+      "snapshotSha": "c082f82e625b9204df98f5874bda70b5acc53c90",
+      "snapshotAt": "2022-09-12T18:26:47+00:00",
+      "adjudicator": "codex",
+      "rationale": "Preserving attributes by default changes the public result of grouping and resampling operations and requires a compatibility decision.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/b018442c8dfa3e71ec35e294de69e2011949afec...c082f82e625b9204df98f5874bda70b5acc53c90",
+        "https://github.com/pydata/xarray/pull/7022#discussion_r968894297"
+      ]
+    },
+    {
+      "id": "pydata/xarray#5311",
+      "decision": "hold",
+      "snapshotSha": "5bcabb745bbb3a0f45292e9a72d010e77a3741fc",
+      "snapshotAt": "2021-05-14T15:01:17+00:00",
+      "adjudicator": "codex",
+      "rationale": "Removing dependency-version branches changes Dask and NumPy execution behavior for installations at the declared minimum versions.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/9e84d093102c9d7b98fd03d25db0636ff4aaf073...5bcabb745bbb3a0f45292e9a72d010e77a3741fc",
+        "https://github.com/pydata/xarray/pull/5311"
+      ]
+    },
+    {
+      "id": "pydata/xarray#6237",
+      "decision": "hold",
+      "snapshotSha": "f514806ded3226c68396e5aebdf9a6c775674e38",
+      "snapshotAt": "2022-02-04T17:15:14+00:00",
+      "adjudicator": "codex",
+      "rationale": "The Sphinx build now relies on CONDA_EXE and changes generated file handling, so Windows and non-Conda documentation builds need validation.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/33067cd24f66d4855babaa6801b009480c4e2cb2...f514806ded3226c68396e5aebdf9a6c775674e38",
+        "https://github.com/pydata/xarray/pull/6237#discussion_r799762425"
+      ]
+    },
+    {
+      "id": "pydata/xarray#6240",
+      "decision": "eligible",
+      "snapshotSha": "9af5e4aad13e5fea66fc0cd470fdd651fe7eb2e6",
+      "snapshotAt": "2022-02-05T09:39:48+00:00",
+      "adjudicator": "codex",
+      "rationale": "The diff adds only future annotations to one utility module; the executable functions and their control flow remain unchanged.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/33067cd24f66d4855babaa6801b009480c4e2cb2...9af5e4aad13e5fea66fc0cd470fdd651fe7eb2e6",
+        "https://github.com/pydata/xarray/pull/6240"
+      ]
+    },
+    {
+      "id": "pydata/xarray#7114",
+      "decision": "hold",
+      "snapshotSha": "9a314d26d23ec0833804c785c4f0ad4934dac4b8",
+      "snapshotAt": "2022-10-02T17:20:56+00:00",
+      "adjudicator": "codex",
+      "rationale": "Backend typing edits span twelve files and include test changes; overload and file-object compatibility need human API review.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/341f1302f000a9a4145ec83a3fa88b6a33a3555e...9a314d26d23ec0833804c785c4f0ad4934dac4b8",
+        "https://github.com/pydata/xarray/pull/7114"
+      ]
+    },
+    {
+      "id": "pydata/xarray#6260",
+      "decision": "hold",
+      "snapshotSha": "ca7ab7e520bfae837daea1e5a29e8b780f1e242e",
+      "snapshotAt": "2022-02-09T17:21:19+00:00",
+      "adjudicator": "codex",
+      "rationale": "The region-write filter excludes coordinate variables and can mishandle nondimension coordinates; reviewers requested a behavior decision first.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/39860f9bd3ed4e84a5d694adda10c82513ed519f...ca7ab7e520bfae837daea1e5a29e8b780f1e242e",
+        "https://github.com/pydata/xarray/pull/6260#discussion_r802920057"
+      ]
+    },
+    {
+      "id": "pydata/xarray#8605",
+      "decision": "hold",
+      "snapshotSha": "b5149c705a0195d294bb1f0a64f799623830947c",
+      "snapshotAt": "2024-01-12T10:47:18+00:00",
+      "adjudicator": "codex",
+      "rationale": "Adding Python 3.12 CI matrices and separate dependency environments changes what release checks execute, requiring CI validation.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/03ec3cb4d3fc97dd31b2269887ddc63a13ee518c...b5149c705a0195d294bb1f0a64f799623830947c",
+        "https://github.com/pydata/xarray/pull/8605"
+      ]
+    },
+    {
+      "id": "pydata/xarray#7222",
+      "decision": "eligible",
+      "snapshotSha": "48334c6bfbe74bbd254fa826d9904ecd6850fd40",
+      "snapshotAt": "2022-10-26T01:59:09+00:00",
+      "adjudicator": "codex",
+      "rationale": "The added return exits an existing fast path after its work is complete, avoiding unnecessary alignment work without changing public inputs.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/519abb7bde020f2b27cb7e3dfddec8c6eecb7722...48334c6bfbe74bbd254fa826d9904ecd6850fd40",
+        "https://github.com/pydata/xarray/pull/7222"
+      ]
+    },
+    {
+      "id": "pydata/xarray#8890",
+      "decision": "hold",
+      "snapshotSha": "e96e519f9ecc4c69f927aa999e650783816c8f2a",
+      "snapshotAt": "2024-03-29T13:13:59+00:00",
+      "adjudicator": "codex",
+      "rationale": "Adding type checking to groupby tests exposed incompatible array conversions discussed in review; this snapshot is not ready for unattended approval.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/2120808bbe45f3d4f0b6a01cd43bac4df4039092...e96e519f9ecc4c69f927aa999e650783816c8f2a",
+        "https://github.com/pydata/xarray/pull/8890#discussion_r1544632342"
+      ]
+    },
+    {
+      "id": "pydata/xarray#8438",
+      "decision": "hold",
+      "snapshotSha": "2c23117ebbbaeabc107fd607e80f39faa7dadbd3",
+      "snapshotAt": "2023-11-10T02:58:21+00:00",
+      "adjudicator": "codex",
+      "rationale": "Renaming Dataset.to_array throughout code and docs changes a public method used by downstream callers; compatibility needs human approval.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/37325848799e75d7b1a73a0e45e2cf4bd376ccaa...2c23117ebbbaeabc107fd607e80f39faa7dadbd3",
+        "https://github.com/pydata/xarray/pull/8438"
+      ]
+    },
+    {
+      "id": "pydata/xarray#7489",
+      "decision": "hold",
+      "snapshotSha": "12f6d2449b478afbcf442a39bc3f0048b1fa8c29",
+      "snapshotAt": "2023-01-30T17:13:16+00:00",
+      "adjudicator": "codex",
+      "rationale": "Removing the global single-threaded Dask setting changes concurrency assumptions for the entire test suite and can expose nondeterminism.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/d385e2063a6b5919e1fe9dd3e27a24bc7117137e...12f6d2449b478afbcf442a39bc3f0048b1fa8c29",
+        "https://github.com/pydata/xarray/pull/7489"
+      ]
+    },
+    {
+      "id": "pydata/xarray#10219",
+      "decision": "hold",
+      "snapshotSha": "daa73a54718bc5549f55a815c5b2b36106fcaac0",
+      "snapshotAt": "2025-04-11T11:40:45+00:00",
+      "adjudicator": "codex",
+      "rationale": "DatasetView.map now copies variable and dataset attributes under keep_attrs; this changes public metadata behavior and requires review.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/aa9e2bd407a47cef1ec7f1d9498e4a1118bc440e...daa73a54718bc5549f55a815c5b2b36106fcaac0",
+        "https://github.com/pydata/xarray/pull/10219"
+      ]
+    },
+    {
+      "id": "pydata/xarray#10006",
+      "decision": "eligible",
+      "snapshotSha": "238f2e4064775fdb6d8dedf2939fc16f9f29e6d2",
+      "snapshotAt": "2025-01-30T09:32:18+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only obsolete type-ignore comments are removed from two unchanged expressions; neither runtime execution nor API shape changes.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/e84e4213c982da0a34609cd44837bf5c3e2d2da2...238f2e4064775fdb6d8dedf2939fc16f9f29e6d2",
+        "https://github.com/pydata/xarray/pull/10006"
+      ]
+    },
+    {
+      "id": "pydata/xarray#7798",
+      "decision": "hold",
+      "snapshotSha": "3674b5eb5a212a1fbde81e4b5e56e6a30545c617",
+      "snapshotAt": "2023-04-30T04:14:14+00:00",
+      "adjudicator": "codex",
+      "rationale": "Changing groupby alignment from outer to right alters data selection and result shape; review noted an existing test expectation was wrong.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/25d9a28e12141b9b5e4a79454eb76ddd2ee2bc4d...3674b5eb5a212a1fbde81e4b5e56e6a30545c617",
+        "https://github.com/pydata/xarray/pull/7798#discussion_r1181231270"
+      ]
+    },
+    {
+      "id": "pydata/xarray#8535",
+      "decision": "hold",
+      "snapshotSha": "68b48f1dc7ee0075667a20be949152dd3900d543",
+      "snapshotAt": "2023-12-10T17:31:27+00:00",
+      "adjudicator": "codex",
+      "rationale": "Eagerly loading and dropping nulls before plotting can change line plots and Dask memory use; review explicitly limited the change to scatter.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/9acc411bc7e99e61269eadf77e96b9ddd40aec9e...68b48f1dc7ee0075667a20be949152dd3900d543",
+        "https://github.com/pydata/xarray/pull/8535#discussion_r1421822295"
+      ]
+    },
+    {
+      "id": "pydata/xarray#6414",
+      "decision": "hold",
+      "snapshotSha": "dc4ea763c066aa10cb5394942121e43a18949416",
+      "snapshotAt": "2022-03-26T12:00:34+00:00",
+      "adjudicator": "codex",
+      "rationale": "The indexing adapter now handles duck Dask arrays, changing array dispatch and Pint test behavior across backends.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/f8bae5974ee2c3f67346298da12621af4cae8cf8...dc4ea763c066aa10cb5394942121e43a18949416",
+        "https://github.com/pydata/xarray/pull/6414#pullrequestreview-922325952"
+      ]
+    },
+    {
+      "id": "pydata/xarray#5725",
+      "decision": "eligible",
+      "snapshotSha": "92639b7b51a44d28fe59ef05b7297c464d04fced",
+      "snapshotAt": "2021-08-21T15:07:08+00:00",
+      "adjudicator": "codex",
+      "rationale": "One documentation ecosystem link is replaced with a more current extension; no code, build logic or policy changes.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/1434b8d04c5d6d07472dc9997a589353e7da4b06...92639b7b51a44d28fe59ef05b7297c464d04fced",
+        "https://github.com/pydata/xarray/pull/5725"
+      ]
+    },
+    {
+      "id": "pydata/xarray#4296",
+      "decision": "hold",
+      "snapshotSha": "286fd5dff74400ecb22383a7cafbc13a69be7051",
+      "snapshotAt": "2020-08-01T18:55:54+00:00",
+      "adjudicator": "codex",
+      "rationale": "The dependency support policy is widened and minimum package versions change across setup, CI, and documentation, affecting compatibility.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/9058114f70d07ef04654d1d60718442d0555b84b...286fd5dff74400ecb22383a7cafbc13a69be7051",
+        "https://github.com/pydata/xarray/pull/4296#pullrequestreview-465902999"
+      ]
+    },
+    {
+      "id": "pydata/xarray#6592",
+      "decision": "hold",
+      "snapshotSha": "b0022cb93b40802464fb37e4e084dd30f85fd00f",
+      "snapshotAt": "2022-05-11T15:26:44+00:00",
+      "adjudicator": "codex",
+      "rationale": "MultiIndex drop_vars behavior changes from an exception to implicit removal with a deprecation warning, a public API decision.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/770e878663b03bd83d2c28af0643770bdd43c3da...b0022cb93b40802464fb37e4e084dd30f85fd00f",
+        "https://github.com/pydata/xarray/pull/6592#discussion_r870534183"
+      ]
+    },
+    {
+      "id": "pydata/xarray#6461",
+      "decision": "hold",
+      "snapshotSha": "5868aed40b520e87bef501361bdc2beb7eb0b26c",
+      "snapshotAt": "2022-04-09T03:02:40+00:00",
+      "adjudicator": "codex",
+      "rationale": "The new hasattr guard prevents a scalar crash but the reviewer found uncertainty about which attrs are copied for Dataset inputs.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/8389fe6e8c86a04d57f25fe137b6f2db77065523...5868aed40b520e87bef501361bdc2beb7eb0b26c",
+        "https://github.com/pydata/xarray/pull/6461#discussion_r1004988864"
+      ]
+    },
+    {
+      "id": "pydata/xarray#4943",
+      "decision": "hold",
+      "snapshotSha": "a02421e7a8f340591fc1533caedbc33fed5657b0",
+      "snapshotAt": "2021-02-22T17:17:53+00:00",
+      "adjudicator": "codex",
+      "rationale": "An automation workflow now installs new tools and runs a new linter-version sync script, changing bot-authored code updates.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/200c2b2df28bd477dbec863ac0837b901535c955...a02421e7a8f340591fc1533caedbc33fed5657b0",
+        "https://github.com/pydata/xarray/pull/4943#discussion_r580674962"
+      ]
+    },
+    {
+      "id": "pydata/xarray#8287",
+      "decision": "hold",
+      "snapshotSha": "a7cb9f22607c16ff6544975170a5d69e4d2e51ea",
+      "snapshotAt": "2023-10-08T01:19:25+00:00",
+      "adjudicator": "codex",
+      "rationale": "Renaming reset_encoding while retaining wrappers changes a public method and warning behavior; review requested API documentation.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/1b0012a44aa45c67858489bc815928e1712dbd00...a7cb9f22607c16ff6544975170a5d69e4d2e51ea",
+        "https://github.com/pydata/xarray/pull/8287#discussion_r1349966406"
+      ]
+    },
+    {
+      "id": "pydata/xarray#4744",
+      "decision": "hold",
+      "snapshotSha": "9ddf62c9ecd0fcf9c4722342d710917311a690c2",
+      "snapshotAt": "2020-12-30T19:03:05+00:00",
+      "adjudicator": "codex",
+      "rationale": "The performance shortcut iterates private coordinate names and triggered ordering failures in tests, so the snapshot needs correction.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/bf0fe2caca1d2ebc4f1298f019758baa12f68b94...9ddf62c9ecd0fcf9c4722342d710917311a690c2",
+        "https://github.com/pydata/xarray/pull/4744#discussion_r550393617"
+      ]
+    },
+    {
+      "id": "pydata/xarray#8365",
+      "decision": "hold",
+      "snapshotSha": "d3edc964bc16a02e9ac5382008c4139390c6b8ba",
+      "snapshotAt": "2023-10-24T02:55:30+00:00",
+      "adjudicator": "codex",
+      "rationale": "The new real and imag properties use a replacement helper despite changing dtype, a type and behavior mismatch identified in review.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/eb749448f9513517230090b2cb0e3521ccb4f20f...d3edc964bc16a02e9ac5382008c4139390c6b8ba",
+        "https://github.com/pydata/xarray/pull/8365#discussion_r1370511577"
+      ]
+    },
+    {
+      "id": "pydata/xarray#6939",
+      "decision": "hold",
+      "snapshotSha": "1da80cdc6d384cba0e65b3f820b5a0c17e91e7ce",
+      "snapshotAt": "2022-08-20T17:17:32+00:00",
+      "adjudicator": "codex",
+      "rationale": "The version compatibility error handling changes and a reviewer found a missing f-string, so the intended message will not interpolate.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/c4e40d991c28be51de9ac560ce895ac7f9b14924...1da80cdc6d384cba0e65b3f820b5a0c17e91e7ce",
+        "https://github.com/pydata/xarray/pull/6939#discussion_r954898489"
+      ]
+    },
+    {
+      "id": "pydata/xarray#8246",
+      "decision": "hold",
+      "snapshotSha": "8da260870c7df58f3a42b72dcf404f5af2af690b",
+      "snapshotAt": "2023-09-28T14:21:58+00:00",
+      "adjudicator": "codex",
+      "rationale": "The test-policy update replaces an expected failure with an unconditional skip and changes pytest minimum/version flags.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/c3b5ead8cdbce38157265fd449a2a641cc118066...8da260870c7df58f3a42b72dcf404f5af2af690b",
+        "https://github.com/pydata/xarray/pull/8246#discussion_r1340236453"
+      ]
+    },
+    {
+      "id": "pydata/xarray#4592",
+      "decision": "hold",
+      "snapshotSha": "7fc7c7beb85f21482035895d9aa33938d36bd9a6",
+      "snapshotAt": "2020-11-18T21:29:12+00:00",
+      "adjudicator": "codex",
+      "rationale": "The rolling exponential mean now preserves attributes by default, a public output behavior change requiring compatibility review.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/764ffc95af41602b7ba216bad4be438330c3dc45...7fc7c7beb85f21482035895d9aa33938d36bd9a6",
+        "https://github.com/pydata/xarray/pull/4592#discussion_r526433311"
+      ]
+    },
+    {
+      "id": "pydata/xarray#4775",
+      "decision": "hold",
+      "snapshotSha": "8eae768c927a44c21fc9186bd4e888b9c904df3e",
+      "snapshotAt": "2021-01-07T01:45:39+00:00",
+      "adjudicator": "codex",
+      "rationale": "The CI dependency checker swaps subprocess calls for conda.api, changing how dependency metadata is resolved and requiring CI proof.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/bc49e277a45212f7ef33165d7fa1247c219ce276...8eae768c927a44c21fc9186bd4e888b9c904df3e",
+        "https://github.com/pydata/xarray/pull/4775#pullrequestreview-564899011"
+      ]
+    },
+    {
+      "id": "pydata/xarray#3714",
+      "decision": "hold",
+      "snapshotSha": "1481c803ccebadc6831d6d9a474f18b33484a782",
+      "snapshotAt": "2020-01-22T12:46:43+00:00",
+      "adjudicator": "codex",
+      "rationale": "The packaging migration removes versioneer and changes setup and generated version files; wheel and source release behavior need review.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/aa0f96383062c48cb17f46ef951075c0494c9c0a...1481c803ccebadc6831d6d9a474f18b33484a782",
+        "https://github.com/pydata/xarray/pull/3714"
+      ]
+    },
+    {
+      "id": "pydata/xarray#8296",
+      "decision": "hold",
+      "snapshotSha": "696b479173dae87783b68d3af66959c66f3c9144",
+      "snapshotAt": "2023-10-12T06:04:46+00:00",
+      "adjudicator": "codex",
+      "rationale": "Mypy configuration and ignores change, including a semantic config change identified by review; the quality gate needs human verification.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/75af56c33a29529269a73bdd00df2d3af17ee0f5...696b479173dae87783b68d3af66959c66f3c9144",
+        "https://github.com/pydata/xarray/pull/8296#discussion_r1357211930"
+      ]
+    },
+    {
+      "id": "pydata/xarray#6823",
+      "decision": "hold",
+      "snapshotSha": "ac4042b5963a44d0bfe69f94cc4f8fb86301339a",
+      "snapshotAt": "2022-07-25T09:43:21+00:00",
+      "adjudicator": "codex",
+      "rationale": "DataArray formatting now delegates to arbitrary array backends, changing string output and possible backend side effects.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/60f8c3d3488d377b0b21009422c6121e1c8f1f70...ac4042b5963a44d0bfe69f94cc4f8fb86301339a",
+        "https://github.com/pydata/xarray/pull/6823#pullrequestreview-1065132940"
+      ]
+    },
+    {
+      "id": "pydata/xarray#6710",
+      "decision": "eligible",
+      "snapshotSha": "901e84e9c0620c8a07e5f62e44f5dc3a84cf788d",
+      "snapshotAt": "2022-06-21T15:58:34+00:00",
+      "adjudicator": "codex",
+      "rationale": "The two file-mtime checks now expand a leading tilde consistently with file opening; no path outside this input case changes.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/1d9c1e35a61cbb3680c141e29808c131e019301e...901e84e9c0620c8a07e5f62e44f5dc3a84cf788d",
+        "https://github.com/pydata/xarray/pull/6710#pullrequestreview-1019359915"
+      ]
+    },
+    {
+      "id": "pydata/xarray#3900",
+      "decision": "hold",
+      "snapshotSha": "793f7fd8df31ff91f7125c60bd8244bf989c703c",
+      "snapshotAt": "2020-03-27T01:21:31+00:00",
+      "adjudicator": "codex",
+      "rationale": "The array repr algorithm changes truncation output; tests even expect two ellipses in one case, which review rejected as confusing.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/6378a711d50ba7f1ba9b2a451d4d1f5e1fb37353...793f7fd8df31ff91f7125c60bd8244bf989c703c",
+        "https://github.com/pydata/xarray/pull/3900#discussion_r398983736"
+      ]
+    },
+    {
+      "id": "pydata/xarray#6316",
+      "decision": "eligible",
+      "snapshotSha": "bb7338553ca22a254761fcc8d12df9af2f1cdc08",
+      "snapshotAt": "2022-03-01T17:52:24+00:00",
+      "adjudicator": "codex",
+      "rationale": "The change corrects spelling in docs, example comments and explanatory prose; no executable statement or API behavior changes.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/f9037c41e36254bfe7efa9feaedd3eae5512bd11...bb7338553ca22a254761fcc8d12df9af2f1cdc08",
+        "https://github.com/pydata/xarray/pull/6316#pullrequestreview-896658173"
+      ]
+    },
+    {
+      "id": "pydata/xarray#7876",
+      "decision": "hold",
+      "snapshotSha": "64cfc34ba736358dc27f7f7abc543b64d0e5a44a",
+      "snapshotAt": "2023-05-28T22:18:55+00:00",
+      "adjudicator": "codex",
+      "rationale": "Deprecating cdms2 conversion emits user warnings and skips tests on newer NumPy/Python, a public compatibility and maintenance decision.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/b319d8671b178407927b5878ed878ffab22b6352...64cfc34ba736358dc27f7f7abc543b64d0e5a44a",
+        "https://github.com/pydata/xarray/pull/7876"
+      ]
+    },
+    {
+      "id": "pydata/xarray#8441",
+      "decision": "hold",
+      "snapshotSha": "9ac8a2949af8a34a3b1030a82977acb834349050",
+      "snapshotAt": "2023-11-10T17:25:50+00:00",
+      "adjudicator": "codex",
+      "rationale": "Removing cdms2 support changes public conversion APIs and CI dependency coverage across many files; the removal policy needs human approval.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/e5d163a8ddef4e8aa95a2841505a642f8ffbcea6...9ac8a2949af8a34a3b1030a82977acb834349050",
+        "https://github.com/pydata/xarray/pull/8441#discussion_r1391605540"
+      ]
+    },
+    {
+      "id": "pydata/xarray#3886",
+      "decision": "eligible",
+      "snapshotSha": "c22c59b529d2855d77bdca3fb670f21c13065576",
+      "snapshotAt": "2020-03-24T18:37:06+00:00",
+      "adjudicator": "codex",
+      "rationale": "The template swaps Closes for Fixes and adds one release-note entry; GitHub issue linkage still works and no code path changes.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/c707b337a0f75224ee3b3e3b65a08da792df2fa6...c22c59b529d2855d77bdca3fb670f21c13065576",
+        "https://github.com/pydata/xarray/pull/3886"
+      ]
+    },
+    {
+      "id": "pydata/xarray#6988",
+      "decision": "eligible",
+      "snapshotSha": "7361d413f5abedea3c0aa3cd419fb6f37105c288",
+      "snapshotAt": "2022-09-05T12:39:30+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only a datetime-calendar test fixture is simplified while preserving its assertion; the runtime library and public contract are unchanged.",
+      "evidence": [
+        "https://github.com/pydata/xarray/compare/18454c218002e48e1643ce8e25654262e5f592ad...7361d413f5abedea3c0aa3cd419fb6f37105c288",
+        "https://github.com/pydata/xarray/pull/6988#discussion_r962874630"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#7537",
+      "decision": "hold",
+      "snapshotSha": "6b20dc907380f0abf4e96140f041ffee4d1a3429",
+      "snapshotAt": "2022-09-27T20:34:53+00:00",
+      "adjudicator": "codex",
+      "rationale": "The unused-variable checker now treats For parents like assignments, changing lint diagnostics and warranting regression review.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/99e05cc7f3f4d1cc3e46f4a0f8d1a98eb1f0ba95...6b20dc907380f0abf4e96140f041ffee4d1a3429",
+        "https://github.com/pylint-dev/pylint/pull/7537#pullrequestreview-1123226088"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#9339",
+      "decision": "hold",
+      "snapshotSha": "61861da6680ecca05b3118653efaf0bdf11ed45b",
+      "snapshotAt": "2024-01-01T20:43:03+00:00",
+      "adjudicator": "codex",
+      "rationale": "Pre-commit hook versions include an alpha major release; automatic formatting and CI behavior can change across the repository.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/c600f3491baeb3d6f7173c0ad3d2c6268100fa37...61861da6680ecca05b3118653efaf0bdf11ed45b",
+        "https://github.com/pylint-dev/pylint/pull/9339#discussion_r1439084197"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#6758",
+      "decision": "hold",
+      "snapshotSha": "e97c2f91b2f6e6d10f8694c4aff7006af21b8b73",
+      "snapshotAt": "2022-05-30T20:58:20+00:00",
+      "adjudicator": "codex",
+      "rationale": "The comment workflow introduces an intentional failing step and conditional summary logic; review questioned whether the failure check works.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/c29bba61a16dbffb807c5af91208dd6a116435e3...e97c2f91b2f6e6d10f8694c4aff7006af21b8b73",
+        "https://github.com/pylint-dev/pylint/pull/6758#discussion_r885083839"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#5077",
+      "decision": "hold",
+      "snapshotSha": "831099c0517d847a3c802d5142052135beb5a05b",
+      "snapshotAt": "2021-09-27T10:21:54+00:00",
+      "adjudicator": "codex",
+      "rationale": "The suppression checker changes how ignored line-too-long messages are recorded, affecting user diagnostics and requiring regression validation.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/162cbfef2d7cd62509241261fb976828dd1423af...831099c0517d847a3c802d5142052135beb5a05b",
+        "https://github.com/pylint-dev/pylint/pull/5077#discussion_r716920784"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#4423",
+      "decision": "hold",
+      "snapshotSha": "06b8312e316cfe203c0352f284f30d82937854c1",
+      "snapshotAt": "2021-04-30T18:31:46+00:00",
+      "adjudicator": "codex",
+      "rationale": "The CI command now runs only the pylint pre-commit hook rather than all hooks, an accidental coverage reduction identified in review.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/822b99e1260417c3141fa947e65237e40d1bfa8b...06b8312e316cfe203c0352f284f30d82937854c1",
+        "https://github.com/pylint-dev/pylint/pull/4423#discussion_r624116466"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#7862",
+      "decision": "hold",
+      "snapshotSha": "de7819b8d12241f431641f5e675fbc0c62587143",
+      "snapshotAt": "2022-11-29T04:05:04+00:00",
+      "adjudicator": "codex",
+      "rationale": "Several pre-commit hooks receive major upgrades, which change validation behavior; review identified an additional missing update.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/7618b7e79ce64baa1eac0fd81950beb4b75318b8...de7819b8d12241f431641f5e675fbc0c62587143",
+        "https://github.com/pylint-dev/pylint/pull/7862#discussion_r1034462292"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#4105",
+      "decision": "hold",
+      "snapshotSha": "9ce1f37a6bd51da75762ce445d7baa6df902b865",
+      "snapshotAt": "2021-02-18T13:30:35+00:00",
+      "adjudicator": "codex",
+      "rationale": "The Python 3 checker changes when zip arguments trigger a diagnostic, so false-positive and true-positive behavior needs regression review.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/4faccd0563c628954f04322ffb696905a3dab62d...9ce1f37a6bd51da75762ce445d7baa6df902b865",
+        "https://github.com/pylint-dev/pylint/pull/4105"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#8819",
+      "decision": "hold",
+      "snapshotSha": "ed9e5e404a79d1d9b48047b81f3f6516544ea4a6",
+      "snapshotAt": "2023-07-04T00:34:21+00:00",
+      "adjudicator": "codex",
+      "rationale": "Configuration enable/disable ordering changes documented public semantics, including inline and command-line cases; human policy review is required.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/2e3798a82869b3bfb73a7be31eadb0589f4e35b6...ed9e5e404a79d1d9b48047b81f3f6516544ea4a6",
+        "https://github.com/pylint-dev/pylint/pull/8819#discussion_r1252013187"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#6958",
+      "decision": "hold",
+      "snapshotSha": "b4553c85bb4aa45eee3457b6bc8f7ad81583281a",
+      "snapshotAt": "2022-06-15T13:24:55+00:00",
+      "adjudicator": "codex",
+      "rationale": "The used-before-assignment checker adds scope inference and new diagnostics across branches, which can produce false positives.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/9069eb48dd310b74ed96beba17c2a53366c5376f...b4553c85bb4aa45eee3457b6bc8f7ad81583281a",
+        "https://github.com/pylint-dev/pylint/pull/6958#pullrequestreview-1007914871"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#4153",
+      "decision": "hold",
+      "snapshotSha": "089ee0752d6df206970a22e9d16be1e320f50ff3",
+      "snapshotAt": "2021-02-28T01:33:16+00:00",
+      "adjudicator": "codex",
+      "rationale": "The CLI changes sys.path sanitization, a security-sensitive import boundary where mistaken filtering could execute unwanted code.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/41d2349c7b84714539a9979b5344294029c984ab...089ee0752d6df206970a22e9d16be1e320f50ff3",
+        "https://github.com/pylint-dev/pylint/pull/4153#pullrequestreview-600277450"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#6575",
+      "decision": "eligible",
+      "snapshotSha": "658bfa2f25286e61efd20b4f2b2bbbb04451baaf",
+      "snapshotAt": "2022-05-11T07:50:27+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only assertion messages in documentation tests are expanded; pass/fail conditions and product behavior remain identical.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/c6022aaea149395dee574a2b147bb6cb12e051e0...658bfa2f25286e61efd20b4f2b2bbbb04451baaf",
+        "https://github.com/pylint-dev/pylint/pull/6575#discussion_r869981806"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#7410",
+      "decision": "hold",
+      "snapshotSha": "025e6988c47326968e7cb3f13a4096811d5c27c3",
+      "snapshotAt": "2022-09-04T14:07:26+00:00",
+      "adjudicator": "codex",
+      "rationale": "The missing-return-doc checker now skips names matching a regex option, changing which diagnostics users receive.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/7fdde384f0d308f65ccc560a4192ffb1f1381de5...025e6988c47326968e7cb3f13a4096811d5c27c3",
+        "https://github.com/pylint-dev/pylint/pull/7410#pullrequestreview-1095706588"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#9630",
+      "decision": "hold",
+      "snapshotSha": "fc596b5b343c2e441e9167886e70e30d8854fec5",
+      "snapshotAt": "2024-05-15T18:46:29+00:00",
+      "adjudicator": "codex",
+      "rationale": "The ignore-pattern expansion changes path handling for dot directories; exclusion behavior can expose or skip code unexpectedly.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/67e59aca1632e0f2311c3418541360f51a306ba9...fc596b5b343c2e441e9167886e70e30d8854fec5",
+        "https://github.com/pylint-dev/pylint/pull/9630#pullrequestreview-2060568591"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#6775",
+      "decision": "eligible",
+      "snapshotSha": "21b0594b5e900a984839527ba8c3717139e39b48",
+      "snapshotAt": "2022-05-31T13:59:42+00:00",
+      "adjudicator": "codex",
+      "rationale": "The diff reorganizes contributor installation and testing instructions without modifying package or CI execution.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/7aa1f08fc4e9142c247c8e277c137a0f7a4157d1...21b0594b5e900a984839527ba8c3717139e39b48",
+        "https://github.com/pylint-dev/pylint/pull/6775#discussion_r885703371"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#5592",
+      "decision": "hold",
+      "snapshotSha": "89d6a41970de73c0cdeca6d291d008695cc19e26",
+      "snapshotAt": "2021-12-23T12:37:42+00:00",
+      "adjudicator": "codex",
+      "rationale": "The mypy pre-commit hook and test pin upgrade together, changing the type-checking gate for the repository.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/21cb6881846c8ad506bb53970802ba378388f2f1...89d6a41970de73c0cdeca6d291d008695cc19e26",
+        "https://github.com/pylint-dev/pylint/pull/5592"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#7257",
+      "decision": "hold",
+      "snapshotSha": "7db1f3f97c00462c772b7ad51c00db8a69f5c493",
+      "snapshotAt": "2022-08-02T07:13:50+00:00",
+      "adjudicator": "codex",
+      "rationale": "Enum member inference now discards __slots__, which changes class-checker diagnostics and deserves a regression review.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/260aa939bf9faaa4975cce6e1922e189078b69ce...7db1f3f97c00462c772b7ad51c00db8a69f5c493",
+        "https://github.com/pylint-dev/pylint/pull/7257"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#7918",
+      "decision": "hold",
+      "snapshotSha": "85c6a9d6b82e6eb9618fa46a12db77af94738b51",
+      "snapshotAt": "2022-12-10T22:17:28+00:00",
+      "adjudicator": "codex",
+      "rationale": "The minimum dill dependency jumps for all installations to avoid Python 3.11 hangs, a packaging compatibility decision.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/e7ef1fd364825e9b0bf4e6a5668b2e24ce058303...85c6a9d6b82e6eb9618fa46a12db77af94738b51",
+        "https://github.com/pylint-dev/pylint/pull/7918#discussion_r1045215444"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#6879",
+      "decision": "hold",
+      "snapshotSha": "e412bb0a49502947aa9fba9aa4894e6a614cb7bb",
+      "snapshotAt": "2022-06-06T13:19:21+00:00",
+      "adjudicator": "codex",
+      "rationale": "The Sphinx pin jumps from 4.5 to 5.0, a major documentation build dependency change that needs a successful build.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/6858292c97fb31bfcf3d06cdfa750d8a4da13817...e412bb0a49502947aa9fba9aa4894e6a614cb7bb",
+        "https://github.com/pylint-dev/pylint/pull/6879"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#8706",
+      "decision": "hold",
+      "snapshotSha": "c99b7ab10f714ae97252982209ce4da15d98d18c",
+      "snapshotAt": "2023-05-20T08:13:22+00:00",
+      "adjudicator": "codex",
+      "rationale": "The new stale workflow can automatically close contributor issues and PRs; maintainers questioned that policy in review.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/9a2f1133dc3c1d0a9b020d31052f17c2626d3c6f...c99b7ab10f714ae97252982209ce4da15d98d18c",
+        "https://github.com/pylint-dev/pylint/pull/8706#discussion_r1199579712"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#3959",
+      "decision": "hold",
+      "snapshotSha": "2a86092204b123ff569965cbe609b243ee965181",
+      "snapshotAt": "2020-11-28T13:55:49+00:00",
+      "adjudicator": "codex",
+      "rationale": "The astroid dependency floor and CI Python support change; review specifically warned the proposed floor was not yet released.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/08472654b40d813de33a98344f073feeb0911fdb...2a86092204b123ff569965cbe609b243ee965181",
+        "https://github.com/pylint-dev/pylint/pull/3959#discussion_r549628448"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#9940",
+      "decision": "hold",
+      "snapshotSha": "72d88eaa30fd2d68c9e83a36227838e7f2d9e3a6",
+      "snapshotAt": "2024-09-20T12:25:53+00:00",
+      "adjudicator": "codex",
+      "rationale": "A release-branch update changes version date and many release artifacts; release publication and provenance require human approval.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/78f3dfa0c40bdb1e0f145e75c309f28f4e8cc31e...72d88eaa30fd2d68c9e83a36227838e7f2d9e3a6",
+        "https://github.com/pylint-dev/pylint/pull/9940"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#7921",
+      "decision": "hold",
+      "snapshotSha": "4d82cc69ec828f686a45cad69208564250e3397c",
+      "snapshotAt": "2022-12-12T04:10:57+00:00",
+      "adjudicator": "codex",
+      "rationale": "The variable checker traverses named expressions differently to change diagnostics; branch and scope edge cases require review.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/e7ef1fd364825e9b0bf4e6a5668b2e24ce058303...4d82cc69ec828f686a45cad69208564250e3397c",
+        "https://github.com/pylint-dev/pylint/pull/7921#pullrequestreview-1213072632"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#9195",
+      "decision": "hold",
+      "snapshotSha": "aea04541653f71da733bc0b6a8e5fb87bcaf1b5b",
+      "snapshotAt": "2023-10-28T17:25:02+00:00",
+      "adjudicator": "codex",
+      "rationale": "The checker adds Python 3.12 generic-type scope handling, affecting undefined-variable and unused-argument diagnostics.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/3de196c91bcf67e92e5413dea09eb65c4d15c37e...aea04541653f71da733bc0b6a8e5fb87bcaf1b5b",
+        "https://github.com/pylint-dev/pylint/pull/9195#pullrequestreview-1703019254"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#9016",
+      "decision": "hold",
+      "snapshotSha": "4dfc004f39ef5902c0682964f348dd077258dca8",
+      "snapshotAt": "2023-09-07T05:29:35+00:00",
+      "adjudicator": "codex",
+      "rationale": "Pyreverse annotation formatting logic changes and the reviewer reported a genuine pre-commit failure at this snapshot.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/77dcaad482ad795fa19aa8821e7f7ee74a8f2e1e...4dfc004f39ef5902c0682964f348dd077258dca8",
+        "https://github.com/pylint-dev/pylint/pull/9016#pullrequestreview-1615804087"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#6782",
+      "decision": "hold",
+      "snapshotSha": "8734d92e1be1ab32d2c1ead75085f75558cd28e5",
+      "snapshotAt": "2022-06-01T06:58:44+00:00",
+      "adjudicator": "codex",
+      "rationale": "Primer package URLs and comment links change, and review requested corrections before the tool output is reliable.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/bd33f79b69bef522fd8d0790d215213954a82707...8734d92e1be1ab32d2c1ead75085f75558cd28e5",
+        "https://github.com/pylint-dev/pylint/pull/6782#discussion_r886403005"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#9978",
+      "decision": "hold",
+      "snapshotSha": "7100402aaad21cf416fd2874ead4c8ab33a3c63a",
+      "snapshotAt": "2024-09-27T17:03:56+00:00",
+      "adjudicator": "codex",
+      "rationale": "A broad cleanup of the variable checker changes imports and internal complexity across a high-impact diagnostic module.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/8630cfd34a211b0d8135dbd79244a1fab4780b1d...7100402aaad21cf416fd2874ead4c8ab33a3c63a",
+        "https://github.com/pylint-dev/pylint/pull/9978#pullrequestreview-2335849627"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#6208",
+      "decision": "hold",
+      "snapshotSha": "ee7a35a8f0e395c9d33fe7b6c75ab8f658fc28ac",
+      "snapshotAt": "2022-04-06T16:27:51+00:00",
+      "adjudicator": "codex",
+      "rationale": "Configuration parser internals are restructured for speed; option ordering and defaults require behavioral equivalence review.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/3a315d2044086da6e8045db63404362dcd82833a...ee7a35a8f0e395c9d33fe7b6c75ab8f658fc28ac",
+        "https://github.com/pylint-dev/pylint/pull/6208#discussion_r844151213"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#8085",
+      "decision": "hold",
+      "snapshotSha": "6a5561c9015bc626c48792bdf4a59d6b2258ebc2",
+      "snapshotAt": "2023-01-19T16:16:04+00:00",
+      "adjudicator": "codex",
+      "rationale": "The workflow switches to a pre-authenticated GitHub context for Primer PRs, changing token use and permissions.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/b87cf1631f9fcef278895382481cc0169cb2301e...6a5561c9015bc626c48792bdf4a59d6b2258ebc2",
+        "https://github.com/pylint-dev/pylint/pull/8085#pullrequestreview-1262301752"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#9589",
+      "decision": "eligible",
+      "snapshotSha": "9275ac69c5c7f6ebb7e5fad61e9b3f98d67a862c",
+      "snapshotAt": "2024-05-02T14:28:45+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only explanatory documentation for syntax-error diagnostics is added; checker behavior and CI configuration are untouched.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/82ef6475e665ca8ae1542822a485c98a067e1834...9275ac69c5c7f6ebb7e5fad61e9b3f98d67a862c",
+        "https://github.com/pylint-dev/pylint/pull/9589"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#4791",
+      "decision": "hold",
+      "snapshotSha": "f61c616c6b5db5c703ca6940ba772054baad83ef",
+      "snapshotAt": "2021-08-02T23:22:18+00:00",
+      "adjudicator": "codex",
+      "rationale": "Exception-handler assignment inference changes, and review requested changes because the consume implementation was uncertain.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/9ae559d202814091896cdd3b95068a12fa1bd94b...f61c616c6b5db5c703ca6940ba772054baad83ef",
+        "https://github.com/pylint-dev/pylint/pull/4791#discussion_r681470279"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#8279",
+      "decision": "hold",
+      "snapshotSha": "46abfecdcd2a66e5c7245223888d4bcf4e570c34",
+      "snapshotAt": "2023-02-13T13:58:09+00:00",
+      "adjudicator": "codex",
+      "rationale": "A major mypy upgrade changes the type-checking gate and may produce new diagnostics or hide old ones.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/db38da0e3fcc0aa0242e53d999a8daa22e60c83b...46abfecdcd2a66e5c7245223888d4bcf4e570c34",
+        "https://github.com/pylint-dev/pylint/pull/8279"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#9812",
+      "decision": "hold",
+      "snapshotSha": "f0926c555cc3500a40a4aa12674e2948df79f7a8",
+      "snapshotAt": "2024-07-18T10:53:42+00:00",
+      "adjudicator": "codex",
+      "rationale": "The setuptools build floor changes substantially, while review questioned the inconsistent Python-version limit in test requirements.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/6236b919309ae02702ee15b2b6bde71cc64ad4ad...f0926c555cc3500a40a4aa12674e2948df79f7a8",
+        "https://github.com/pylint-dev/pylint/pull/9812#discussion_r1682869370"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#6367",
+      "decision": "hold",
+      "snapshotSha": "42841332b699274491aecae8e96149f3b4a4626f",
+      "snapshotAt": "2022-04-17T18:47:14+00:00",
+      "adjudicator": "codex",
+      "rationale": "The checker crash fix changes assignment inference, but review questioned whether a missing parent can still crash this path.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/7c848b9bdab07897027ce1a39c812cd03055c2ff...42841332b699274491aecae8e96149f3b4a4626f",
+        "https://github.com/pylint-dev/pylint/pull/6367#discussion_r852316739"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#6969",
+      "decision": "eligible",
+      "snapshotSha": "0753aae5eb48e1a485402c52decee257e545e68a",
+      "snapshotAt": "2022-06-17T21:14:01+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only fixture files and tests for Primer comment output are added; production code and workflow behavior do not change.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/dd06ea7f593935a1f9c1b43a787d88b54cbd2e21...0753aae5eb48e1a485402c52decee257e545e68a",
+        "https://github.com/pylint-dev/pylint/pull/6969"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#8926",
+      "decision": "hold",
+      "snapshotSha": "a095cff7890f702c759ddfdeb7142718fa55efd1",
+      "snapshotAt": "2023-08-05T04:41:31+00:00",
+      "adjudicator": "codex",
+      "rationale": "The minimum test-environment setuptools version jumps by years and a reviewer requested changes to the pin.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/e1f50d77732542bb6936b94f1d1d13823b8b4e1d...a095cff7890f702c759ddfdeb7142718fa55efd1",
+        "https://github.com/pylint-dev/pylint/pull/8926#discussion_r1284966804"
+      ]
+    },
+    {
+      "id": "pylint-dev/pylint#9316",
+      "decision": "hold",
+      "snapshotSha": "2952d1f9b657234d8d058319a85992f4fc592081",
+      "snapshotAt": "2023-12-18T21:23:56+00:00",
+      "adjudicator": "codex",
+      "rationale": "Pre-commit hooks are updated including an alpha major release; automatic formatting and checks need validation.",
+      "evidence": [
+        "https://github.com/pylint-dev/pylint/compare/278de0f43e389142d14d2ba2a47b770c2d84a085...2952d1f9b657234d8d058319a85992f4fc592081",
+        "https://github.com/pylint-dev/pylint/pull/9316#discussion_r1430664225"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#7201",
+      "decision": "eligible",
+      "snapshotSha": "97a0239aadf8ac8760bc5dc7b0a9281ed84c02c8",
+      "snapshotAt": "2020-05-08T15:39:03+00:00",
+      "adjudicator": "codex",
+      "rationale": "A single maintainer link is added to Tidelift documentation with no runtime, build or policy logic change.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/741a8b8023ecc72635e6b258cd88212620e06ff5...97a0239aadf8ac8760bc5dc7b0a9281ed84c02c8",
+        "https://github.com/pytest-dev/pytest/pull/7201"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#8764",
+      "decision": "hold",
+      "snapshotSha": "605fe29d12d62362f9a523f8c46774f9c7b0add2",
+      "snapshotAt": "2021-06-14T17:42:34+00:00",
+      "adjudicator": "codex",
+      "rationale": "Multiple pre-commit hook versions change, including beta formatting behavior that can alter the repository quality gate.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/ced125ad153bb3e24710ad478b8986147f9b1a5d...605fe29d12d62362f9a523f8c46774f9c7b0add2",
+        "https://github.com/pytest-dev/pytest/pull/8764"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#11659",
+      "decision": "hold",
+      "snapshotSha": "ed9e5ee6bb611029b2a95b8ade3b5ae8a728ca6c",
+      "snapshotAt": "2023-12-03T13:17:20+00:00",
+      "adjudicator": "codex",
+      "rationale": "Assertion failure formatting changes and a reviewer found truncated non-verbose output became worse for local users.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/5689d806cffa394ae3e79aff9617784bb14533c2...ed9e5ee6bb611029b2a95b8ade3b5ae8a728ca6c",
+        "https://github.com/pytest-dev/pytest/pull/11659#discussion_r1413111270"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#7872",
+      "decision": "eligible",
+      "snapshotSha": "af3759a50372602be748b126b3390ed38c072713",
+      "snapshotAt": "2020-10-07T21:25:32+00:00",
+      "adjudicator": "codex",
+      "rationale": "The addini typing and docstring now mention an already supported string option; runtime parsing is unchanged.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/95917f8833bc71229c3ac4fb73cbf5ca5818201b...af3759a50372602be748b126b3390ed38c072713",
+        "https://github.com/pytest-dev/pytest/pull/7872#pullrequestreview-504324480"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#10383",
+      "decision": "hold",
+      "snapshotSha": "0bc9ffcc8782fd126d0a9ce95ce130d1d760d2cb",
+      "snapshotAt": "2022-10-14T18:17:54+00:00",
+      "adjudicator": "codex",
+      "rationale": "Pdb exception handling changes for SkipTest, and review requested the missing test that ordinary test-level skips still enter pdb.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/15ac0349b2c7d8dc48fe2e25a1b4fa47c9fda25c...0bc9ffcc8782fd126d0a9ce95ce130d1d760d2cb",
+        "https://github.com/pytest-dev/pytest/pull/10383#discussion_r996334891"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#12746",
+      "decision": "eligible",
+      "snapshotSha": "2d5618ec4e9499ba4f39131f1fb8423aa89d1d4b",
+      "snapshotAt": "2024-08-29T11:54:59+00:00",
+      "adjudicator": "codex",
+      "rationale": "The backport switches typing-only Self imports for Python 3.9 compatibility; it does not change executable control flow.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/6d59143aa4170a9174d253adc826043eb7545788...2d5618ec4e9499ba4f39131f1fb8423aa89d1d4b",
+        "https://github.com/pytest-dev/pytest/pull/12746#pullrequestreview-2270108558"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#13293",
+      "decision": "hold",
+      "snapshotSha": "e4d70c72726754e9639a7ce61017b789cd28e925",
+      "snapshotAt": "2025-03-13T07:12:04+00:00",
+      "adjudicator": "codex",
+      "rationale": "Changing assertion-rewrite cache timestamps to nanoseconds affects pyc invalidation and portability; tests and changelog needed review.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/d149ab353adcfa67693f692e3ee235888971e744...e4d70c72726754e9639a7ce61017b789cd28e925",
+        "https://github.com/pytest-dev/pytest/pull/13293#discussion_r1993357652"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#8537",
+      "decision": "hold",
+      "snapshotSha": "385bc4b8312674f20139451bbd294739dbe19ff5",
+      "snapshotAt": "2021-04-10T20:20:58+00:00",
+      "adjudicator": "codex",
+      "rationale": "The rootdir resolution semantics for -c were wrong in the snapshot, and the reviewer requested a different approach.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/047c9603f670bb459c1a2f0aaee39eef64730dd0...385bc4b8312674f20139451bbd294739dbe19ff5",
+        "https://github.com/pytest-dev/pytest/pull/8537#discussion_r613163781"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#12232",
+      "decision": "hold",
+      "snapshotSha": "b5ee309a2c54f9e71ca7f21aa7ed7304ba9b68c5",
+      "snapshotAt": "2024-04-22T01:12:40+00:00",
+      "adjudicator": "codex",
+      "rationale": "pytest.approx now coerces inputs to NumPy arrays, changing comparison and optional dependency behavior; review requested more tests.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/63d985c6d3e61f02a0774aef26df63027e8b4d67...b5ee309a2c54f9e71ca7f21aa7ed7304ba9b68c5",
+        "https://github.com/pytest-dev/pytest/pull/12232#discussion_r1574173885"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#9243",
+      "decision": "hold",
+      "snapshotSha": "24946128afae68f4c4f1e26b6f8e2529d4f6cb5e",
+      "snapshotAt": "2021-10-27T13:12:46+00:00",
+      "adjudicator": "codex",
+      "rationale": "The terminal reporter changes a callback signature but setprocessor still passes the removed tags argument, a concrete failure identified in review.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/b7fc0003fd5e6127530fa35402b3d09441dc1a65...24946128afae68f4c4f1e26b6f8e2529d4f6cb5e",
+        "https://github.com/pytest-dev/pytest/pull/9243#discussion_r739613081"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#9042",
+      "decision": "hold",
+      "snapshotSha": "44d3282bb7c36e1979579e254f7120d7f8aa0f00",
+      "snapshotAt": "2021-08-26T17:56:44+00:00",
+      "adjudicator": "codex",
+      "rationale": "The release-branch backport changes documentation references and minimum pluggy version, so the maintained branch build needs review.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/fafe00aaee3b0133d35d8eb1f076a7e5160aab8a...44d3282bb7c36e1979579e254f7120d7f8aa0f00",
+        "https://github.com/pytest-dev/pytest/pull/9042"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#6802",
+      "decision": "hold",
+      "snapshotSha": "bfef15b007802778a476b344791ef3e76e934a9d",
+      "snapshotAt": "2020-02-23T21:32:47+00:00",
+      "adjudicator": "codex",
+      "rationale": "The pytester fixture now uses node.name instead of function name across several paths; reviewer questioned whether this fallback is valid for all node types.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/bfd0d1837105e2eb9ea0c16e1bb9b52328f82b3d...bfef15b007802778a476b344791ef3e76e934a9d",
+        "https://github.com/pytest-dev/pytest/pull/6802#discussion_r384209659"
+      ]
+    },
+    {
+      "id": "pytest-dev/pytest#10678",
+      "decision": "hold",
+      "snapshotSha": "42fec94c130a0c48ebe1d0bd0684931d8cf4819f",
+      "snapshotAt": "2023-01-20T10:33:35+00:00",
+      "adjudicator": "codex",
+      "rationale": "CaptureResult changes back to a namedtuple, affecting public tuple behavior and typing compatibility; consumers need regression review.",
+      "evidence": [
+        "https://github.com/pytest-dev/pytest/compare/310b67b2271cb05f575054c1cdd2ece2412c89a2...42fec94c130a0c48ebe1d0bd0684931d8cf4819f",
+        "https://github.com/pytest-dev/pytest/pull/10678#discussion_r1082376505"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#20421",
+      "decision": "eligible",
+      "snapshotSha": "806ec9b311e54b475fb7401e18e88ad6eba311fb",
+      "snapshotAt": "2021-06-29T04:10:41+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only a deprecation test switches from a custom warning helper to pytest.warns while retaining the same warning assertions.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/daae053f7e9afc1dac24ce9ecce87f1356b96b03...806ec9b311e54b475fb7401e18e88ad6eba311fb",
+        "https://github.com/scikit-learn/scikit-learn/pull/20421#pullrequestreview-696651333"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#30862",
+      "decision": "hold",
+      "snapshotSha": "02ce5b224b4b319102491318e05a7946ad1a763b",
+      "snapshotAt": "2025-02-19T16:42:39+00:00",
+      "adjudicator": "codex",
+      "rationale": "The Binder postBuild safety guard is replaced with REPO_DIR; if the environment marker is absent or spoofed, the script may run destructive commands.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/6a0838c416c7c2a6ee7fe4562cd34ae133674b2e...02ce5b224b4b319102491318e05a7946ad1a763b",
+        "https://github.com/scikit-learn/scikit-learn/pull/30862"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#27444",
+      "decision": "eligible",
+      "snapshotSha": "c290c3fda7cdfd28ed4049b09a8fedbc358b702a",
+      "snapshotAt": "2023-09-22T16:39:58+00:00",
+      "adjudicator": "codex",
+      "rationale": "A gallery example replaces deprecated contour handles with explicit Line2D legend handles; the reviewer confirmed the narrowly scoped visual fix.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/20dad5851e77836a01aea710de3f965fe9384576...c290c3fda7cdfd28ed4049b09a8fedbc358b702a",
+        "https://github.com/scikit-learn/scikit-learn/pull/27444#pullrequestreview-1641593847"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#17888",
+      "decision": "eligible",
+      "snapshotSha": "a8ed45cdda35419b30297e2287d85224ab2ab14d",
+      "snapshotAt": "2020-07-10T16:14:40+00:00",
+      "adjudicator": "codex",
+      "rationale": "The user guide changes shape notation from brackets to tuples without changing an API, runnable example, or build setting.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/895f20d2339bce966d4e58e48401df3899ef4da0...a8ed45cdda35419b30297e2287d85224ab2ab14d",
+        "https://github.com/scikit-learn/scikit-learn/pull/17888"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#23110",
+      "decision": "hold",
+      "snapshotSha": "a037eb7aeb6d9d39c817c4c523852d7a90e11bb9",
+      "snapshotAt": "2022-04-11T13:58:50+00:00",
+      "adjudicator": "codex",
+      "rationale": "Nightly CI enables float32 tests but only on some jobs, and review noted incomplete platform coverage of the intended check.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/aeeac1c1d634dc80abc93fb30b3fe48e1d709b64...a037eb7aeb6d9d39c817c4c523852d7a90e11bb9",
+        "https://github.com/scikit-learn/scikit-learn/pull/23110#pullrequestreview-938387625"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#30581",
+      "decision": "hold",
+      "snapshotSha": "2cd16c06297d70731e3d7c337186402b078e00ef",
+      "snapshotAt": "2025-01-04T08:23:35+00:00",
+      "adjudicator": "codex",
+      "rationale": "The documentation CSS forces dropdown alignment; a reviewer could not reproduce the reported clipping across browsers and questioned the change.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/e5b78f054330de195cdfbdc999c56d0d6f424196...2cd16c06297d70731e3d7c337186402b078e00ef",
+        "https://github.com/scikit-learn/scikit-learn/pull/30581#discussion_r1903292421"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#29838",
+      "decision": "hold",
+      "snapshotSha": "589eefae9004c733608cbbc7c879ce72bb746f66",
+      "snapshotAt": "2024-09-13T09:18:47+00:00",
+      "adjudicator": "codex",
+      "rationale": "Maintainer release instructions now prescribe rebase and backport steps; an incorrect sequence could corrupt the release branch.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/c24a3f962739b72b44eeda2676d039f31d95d2dd...589eefae9004c733608cbbc7c879ce72bb746f66",
+        "https://github.com/scikit-learn/scikit-learn/pull/29838#discussion_r1759614748"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#20889",
+      "decision": "hold",
+      "snapshotSha": "3b9b1444d098750e247a77c5bce55e65aa3a1361",
+      "snapshotAt": "2021-08-30T16:31:39+00:00",
+      "adjudicator": "codex",
+      "rationale": "The new release-note entry uses malformed Sphinx roles and inaccurate metric descriptions, risking broken docs and misleading public release information.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/c3db2cdbf5244229af2c5eb54f9216a69f77a146...3b9b1444d098750e247a77c5bce55e65aa3a1361",
+        "https://github.com/scikit-learn/scikit-learn/pull/20889"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#16841",
+      "decision": "hold",
+      "snapshotSha": "728badb4a9453c3dcf39a247375ce3af990b740e",
+      "snapshotAt": "2020-04-04T20:48:45+00:00",
+      "adjudicator": "codex",
+      "rationale": "The PCA MLE dimension calculation changes numerical likelihood logic and small-eigenvalue handling, requiring scientific correctness review.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/2d25ea74fe89c8ad5611d801628a75912cf2923d...728badb4a9453c3dcf39a247375ce3af990b740e",
+        "https://github.com/scikit-learn/scikit-learn/pull/16841"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#29493",
+      "decision": "hold",
+      "snapshotSha": "4461610f77bb7b356aef3d0aff32d503c77317c5",
+      "snapshotAt": "2024-07-15T13:39:13+00:00",
+      "adjudicator": "codex",
+      "rationale": "The docs upgrade changes sphinx-design minimum, JavaScript behavior, styles and lockfiles, so rendered interaction needs verification.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/d79cb58c464f0b54bf0f0286c725d2df837574d0...4461610f77bb7b356aef3d0aff32d503c77317c5",
+        "https://github.com/scikit-learn/scikit-learn/pull/29493#pullrequestreview-2179573746"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#26670",
+      "decision": "hold",
+      "snapshotSha": "28b792d388e3029a37a57e57d950fa3a04ea68de",
+      "snapshotAt": "2023-06-22T14:35:15+00:00",
+      "adjudicator": "codex",
+      "rationale": "The linter workflow and bot comment generator change what gets displayed after CI; workflow and output behavior need review.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/a9fa9a74d73edc01c6cb21c19162214ba926a3d1...28b792d388e3029a37a57e57d950fa3a04ea68de",
+        "https://github.com/scikit-learn/scikit-learn/pull/26670#pullrequestreview-1493360167"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#27539",
+      "decision": "hold",
+      "snapshotSha": "0024a2c36cdf2d4c1f524cb10a76547341993f08",
+      "snapshotAt": "2023-10-06T00:43:20+00:00",
+      "adjudicator": "codex",
+      "rationale": "Cython tree internals replace C doubles with typedefs across many files; ABI and numerical behavior require careful review.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/fb0ab5abcaae3eaaf7cfa740ed74b8e7b6f57ded...0024a2c36cdf2d4c1f524cb10a76547341993f08",
+        "https://github.com/scikit-learn/scikit-learn/pull/27539#discussion_r1349308864"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#20580",
+      "decision": "eligible",
+      "snapshotSha": "3b8c62f01fcfd47630bf7bce84a6ca779295b4e1",
+      "snapshotAt": "2021-07-21T04:10:50+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only MinCovDet documentation is expanded and its numpydoc exemption removed; estimator computation and public signatures stay unchanged.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/ded59b5713bcbfcaa27d7d9d1de704c96817870c...3b8c62f01fcfd47630bf7bce84a6ca779295b4e1",
+        "https://github.com/scikit-learn/scikit-learn/pull/20580"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#20149",
+      "decision": "hold",
+      "snapshotSha": "39595d8d4715311573289eb38caea75dcfe574d0",
+      "snapshotAt": "2021-05-27T13:37:32+00:00",
+      "adjudicator": "codex",
+      "rationale": "The minimum pandas test dependency rises and could reduce compatibility coverage for users on older supported versions.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/aa86c83b8e31df0367b299e85c88828f48eb1940...39595d8d4715311573289eb38caea75dcfe574d0",
+        "https://github.com/scikit-learn/scikit-learn/pull/20149#pullrequestreview-673411666"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#26228",
+      "decision": "eligible",
+      "snapshotSha": "965c2310365cb89f203b5b51c64330a25240f3fa",
+      "snapshotAt": "2023-04-20T03:43:05+00:00",
+      "adjudicator": "codex",
+      "rationale": "A single sentence in an example docstring changes demoed to demonstrated; executable plotting code is identical.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/cec09e20910e3eb970310732c40ec63b35b5cd35...965c2310365cb89f203b5b51c64330a25240f3fa",
+        "https://github.com/scikit-learn/scikit-learn/pull/26228#pullrequestreview-1393394599"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#22412",
+      "decision": "hold",
+      "snapshotSha": "eaf3d61e99e26ac6ec2a59109b6a23a953ddfd6d",
+      "snapshotAt": "2022-02-08T11:10:14+00:00",
+      "adjudicator": "codex",
+      "rationale": "The data generator now preallocates output, and review asked whether a fixed random state still produces identical shuffling.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/b80138fccb025ec1f8944e1b17d08b5fc2e9d1cb...eaf3d61e99e26ac6ec2a59109b6a23a953ddfd6d",
+        "https://github.com/scikit-learn/scikit-learn/pull/22412#discussion_r802505238"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#28198",
+      "decision": "hold",
+      "snapshotSha": "344bbcd78c1390ec2d5af268693ef3583d18b0d5",
+      "snapshotAt": "2024-01-20T20:03:31+00:00",
+      "adjudicator": "codex",
+      "rationale": "available_if changes exception chaining and public error text, which clients and tests may inspect; compatibility needs review.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/6a1022353103cefb93258f503b087d821262a1b6...344bbcd78c1390ec2d5af268693ef3583d18b0d5",
+        "https://github.com/scikit-learn/scikit-learn/pull/28198#pullrequestreview-1836018677"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#30465",
+      "decision": "hold",
+      "snapshotSha": "7bff59f1da6e015ffdb3c08a44e8d6f5072bd6fa",
+      "snapshotAt": "2024-12-11T14:42:25+00:00",
+      "adjudicator": "codex",
+      "rationale": "A large 1.6 changelog forward-port removes fragments and changes release documentation, requiring maintainer release validation.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/778425153dbc658278fd8ffaa9fb3de41eb7f7cf...7bff59f1da6e015ffdb3c08a44e8d6f5072bd6fa",
+        "https://github.com/scikit-learn/scikit-learn/pull/30465"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#22862",
+      "decision": "eligible",
+      "snapshotSha": "98d52e380fbbd381918601bd36f9b5eaa645cd0d",
+      "snapshotAt": "2022-03-16T12:16:47+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only tests replace variable random seeds with the existing global seed fixture to improve determinism; library code is untouched.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/8a7684705f636a8dfcde8e2239d2e0bcd624ac54...98d52e380fbbd381918601bd36f9b5eaa645cd0d",
+        "https://github.com/scikit-learn/scikit-learn/pull/22862#pullrequestreview-911850231"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#23937",
+      "decision": "hold",
+      "snapshotSha": "97e4013da676bce3bc1e0618e22352602f4482c4",
+      "snapshotAt": "2022-07-17T20:00:44+00:00",
+      "adjudicator": "codex",
+      "rationale": "The documentation hosting trigger adds a GitHub API fallback for fork branches, changing CI publication routing and API rate-limit use.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/f0af898de5bfa93916b659438b4cf0b86fffd974...97e4013da676bce3bc1e0618e22352602f4482c4",
+        "https://github.com/scikit-learn/scikit-learn/pull/23937#pullrequestreview-1041716425"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#22454",
+      "decision": "eligible",
+      "snapshotSha": "657e68f9ca789970fce068a47c3011d88a88e819",
+      "snapshotAt": "2022-02-11T18:35:53+00:00",
+      "adjudicator": "codex",
+      "rationale": "Duplicate words are corrected across documentation and example prose; no library behavior or CI rule changes.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/0cb06ea33ead6bc191e6721942606a6b17ecc01a...657e68f9ca789970fce068a47c3011d88a88e819",
+        "https://github.com/scikit-learn/scikit-learn/pull/22454#discussion_r804956572"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#25474",
+      "decision": "hold",
+      "snapshotSha": "a355a69fb6cae1da1c7647d55cda763c4a0a23c3",
+      "snapshotAt": "2023-01-24T20:11:25+00:00",
+      "adjudicator": "codex",
+      "rationale": "make_classification gains parameter validation for a public generator, changing accepted inputs and exception behavior.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/8e0f54fe1eeebd072c1ac7d56a36a8c531ac14d0...a355a69fb6cae1da1c7647d55cda763c4a0a23c3",
+        "https://github.com/scikit-learn/scikit-learn/pull/25474#discussion_r1086624966"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#25108",
+      "decision": "hold",
+      "snapshotSha": "fe4716b48c961b5e530649a1227094dc8689622c",
+      "snapshotAt": "2022-12-04T00:27:05+00:00",
+      "adjudicator": "codex",
+      "rationale": "roc_curve gains validation rules, and review found the proposed sparse-matrix acceptance conflicts with actual target parsing.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/d52e946fa4fca4282b0065ddcb0dd5d268c956e7...fe4716b48c961b5e530649a1227094dc8689622c",
+        "https://github.com/scikit-learn/scikit-learn/pull/25108#discussion_r1041023075"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#28330",
+      "decision": "eligible",
+      "snapshotSha": "75aec35ced232ebd4ce861e06abc8a5edb1003f6",
+      "snapshotAt": "2024-01-31T23:25:11+00:00",
+      "adjudicator": "codex",
+      "rationale": "The user guide corrects explanatory wording around the F-measure; neither the metric implementation nor an example changes.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/544394d21d9723c08cb0504d6b2aadfff3d1d0d6...75aec35ced232ebd4ce861e06abc8a5edb1003f6",
+        "https://github.com/scikit-learn/scikit-learn/pull/28330#pullrequestreview-1855091753"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#24456",
+      "decision": "hold",
+      "snapshotSha": "54928d7a63c48047c5584c8f0d1daab3db25f0be",
+      "snapshotAt": "2022-09-16T16:04:50+00:00",
+      "adjudicator": "codex",
+      "rationale": "Multiple runnable release examples replace removed plotting APIs, so visual output and execution across versions need verification.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/ee5d4ce151c633499b02abc85a0cbb863f3254f8...54928d7a63c48047c5584c8f0d1daab3db25f0be",
+        "https://github.com/scikit-learn/scikit-learn/pull/24456#pullrequestreview-1110921304"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#28121",
+      "decision": "hold",
+      "snapshotSha": "fa18b440136fb6e34dd2434c2843e3279c93e6b3",
+      "snapshotAt": "2024-01-14T06:52:54+00:00",
+      "adjudicator": "codex",
+      "rationale": "Changing the equality threshold in AffinityPropagation alters cluster assignment for tied points, a scientific behavior change.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/198908beb9dce5800a3ef78763a8b48afbc5cff4...fa18b440136fb6e34dd2434c2843e3279c93e6b3",
+        "https://github.com/scikit-learn/scikit-learn/pull/28121#pullrequestreview-1821423945"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#29916",
+      "decision": "hold",
+      "snapshotSha": "c6c7f8c58b65000e31cabf60c3117f0aa90a07a0",
+      "snapshotAt": "2024-09-23T14:43:59+00:00",
+      "adjudicator": "codex",
+      "rationale": "HDBSCAN deprecated algorithm aliases and warning tests are removed for 1.6, changing user-facing compatibility behavior.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/c3d4e5799f509ca167840ace1a6f0adb2e64c08e...c6c7f8c58b65000e31cabf60c3117f0aa90a07a0",
+        "https://github.com/scikit-learn/scikit-learn/pull/29916"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#20912",
+      "decision": "hold",
+      "snapshotSha": "de9b9d723052da1226889ade558fcfd102823ecd",
+      "snapshotAt": "2021-09-01T18:35:50+00:00",
+      "adjudicator": "codex",
+      "rationale": "Encoders gain feature-name and feature-count state and validation while an older error test is removed; public fit/transform behavior changes.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/b3b19552b181bff492c263f11ded2ffec6b7ec17...de9b9d723052da1226889ade558fcfd102823ecd",
+        "https://github.com/scikit-learn/scikit-learn/pull/20912#pullrequestreview-744363292"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#20468",
+      "decision": "eligible",
+      "snapshotSha": "e9cc9fd6d779733cb2aea2042728edd4e6d41168",
+      "snapshotAt": "2021-07-05T12:36:25+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only regression tests set explicit random_state values; production multioutput code and test assertions stay the same.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/c79bed337c6eeea3b181d1e2054308197090b036...e9cc9fd6d779733cb2aea2042728edd4e6d41168",
+        "https://github.com/scikit-learn/scikit-learn/pull/20468#pullrequestreview-702936354"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#18149",
+      "decision": "hold",
+      "snapshotSha": "de40aa69697f3b32a33ba9ada6ab5e4c64f8000c",
+      "snapshotAt": "2020-08-13T09:12:20+00:00",
+      "adjudicator": "codex",
+      "rationale": "KernelPCA eigenvalue filtering changes for float32 and float64, affecting numerical rank and component selection.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/e217b68fd00bb7c54b81a492ee6f9db6498517fa...de40aa69697f3b32a33ba9ada6ab5e4c64f8000c",
+        "https://github.com/scikit-learn/scikit-learn/pull/18149#pullrequestreview-466651427"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#30361",
+      "decision": "hold",
+      "snapshotSha": "c1c26a738fe8d20fcfc6c4a41c88b9782ac7cdcd",
+      "snapshotAt": "2024-11-28T08:55:44+00:00",
+      "adjudicator": "codex",
+      "rationale": "The documentation CI script filters towncrier fragments and computes version paths, changing which rendered pages are rebuilt.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/fa5d7275ba4dd2627b6522e1ec4eaf0f3a2e3c05...c1c26a738fe8d20fcfc6c4a41c88b9782ac7cdcd",
+        "https://github.com/scikit-learn/scikit-learn/pull/30361#pullrequestreview-2467774261"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#20165",
+      "decision": "hold",
+      "snapshotSha": "31e98c2ff153daab779ea586f5de72cd0a96acf2",
+      "snapshotAt": "2021-05-30T02:47:18+00:00",
+      "adjudicator": "codex",
+      "rationale": "check_array starts warning on np.matrix with planned removal, changing public validation and warning behavior.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/deda6e2a5a01ad22096862bded5f66e9578cc39e...31e98c2ff153daab779ea586f5de72cd0a96acf2",
+        "https://github.com/scikit-learn/scikit-learn/pull/20165#discussion_r643197754"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#23420",
+      "decision": "hold",
+      "snapshotSha": "6ee5f91519d09200a56e35a33659b67ae5bf6c57",
+      "snapshotAt": "2022-05-19T11:09:10+00:00",
+      "adjudicator": "codex",
+      "rationale": "Release notes add features to the 1.1.1 section that a reviewer said were not part of 1.1.0, requiring version accuracy review.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/8f0fc533ba169de2f07edf8470cdee7075e44aa8...6ee5f91519d09200a56e35a33659b67ae5bf6c57",
+        "https://github.com/scikit-learn/scikit-learn/pull/23420#discussion_r876934584"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#26052",
+      "decision": "hold",
+      "snapshotSha": "f55b0f9988978e3d45f83f548204d666e95092d9",
+      "snapshotAt": "2023-04-02T10:07:23+00:00",
+      "adjudicator": "codex",
+      "rationale": "Windows CI coverage is disabled, removing platform-specific coverage signal as a test policy decision.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/097c3683a73c5805a84e6eada71e4928cb35496e...f55b0f9988978e3d45f83f548204d666e95092d9",
+        "https://github.com/scikit-learn/scikit-learn/pull/26052"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#22983",
+      "decision": "hold",
+      "snapshotSha": "7e42687160ad33fa4285c55a07833925615f77d7",
+      "snapshotAt": "2022-03-28T23:47:28+00:00",
+      "adjudicator": "codex",
+      "rationale": "The Black formatter version changes in pre-commit and Azure CI, affecting generated formatting and quality gates.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/75a94f518f7bd7d0bf581ffb67d9f961e3c4efbc...7e42687160ad33fa4285c55a07833925615f77d7",
+        "https://github.com/scikit-learn/scikit-learn/pull/22983#pullrequestreview-924226477"
+      ]
+    },
+    {
+      "id": "scikit-learn/scikit-learn#23106",
+      "decision": "eligible",
+      "snapshotSha": "7af75f9c4f7764808c29fb0e7e8396cf74c36181",
+      "snapshotAt": "2022-04-11T06:49:36+00:00",
+      "adjudicator": "codex",
+      "rationale": "Only notebook cell markers replace comment separators in one example; the executable statements remain identical and review comments are stylistic.",
+      "evidence": [
+        "https://github.com/scikit-learn/scikit-learn/compare/aeeac1c1d634dc80abc93fb30b3fe48e1d709b64...7af75f9c4f7764808c29fb0e7e8396cf74c36181",
+        "https://github.com/scikit-learn/scikit-learn/pull/23106#discussion_r849664143"
+      ]
+    }
+  ]
+}

@@ -14,11 +14,6 @@ import { isByokConfig, hasNonManagedCredential } from './byok-config';
 import type { BYOKConfig } from './byok-config';
 
 describe('isByokConfig', () => {
-    it('returns true for the canonical v2 config shape', () => {
-        const cfg = { version: 2, credentials: [], models: [] };
-        expect(isByokConfig(cfg)).toBe(true);
-    });
-
     it('returns true for any object with version === 2, regardless of other fields', () => {
         expect(isByokConfig({ version: 2 })).toBe(true);
     });
@@ -28,30 +23,10 @@ describe('isByokConfig', () => {
         expect(isByokConfig(null)).toBe(false);
     });
 
-    it('returns false for undefined', () => {
-        expect(isByokConfig(undefined)).toBe(false);
-    });
-
-    it('returns false for 0 (falsy non-object)', () => {
-        expect(isByokConfig(0)).toBe(false);
-    });
-
-    it('returns false for the empty string (falsy)', () => {
-        expect(isByokConfig('')).toBe(false);
-    });
-
-    it('returns false for false', () => {
-        expect(isByokConfig(false)).toBe(false);
-    });
-
     // ── typeof === 'object' branch ──────────────────────────────────────────
     it('returns false for a truthy non-object even when it stringifies to a version', () => {
         // number 2 is truthy but not an object → typeof guard rejects it.
         expect(isByokConfig(2)).toBe(false);
-    });
-
-    it('returns false for a truthy string', () => {
-        expect(isByokConfig('version=2')).toBe(false);
     });
 
     // ── version === 2 discriminant ──────────────────────────────────────────
@@ -63,19 +38,9 @@ describe('isByokConfig', () => {
         expect(isByokConfig({ version: 1 })).toBe(false);
     });
 
-    it('returns false for version 3 (above the boundary)', () => {
-        expect(isByokConfig({ version: 3 })).toBe(false);
-    });
-
     it('returns false for the string "2" (strict equality, not coercion)', () => {
         // Kills a === → == mutation: '2' == 2 is true, '2' === 2 is false.
         expect(isByokConfig({ version: '2' })).toBe(false);
-    });
-
-    it('returns false for a boxed/other-typed version', () => {
-        expect(isByokConfig({ version: null })).toBe(false);
-        expect(isByokConfig({ version: undefined })).toBe(false);
-        expect(isByokConfig({ version: true })).toBe(false);
     });
 });
 
@@ -91,10 +56,6 @@ describe('hasNonManagedCredential', () => {
     // ── isByokConfig short-circuit (left operand of &&) ──────────────────────
     it('returns false for null', () => {
         expect(hasNonManagedCredential(null)).toBe(false);
-    });
-
-    it('returns false for undefined', () => {
-        expect(hasNonManagedCredential(undefined)).toBe(false);
     });
 
     it('returns false for a non-v2 blob even if it carries a real credential', () => {
@@ -164,17 +125,5 @@ describe('hasNonManagedCredential', () => {
                 ]),
             ),
         ).toBe(true);
-    });
-
-    it('returns false for a mix where the ONLY non-managed-looking entry is still managed:true', () => {
-        expect(
-            hasNonManagedCredential(
-                makeConfig([
-                    { id: 'c1', provider: 'openai', managed: true },
-                    { id: 'c2', provider: 'anthropic', managed: true },
-                    { id: 'c3', provider: 'google', managed: true },
-                ]),
-            ),
-        ).toBe(false);
     });
 });

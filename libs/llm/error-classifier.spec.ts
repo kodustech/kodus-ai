@@ -126,6 +126,33 @@ describe('classifyLLMError', () => {
             );
         });
 
+        // Read off production (#2104): Z.AI's weekly/monthly cap (code 1310)
+        // says neither quota nor balance, so it landed on RATE_LIMIT. A
+        // one-shot call (maxRetries: 0) never fails over on RATE_LIMIT, and the
+        // configured fallback sat unused until the cap reset.
+        it('reads the Z.AI weekly/monthly cap as a spent quota and fails over', () => {
+            const err = errorWithStatus(
+                'Weekly/Monthly Limit Exhausted. Your limit will reset at 2026-10-10 21:00:06',
+                429,
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+            expect(shouldFailoverToNextModel(err)).toBe(true);
+        });
+
+        // Its neighbour, Z.AI code 1308, is a window that reopens within hours.
+        // It stays a rate limit, the cheap direction to be wrong in.
+        it('keeps the Z.AI short-window usage limit on RATE_LIMIT', () => {
+            const err = errorWithStatus(
+                'Usage limit reached for 5 hour. Your limit will reset at 2026-10-10 21:00:06',
+                429,
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.RATE_LIMIT,
+            );
+        });
+
         it('treats plain 429 → RATE_LIMIT', () => {
             const err = errorWithStatus('too many requests', 429);
             expect(classifyLLMError(err).category).toBe(
@@ -224,6 +251,16 @@ describe('classifyLLMError', () => {
             expect(classifyLLMError(err).httpStatus).toBe(503);
         });
 
+        // Production 2026-10-29: an OpenAI-compatible gateway answers 499 when
+        // its upstream drops the request. Read as UNKNOWN it got no same-model
+        // retry and no failover, and the file's review was lost.
+        it('a gateway 499 (upstream cancelled) → TRANSIENT', () => {
+            const err = exhausted(apiError(499, 'status code 499'));
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.TRANSIENT,
+            );
+        });
+
         it('a 404 on every attempt → MODEL_NOT_FOUND', () => {
             const err = exhausted(apiError(404, 'Not Found'));
             expect(classifyLLMError(err).category).toBe(
@@ -319,6 +356,16 @@ describe('classifyLLMError', () => {
             const err = new Error(
                 'Your input exceeds the context window of this model. Please adjust your input and try again.',
             );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.CONTEXT_OVERFLOW,
+            );
+        });
+
+        // Production 2026-10-29: a gateway caps the request body instead of
+        // the token count. Read as UNKNOWN, the PR summary never retried on a
+        // smaller budget and failed outright.
+        it('"total text input size exceeds 8 MB" → CONTEXT_OVERFLOW', () => {
+            const err = new Error('The total text input size exceeds 8 MB');
             expect(classifyLLMError(err).category).toBe(
                 LlmErrorCategory.CONTEXT_OVERFLOW,
             );

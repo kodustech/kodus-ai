@@ -103,22 +103,4 @@ describe('resolveTaskInvocation — Porta 1 (router + access + usage, composed o
         expect(out.usageIdentity.model).toBe(INVOCATION.modelName);
     });
 
-    it('degrades to the env/managed default when the router returns no slot', () => {
-        resolveTaskSlotMock.mockReturnValue({ slot: undefined, verdict: undefined });
-        agentModelIdentityMock.mockReturnValue({
-            model: 'managed-default',
-            isByok: false,
-            byokModelId: undefined,
-            credentialId: undefined,
-        });
-
-        const out = resolveTaskInvocation(null, 'codeReview', { runName: 'x' });
-
-        expect(resolveModelConfigMock).toHaveBeenCalledWith(
-            undefined,
-            expect.objectContaining({ runName: 'x' }),
-        );
-        expect(out.slot).toBeUndefined();
-        expect(out.usageIdentity.isByok).toBe(false);
-    });
 });

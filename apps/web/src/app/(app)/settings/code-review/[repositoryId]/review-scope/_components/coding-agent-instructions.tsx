@@ -5,7 +5,7 @@ import { CardHeader } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
 import { InlineCode } from "@components/ui/inline-code";
 import { Switch } from "@components/ui/switch";
-import { Controller, useFormContext } from "react-hook-form";
+import { Controller, useFormContext, useWatch } from "react-hook-form";
 import { useCodeReviewConfig } from "src/app/(app)/settings/_components/context";
 import { OverrideIndicatorForm } from "src/app/(app)/settings/code-review/_components/override";
 
@@ -19,6 +19,15 @@ import type { CodeReviewFormType } from "../../../_types";
 export const CodingAgentInstructions = () => {
     const form = useFormContext<CodeReviewFormType>();
     const config = useCodeReviewConfig();
+    const reviewOptions = useWatch({
+        control: form.control,
+        name: "reviewOptions",
+    }) as Record<string, { value?: boolean }> | undefined;
+    // The agent that reads the files reviews bugs, security and performance;
+    // with all three off it does not run.
+    const noAgentReads = ["bug", "security", "performance"].every(
+        (category) => reviewOptions?.[category]?.value === false,
+    );
 
     return (
         <Controller
@@ -55,6 +64,14 @@ export const CodingAgentInstructions = () => {
                                 changes that break them. Those comments follow
                                 the severity threshold below like any other.
                             </p>
+
+                            {field.value === true && noAgentReads && (
+                                <p className="text-warning text-sm">
+                                    Bug, Security and Performance are all off,
+                                    so Kody does not read these files. Turn one
+                                    of them on for this to take effect.
+                                </p>
+                            )}
                         </div>
 
                         <Switch decorative checked={field.value === true} />

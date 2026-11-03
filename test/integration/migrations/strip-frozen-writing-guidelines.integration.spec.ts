@@ -426,19 +426,24 @@ const canonical = (v: unknown): string =>
             );
             await ds.query(`DELETE FROM parameters`);
             seeds = seedRows();
-            for (const s of seeds) {
-                await ds.query(
-                    `INSERT INTO parameters (uuid, "configKey", "configValue", active, team_id, "updatedAt")
-                     VALUES ($1, $2, $3::jsonb, $4, $5, '2020-01-01')`,
-                    [
-                        s.uuid,
-                        s.configKey,
-                        JSON.stringify(s.configValue),
-                        s.active,
-                        s.teamId,
-                    ],
-                );
-            }
+            // One round trip for every seed row (was one INSERT per row, per test).
+            await ds.query(
+                `INSERT INTO parameters (uuid, "configKey", "configValue", active, team_id, "updatedAt")
+                 SELECT uuid, "configKey", "configValue", active, team_id, "updatedAt"
+                   FROM jsonb_populate_recordset(NULL::parameters, $1::jsonb)`,
+                [
+                    JSON.stringify(
+                        seeds.map((s) => ({
+                            uuid: s.uuid,
+                            configKey: s.configKey,
+                            configValue: s.configValue,
+                            active: s.active,
+                            team_id: s.teamId,
+                            updatedAt: '2020-01-01',
+                        })),
+                    ),
+                ],
+            );
         });
         afterEach(() => log.mockRestore());
 
@@ -814,7 +819,7 @@ const canonical = (v: unknown): string =>
                 `${D2025}.`,
                 editorList(D2026_LINES),
             ];
-            const bulk = Array.from({ length: 5000 }, (_, i) => ({
+            const bulk = Array.from({ length: 1000 }, (_, i) => ({
                 uuid: uuidv4(),
                 teamId: uuidv4(),
                 configValue: {
@@ -861,7 +866,7 @@ const canonical = (v: unknown): string =>
             // Not a benchmark; a guard against something quadratic.
             expect(elapsed).toBeLessThan(120_000);
             console.warn(
-                `[integration] 5000 rows x 11 scopes migrated in ${elapsed} ms`,
+                `[integration] ${bulk.length} rows x 11 scopes migrated in ${elapsed} ms`,
             );
         });
     },

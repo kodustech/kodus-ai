@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import { setLlmObservability } from '@libs/llm/llm-observability';
+import { LLM } from '@libs/llm/llm';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
@@ -167,6 +168,8 @@ describe('KodyRuleSummaryService', () => {
             expect(service.isLong('x'.repeat(1000))).toBe(false);
             expect(service.isLong('x'.repeat(1001))).toBe(true);
             expect(service.isLong(undefined)).toBe(false);
+            expect(service.isLong(null)).toBe(false);
+            expect(service.isLong('')).toBe(false);
         });
     });
 
@@ -852,5 +855,210 @@ describe('KodyRuleSummaryService', () => {
                 }),
             );
         });
+    });
+});
+
+// Hashing/validity guards that decide whether a cached summary or atom
+// decomposition may still be served (a stale one = the review judging against
+// outdated rule text, silently). Injected deps are never touched here.
+describe('KodyRuleSummaryService — hashing & validity guards', () => {
+    const long = 'r'.repeat(1200);
+    let service: KodyRuleSummaryService;
+
+    beforeEach(() => {
+        service = new KodyRuleSummaryService({} as any, {} as any, {} as any);
+    });
+
+    it('hashOf is deterministic, distinguishes inputs, and hashes null/undefined as ""', () => {
+        expect(service.hashOf('abc')).toBe(service.hashOf('abc'));
+        expect(service.hashOf('abc')).not.toBe(service.hashOf('abd'));
+        const empty = service.hashOf('');
+        expect(service.hashOf(undefined)).toBe(empty);
+        expect(service.hashOf(null)).toBe(empty);
+    });
+
+    describe('hasValidSummary', () => {
+        it('is true only when content exists AND sourceHash matches the CURRENT rule text', () => {
+            const valid = {
+                rule: long,
+                summary: { content: 'S', sourceHash: service.hashOf(long) },
+            };
+            expect(service.hasValidSummary(valid as any)).toBe(true);
+        });
+
+        it('is false when there is no summary content', () => {
+            const noContent = {
+                rule: long,
+                summary: { sourceHash: service.hashOf(long) },
+            };
+            expect(service.hasValidSummary(noContent as any)).toBe(false);
+        });
+
+        it('is false when the rule text changed under the summary (stale hash)', () => {
+            const stale = {
+                rule: 'NEW rule text',
+                summary: {
+                    content: 'S',
+                    sourceHash: service.hashOf('OLD rule text'),
+                },
+            };
+            expect(service.hasValidSummary(stale as any)).toBe(false);
+        });
+    });
+
+    describe('hasValidAtoms', () => {
+        it('is true only when items exist AND the atoms hash matches', () => {
+            const base = { rule: 'R', examples: [{ snippet: 'x' }] };
+            const valid = {
+                ...base,
+                atoms: {
+                    items: [{}],
+                    sourceHash: service.atomsHashOf(base as any),
+                },
+            };
+            expect(service.hasValidAtoms(valid as any)).toBe(true);
+        });
+
+        it('is false when an example edit invalidated the decomposition', () => {
+            const original = { rule: 'R', examples: [{ snippet: 'x' }] };
+            const edited = {
+                rule: 'R',
+                examples: [{ snippet: 'EDITED' }],
+                atoms: {
+                    items: [{}],
+                    sourceHash: service.atomsHashOf(original as any),
+                },
+            };
+            expect(service.hasValidAtoms(edited as any)).toBe(false);
+        });
+
+        it('is false when there are no atom items', () => {
+            const base = { rule: 'R', examples: [{ snippet: 'x' }] };
+            const empty = {
+                ...base,
+                atoms: { items: [], sourceHash: service.atomsHashOf(base as any) },
+            };
+            expect(service.hasValidAtoms(empty as any)).toBe(false);
+        });
+    });
+
+    it('resolveForReview returns the rule UNTOUCHED when there is no summary', () => {
+        const rule = { rule: long };
+        expect(service.resolveForReview(rule as any)).toBe(rule);
+    });
+});
+
+describe('KodyRuleSummaryService — LLM.run-level guards', () => {
+    const ORG = { organizationId: 'org-1', teamId: 'team-1' } as any;
+    const long = 'r'.repeat(1200);
+    let runSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+        runSpy = jest.spyOn(LLM, 'run');
+    });
+
+    afterEach(() => runSpy.mockRestore());
+
+    it('generate runs on the resolved BYOK slot even post-trial (own key is always allowed)', async () => {
+        const slot = { provider: 'openai', model: 'gpt-4o', apiKey: 'enc' } as any;
+        const service = new KodyRuleSummaryService(
+            {
+                resolveTaskSlot: jest.fn().mockResolvedValue(slot),
+                getSubscriptionStatus: jest
+                    .fn()
+                    .mockResolvedValue(SubscriptionStatus.ACTIVE),
+            } as any,
+            {} as any,
+            {} as any,
+        );
+        runSpy.mockResolvedValue(validSummaryText);
+
+        const out = await service.generate({ rule: long, uuid: 'u1' } as any, ORG);
+
+        expect(out).not.toBeNull();
+        expect(runSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ byokConfig: slot }),
+        );
+    });
+
+    it('verifyAtoms returns empty without an LLM call when there are no atoms', async () => {
+        const service = new KodyRuleSummaryService({} as any, {} as any, {} as any);
+
+        const out = await (service as any).verifyAtoms(
+            { rule: 'R' },
+            [],
+            undefined,
+            { organizationId: 'o' },
+        );
+
+        expect(out.invalidIndexes.size).toBe(0);
+        expect(out.missingRequirements).toEqual([]);
+        expect(runSpy).not.toHaveBeenCalled();
+    });
+});
+
+// ensureSummaries() must never block a review: generate() is stubbed here to
+// pin the orchestration around it.
+describe('KodyRuleSummaryService — ensureSummaries() orchestration', () => {
+    const ORG = { organizationId: 'org-1', teamId: 'team-1' } as any;
+    const long = 'r'.repeat(1200);
+
+    let service: KodyRuleSummaryService;
+    let findByOrganizationId: jest.Mock;
+    let updateRule: jest.Mock;
+    let genSpy: jest.SpyInstance;
+
+    const summary = () =>
+        ({ content: 'SUM', sourceHash: 'hash', model: 'm' }) as any;
+
+    beforeEach(() => {
+        findByOrganizationId = jest.fn().mockResolvedValue({ uuid: 'doc-1' });
+        updateRule = jest.fn().mockResolvedValue(undefined);
+        service = new KodyRuleSummaryService(
+            {} as any,
+            { findByOrganizationId, updateRule } as any,
+            {} as any,
+        );
+        genSpy = jest.spyOn(service, 'generate');
+    });
+
+    it('does nothing (no generate, no DB) when no rule needs a summary', async () => {
+        const rules = [{ uuid: 'r2', rule: 'short' }] as any;
+        const out = await service.ensureSummaries(rules, ORG);
+
+        expect(out).toBe(rules);
+        expect(genSpy).not.toHaveBeenCalled();
+        expect(findByOrganizationId).not.toHaveBeenCalled();
+    });
+
+    it('leaves short/already-summarized rules as the same references', async () => {
+        const valid = {
+            uuid: 'r3',
+            rule: long,
+            summary: { content: 'S', sourceHash: service.hashOf(long) },
+        } as any;
+        const short = { uuid: 'r2', rule: 'short' } as any;
+        genSpy.mockResolvedValue(summary());
+
+        const out = await service.ensureSummaries(
+            [valid, short, { uuid: 'r1', rule: long } as any],
+            ORG,
+        );
+
+        expect(out.find((r) => r.uuid === 'r3')).toBe(valid);
+        expect(out.find((r) => r.uuid === 'r2')).toBe(short);
+    });
+
+    it('degrades to in-memory when the DOC lookup fails — summary used, persist skipped', async () => {
+        findByOrganizationId.mockRejectedValue(new Error('no doc'));
+        genSpy.mockResolvedValue(summary());
+
+        const out = await service.ensureSummaries(
+            [{ uuid: 'r1', rule: long } as any],
+            ORG,
+        );
+
+        expect(out[0].summary).toBeDefined();
+        expect(updateRule).not.toHaveBeenCalled();
     });
 });

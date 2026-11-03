@@ -78,6 +78,7 @@ export class ForgejoMappedPlatform implements IMappedPlatform {
                     defaultBranch: payload?.repository?.default_branch,
                 },
                 ref: payload?.pull_request?.base?.ref,
+                sha: payload?.pull_request?.base?.sha,
             },
             isDraft: payload?.pull_request?.draft ?? false,
             tags:

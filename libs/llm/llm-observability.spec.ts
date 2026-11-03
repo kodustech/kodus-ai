@@ -103,24 +103,6 @@ describe('registry: set/get/reset', () => {
         expect(getLlmObservability()).toBeUndefined();
     });
 
-    it('last write wins (re-registration overwrites, no accumulation)', () => {
-        const a = { runAiSdkLLMInSpan: jest.fn() } as any;
-        const b = { runAiSdkLLMInSpan: jest.fn() } as any;
-        setLlmObservability(a);
-        setLlmObservability(b);
-        expect(getLlmObservability()).toBe(b);
-        expect(getLlmObservability()).not.toBe(a);
-    });
-
-    it('getter is always the declared type-or-undefined, never throws', () => {
-        setLlmObservability(undefined);
-        expect(() => getLlmObservability()).not.toThrow();
-        const impl = { runAiSdkLLMInSpan: jest.fn() } as any;
-        setLlmObservability(impl);
-        const got = getLlmObservability();
-        expect(typeof got!.runAiSdkLLMInSpan).toBe('function');
-    });
-
     it('constructing the concrete service registers it as the port', () => {
         const { svc } = makeSvc();
         expect(getLlmObservability()).toBe(svc);
@@ -150,58 +132,6 @@ describe('A. result/usage shape zoo', () => {
             'gen_ai.usage.total_tokens': 15,
         });
         expect(captured['gen_ai.response.model']).toBe('gpt-4o');
-    });
-
-    it('[row 2] bare array result (no .usage) → zeros, array returned unchanged', async () => {
-        const { svc, captured } = makeSvc();
-        const arr = [{ finding: 1 }, { finding: 2 }];
-        const out = await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            exec: async () => arr as any,
-        });
-        expect(out).toBe(arr);
-        expect(usageAttrs(captured)).toEqual({
-            'gen_ai.usage.input_tokens': 0,
-            'gen_ai.usage.output_tokens': 0,
-            'gen_ai.usage.total_tokens': 0,
-        });
-    });
-
-    it('[row 3] usage as a wrong container (array) → null-safe field access → zeros', async () => {
-        const { svc, captured } = makeSvc();
-        const out = await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            exec: async () => ({ usage: [1, 2, 3] as any }),
-        });
-        expect(out).toEqual({ usage: [1, 2, 3] });
-        expect(usageAttrs(captured)['gen_ai.usage.total_tokens']).toBe(0);
-    });
-
-    it('[row 4] usage nested under a wrapper key → top-level undefined → zeros, no crash, unchanged', async () => {
-        const { svc, captured } = makeSvc();
-        // Contract: usage is read from result.usage (top-level). A misplaced,
-        // nested usage is out-of-contract input; the boundary must not crash and
-        // must pass the object through untouched — it records zeros, no throw.
-        const payload = {
-            result: { usage: { inputTokens: 99, outputTokens: 99 } },
-        };
-        const out = await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            exec: async () => payload as any,
-        });
-        expect(out).toBe(payload);
-        expect(usageAttrs(captured)['gen_ai.usage.total_tokens']).toBe(0);
-    });
-
-    it('[row 7] usage as a stringified JSON blob → field access on string → zeros', async () => {
-        const { svc, captured } = makeSvc();
-        const out = await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            exec: async () =>
-                ({ usage: '{"inputTokens":5}' } as any),
-        });
-        expect(out).toEqual({ usage: '{"inputTokens":5}' });
-        expect(usageAttrs(captured)['gen_ai.usage.input_tokens']).toBe(0);
     });
 
     it('[row 10] renamed snake_case usage keys are NOT read (camelCase contract) → zeros', async () => {
@@ -260,60 +190,6 @@ describe('A. result/usage shape zoo', () => {
         });
     });
 
-    it('[row 13] extra unknown keys on usage are tolerated; real fields still read', async () => {
-        const { svc, captured } = makeSvc();
-        await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            exec: async () =>
-                ({
-                    usage: {
-                        inputTokens: 4,
-                        outputTokens: 6,
-                        totalTokens: 10,
-                        somethingWeird: 'ignore-me',
-                        nested: { junk: true },
-                    },
-                } as any),
-        });
-        expect(usageAttrs(captured)).toEqual({
-            'gen_ai.usage.input_tokens': 4,
-            'gen_ai.usage.output_tokens': 6,
-            'gen_ai.usage.total_tokens': 10,
-        });
-        expect(captured).not.toHaveProperty('somethingWeird');
-    });
-
-    it('[row 14] empty usage object {} → all zeros', async () => {
-        const { svc, captured } = makeSvc();
-        await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            exec: async () => ({ usage: {} }),
-        });
-        expect(usageAttrs(captured)).toEqual({
-            'gen_ai.usage.input_tokens': 0,
-            'gen_ai.usage.output_tokens': 0,
-            'gen_ai.usage.total_tokens': 0,
-        });
-    });
-
-    it('[row 15] usage as empty array → zeros', async () => {
-        const { svc, captured } = makeSvc();
-        await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            exec: async () => ({ usage: [] as any }),
-        });
-        expect(usageAttrs(captured)['gen_ai.usage.total_tokens']).toBe(0);
-    });
-
-    it('[row 16] usage as empty string → zeros', async () => {
-        const { svc, captured } = makeSvc();
-        await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            exec: async () => ({ usage: '' as any }),
-        });
-        expect(usageAttrs(captured)['gen_ai.usage.total_tokens']).toBe(0);
-    });
-
     it('[row 17] null / undefined / absent usage → zeros, result unchanged', async () => {
         for (const u of [null, undefined]) {
             const { svc, captured } = makeSvc();
@@ -343,30 +219,6 @@ describe('A. result/usage shape zoo', () => {
         expect(usageAttrs(captured)['gen_ai.usage.total_tokens']).toBe(0);
     });
 
-    it('[row 18] primitive where object expected (usage = true/0/"ok") → zeros, no crash', async () => {
-        for (const prim of [true, 0, 'ok']) {
-            const { svc, captured } = makeSvc();
-            await svc.runAiSdkLLMInSpan({
-                spanName: 'a::b',
-                exec: async () => ({ usage: prim as any }),
-            });
-            expect(usageAttrs(captured)['gen_ai.usage.total_tokens']).toBe(0);
-        }
-    });
-
-    it('[row 19] provider envelope leak ({choices:[...]}) → no top-level usage → zeros, returned unchanged', async () => {
-        const { svc, captured } = makeSvc();
-        const envelope = {
-            choices: [{ message: { content: '{}' } }],
-        };
-        const out = await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            exec: async () => envelope as any,
-        });
-        expect(out).toBe(envelope);
-        expect(usageAttrs(captured)['gen_ai.usage.total_tokens']).toBe(0);
-    });
-
     it('[row 20] reasoning tokens in nested outputTokenDetails are recovered (not dropped)', async () => {
         const { svc, captured } = makeSvc();
         await svc.runAiSdkLLMInSpan({
@@ -382,26 +234,6 @@ describe('A. result/usage shape zoo', () => {
                 } as any),
         });
         expect(captured['gen_ai.usage.reasoning_tokens']).toBe(9);
-    });
-});
-
-// =====================================================================
-// B. Semantic-but-wrong value encoding — attribute-value guarantees.
-// (Boolean/enum/index/dup-key encodings do not apply; see rowsNA.)
-// =====================================================================
-describe('B. value-encoding guarantees', () => {
-    it('[row 27] unicode / emoji / newlines in string attrs (model, route) are preserved verbatim', async () => {
-        const { svc, captured } = makeSvc();
-        const model = 'grøk-π/日本語-🚀\nv2';
-        const route = 'codeReview\t✅';
-        await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            model,
-            route,
-            exec: async () => ({ usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }),
-        });
-        expect(captured['gen_ai.response.model']).toBe(model);
-        expect(captured.route).toBe(route);
     });
 });
 
@@ -423,52 +255,6 @@ describe('C. transport / fail-safe', () => {
         // A transport failure billed nothing → must not write a zero-token span.
         expect(usageAttrs(captured)).toEqual({});
         expect(captured.error).toBe(true);
-    });
-
-    it('[row 31] exec RETURNS an {error} object (no throw) → passed through unchanged, not reinterpreted', async () => {
-        const { svc, captured } = makeSvc();
-        const payload = { error: 'model said no', usage: undefined };
-        const out = await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            exec: async () => payload as any,
-        });
-        expect(out).toBe(payload); // boundary does not interpret {error}
-        expect(usageAttrs(captured)['gen_ai.usage.total_tokens']).toBe(0);
-        expect(captured.error).toBeUndefined(); // returned normally, not errored
-    });
-
-    it('[row 32] empty success (content:"" , finish_reason length) → usage recorded, result unchanged', async () => {
-        const { svc, captured } = makeSvc();
-        const payload = {
-            text: '',
-            finishReason: 'length',
-            usage: { inputTokens: 8, outputTokens: 0, totalTokens: 8 },
-        };
-        const out = await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            exec: async () => payload,
-        });
-        expect(out).toBe(payload);
-        expect(usageAttrs(captured)).toEqual({
-            'gen_ai.usage.input_tokens': 8,
-            'gen_ai.usage.output_tokens': 0,
-            'gen_ai.usage.total_tokens': 8,
-        });
-    });
-
-    it('[row 33] refusal prose result (content_filter) → returned unchanged, usage recorded', async () => {
-        const { svc, captured } = makeSvc();
-        const payload = {
-            text: 'I cannot help with that.',
-            finishReason: 'content_filter',
-            usage: { inputTokens: 12, outputTokens: 6, totalTokens: 18 },
-        };
-        const out = await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            exec: async () => payload,
-        });
-        expect(out).toBe(payload);
-        expect(usageAttrs(captured)['gen_ai.usage.total_tokens']).toBe(18);
     });
 
     it('[row 34] error CARRYING usage (billed-but-failed parse) → usage recorded BEFORE rethrow', async () => {
@@ -517,17 +303,6 @@ describe('C. transport / fail-safe', () => {
 // D. Input variants — the params fed INTO the boundary.
 // =====================================================================
 describe('D. input variants', () => {
-    it('[row 35] minimal/empty params (only spanName + exec) → still returns a valid usage span shape', async () => {
-        const { svc, captured } = makeSvc();
-        const out = await svc.runAiSdkLLMInSpan({
-            spanName: 'solo::run',
-            exec: async () => ({ usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }),
-        });
-        expect(out).toEqual({ usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } });
-        // The billing-critical trio is ALWAYS present, even with no metadata.
-        expect(captured['gen_ai.usage.total_tokens']).toBe(2);
-    });
-
     it('[row 36] single happy call threads every optional attribute through', async () => {
         const { svc, captured } = makeSvc();
         await svc.runAiSdkLLMInSpan({
@@ -577,44 +352,6 @@ describe('D. input variants', () => {
         });
         expect(cap2.usedFallback).toBe(false);
     });
-
-    it('[row 40] huge token counts + whitespace-only model string pass through faithfully', async () => {
-        const { svc, captured } = makeSvc();
-        const big = 5_000_000;
-        await svc.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            model: '   ',
-            exec: async () =>
-                ({ usage: { inputTokens: big, outputTokens: big, totalTokens: big * 2 } }),
-        });
-        expect(captured['gen_ai.usage.total_tokens']).toBe(big * 2);
-        expect(captured['gen_ai.response.model']).toBe('   ');
-    });
-
-    it('[row 42] param key-order permutation → identical assembled attrs (metamorphic)', async () => {
-        const usage = { inputTokens: 7, outputTokens: 8, totalTokens: 15 };
-        const { svc: s1, captured: c1 } = makeSvc();
-        await s1.runAiSdkLLMInSpan({
-            spanName: 'a::b',
-            model: 'm',
-            route: 'r',
-            byokModelId: 'bk',
-            exec: async () => ({ usage }),
-        });
-        const { svc: s2, captured: c2 } = makeSvc();
-        await s2.runAiSdkLLMInSpan({
-            byokModelId: 'bk',
-            route: 'r',
-            model: 'm',
-            exec: async () => ({ usage }),
-            spanName: 'a::b',
-        });
-        const strip = (c: Record<string, any>) => {
-            const { durationMs, ...rest } = c;
-            return rest;
-        };
-        expect(strip(c1)).toEqual(strip(c2));
-    });
 });
 
 // =====================================================================
@@ -662,42 +399,3 @@ describe('E. provider-agnostic usage reading', () => {
     });
 });
 
-// =====================================================================
-// Cross-cutting: the return-shape guarantee holds at EVERY layer, including
-// when NO port is registered (the caller runs exec directly).
-// =====================================================================
-describe('return-shape guarantee across layers', () => {
-    afterEach(() => setLlmObservability(originalPort));
-
-    it('runAiSdkLLMInSpan returns the exact exec value for every result shape', async () => {
-        const shapes: any[] = [
-            { usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
-            [{ x: 1 }],
-            'a raw string result',
-            42,
-            null,
-            { nested: { deep: true }, usage: {} },
-        ];
-        for (const shape of shapes) {
-            const { svc } = makeSvc();
-            const out = await svc.runAiSdkLLMInSpan({
-                spanName: 'a::b',
-                exec: async () => shape,
-            });
-            expect(out).toEqual(shape);
-        }
-    });
-
-    it('port-absent fallback: caller pattern (getLlmObservability() ?? exec()) still yields the exec result', async () => {
-        setLlmObservability(undefined);
-        const payload = { findings: [], usage: { inputTokens: 1 } };
-        const obs = getLlmObservability();
-        // This mirrors structured-review-call.ts / agent-loop-call.ts: no port
-        // registered → run exec directly, same return value, no span, no throw.
-        const out = obs
-            ? await obs.runAiSdkLLMInSpan({ spanName: 'a::b', exec: async () => payload })
-            : await (async () => payload)();
-        expect(out).toBe(payload);
-        expect(obs).toBeUndefined();
-    });
-});

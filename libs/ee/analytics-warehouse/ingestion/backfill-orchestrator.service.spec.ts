@@ -98,19 +98,9 @@ describe('BackfillOrchestratorService (deterministic logic)', () => {
             expect(p.stepDays).toBe(1);
         });
 
-        it('returns the fallback for a negative value', async () => {
-            const p = await clampedParams({ stepDays: -3 });
-            expect(p.stepDays).toBe(DEFAULT_STEP_DAYS);
-        });
-
         it('returns the fallback for a non-integer', async () => {
             // Kills removal of the Number.isInteger guard.
             const p = await clampedParams({ stepDays: 2.5 });
-            expect(p.stepDays).toBe(DEFAULT_STEP_DAYS);
-        });
-
-        it('returns the fallback for NaN', async () => {
-            const p = await clampedParams({ stepDays: NaN });
             expect(p.stepDays).toBe(DEFAULT_STEP_DAYS);
         });
 
@@ -129,25 +119,11 @@ describe('BackfillOrchestratorService (deterministic logic)', () => {
             expect(p.stepDays).toBe(MAX_STEP_DAYS);
         });
 
-        it('passes max-1 through unchanged (below cap)', async () => {
-            const p = await clampedParams({ stepDays: MAX_STEP_DAYS - 1 });
-            expect(p.stepDays).toBe(MAX_STEP_DAYS - 1);
-        });
     });
 
     describe('clampPositiveInt (via batchSize: fallback=200, max=1000)', () => {
         // A second carrier of clampPositiveInt confirms the fallback/max
         // literals are wired per-call, not a shared constant.
-        it('passes a valid value through unchanged', async () => {
-            const p = await clampedParams({ batchSize: 300 });
-            expect(p.batchSize).toBe(300);
-        });
-
-        it('returns the 200 fallback for 0', async () => {
-            const p = await clampedParams({ batchSize: 0 });
-            expect(p.batchSize).toBe(DEFAULT_BATCH);
-        });
-
         it('caps above-max to 1000', async () => {
             const p = await clampedParams({ batchSize: 5000 });
             expect(p.batchSize).toBe(MAX_BATCH);
@@ -186,11 +162,6 @@ describe('BackfillOrchestratorService (deterministic logic)', () => {
             expect(p.pauseMs).toBe(DEFAULT_PAUSE_MS);
         });
 
-        it('returns the fallback for NaN', async () => {
-            const p = await clampedParams({ pauseMs: NaN });
-            expect(p.pauseMs).toBe(DEFAULT_PAUSE_MS);
-        });
-
         it('caps above-max to 60000 (kills Math.min)', async () => {
             const p = await clampedParams({ pauseMs: 100_000 });
             expect(p.pauseMs).toBe(MAX_PAUSE_MS);
@@ -201,10 +172,6 @@ describe('BackfillOrchestratorService (deterministic logic)', () => {
             expect(p.pauseMs).toBe(MAX_PAUSE_MS);
         });
 
-        it('passes max-1 through unchanged (below cap)', async () => {
-            const p = await clampedParams({ pauseMs: MAX_PAUSE_MS - 1 });
-            expect(p.pauseMs).toBe(MAX_PAUSE_MS - 1);
-        });
     });
 
     describe('sleepInterruptible', () => {

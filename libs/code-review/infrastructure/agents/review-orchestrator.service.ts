@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import { llmErrorLogLevel } from '@libs/llm/error-classifier';
+import { classifyLLMError, llmErrorLogLevel } from '@libs/llm/error-classifier';
 import { Injectable, Optional } from '@nestjs/common';
 
 import {
@@ -458,6 +458,7 @@ export class ReviewOrchestratorService {
                         (result.value.discardedByVerifyError?.length ?? 0);
                     if (result.value.hitHardLimit) {
                         customRun.status = 'incomplete';
+                        customRun.reason = result.value.finishReason;
                     }
                 }
 
@@ -536,6 +537,12 @@ export class ReviewOrchestratorService {
                 });
                 if (customRun) {
                     customRun.status = 'failed';
+                    // The category and status only: the provider's message
+                    // can carry key fragments, and this lands in the logs.
+                    const { category, httpStatus } = classifyLLMError(err);
+                    customRun.reason = httpStatus
+                        ? `${category} (HTTP ${httpStatus})`
+                        : category;
                 }
 
                 // A thrown agent is dropped by allSettled, and with it anything

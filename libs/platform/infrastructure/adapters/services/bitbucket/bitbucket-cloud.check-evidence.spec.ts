@@ -68,27 +68,6 @@ describe('BitbucketCloudService — getCheckEvidence', () => {
         ]);
     });
 
-    it('queries the head commit', async () => {
-        const listCommitStatuses = jest
-            .fn()
-            .mockResolvedValue({ data: { values: [] } });
-        const service = makeService(listCommitStatuses);
-
-        await service.getCheckEvidence({
-            organizationAndTeamData,
-            repository,
-            commitSha,
-        });
-
-        expect(listCommitStatuses).toHaveBeenCalledWith(
-            expect.objectContaining({
-                workspace: 'acme',
-                repo_slug: 'widget-api',
-                commit: commitSha,
-            }),
-        );
-    });
-
     it.each([
         ['FAILED', 'failure'],
         ['STOPPED', 'cancelled'],

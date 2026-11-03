@@ -1,7 +1,7 @@
 # funnel/severity
 
 > - **Answers:** Of the known bugs a review's findings reach the severity pass with, how many does it keep above the default threshold?
-> - **Runs:** nightly on the controlled set when the severity pass or the snapshot changes (`evals/nightly-evals.js`); weekly on every tier-0 model's controlled set and DeepSeek's full set (`evals/weekly.js`); its control pair on every PR (`evals/wiring-smoke.js`).
+> - **Runs:** nightly on the controlled set when the severity pass or the snapshot changes (`evals/nightly-evals.js`); weekly on every tier-0 model's controlled set (`evals/weekly.js`); the full set on demand; its control pair on every PR (`evals/wiring-smoke.js`).
 > - **Run it:** `node evals/funnel/severity/run.js --model=<id> [--set=controlled|full]`
 > - **Gate:** `--gate` fails below the floor for the model and set in `targets.json` (`sets.<set>.models`); a model with none reports ungated.
 > - **Cost:** one severity call per PR that has a known bug among its findings.

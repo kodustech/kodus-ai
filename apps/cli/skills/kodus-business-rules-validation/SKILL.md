@@ -56,6 +56,7 @@ kodus pr business-validation src/service.ts src/use-case.ts --task-id KC-1441
 3. Interpret the result.
 
 - `Mode: local diff` means validation over the provided local diff scope.
+- To act on the result, add `--format json` (or `--agent`): it prints the verdict structured, with `passed`, and per task each requirement's `state` (`met`, `partial`, `missing`, `check_manually`), `evidence` and the `action` to take.
 - If output says missing MCP/task context, report that directly and request integration/context setup.
 
 ## Notes

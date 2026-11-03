@@ -160,10 +160,13 @@ describe('AgentReviewStage — dedup anchor (#2157)', () => {
             expect.objectContaining({
                 relevantLinesStart: 22,
                 relevantLinesEnd: 31,
-                existingCode: onTheLoop.existingCode,
             }),
         );
-        expect(published[0].suggestionContent).not.toContain('Also found in');
+        // The parse-schema strip (#1821) drops existingCode before dedup, so
+        // the kept finding is told apart by its text.
+        expect(published[0].suggestionContent).toBe(
+            onTheLoop.suggestionContent,
+        );
     });
 
     // Review of #2181: the model may list a duplicate in `unique` too, which
@@ -203,8 +206,8 @@ describe('AgentReviewStage — dedup anchor (#2157)', () => {
             (f: any) => f.validSuggestionsToAnalyze ?? [],
         );
 
-        expect(published.map((s: any) => s.existingCode).sort()).toEqual(
-            [bugA.existingCode, bugB.existingCode].sort(),
+        expect(published.map((s: any) => s.suggestionContent).sort()).toEqual(
+            [bugA.suggestionContent, bugB.suggestionContent].sort(),
         );
     });
 });

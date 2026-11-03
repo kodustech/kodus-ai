@@ -42,13 +42,6 @@ describe('dumpCentralizedYaml', () => {
         });
     });
 
-    it('is what makes that payload dumpable at all', () => {
-        // Non-vacuous: the raw dump this replaces is the reported 500.
-        expect(() =>
-            yaml.dump({ severityLimits: nestedDto() }),
-        ).toThrow(/unacceptable kind of an object/);
-    });
-
     it('leaves an already-plain payload byte-for-byte unchanged', () => {
         const plain = {
             languageResultPrompt: 'en-US',
@@ -92,15 +85,31 @@ describe('the reachable path: deepMerge hands the instance straight through', ()
         );
         expect(() => dumpCentralizedYaml(configFileContent)).not.toThrow();
     });
+});
 
-    it('a field that already existed is rebuilt plain, which is why this hid', () => {
-        const base = { severityLimits: { high: 1 } };
-        const merged = deepMerge(base as any, {
-            severityLimits: nestedDto(),
-        } as any);
-
-        expect((merged as any).severityLimits).not.toBeInstanceOf(
-            SeverityLimitsDto,
-        );
+describe('dumpCentralizedYaml with custom agent CLI secrets', () => {
+    it('never writes a CLI secret ciphertext into the YAML', () => {
+        const yamlText = dumpCentralizedYaml({
+            customAgents: [
+                {
+                    id: 'agent-1',
+                    tools: {
+                        cli: [
+                            {
+                                name: 'lintkit',
+                                secrets: [
+                                    {
+                                        env: 'LINTKIT_TOKEN',
+                                        ciphertext: 'aabbcc:ddeeff00',
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                },
+            ],
+        });
+        expect(yamlText).toContain('LINTKIT_TOKEN');
+        expect(yamlText).not.toContain('aabbcc:ddeeff00');
     });
 });

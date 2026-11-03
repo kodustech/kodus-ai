@@ -24,19 +24,23 @@ export function commandArgument(
 /**
  * What the command replies once the outcome is on the PR. A verdict, a task
  * too thin or a typo went into the Business Logic comment, so the reply only
- * points there; anything else is the reason nothing was checked.
+ * points there; anything else is the reason nothing was checked. The first
+ * run posts that comment, so it can't say the comment was updated.
  */
 export function replyFor(
     outcome: BusinessValidationOutcome,
-    commented: boolean,
+    comment: 'created' | 'updated' | 'none',
 ): string {
     if (outcome.kind === 'skipped') {
         return outcome.message;
     }
-    if (!commented) {
+    if (comment === 'none') {
         return outcome.kind === 'validated'
             ? `Business logic re-checked: ${outcome.checks.map((c) => c.task.id).join(', ')} ${outcome.passed ? 'met' : 'has open requirements'}.`
             : outcome.message;
+    }
+    if (comment === 'created') {
+        return 'Business logic checked. The result is in the Kody · Business Logic comment on this pull request.';
     }
     return 'Business logic re-checked. The Kody · Business Logic comment on this pull request is updated.';
 }

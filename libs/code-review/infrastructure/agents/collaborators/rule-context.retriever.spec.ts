@@ -252,6 +252,26 @@ describe('retrieveForShard — sibling-file (KRC-26)', () => {
         expect(repo.exists).not.toHaveBeenCalled();
     });
 
+    // Azure Repos names changed files with a leading "/". The companions keep
+    // the PR's own form so they read like the filenames the model sees.
+    it('builds companions in the form the PR names its files', async () => {
+        const exists = jest.fn(
+            async (path: string) => path === '/src/invoice.spec.ts',
+        );
+
+        const result = await retrieveForShard({
+            file: file({ filename: '/src/invoice.ts' }),
+            rules: [rule('sibling-file')],
+            lookup: lookup({ exists }),
+            changedFilenames: ['/src/invoice.ts'],
+        });
+
+        expect(result.unmet).toEqual([]);
+        expect(result.slices[0].content).toContain(
+            '- /src/invoice.spec.ts: exists',
+        );
+    });
+
     it('reports the rule unmet when existence cannot be checked', async () => {
         const rules = [rule('sibling-file')];
 
@@ -289,10 +309,6 @@ describe('retrieveForShard — mixed needs in one shard', () => {
 });
 
 describe('retrieveForShard — budget (KRC-28, KRC-29)', () => {
-    it('defaults to a 6000-character per-shard budget', () => {
-        expect(SHARD_CONTEXT_BUDGET_CHARS).toBe(6000);
-    });
-
     // The second half of KRC-28 — "prefer retrieved slices over whole-file
     // content" — held only because no code path happened to read a whole file,
     // which nothing asserted (Verifier round 2, gap 6). This pins it: every

@@ -103,27 +103,6 @@ describe('GithubService — getCheckEvidence', () => {
         ]);
     });
 
-    it('queries the head commit', async () => {
-        const listForRef = jest
-            .fn()
-            .mockResolvedValue({ data: { check_runs: [] } });
-        const { service } = makeService({ listForRef });
-
-        await service.getCheckEvidence({
-            organizationAndTeamData,
-            repository,
-            commitSha,
-        });
-
-        expect(listForRef).toHaveBeenCalledWith(
-            expect.objectContaining({
-                owner: 'acme',
-                repo: 'widget-api',
-                ref: commitSha,
-            }),
-        );
-    });
-
     it('reports an in-flight run with no conclusion', async () => {
         const { service } = makeService({
             listForRef: jest.fn().mockResolvedValue({

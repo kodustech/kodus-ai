@@ -16,6 +16,15 @@ function toModel(messages: AgentMessage[]) {
     return messages.map((m) => ({ role: m.role, content: m.content }) as any);
 }
 
+/**
+ * Code-like tool output. Not `'y'.repeat(n)`: the estimator runs tiktoken, and
+ * BPE on one long run of a single character is quadratic.
+ */
+function codeLike(chars: number): string {
+    const line = 'const value = compute(input);\n';
+    return line.repeat(Math.ceil(chars / line.length)).slice(0, chars);
+}
+
 /** A tool-loop window that has already blown well past the given window size. */
 function overflowingWindow(rounds: number, resultChars: number): AgentMessage[] {
     const msgs: AgentMessage[] = [
@@ -41,7 +50,7 @@ function overflowingWindow(rounds: number, resultChars: number): AgentMessage[] 
                     type: 'tool-result',
                     toolCallId: `c${i}`,
                     toolName: 'readFile',
-                    output: 'y'.repeat(resultChars),
+                    output: codeLike(resultChars),
                 },
             ] as any,
         });
@@ -89,9 +98,11 @@ describe('ContextWindowCompressor', () => {
     it('never returns a window that still overflows, even when soft truncation cannot save enough', () => {
         // Overhead alone eats most of the window → the messages budget is tiny,
         // so the soft pass can't get under it and the hard clamp MUST engage.
+        // (The soft pass lands this window near 6K tokens, so a 4K budget is
+        // what actually forces the clamp.)
         const contextWindow = 20_000;
         const c = new ContextWindowCompressor(contextWindow, {
-            overheadTokens: 10_000,
+            overheadTokens: 15_000,
             safetyMarginTokens: 1_000,
         });
         const msgs = overflowingWindow(25, 6_000);
@@ -100,7 +111,7 @@ describe('ContextWindowCompressor', () => {
         // The old code returned null here (no savings) and shipped the overflow.
         expect(result).not.toBeNull();
 
-        const budget = 20_000 - 10_000 - 1_000; // 9_000
+        const budget = 20_000 - 15_000 - 1_000; // 4_000
         expect(
             estimateMessagesTokens(toModel(result!.messages as AgentMessage[])),
         ).toBeLessThanOrEqual(budget);

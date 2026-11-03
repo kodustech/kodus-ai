@@ -157,23 +157,6 @@ afterEach(() => {
 });
 
 describe('#1826 — a whole-file finding is delivered as a PR comment', () => {
-    it('marks an out-of-hunk finding from a context-needing rule file-anchored (KRC-32)', async () => {
-        const result = await run([ruleFinding()]);
-
-        // the cited lines are kept as the model gave them, NOT snapped onto
-        // the hunk — the whole point is that they are outside it
-        expect(result.validSuggestionsByPR).toHaveLength(1);
-        expect(result.validSuggestionsByPR[0].suggestionContent).toContain(
-            '`src/user.ts:120`',
-        );
-        expect(result.validSuggestionsByPR[0].fullExplanation).toContain(
-            '`src/user.ts:120`',
-        );
-        expect(resolveAgentPrompt(result.validSuggestionsByPR[0])).toContain(
-            '`src/user.ts:120`',
-        );
-    });
-
     // CreateFileCommentsStage posts every entry of `validSuggestions` as a line
     // comment. A PR-level finding left there was posted twice: once PR-level,
     // once inline at out-of-hunk lines (GitHub: "line could not be resolved")
