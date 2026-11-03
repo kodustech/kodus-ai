@@ -1,5 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// The team's selected repositories (owner/repo), which repository references
+// are resolved against.
+vi.mock('../api/cockpit.api.js', () => ({
+    cockpitApi: {
+        listSelectedRepositories: vi.fn().mockResolvedValue([
+            { id: 'repo-1', name: 'kodus-ai', full_name: 'acme/kodus-ai' },
+            { id: 'repo-2', name: 'docs', full_name: 'acme/docs' },
+            { id: 'repo-3', name: 'archived', full_name: 'acme/archived' },
+        ]),
+    },
+}));
+
 vi.mock('../api/custom-agents.api.js', () => ({
     customAgentsApi: {
         getCodeReviewConfig: vi.fn(),

@@ -45,6 +45,8 @@ export function isByokUsageView(params: {
     }
 }
 
+const CACHE_TTL_MS = 60 * 1000;
+
 @Injectable()
 export class ResolveUsageByokViewUseCase {
     private readonly logger = createLogger(ResolveUsageByokViewUseCase.name);
@@ -55,10 +57,42 @@ export class ResolveUsageByokViewUseCase {
         private readonly getLLMConfigStatusUseCase: GetLLMConfigStatusUseCase,
     ) {}
 
+    // One `kodus usage tokens` sends the overview, the previous period and
+    // a breakdown in parallel, each without `byok`: share one license/LLM
+    // read per organization (in flight, then for a short while). A plan
+    // change shows up within the TTL.
+    private readonly cache = new Map<
+        string,
+        { expiresAt: number; value: Promise<boolean> }
+    >();
+
     async execute(params: {
         organizationId: string;
         teamId?: string;
     }): Promise<boolean> {
+        const key = `${params.organizationId}:${params.teamId ?? ''}`;
+        const cached = this.cache.get(key);
+        if (cached && Date.now() < cached.expiresAt) {
+            return cached.value;
+        }
+        const read = this.resolve(params);
+        const value = read.then((result) => result.byok);
+        this.cache.set(key, { expiresAt: Date.now() + CACHE_TTL_MS, value });
+        // Only a read that got an answer is kept; after a failure (which
+        // falls back to managed) the next request tries again.
+        void read.then(
+            (result) => {
+                if (!result.answered) this.cache.delete(key);
+            },
+            () => this.cache.delete(key),
+        );
+        return value;
+    }
+
+    private async resolve(params: {
+        organizationId: string;
+        teamId?: string;
+    }): Promise<{ byok: boolean; answered: boolean }> {
         const organizationAndTeamData = {
             organizationId: params.organizationId,
             teamId: params.teamId,
@@ -71,11 +105,14 @@ export class ResolveUsageByokViewUseCase {
                     this.logUnresolved('LLM config status', error, params);
                     return null;
                 });
-            return isByokUsageView({
-                isCloud: false,
-                license: null,
-                llmSource: status?.source ?? null,
-            });
+            return {
+                byok: isByokUsageView({
+                    isCloud: false,
+                    license: null,
+                    llmSource: status?.source ?? null,
+                }),
+                answered: status !== null,
+            };
         }
 
         const license = await this.licenseService
@@ -84,7 +121,12 @@ export class ResolveUsageByokViewUseCase {
                 this.logUnresolved('license', error, params);
                 return null;
             });
-        return isByokUsageView({ isCloud: true, license, llmSource: null });
+        return {
+            byok: isByokUsageView({ isCloud: true, license, llmSource: null }),
+            // The cloud license service answers a billing failure with
+            // `{ valid: false }` and no status rather than throwing.
+            answered: !!license?.subscriptionStatus,
+        };
     }
 
     // The page falls back the same way when its reads fail; log it so a

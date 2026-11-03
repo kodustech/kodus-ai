@@ -104,7 +104,18 @@ function pickTeam(teams: ConfigTeam[], requested?: string): ConfigTeam {
 }
 
 class UserContextService {
+    /**
+     * For the commands that take either credential (rules, config remote):
+     * a team key set in the environment is explicit intent and wins, as it
+     * did before these commands gained a logged-in path. A CI job that sets
+     * KODUS_TOKEN for `kodus review` and KODUS_TEAM_KEY for rules keeps its
+     * team-key flow. Otherwise a stored login wins over a stored team key.
+     */
     async resolveCredential(): Promise<ResolvedCredential> {
+        const envTeamKey = process.env.KODUS_TEAM_KEY?.trim();
+        if (envTeamKey && isTeamKey(envTeamKey)) {
+            return { kind: 'team-key', accessToken: envTeamKey };
+        }
         const accessToken = await authService.getValidToken();
         return {
             kind: isTeamKey(accessToken) ? 'team-key' : 'user',
@@ -112,15 +123,16 @@ class UserContextService {
         };
     }
 
+    /** For the logged-in-only commands: the user's token, whatever else is set. */
     async requireUserToken(feature: string): Promise<string> {
-        const credential = await this.resolveCredential();
-        if (credential.kind === 'team-key') {
+        const accessToken = await authService.getValidToken();
+        if (isTeamKey(accessToken)) {
             throw new CommandError(
                 'AUTH_REQUIRED',
                 `${feature} requires a logged-in user. ${LOGIN_REQUIRED_HINT}`,
             );
         }
-        return credential.accessToken;
+        return accessToken;
     }
 
     async resolve(

@@ -7,6 +7,7 @@ import type {
     KodyRuleStatus,
     KodyRulesStatusResult,
     UpdateKodyRuleRequest,
+    UserKodyRulePayload,
     ViewKodyRulesRequest,
 } from '../types/rules.js';
 import { CommandError } from '../utils/command-errors.js';
@@ -39,6 +40,58 @@ const SCOPE_ALIASES: Record<string, KodyRuleScope> = {
 };
 
 const RULES_FEATURE = 'Kody Rules';
+
+type StoredKodyRule = KodyRule & {
+    origin?: string;
+    examples?: Array<{ snippet?: string; isCorrect?: boolean }>;
+    inheritance?: {
+        inheritable?: boolean;
+        include?: string[];
+        exclude?: string[];
+    };
+    sourcePath?: string;
+    sourceAnchor?: string;
+};
+
+/**
+ * The stored rule as the save DTO takes it: only the fields it declares (it
+ * rejects unknown ones), nested objects trimmed to theirs.
+ */
+export function storedRulePayload(
+    stored: StoredKodyRule,
+): Omit<UserKodyRulePayload, 'teamId'> {
+    const defined = <T extends object>(value: T): T =>
+        Object.fromEntries(
+            Object.entries(value).filter(([, entry]) => entry !== undefined),
+        ) as T;
+    return defined({
+        type: stored.type || 'standard',
+        title: stored.title,
+        rule: stored.rule,
+        severity: stored.severity ?? 'medium',
+        scope: stored.scope,
+        path: stored.path,
+        repositoryId: stored.repositoryId,
+        directoryId: stored.directoryId,
+        origin: stored.origin,
+        status: stored.status,
+        sourcePath: stored.sourcePath,
+        sourceAnchor: stored.sourceAnchor,
+        examples: (stored.examples ?? []).map((example) => ({
+            snippet: example.snippet,
+            isCorrect: example.isCorrect,
+        })),
+        ...(stored.inheritance
+            ? {
+                  inheritance: defined({
+                      inheritable: stored.inheritance.inheritable,
+                      include: stored.inheritance.include,
+                      exclude: stored.inheritance.exclude,
+                  }),
+              }
+            : {}),
+    });
+}
 
 class RulesService {
     async createRule(
@@ -98,15 +151,17 @@ class RulesService {
         const ctx = await userContextService.resolve(RULES_FEATURE, options);
         const existing = await this.findOneAsUser(ctx.accessToken, ruleId);
 
-        // The web endpoint validates a full rule (type/title/rule/severity are
-        // required); the service merges it over the stored one, so fields not
-        // sent here keep their stored values.
+        // Send the whole stored rule with the user's changes on top, as the
+        // web form does. A partial payload is not safe: the API validates it
+        // into a CreateKodyRuleDto whose undeclared fields are own `undefined`
+        // properties, and spreading that over the stored rule wipes status,
+        // scope, path, examples and the rest (kodyRules.service.ts merge).
         return api.rules.saveRuleAsUser(ctx.accessToken, {
+            ...storedRulePayload(existing),
             uuid: ruleId,
-            type: existing.type || 'standard',
-            title: payload.title ?? existing.title,
-            rule: payload.rule ?? existing.rule,
-            severity: payload.severity ?? existing.severity ?? 'medium',
+            ...(payload.title ? { title: payload.title } : {}),
+            ...(payload.rule ? { rule: payload.rule } : {}),
+            ...(payload.severity ? { severity: payload.severity } : {}),
             ...(payload.scope ? { scope: payload.scope } : {}),
             ...(payload.path ? { path: payload.path } : {}),
             ...(payload.repositoryId

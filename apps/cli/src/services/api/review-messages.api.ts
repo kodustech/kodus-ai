@@ -5,11 +5,11 @@ import type {
     TeamParameter,
 } from '../../types/review-messages.js';
 import { buildAuthHeaders, buildQuery } from '../user-context.service.js';
-import { requestWithRetry } from './api-core.js';
+import { requestWithRetry, type ApiRequestOptions } from './api-core.js';
 
 type RequestWithRetry = <T>(
     endpoint: string,
-    options?: RequestInit,
+    options?: ApiRequestOptions,
 ) => Promise<T>;
 
 export const LANGUAGE_CONFIG_KEY = 'language_config';
@@ -44,6 +44,8 @@ export class RealReviewMessagesApi {
                 method: 'POST',
                 headers: buildAuthHeaders(accessToken),
                 body: JSON.stringify(body),
+                // Answers a save with no body.
+                allowEmptyResponse: true,
             },
         );
     }

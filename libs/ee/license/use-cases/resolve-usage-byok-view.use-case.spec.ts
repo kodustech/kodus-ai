@@ -93,6 +93,48 @@ describe('ResolveUsageByokViewUseCase', () => {
         mockEnvironment.API_CLOUD_MODE = true;
     });
 
+    it('reads the license once for parallel requests of the same org', async () => {
+        const { useCase, licenseService } = make();
+        licenseService.validateOrganizationLicense.mockResolvedValue({
+            valid: true,
+            subscriptionStatus: 'active',
+            planType: 'teams_byok',
+        });
+
+        const results = await Promise.all([
+            useCase.execute({ organizationId: 'org-1', teamId: 'team-1' }),
+            useCase.execute({ organizationId: 'org-1', teamId: 'team-1' }),
+            useCase.execute({ organizationId: 'org-1', teamId: 'team-1' }),
+        ]);
+
+        expect(results).toEqual([true, true, true]);
+        expect(
+            licenseService.validateOrganizationLicense,
+        ).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not keep a failed license read', async () => {
+        const { useCase, licenseService } = make();
+        licenseService.validateOrganizationLicense
+            .mockResolvedValueOnce({ valid: false })
+            .mockResolvedValue({
+                valid: true,
+                subscriptionStatus: 'active',
+                planType: 'teams_byok',
+            });
+
+        await expect(
+            useCase.execute({ organizationId: 'org-1' }),
+        ).resolves.toBe(false);
+        await new Promise((resolve) => setImmediate(resolve));
+        await expect(
+            useCase.execute({ organizationId: 'org-1' }),
+        ).resolves.toBe(true);
+        expect(
+            licenseService.validateOrganizationLicense,
+        ).toHaveBeenCalledTimes(2);
+    });
+
     it('cloud reads the license for the given team', async () => {
         const { useCase, licenseService, getLLMConfigStatusUseCase } = make();
         licenseService.validateOrganizationLicense.mockResolvedValue({

@@ -81,6 +81,10 @@ export interface UserKodyRulePayload {
     origin?: string;
     status?: string;
     examples?: unknown[];
+    directoryId?: string;
+    sourcePath?: string;
+    sourceAnchor?: string;
+    inheritance?: unknown;
     teamId: string;
 }
 

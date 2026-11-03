@@ -285,10 +285,19 @@ function normalizeApiErrorMessage(
     return trimmed;
 }
 
+/**
+ * `allowEmptyResponse`: the endpoint answers a success with no body (e.g.
+ * POST /pull-request-messages), so an empty 2xx resolves to undefined. Off by
+ * default: an empty body where data is expected stays an error instead of a
+ * value typed T that is really undefined.
+ */
+export type ApiRequestOptions = RequestInit & { allowEmptyResponse?: boolean };
+
 export async function request<T>(
     endpoint: string,
-    options: RequestInit = {},
+    requestOptions: ApiRequestOptions = {},
 ): Promise<T> {
+    const { allowEmptyResponse = false, ...options } = requestOptions;
     const baseUrl = await resolveApiBaseUrl();
     const url = `${baseUrl}${endpoint}`;
     let deviceIdentity: { deviceId: string; deviceToken?: string } | undefined;
@@ -399,10 +408,10 @@ export async function request<T>(
 
     if (!isJson) {
         const text = await response.text();
-        // A handler that returns nothing (e.g. POST /pull-request-messages)
-        // answers 2xx with an empty body. That is a success; treating it as
-        // an invalid response also made requestWithRetry repeat the write.
-        if (text.trim() === '') {
+        // A handler that returns nothing answers 2xx with an empty body. For
+        // an endpoint declared that way it is a success; treating it as an
+        // invalid response also made requestWithRetry repeat the write.
+        if (allowEmptyResponse && text.trim() === '') {
             return undefined as T;
         }
         const preview = text.substring(0, 100);
@@ -547,7 +556,7 @@ const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 
 export async function requestWithRetry<T>(
     endpoint: string,
-    options: RequestInit = {},
+    options: ApiRequestOptions = {},
 ): Promise<T> {
     let lastError: unknown;
 

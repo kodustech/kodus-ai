@@ -33,6 +33,7 @@ vi.mock('../../../utils/config.js', () => ({
 }));
 
 import { RealApi, _resetConfigCache } from '../api.real.js';
+import { request } from '../api-core.js';
 
 describe('RealApi request headers', () => {
     let fetchMock: ReturnType<typeof vi.fn>;
@@ -632,15 +633,24 @@ describe('RealApi config repository methods', () => {
         );
     });
 
-    it('treats a 2xx with an empty body as success, without retrying', async () => {
+    it('treats an empty 2xx as success only for an endpoint declared that way', async () => {
         fetchMock.mockResolvedValue(new Response(null, { status: 201 }));
 
-        const api = new RealApi();
-
         await expect(
-            api.config.addRepositories('kodus_team_key', ['repo-1']),
+            request('/pull-request-messages', {
+                method: 'POST',
+                allowEmptyResponse: true,
+            }),
         ).resolves.toBeUndefined();
         expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps an empty 2xx an error where the endpoint returns data', async () => {
+        fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+
+        await expect(
+            request('/kody-rules/find-rules-in-organization-by-filter'),
+        ).rejects.toMatchObject({ name: 'ApiError' });
     });
 
     it('keeps every validation message of a 400', async () => {

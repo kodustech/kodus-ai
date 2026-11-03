@@ -1,5 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// The team's selected repositories (owner/repo), which repository references
+// are resolved against.
+vi.mock('../api/cockpit.api.js', () => ({
+    cockpitApi: {
+        listSelectedRepositories: vi.fn().mockResolvedValue([
+            { id: 'repo-1', name: 'kodus-ai', full_name: 'kodustech/kodus-ai' },
+            { id: 'repo-2', name: 'docs', full_name: 'kodustech/docs' },
+            { id: 'repo-3', name: 'archived', full_name: 'kodustech/archived' },
+        ]),
+    },
+}));
+
 vi.mock('../api/index.js', () => ({
     api: {
         config: {
@@ -27,6 +39,7 @@ vi.mock('../git.service.js', () => ({
 }));
 
 import { api } from '../api/index.js';
+import { cockpitApi } from '../api/cockpit.api.js';
 import { gitService } from '../git.service.js';
 import { readLeaf, reviewSettingsService } from '../review-settings.service.js';
 import { userContextService } from '../user-context.service.js';
@@ -187,10 +200,34 @@ describe('reviewSettingsService', () => {
                 reviewSettingsService.resolveScope(CTX, {
                     repository: 'unknown-repo',
                 }),
-            ).rejects.toThrow(/not configured in Kodus/);
+            ).rejects.toThrow(/is not selected for team/);
+        });
+
+        it("never lands on another owner's repository with the same name", async () => {
+            // Only kodustech/kodus-ai is selected: other-org/kodus-ai must
+            // fail, not resolve through its last path segment.
+            await expect(
+                reviewSettingsService.resolveScope(CTX, {
+                    repository: 'other-org/kodus-ai',
+                }),
+            ).rejects.toThrow(/is not selected for team/);
         });
 
         it('refuses an ambiguous name and asks for the id', async () => {
+            vi.mocked(
+                cockpitApi.listSelectedRepositories,
+            ).mockResolvedValueOnce([
+                {
+                    id: 'repo-1',
+                    name: 'kodus-ai',
+                    full_name: 'kodustech/kodus-ai',
+                },
+                {
+                    id: 'repo-9',
+                    name: 'kodus-ai',
+                    full_name: 'other-org/kodus-ai',
+                },
+            ]);
             configApi.getCodeReviewScopes.mockResolvedValue([
                 ...SCOPES,
                 {
@@ -458,6 +495,52 @@ describe('reviewSettingsService', () => {
             ).resolves.toMatchObject({ key: 'linkedRepositories' });
         });
 
+        it('reads the saved value back without the kodus-config.yml overlay', async () => {
+            const value = [{ repository: 'acme/docs' }];
+            const base = FORMATTED as any;
+            configApi.getFormattedCodeReviewParameter.mockImplementation(
+                async (_token: string, _team: string, options?: any) =>
+                    ({
+                        ...base,
+                        configValue: {
+                            ...base.configValue,
+                            repositories: base.configValue.repositories.map(
+                                (repo: any) =>
+                                    repo.id === 'repo-1'
+                                        ? {
+                                              ...repo,
+                                              configs: {
+                                                  ...repo.configs,
+                                                  // The file shows its own value on top
+                                                  // of what was saved.
+                                                  linkedRepositories:
+                                                      options?.includeFileOverlay ===
+                                                      false
+                                                          ? {
+                                                                value,
+                                                                level: 'repository',
+                                                            }
+                                                          : {
+                                                                value: [],
+                                                                level: 'repository_file',
+                                                            },
+                                              },
+                                          }
+                                        : repo,
+                            ),
+                        },
+                    }) as never,
+            );
+
+            await expect(
+                reviewSettingsService.set(
+                    { repository: 'kodus-ai' },
+                    'linkedRepositories',
+                    JSON.stringify(value),
+                ),
+            ).resolves.toMatchObject({ key: 'linkedRepositories' });
+        });
+
         it('saves global without a repository id', async () => {
             await reviewSettingsService.set(
                 { repository: 'global' },
@@ -545,6 +628,18 @@ describe('reviewSettingsService', () => {
     });
 
     describe('unset', () => {
+        it('looks for the override in the saved config, not the file overlay', async () => {
+            await reviewSettingsService.unset(
+                { repository: 'kodus-ai' },
+                'runOnDraft',
+            );
+            expect(
+                configApi.getFormattedCodeReviewParameter,
+            ).toHaveBeenCalledWith(CTX.accessToken, 'team-1', {
+                includeFileOverlay: false,
+            });
+        });
+
         it("saves the parent's value so the scope inherits again", async () => {
             const result = await reviewSettingsService.unset(
                 { repository: 'kodus-ai' },
@@ -634,6 +729,20 @@ describe('reviewSettingsService', () => {
             expect(configApi.saveCodeReviewConfig).toHaveBeenLastCalledWith(
                 CTX.accessToken,
                 expect.objectContaining({ configValue: { byokModelId: '' } }),
+            );
+        });
+
+        it("saves the model's id when given the provider's model name", async () => {
+            configApi.getLLMConfigStatus.mockResolvedValue(STATUS);
+            await reviewSettingsService.setModel(
+                { repository: 'global' },
+                'claude-b',
+            );
+            expect(configApi.saveCodeReviewConfig).toHaveBeenLastCalledWith(
+                CTX.accessToken,
+                expect.objectContaining({
+                    configValue: { byokModelId: 'model-b' },
+                }),
             );
         });
 

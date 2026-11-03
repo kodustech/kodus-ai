@@ -26,6 +26,7 @@ import {
     userContextService,
     type UserContext,
 } from './user-context.service.js';
+import { resolveTeamRepository } from './team-repository.js';
 
 const FEATURE = 'Custom agents';
 
@@ -207,15 +208,14 @@ function findRepository(
     repositories: FormattedRepository[],
     ref: string,
 ): FormattedRepository {
+    // By id (what load() resolves a reference to) or exact name; never by a
+    // last path segment, which can name another owner's repository.
     const wanted = ref.trim().toLowerCase();
-    const matches = repositories.filter((repo) => {
-        const name = (repo.name ?? '').toLowerCase();
-        return (
+    const matches = repositories.filter(
+        (repo) =>
             repo.id.toLowerCase() === wanted ||
-            name === wanted ||
-            name.split('/').pop() === wanted.split('/').pop()
-        );
-    });
+            (repo.name ?? '').toLowerCase() === wanted,
+    );
     const exact = matches.find(
         (repo) =>
             repo.id.toLowerCase() === wanted ||
@@ -975,7 +975,22 @@ class CustomAgentsService {
             ctx.accessToken,
             ctx.teamId,
         );
-        return { ctx, view: resolveLevel(parameter, target) };
+        // The config names repositories by short name only; resolve the
+        // reference against the team's repositories (owner/repo) first, so
+        // `acme/api` never lands on another owner's `api`.
+        const repo = target.repo?.trim();
+        const resolved =
+            repo &&
+            repo.toLowerCase() !== 'global' &&
+            !(parameter?.configValue?.repositories ?? []).some(
+                (candidate) => candidate.id === repo,
+            )
+                ? {
+                      ...target,
+                      repo: (await resolveTeamRepository(ctx, repo)).id,
+                  }
+                : target;
+        return { ctx, view: resolveLevel(parameter, resolved) };
     }
 
     private where(view: LevelView) {

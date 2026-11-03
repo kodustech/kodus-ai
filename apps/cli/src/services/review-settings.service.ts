@@ -1,6 +1,10 @@
 import { api } from './api/index.js';
 import { gitService } from './git.service.js';
 import {
+    repositoryFullName,
+    resolveTeamRepository,
+} from './team-repository.js';
+import {
     userContextService,
     type UserContext,
 } from './user-context.service.js';
@@ -203,48 +207,35 @@ class ReviewSettingsService {
     }
 
     /**
-     * Matches the way the settings sidebar lists them, by id or name. Every
-     * scope is a repository the team reviews; `isSelected: false` only means
-     * it has no settings of its own yet ("Inherits Global" in the sidebar).
+     * The scope of the repository a reference names. Scopes carry only the
+     * repository's short name, so the reference is resolved against the
+     * team's selected repositories (which carry owner/repo) and the scope is
+     * then picked by id; see matchTeamRepository for why a mismatching
+     * owner is never guessed. Every scope is a repository the team reviews;
+     * `isSelected: false` only means it still inherits global settings.
      */
-    findRepositoryScope(
+    async findRepositoryScope(
+        ctx: UserContext,
         reference: string,
         scopes: CodeReviewScope[],
-    ): CodeReviewScope {
+    ): Promise<CodeReviewScope> {
         const wanted = reference.toLowerCase();
-        const lastSegment = wanted.split('/').pop() ?? wanted;
-        const selected = scopes;
-
-        const byId = selected.find(
-            (scope) => scope.id.toLowerCase() === wanted,
-        );
+        const byId = scopes.find((scope) => scope.id.toLowerCase() === wanted);
         if (byId) {
             return byId;
         }
 
-        const byFullName = selected.filter(
-            (scope) => scope.name.toLowerCase() === wanted,
+        const repository = await resolveTeamRepository(ctx, reference);
+        const scope = scopes.find(
+            (candidate) => candidate.id === repository.id,
         );
-        const matches = byFullName.length
-            ? byFullName
-            : selected.filter(
-                  (scope) =>
-                      scope.name.toLowerCase().split('/').pop() === lastSegment,
-              );
-
-        if (matches.length === 1) {
-            return matches[0];
-        }
-        if (matches.length > 1) {
+        if (!scope) {
             throw new CommandError(
                 'INVALID_INPUT',
-                `'${reference}' matches more than one repository (${matches.map((scope) => `${scope.name} [${scope.id}]`).join(', ')}). Pass the repository id.`,
+                `Repository '${repositoryFullName(repository)}' has no code review settings yet. Open it once in Settings > Code Review, or re-select it in Settings > Git.`,
             );
         }
-        throw new CommandError(
-            'INVALID_INPUT',
-            `Repository '${reference}' is not configured in Kodus for this team. Configured: ${selected.map((scope) => scope.name).join(', ') || 'none'}.`,
-        );
+        return scope;
     }
 
     async resolveScope(
@@ -269,7 +260,11 @@ class ReviewSettingsService {
             ctx.accessToken,
             ctx.teamId,
         );
-        const repository = this.findRepositoryScope(reference, scopes ?? []);
+        const repository = await this.findRepositoryScope(
+            ctx,
+            reference,
+            scopes ?? [],
+        );
 
         if (!target.directory) {
             return {
@@ -464,7 +459,10 @@ class ReviewSettingsService {
                 scope.level === 'directory' && !scope.directoryId
                     ? await this.resolveScope(ctx, target)
                     : scope;
-            const after = await this.loadScopeConfigs(ctx, savedScope);
+            // What was saved, not what kodus-config.yml shows on top of it.
+            const after = await this.loadScopeConfigs(ctx, savedScope, {
+                includeFileOverlay: false,
+            });
             const stored = readLeaf(after.configs, setting.key);
             if (JSON.stringify(stored?.value) !== JSON.stringify(value)) {
                 throw new CommandError(
@@ -496,7 +494,11 @@ class ReviewSettingsService {
         const setting = resolveReviewSetting(key);
         const ctx = await this.context(target);
         const scope = await this.resolveScope(ctx, target);
-        const { configs } = await this.loadScopeConfigs(ctx, scope);
+        // The saved value: with the file overlay a key kodus-config.yml also
+        // sets reads as 'repository_file' and the override here looks absent.
+        const { configs } = await this.loadScopeConfigs(ctx, scope, {
+            includeFileOverlay: false,
+        });
         const leaf = readLeaf(configs, setting.key);
 
         if (!leaf || leaf.level !== scope.level) {
@@ -566,14 +568,15 @@ class ReviewSettingsService {
         const status = await api.config.getLLMConfigStatus(ctx.accessToken);
         requireByok(status);
 
-        const trimmed = modelId.trim();
+        const typed = modelId.trim();
         const models = status.models ?? [];
-        const known =
-            trimmed === '' ||
-            models.length === 0 ||
-            models.some(
-                (model) => model.modelId === trimmed || model.model === trimmed,
-            );
+        // Reviews resolve byokModelId by id (resolveModelSlot), so a provider
+        // model name the user typed is saved as the id of the model it names.
+        const match =
+            models.find((model) => model.modelId === typed) ??
+            models.find((model) => model.model === typed);
+        const trimmed = match?.modelId ?? typed;
+        const known = typed === '' || models.length === 0 || !!match;
         if (!known && !target.force) {
             throw new CommandError(
                 'INVALID_INPUT',

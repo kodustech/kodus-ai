@@ -105,6 +105,25 @@ describe('userContextService', () => {
         );
     });
 
+    it('lets a team key set in the environment win for the dual-path commands', async () => {
+        // CI: KODUS_TOKEN for `kodus review`, KODUS_TEAM_KEY for rules.
+        process.env.KODUS_TEAM_KEY = 'kodus_ci_key';
+        try {
+            await expect(
+                userContextService.resolveCredential(),
+            ).resolves.toEqual({
+                kind: 'team-key',
+                accessToken: 'kodus_ci_key',
+            });
+            // The logged-in-only commands still get the user token.
+            await expect(
+                userContextService.requireUserToken('Cockpit'),
+            ).resolves.toBe(USER_TOKEN);
+        } finally {
+            delete process.env.KODUS_TEAM_KEY;
+        }
+    });
+
     it('reports the credential kind', async () => {
         await expect(userContextService.resolveCredential()).resolves.toEqual({
             kind: 'user',

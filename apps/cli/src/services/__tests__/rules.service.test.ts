@@ -231,7 +231,9 @@ describe('rulesService', () => {
             expect(mockRulesApi.createRule).not.toHaveBeenCalled();
         });
 
-        it('updates by merging the changes over the stored rule', async () => {
+        it('updates by sending the whole stored rule with the changes on top', async () => {
+            // A paused, PR-scoped rule: a partial payload would let the API's
+            // merge wipe what it does not send (status, scope, examples...).
             mockRulesApi.findRulesAsUser.mockResolvedValue([
                 {
                     uuid: 'rule-1',
@@ -239,7 +241,21 @@ describe('rulesService', () => {
                     rule: 'Old body',
                     severity: 'high',
                     type: 'standard',
-                },
+                    scope: 'pull-request',
+                    path: 'src/**',
+                    status: 'paused',
+                    origin: 'manual',
+                    repositoryId: 'repo-1',
+                    examples: [
+                        { snippet: 'x', isCorrect: false, _id: 'mongo-id' },
+                    ],
+                    inheritance: {
+                        inheritable: true,
+                        include: [],
+                        exclude: [],
+                    },
+                    createdAt: '2026-10-01T00:00:00Z',
+                } as never,
             ]);
             mockRulesApi.saveRuleAsUser.mockResolvedValue({
                 uuid: 'rule-1',
@@ -264,6 +280,17 @@ describe('rulesService', () => {
                     title: 'New title',
                     rule: 'Old body',
                     severity: 'high',
+                    scope: 'pull-request',
+                    path: 'src/**',
+                    status: 'paused',
+                    origin: 'manual',
+                    repositoryId: 'repo-1',
+                    examples: [{ snippet: 'x', isCorrect: false }],
+                    inheritance: {
+                        inheritable: true,
+                        include: [],
+                        exclude: [],
+                    },
                     teamId: 'team-1',
                 },
             );

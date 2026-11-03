@@ -7,9 +7,12 @@ import {
     type TeamRepository,
 } from './api/cockpit.api.js';
 import {
-    userContextService,
-    type UserContext,
-} from './user-context.service.js';
+    repositoryFullName,
+    resolveTeamRepository,
+} from './team-repository.js';
+import { userContextService } from './user-context.service.js';
+
+export { repositoryFullName, resolveTeamRepository };
 
 export const COCKPIT_TABS = [
     'kodus-review',
@@ -97,41 +100,6 @@ export function resolveDateRange(
     }
 
     return { startDate, endDate };
-}
-
-export function repositoryFullName(repository: TeamRepository): string {
-    return (
-        repository.full_name ||
-        (repository.organizationName
-            ? `${repository.organizationName}/${repository.name}`
-            : repository.name)
-    );
-}
-
-export async function resolveTeamRepository(
-    context: UserContext,
-    reference: string,
-): Promise<TeamRepository> {
-    const repositories = await cockpitApi.listSelectedRepositories(
-        context.accessToken,
-        context.teamId,
-    );
-    const wanted = reference.trim().toLowerCase();
-    const match = (repositories ?? []).find(
-        (repository) =>
-            repository.id.toLowerCase() === wanted ||
-            repositoryFullName(repository).toLowerCase() === wanted ||
-            repository.name.toLowerCase() === wanted,
-    );
-
-    if (!match) {
-        throw new CommandError(
-            'INVALID_INPUT',
-            `Repository '${reference}' is not selected for team '${context.teamName}'.`,
-        );
-    }
-
-    return match;
 }
 
 type MetricRequest = {
