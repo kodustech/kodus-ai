@@ -283,4 +283,18 @@ describe("Skills & docs page when the check fails", () => {
         ).toBeInTheDocument();
         expect(container.querySelector(".animate-spin")).toBeNull();
     });
+
+    it("says nothing of a failure when the check answers", () => {
+        mockReport = {
+            repository: { branch: "main" },
+            knowledge: { status: "ok", items: [], candidates: [], budgets: [] },
+        };
+        render(<SkillsAndDocsPage />);
+
+        expect(screen.getByText(/On main\./)).toBeInTheDocument();
+        expect(
+            screen.queryByText("Could not read this repository. Try again."),
+        ).toBeNull();
+        mockReport = undefined;
+    });
 });

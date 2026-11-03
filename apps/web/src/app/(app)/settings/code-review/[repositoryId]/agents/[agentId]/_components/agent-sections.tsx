@@ -123,6 +123,7 @@ export const FilesAndKnowledge = ({
     knowledge,
     report,
     reportFailed,
+    readKnowledge,
     canEdit,
     canEditFiles = canEdit,
     onChange,
@@ -137,6 +138,8 @@ export const FilesAndKnowledge = ({
     report?: CustomAgentResolveReport;
     /** The page's check failed. */
     reportFailed?: boolean;
+    /** What a review here reads, inherited levels merged in. */
+    readKnowledge?: KnowledgeItem[];
     canEdit: boolean;
     /** False for an inherited agent, whose links are still this level's. */
     canEditFiles?: boolean;
@@ -217,6 +220,7 @@ export const FilesAndKnowledge = ({
                     knowledge={knowledge}
                     report={report}
                     reportFailed={reportFailed}
+                    readKnowledge={readKnowledge}
                     canEdit={canEdit}
                     onChange={onKnowledgeChange}
                     teamId={teamId}

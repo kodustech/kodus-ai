@@ -31,7 +31,7 @@ const params = () => ({
         {
             kind: 'skill',
             path: '.claude/skills/valve-rules',
-            targets: ['main-review'],
+            linkedTo: ['main-review'],
         } as any,
     ],
     customAgents: [],
@@ -102,7 +102,7 @@ describe('resolveReviewKnowledge', () => {
                 {
                     kind: 'skill',
                     path: '.claude/skills/valve-rules',
-                    targets: ['main-review'],
+                    linkedTo: ['main-review'],
                 } as any,
             ],
             customAgents: [],

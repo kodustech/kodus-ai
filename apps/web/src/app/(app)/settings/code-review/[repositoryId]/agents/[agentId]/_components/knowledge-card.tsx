@@ -517,9 +517,14 @@ export const AgentKnowledgeField = ({
     teamId,
     repositoryId,
     instructions,
+    readKnowledge,
 }: {
     agentId: string;
     knowledge: KnowledgeItem[];
+    /** What a review here reads: this level's list merged over the levels
+     *  it inherits. A repository's pinned ref comes from it, as the review
+     *  takes it; this level's own list when unset. */
+    readKnowledge?: KnowledgeItem[];
     report?: CustomAgentResolveReport;
     /** The page's check failed. */
     reportFailed?: boolean;
@@ -585,7 +590,7 @@ export const AgentKnowledgeField = ({
           )
         : [];
     const browse = (repository: string) => {
-        const ref = pinnedRef(knowledge, repository);
+        const ref = pinnedRef(readKnowledge ?? knowledge, repository);
         setSource({ repository, ...(ref && { ref }) });
         setAdding(true);
     };
@@ -739,7 +744,7 @@ export const AgentKnowledgeField = ({
                         onSourceChange={setSource}
                         linkedRepositories={linkedRepositories}
                         connectedRepositories={listing.connectedRepositories}
-                        knowledge={knowledge}
+                        knowledge={readKnowledge ?? knowledge}
                         discoveredIn={listing.discoveredIn}
                         reviewedVisibility={listing.reviewedVisibility}
                         canEdit={canEdit}
