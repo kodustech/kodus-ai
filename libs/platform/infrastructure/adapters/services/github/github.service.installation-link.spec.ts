@@ -1,9 +1,13 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+    BadRequestException,
+    InternalServerErrorException,
+} from '@nestjs/common';
 
 import { GithubService } from './github.service';
 import {
     githubUserAuthorizationUrl,
     INSTALLATION_STATE_TTL_MS,
+    InstallationAuthorizationError,
     openInstallationState,
     sealInstallationState,
 } from './installation-authorization';
@@ -30,7 +34,7 @@ describe('GitHub installation linking', () => {
 
     const setup = (opts: {
         userInstallations?: number[];
-        linkedTo?: string;
+        linkedTo?: string | string[];
         codeAccepted?: boolean;
     }) => {
         const svc: any = Object.create(GithubService.prototype);
@@ -65,12 +69,12 @@ describe('GitHub installation linking', () => {
         svc.configService = { get: () => 'https://app.example.test/' };
         svc.createOctokitInstance = jest.fn().mockReturnValue(appOctokit);
         svc.createUserOctokit = jest.fn().mockReturnValue({ paginate });
+        const linkedTo = [opts.linkedTo ?? []].flat();
         svc.authIntegrationService = {
-            findOne: jest.fn(async (filter: any) =>
-                opts.linkedTo &&
+            find: jest.fn(async (filter: any) =>
                 typeof filter.authDetails.installationId === 'number'
-                    ? { organization: { uuid: opts.linkedTo } }
-                    : undefined,
+                    ? linkedTo.map((uuid) => ({ organization: { uuid } }))
+                    : [],
             ),
         };
         svc.checkRepositoryPermissions = jest
@@ -169,6 +173,23 @@ describe('GitHub installation linking', () => {
         expect(svc.handleIntegration).not.toHaveBeenCalled();
     });
 
+    it('refuses an installation linked to the same and to another organization', async () => {
+        const { svc } = setup({ linkedTo: [ORG, 'org-2'] });
+        await expect(link(svc)).rejects.toThrow(
+            'already connected to another Kodus organization',
+        );
+        expect(svc.handleIntegration).not.toHaveBeenCalled();
+    });
+
+    it('refuses the link when the existing links cannot be read', async () => {
+        const { svc } = setup({});
+        svc.authIntegrationService.find = jest
+            .fn()
+            .mockRejectedValue(new Error('connection terminated'));
+        await expect(link(svc)).rejects.toThrow();
+        expect(svc.handleIntegration).not.toHaveBeenCalled();
+    });
+
     it('relinks an installation already linked to the same organization', async () => {
         const { svc } = setup({ linkedTo: ORG });
         await expect(link(svc)).resolves.toEqual(
@@ -230,6 +251,19 @@ describe('GitHub installation linking', () => {
             );
         });
 
+        it('reports a missing web URL as a server error, not a bad request', () => {
+            const svc: any = Object.create(GithubService.prototype);
+            svc.assertGithubOAuthEnv = jest.fn();
+            svc.configService = { get: () => undefined };
+            expect(() =>
+                svc.getInstallationAuthorizationUrl({
+                    installationId: INSTALLATION,
+                    userId: USER,
+                    organizationId: ORG,
+                }),
+            ).toThrow(InternalServerErrorException);
+        });
+
         it('refuses an installation id that is not a number', () => {
             const svc: any = Object.create(GithubService.prototype);
             svc.assertGithubOAuthEnv = jest.fn();
@@ -271,6 +305,38 @@ describe('GitHub installation linking', () => {
             expect(() =>
                 openInstallationState(`${forged}.${signature}`),
             ).toThrow('invalid');
+        });
+
+        // A user mid-authorization during the deploy holds a state sealed in
+        // the earlier format (fields at the top level), still validly signed.
+        it('refuses a state in the earlier format as invalid, not with a crash', () => {
+            const { createHmac, hkdfSync } = jest.requireActual(
+                'node:crypto',
+            ) as typeof import('node:crypto');
+            const key = Buffer.from(
+                hkdfSync(
+                    'sha256',
+                    Buffer.from(process.env.API_CRYPTO_KEY ?? '', 'hex'),
+                    Buffer.alloc(0),
+                    'kodus/github-installation-authorization/v1',
+                    32,
+                ),
+            );
+            const data = Buffer.from(
+                JSON.stringify({
+                    installationId: INSTALLATION,
+                    userId: USER,
+                    organizationId: ORG,
+                    expiresAt: Date.now() + 60_000,
+                }),
+            ).toString('base64url');
+            const signature = createHmac('sha256', key)
+                .update(data)
+                .digest('base64url');
+
+            expect(() => openInstallationState(`${data}.${signature}`)).toThrow(
+                InstallationAuthorizationError,
+            );
         });
 
         it('builds the authorization URL with an encoded state', () => {

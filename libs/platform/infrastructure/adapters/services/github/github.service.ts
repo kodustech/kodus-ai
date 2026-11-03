@@ -1,4 +1,9 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+    BadRequestException,
+    Inject,
+    Injectable,
+    InternalServerErrorException,
+} from '@nestjs/common';
 import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { extractDiffHunks } from './extract-diff-hunks';
 import { ConfigService } from '@nestjs/config';
@@ -540,21 +545,15 @@ export class GithubService
 
             return res;
         } catch (err) {
-            // Credentials stay out of the log: a PAT, or GitHub's
-            // authorization code and state.
-            const {
-                token: _token,
-                githubCode: _githubCode,
-                githubState: _githubState,
-                ...loggable
-            } = params ?? {};
+            // The logger redacts the PAT (`token`) and GitHub's authorization
+            // code and state (SENSITIVE_KEYS in libs/core/log/logger.ts).
             this.logger.error({
                 message:
                     'Failed to list repositories when creating integration',
                 context: GithubService.name,
                 serviceName: GithubService.name,
                 error: err,
-                metadata: loggable,
+                metadata: params,
             });
             throw new BadRequestException(err);
         }
@@ -599,8 +598,10 @@ export class GithubService
             this.configService.get<string>('API_FRONTEND_URL') ||
             this.configService.get<string>('NEXTAUTH_URL')
         )?.trim();
+        // A server misconfiguration, not a bad request (as BillingSignatureGuard
+        // treats a missing secret).
         if (!frontendUrl) {
-            throw new BadRequestException(
+            throw new InternalServerErrorException(
                 'Neither API_FRONTEND_URL nor NEXTAUTH_URL is configured: one is needed to send the user back from GitHub.',
             );
         }
@@ -672,14 +673,18 @@ export class GithubService
             );
         }
 
-        const linked = await Promise.all(
-            [Number(installationId), installationId].map((id) =>
-                this.authIntegrationService.findOne({
-                    authDetails: { installationId: id },
-                    status: true,
-                }),
-            ),
-        );
+        // Every active link, not one of them: an installation linked to the
+        // caller's organization may also be linked to another one.
+        const linked = (
+            await Promise.all(
+                [Number(installationId), installationId].map((id) =>
+                    this.authIntegrationService.find({
+                        authDetails: { installationId: id },
+                        status: true,
+                    }),
+                ),
+            )
+        ).flat();
         if (
             linked.some(
                 (integration) =>
