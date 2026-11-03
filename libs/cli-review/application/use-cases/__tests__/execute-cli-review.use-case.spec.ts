@@ -591,9 +591,24 @@ describe('ExecuteCliReviewUseCase', () => {
         });
 
         it.each([
-            ['the repository opted in', {}, { repoInstructionsEnabled: true }, true],
-            ['the repository opted out under a global on', { repoInstructionsEnabled: true }, { repoInstructionsEnabled: false }, false],
-            ['only the global level opted in', { repoInstructionsEnabled: true }, {}, true],
+            [
+                'the repository opted in',
+                {},
+                { repoInstructionsEnabled: true },
+                true,
+            ],
+            [
+                'the repository opted out under a global on',
+                { repoInstructionsEnabled: true },
+                { repoInstructionsEnabled: false },
+                false,
+            ],
+            [
+                'only the global level opted in',
+                { repoInstructionsEnabled: true },
+                {},
+                true,
+            ],
         ])(
             'resolves coding-agent instructions like PR reviews, with no directory or kodus-config.yml override: %s',
             async (_label, globalConfigs, repoConfigs, expected) => {
@@ -737,7 +752,10 @@ describe('ExecuteCliReviewUseCase', () => {
                 memoryRules: [],
             });
 
-            await (useCase as any).loadUserConfigWithRules(orgAndTeam, undefined);
+            await (useCase as any).loadUserConfigWithRules(
+                orgAndTeam,
+                undefined,
+            );
 
             expect(
                 kodyRulesService.syncRulesWithPlanLimit,
@@ -798,6 +816,14 @@ describe('ExecuteCliReviewUseCase', () => {
 
         it('runs heavy only when asked, and --fast with --heavy as fast only', async () => {
             const { useCase } = createMocks();
+            jest.spyOn(
+                useCase as any,
+                'loadUserConfigWithRules',
+            ).mockResolvedValue({
+                config: (useCase as any).getDefaultConfig(),
+                repositoryId: 'global',
+                repositoryName: null,
+            });
             const seen: any[] = [];
             const mockExecute = jest
                 .spyOn(
@@ -825,26 +851,42 @@ describe('ExecuteCliReviewUseCase', () => {
                 await useCase.execute({
                     organizationAndTeamData: orgAndTeam,
                     input: { diff: '+ hello', config } as any,
-                    isTrialMode: true,
+                    isTrialMode: false,
                 });
             }
+            // A trial review never runs heavy, whatever the request asks.
+            await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello', config: { heavy: true } } as any,
+                isTrialMode: true,
+            });
 
-            expect(seen.map((c) => c.heavy)).toEqual([false, true, false]);
-            expect(seen.map((c) => c.codeReviewConfig?.reviewMode === 'fast')).toEqual([
-                false,
+            expect(seen.map((c) => c.heavy)).toEqual([
                 false,
                 true,
+                false,
+                false,
             ]);
+            expect(
+                seen.map((c) => c.codeReviewConfig?.reviewMode === 'fast'),
+            ).toEqual([false, false, true, false]);
 
             mockExecute.mockRestore();
         });
 
         it('follows the review mode in settings unless --heavy or --balanced asks otherwise', async () => {
             const { useCase } = createMocks();
-            const realDefault = (useCase as any).getDefaultConfig.bind(useCase);
-            jest.spyOn(useCase as any, 'getDefaultConfig').mockImplementation(
-                () => ({ ...realDefault(), reviewMode: 'heavy' }),
-            );
+            jest.spyOn(
+                useCase as any,
+                'loadUserConfigWithRules',
+            ).mockResolvedValue({
+                config: {
+                    ...(useCase as any).getDefaultConfig(),
+                    reviewMode: 'heavy',
+                },
+                repositoryId: 'global',
+                repositoryName: null,
+            });
             const seen: any[] = [];
             const mockExecute = jest
                 .spyOn(
@@ -873,11 +915,16 @@ describe('ExecuteCliReviewUseCase', () => {
                 await useCase.execute({
                     organizationAndTeamData: orgAndTeam,
                     input: { diff: '+ hello', config } as any,
-                    isTrialMode: true,
+                    isTrialMode: false,
                 });
             }
 
-            expect(seen.map((c) => c.heavy)).toEqual([true, false, true, false]);
+            expect(seen.map((c) => c.heavy)).toEqual([
+                true,
+                false,
+                true,
+                false,
+            ]);
 
             mockExecute.mockRestore();
         });
@@ -986,7 +1033,9 @@ describe('ExecuteCliReviewUseCase', () => {
                 },
             });
 
-            expect(captured.reviewDirective).toBe('the auth /ReviewFocus logic');
+            expect(captured.reviewDirective).toBe(
+                'the auth /ReviewFocus logic',
+            );
             mockExecute.mockRestore();
         });
 

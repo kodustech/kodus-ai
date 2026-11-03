@@ -230,15 +230,17 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 reviewDirective: normalizeReviewDirective(input.config?.focus),
                 // Heavy mode: the M3 lenses run next to the generalist. The
                 // flag asked for, else the review mode in settings; a --fast
-                // review runs fast only.
-                heavy: isHeavyReview(
-                    input.config?.heavy
-                        ? 'heavy'
-                        : input.config?.balanced
-                          ? 'balanced'
-                          : undefined,
-                    effectiveConfig?.reviewMode,
-                ),
+                // review runs fast only. A trial review never runs heavy.
+                heavy:
+                    !isTrialMode &&
+                    isHeavyReview(
+                        input.config?.heavy
+                            ? 'heavy'
+                            : input.config?.balanced
+                              ? 'balanced'
+                              : undefined,
+                        effectiveConfig?.reviewMode,
+                    ),
                 validSuggestions: [],
                 discardedSuggestions: [],
                 preparedFileContexts: [],
@@ -320,7 +322,6 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                           },
                       }
                     : undefined,
-
             };
 
             // 5. Execute pipeline
@@ -608,7 +609,8 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 config: {
                     ...normalizedConfig,
                     languageResultPrompt:
-                        typeof (normalizedConfig as any).languageResultPrompt === 'string'
+                        typeof (normalizedConfig as any)
+                            .languageResultPrompt === 'string'
                             ? (normalizedConfig as any).languageResultPrompt
                             : 'en-US',
                     kodyRules: standardRules,
