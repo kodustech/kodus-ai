@@ -468,6 +468,68 @@ describe("AgentKnowledgeField with another repository", () => {
         ).toBeInTheDocument();
     });
 
+    it("at a directory, moves the inherited items of the repository when its ref changes", () => {
+        // The directory's own list holds no item of the repository: the ref
+        // change writes the inherited ones here, where the review reads them.
+        const inherited: KnowledgeItem = {
+            path: "a.md",
+            kind: "doc",
+            repository: RULES,
+            ref: "v4",
+            linkedTo: [{ agentId: "valves" }],
+        };
+        const own: KnowledgeItem = {
+            path: "b.md",
+            kind: "doc",
+            linkedTo: [{ agentId: "valves" }],
+        };
+        const onChange = field([own], jest.fn(), {
+            readKnowledge: [inherited, own],
+        });
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Add skill or doc" }),
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "irrigation-rules" }),
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "Use the default branch" }),
+        );
+
+        const { ref: _pinned, ...unpinned } = inherited;
+        expect(onChange).toHaveBeenLastCalledWith([own, unpinned]);
+    });
+
+    it("says the repositories could not be listed when the request itself fails", () => {
+        stubCommandList();
+        mockResolve.mockImplementation((params) =>
+            params?.listConnected && params.enabled !== false
+                ? {
+                      isLoading: false,
+                      isFetching: false,
+                      isError: true,
+                      data: undefined,
+                  }
+                : { isLoading: false, isFetching: false, data: undefined },
+        );
+        field([]);
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Add skill or doc" }),
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "Other repository…" }),
+        );
+
+        expect(
+            screen.getByText(
+                "Could not list your repositories. Try again later.",
+            ),
+        ).toBeInTheDocument();
+        expect(screen.queryByText("Loading repositories…")).toBeNull();
+    });
+
     it("says the repositories could not be listed instead of loading forever", () => {
         stubCommandList();
         mockResolve.mockImplementation((params) =>

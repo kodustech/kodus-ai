@@ -126,7 +126,7 @@ describe('RepositorySkillDetectionService', () => {
         }
     });
 
-    it('returns an empty list when the provider fails', async () => {
+    it('fails when the provider fails, so a failed listing is not an empty repository', async () => {
         const { service, codeManagementService } = build();
         codeManagementService.getDefaultBranch.mockRejectedValue(
             new Error('provider down'),
@@ -134,7 +134,7 @@ describe('RepositorySkillDetectionService', () => {
 
         await expect(
             service.detect({ organizationAndTeamData, repository }),
-        ).resolves.toEqual([]);
+        ).rejects.toThrow('provider down');
     });
 
     it('reads at most a few skill files from the provider at a time', async () => {

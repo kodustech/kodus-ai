@@ -302,6 +302,7 @@ function AgentContent() {
                                 (entry) => entry.agentId === agent.id,
                             )}
                             windowDays={status.data?.windowDays ?? 30}
+                            runsUnavailable={status.data?.runsUnavailable}
                             isLoading={status.isLoading && !isGlobal}
                             report={resolve.data}
                             isGlobal={isGlobal}

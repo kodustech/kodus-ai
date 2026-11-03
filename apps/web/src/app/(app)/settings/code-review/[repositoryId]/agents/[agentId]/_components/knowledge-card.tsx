@@ -11,6 +11,7 @@ import {
     knowledgeKey,
     knowledgeTargetKey,
     mentionedButNotFollowed,
+    repositoryKey,
     sameKnowledge,
     setAgentKnowledge,
     skillFolderName,
@@ -200,7 +201,12 @@ export const useKnowledgeSourceListing = (params: {
         candidates,
         discoveredIn: listing?.discoveredIn,
         connectedRepositories: connectedKnowledge?.connectedRepositories,
-        connectedListingFailed: connectedKnowledge?.listingFailed === true,
+        // A request that failed, or a check that could not run, lists
+        // nothing: say so instead of loading forever.
+        connectedListingFailed:
+            connected.isError ||
+            (!!connected.data && !connectedKnowledge) ||
+            connectedKnowledge?.listingFailed === true,
         reviewedVisibility:
             listing?.repositoryVisibility ??
             connectedKnowledge?.repositoryVisibility,
@@ -235,8 +241,7 @@ const pinnedRef = (knowledge: KnowledgeItem[], repository: string) =>
         .reverse()
         .find(
             (item) =>
-                item.repository?.toLowerCase() === repository.toLowerCase() &&
-                item.ref,
+                repositoryKey(item) === repository.toLowerCase() && item.ref,
         )?.ref;
 
 /**
@@ -564,8 +569,7 @@ export const AgentKnowledgeField = ({
     const named = [...(resolved?.items ?? []), ...candidates];
     const { skills, docs } = followedBy(knowledge, agentId, named);
     const fromSource = (choice: { repository?: string }) =>
-        (choice.repository ?? "").toLowerCase() ===
-        (source.repository ?? "").toLowerCase();
+        repositoryKey(choice) === repositoryKey(source);
     const followsFromSource = [...skills, ...docs].some(fromSource);
     const available = knowledgeChoices(knowledge, candidates, agentId).filter(
         (choice) => !choice.linked && fromSource(choice),
@@ -594,21 +598,29 @@ export const AgentKnowledgeField = ({
         setSource({ repository, ...(ref && { ref }) });
         setAdding(true);
     };
-    // One ref per repository: changing it moves every item of that repository.
+    // One ref per repository: changing it moves every item of that
+    // repository, the ones this level inherits too (at a directory), written
+    // here where the review reads them: this level's own list cannot pin an
+    // item it does not hold.
     const changeRef = (ref: string | undefined) => {
         if (!source.repository) return;
         const repository = source.repository.toLowerCase();
         setSource({ repository: source.repository, ...(ref && { ref }) });
-        onChange(
-            knowledge.map((item) =>
-                item.repository?.toLowerCase() === repository
-                    ? (({ ref: _old, ...rest }) => ({
-                          ...rest,
-                          ...(ref && { ref }),
-                      }))(item)
-                    : item,
-            ),
+        const withRef = ({ ref: _old, ...rest }: KnowledgeItem) => ({
+            ...rest,
+            ...(ref && { ref }),
+        });
+        const inherited = (readKnowledge ?? []).filter(
+            (item) =>
+                repositoryKey(item) === repository &&
+                !knowledge.some((own) => sameKnowledge(own, item)),
         );
+        onChange([
+            ...knowledge.map((item) =>
+                repositoryKey(item) === repository ? withRef(item) : item,
+            ),
+            ...inherited.map(withRef),
+        ]);
     };
     const sourceLabel = source.repository ?? "the branch";
 

@@ -47,7 +47,9 @@ const knowledgeRepositories = (
                 ? (report.knowledge.linkedRepositories ?? [])
                 : []),
             ...knowledge.flatMap((item) =>
-                item.repository ? [item.repository] : [],
+                typeof item.repository === "string" && item.repository
+                    ? [item.repository]
+                    : [],
             ),
         ].map((name) => [name.toLowerCase(), name]),
     ).values(),

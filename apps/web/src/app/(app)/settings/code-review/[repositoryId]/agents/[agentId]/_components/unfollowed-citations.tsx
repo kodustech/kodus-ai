@@ -6,6 +6,7 @@ import {
     citationCandidates,
     isLinked,
     knowledgeKey,
+    repositoryKey,
     sameKnowledge,
 } from "@services/custom-agents/drafts";
 import { useResolveCustomAgent } from "@services/custom-agents/hooks";
@@ -67,8 +68,8 @@ export const UnfollowedCitations = ({
             repository
                 ? knowledge.find(
                       (item) =>
-                          item.repository?.toLowerCase() ===
-                              repository.toLowerCase() && item.ref,
+                          repositoryKey(item) === repository.toLowerCase() &&
+                          item.ref,
                   )?.ref
                 : undefined;
         const unique = new Map<string, KnowledgeItem>();

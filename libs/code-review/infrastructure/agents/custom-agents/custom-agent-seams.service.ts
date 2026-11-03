@@ -182,36 +182,29 @@ export class CustomAgentKnowledgeReaderService implements ICustomAgentKnowledgeR
         ];
     }
 
+    /** A failed listing throws: the caller says the files could not be
+     *  listed instead of that the repository has none. */
     private async discoverDocs(
         params: Parameters<ICustomAgentKnowledgeReader['discover']>[0],
     ): Promise<KnowledgeCandidate[]> {
-        try {
-            const port = this
-                .codeManagementService as unknown as KnowledgeCodeManagementPort;
-            const files = await port.getRepositoryAllFiles({
-                organizationAndTeamData: params.organizationAndTeamData,
-                repository: {
-                    id: params.repository.id,
-                    name: params.repository.name,
-                },
-                filters: {
-                    branch: params.repository.branch,
-                    filePatterns: DOC_DISCOVERY_PATTERNS,
-                },
-            });
-            return [...new Set((files ?? []).map((f) => f.path))]
-                .filter((path) => /\.md$/i.test(path))
-                .sort()
-                .slice(0, MAX_DISCOVERED_DOCS)
-                .map((path) => ({ path, kind: 'doc' as const }));
-        } catch (error) {
-            logger.warn({
-                message: 'Could not list repository docs',
-                context: CustomAgentKnowledgeReaderService.name,
-                error,
-            });
-            return [];
-        }
+        const port = this
+            .codeManagementService as unknown as KnowledgeCodeManagementPort;
+        const files = await port.getRepositoryAllFiles({
+            organizationAndTeamData: params.organizationAndTeamData,
+            repository: {
+                id: params.repository.id,
+                name: params.repository.name,
+            },
+            filters: {
+                branch: params.repository.branch,
+                filePatterns: DOC_DISCOVERY_PATTERNS,
+            },
+        });
+        return [...new Set((files ?? []).map((f) => f.path))]
+            .filter((path) => /\.md$/i.test(path))
+            .sort()
+            .slice(0, MAX_DISCOVERED_DOCS)
+            .map((path) => ({ path, kind: 'doc' as const }));
     }
 
     private async resolveSkill(

@@ -256,6 +256,19 @@ describe('saving a skill or doc of another repository', () => {
         ]);
     });
 
+    it('refuses a repository or ref that is not text instead of failing the save', () => {
+        expect(
+            knowledgeSourceProblems([
+                item({ repository: 42 }) as any,
+                item({ repository: RULES, ref: { v: 3 } }) as any,
+                item({ repository: RULES, path: 'stack/node/rules/drip.md' }),
+            ]),
+        ).toEqual([
+            'stack/node/rules/valves.md names its repository or ref with something other than text; use owner/repo and a branch or tag name',
+            'stack/node/rules/valves.md names its repository or ref with something other than text; use owner/repo and a branch or tag name',
+        ]);
+    });
+
     it('treats the same path in two repositories as two entries', () => {
         expect(
             knowledgeSourceProblems([item({}), item({ repository: RULES })]),

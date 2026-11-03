@@ -123,9 +123,12 @@ export const StatusStrip = ({
     isGlobal,
     canEdit,
     onEnabledChange,
+    runsUnavailable,
 }: {
     agent: CustomAgent;
     status?: CustomAgentStatus;
+    /** The runs could not be read: a quiet line is not a healthy agent. */
+    runsUnavailable?: boolean;
     windowDays: number;
     isLoading: boolean;
     report?: CustomAgentResolveReport;
@@ -174,6 +177,12 @@ export const StatusStrip = ({
             </div>
             {!isGlobal && (
                 <RunProblemNotice status={status} canEdit={canEdit} />
+            )}
+            {!isGlobal && !isLoading && runsUnavailable && (
+                <p className="text-text-secondary pl-12 text-xs">
+                    Could not read this agent&apos;s runs, so failed runs do not
+                    show here. Reload to try again.
+                </p>
             )}
             {problems.slice(0, 5).map((problem) => (
                 <p key={problem} className="text-warning pl-12 text-xs">
