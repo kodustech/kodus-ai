@@ -229,27 +229,22 @@ export class SandboxCreateCircuitBreaker {
             });
         } catch (error) {
             // The state change already happened; a broken sink must not fail
-            // sandbox creation, but the lost transition is reported here.
-            try {
-                this.logger.error({
-                    message: `SandboxCreateCircuitBreaker: could not report the ${from} -> ${to} transition`,
-                    context: SandboxCreateCircuitBreaker.name,
-                    error,
-                    metadata: {
-                        from,
-                        to,
-                        failures,
-                        distinctOrgs,
-                        openMs: this.options.openMs,
-                    },
-                });
-            } catch {
-                // The logger itself is down: stderr is the last sink left
-                process.emitWarning(
-                    `SandboxCreateCircuitBreaker: ${from} -> ${to} transition lost (failures=${failures}, distinctOrgs=${distinctOrgs})`,
-                    { code: 'SANDBOX_CIRCUIT_TRANSITION_LOST' },
-                );
-            }
+            // sandbox creation, but the lost transition is reported here. The
+            // logger never throws (it filters by level and catches its own
+            // failures), so `error` is the last stop and stays visible at
+            // API_LOG_LEVEL=error.
+            this.logger.error({
+                message: `SandboxCreateCircuitBreaker: could not report the ${from} -> ${to} transition`,
+                context: SandboxCreateCircuitBreaker.name,
+                error,
+                metadata: {
+                    from,
+                    to,
+                    failures,
+                    distinctOrgs,
+                    openMs: this.options.openMs,
+                },
+            });
         }
     }
 

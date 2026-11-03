@@ -119,25 +119,21 @@ export class SandboxConcurrencyLimiter {
         if (dropped) this.grantWaiters();
     }
 
+    /**
+     * The sink's report of a drop was lost. The logger never throws (it
+     * filters by level and catches its own failures), so this needs no
+     * fallback; `error` keeps it visible at API_LOG_LEVEL=error.
+     */
     private reportLostStaleHolder(
         holderId: string,
         heldMs: number,
         error: unknown,
     ): void {
-        try {
-            this.logger.warn({
-                message: `SandboxConcurrencyLimiter: dropped holder ${holderId} after ${heldMs}ms without release (its report failed)`,
-                context: SandboxConcurrencyLimiter.name,
-                error:
-                    error instanceof Error ? error : new Error(String(error)),
-                metadata: { holderId, heldMs },
-            });
-        } catch {
-            // The logger is down too: stderr is the last sink left
-            process.emitWarning(
-                `SandboxConcurrencyLimiter: dropped holder ${holderId} after ${heldMs}ms without release`,
-                { code: 'SANDBOX_STALE_HOLDER_REPORT_LOST' },
-            );
-        }
+        this.logger.error({
+            message: `SandboxConcurrencyLimiter: dropped holder ${holderId} after ${heldMs}ms without release (its report failed)`,
+            context: SandboxConcurrencyLimiter.name,
+            error: error instanceof Error ? error : new Error(String(error)),
+            metadata: { holderId, heldMs },
+        });
     }
 }

@@ -262,38 +262,6 @@ describe('SandboxCreateCircuitBreaker', () => {
         );
     });
 
-    it('falls back to a process warning when the logger is down too', () => {
-        const breaker = new SandboxCreateCircuitBreaker(
-            OPTIONS,
-            () => 0,
-            () => {
-                throw new Error('log sink down');
-            },
-        );
-        (breaker as any).logger = {
-            error: () => {
-                throw new Error('logger down');
-            },
-        };
-        const emitWarning = jest
-            .spyOn(process, 'emitWarning')
-            .mockImplementation(() => undefined);
-
-        try {
-            breaker.recordFailure('org-a', CLOSED_PERMIT);
-            breaker.recordFailure('org-b', CLOSED_PERMIT);
-            breaker.recordFailure('org-b', CLOSED_PERMIT);
-
-            expect(breaker.getState()).toBe('OPEN');
-            expect(emitWarning).toHaveBeenCalledWith(
-                'SandboxCreateCircuitBreaker: CLOSED -> OPEN transition lost (failures=3, distinctOrgs=2)',
-                { code: 'SANDBOX_CIRCUIT_TRANSITION_LOST' },
-            );
-        } finally {
-            emitWarning.mockRestore();
-        }
-    });
-
     it('works without a transition callback, and logs nothing', () => {
         const breaker = new SandboxCreateCircuitBreaker(OPTIONS, () => 0);
         const logger = { error: jest.fn() };
