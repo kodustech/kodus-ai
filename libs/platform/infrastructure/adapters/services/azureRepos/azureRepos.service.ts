@@ -2862,8 +2862,10 @@ export class AzureReposService implements Omit<
                 message: 'Error to authenticate with token',
                 context: this.authenticateWithToken.name,
                 error: err,
+                // Named fields only: params carries the PAT.
                 metadata: {
-                    params,
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    orgUrl: params?.orgUrl,
                 },
             });
             throw new BadRequestException(
