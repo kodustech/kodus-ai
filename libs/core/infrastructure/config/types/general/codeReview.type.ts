@@ -643,7 +643,8 @@ export function knowledgeItemKey(item: {
     kind: string;
     repository?: string;
 }): string {
-    return `${item.kind}|${(item.repository ?? '').toLowerCase()}|${item.path}`;
+    const repository: unknown = item.repository;
+    return `${item.kind}|${typeof repository === 'string' ? repository.toLowerCase() : ''}|${item.path}`;
 }
 
 /** The first value that appears twice, if any. */
@@ -685,6 +686,20 @@ export function knowledgeLinkProblems(
     return problems;
 }
 
+/**
+ * A stored skill or doc names its source with text only. A config written by
+ * hand or as code can carry a `repository` or `ref` of another type, which no
+ * repository is named by: such an item cannot be read.
+ */
+export function hasTextSource(item: {
+    repository?: unknown;
+    ref?: unknown;
+}): boolean {
+    const text = (value: unknown) =>
+        value === undefined || value === null || typeof value === 'string';
+    return text(item.repository) && text(item.ref);
+}
+
 /** The item is linked to the main review (the built-in agents). */
 export function linksMainReview(item: {
     linkedTo?: readonly unknown[];
@@ -718,6 +733,12 @@ export function knowledgeSourceProblems(
     const refs = new Map<string, { name: string; ref: string }>();
     for (const item of knowledge ?? []) {
         if (!item?.path || !item.kind) continue;
+        if (!hasTextSource(item)) {
+            problems.push(
+                `${item.path} names its repository or ref with something other than text; use owner/repo and a branch or tag name`,
+            );
+            continue;
+        }
         if (item.repository) {
             const key = item.repository.toLowerCase();
             const ref = item.ref ?? '';

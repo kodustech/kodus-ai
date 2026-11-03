@@ -26,6 +26,7 @@ import {
 import {
     astGrepRulesPath,
     customAgentConfigSchema,
+    hasTextSource,
     KNOWLEDGE_REF_PATTERN,
     KNOWLEDGE_REPOSITORY_PATTERN,
     knowledgeItemKey,
@@ -183,8 +184,10 @@ export class ResolveCustomAgentUseCase {
                       repositoryId: params.repositoryId,
                   });
 
+        // A draft names an item's repository and ref with text; one that
+        // does not names no repository and is left out of the check.
         const knowledge = Array.isArray(params.knowledge)
-            ? params.knowledge
+            ? params.knowledge.filter((item) => !!item && hasTextSource(item))
             : [];
         const astGrepConfig = (
             params.agent as { tools?: { astGrepConfig?: string } } | undefined

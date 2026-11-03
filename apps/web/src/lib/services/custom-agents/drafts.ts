@@ -427,12 +427,17 @@ export const agentUsageLine = (
 
 type KnowledgeIdentity = Pick<KnowledgeItem, "path" | "kind" | "repository">;
 
+/** The repository an item names, in lower case; "" for the reviewed one.
+ *  Stored config can carry a non-text value, which names no repository. */
+export const repositoryKey = (item: { repository?: unknown }) =>
+    typeof item.repository === "string" ? item.repository.toLowerCase() : "";
+
 /** One skill or doc is the same entry when its repository, path and kind
  *  match: the same path in two repositories is two entries. */
 export const sameKnowledge = (a: KnowledgeIdentity, b: KnowledgeIdentity) =>
     a.path === b.path &&
     a.kind === b.kind &&
-    (a.repository ?? "").toLowerCase() === (b.repository ?? "").toLowerCase();
+    repositoryKey(a) === repositoryKey(b);
 
 /** How a skill or doc is named once read: its path, or `owner/repo:path`. */
 export const knowledgeSourcePath = (
@@ -445,7 +450,7 @@ export const knowledgeSourcePath = (
 export const knowledgeKey = (item: KnowledgeIdentity) =>
     `${item.kind}:${knowledgeSourcePath({
         ...item,
-        ...(item.repository && { repository: item.repository.toLowerCase() }),
+        repository: repositoryKey(item) || undefined,
     })}`;
 
 const sameTarget = (a: KnowledgeLinkTarget, b: KnowledgeLinkTarget) =>
@@ -604,7 +609,7 @@ export const followedBy = (
     const linked = knowledge.filter((item) => isLinked(item, { agentId }));
     // Keyed as sameKnowledge compares: the repository in any case.
     const keyOf = (item: KnowledgeIdentity) =>
-        `${item.kind}:${(item.repository ?? "").toLowerCase()}:${item.path}`;
+        `${item.kind}:${repositoryKey(item)}:${item.path}`;
     const names = new Map<string, string | undefined>();
     for (const entry of named) {
         if (!names.has(keyOf(entry))) names.set(keyOf(entry), entry.name);
@@ -889,7 +894,7 @@ export const knowledgeChoices = (
 ): KnowledgeChoice[] => {
     // Keyed as sameKnowledge compares: the repository in any case.
     const keyOf = (item: KnowledgeIdentity) =>
-        `${item.kind}:${(item.repository ?? "").toLowerCase()}:${item.path}`;
+        `${item.kind}:${repositoryKey(item)}:${item.path}`;
     const byKey = new Map<string, KnowledgeCandidate>();
     for (const candidate of candidates) {
         if (!byKey.has(keyOf(candidate)))

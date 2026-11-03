@@ -46,11 +46,16 @@ const failing: CustomAgentStatus = {
         },
     },
 };
-const strip = (status: CustomAgentStatus, canEdit = true) =>
+const strip = (
+    status: CustomAgentStatus,
+    canEdit = true,
+    runsUnavailable?: boolean,
+) =>
     render(
         <StatusStrip
             agent={agent}
             status={status}
+            runsUnavailable={runsUnavailable}
             windowDays={30}
             isLoading={false}
             isGlobal={false}
@@ -112,6 +117,30 @@ describe("StatusStrip with failing runs", () => {
         });
 
         expect(screen.queryByRole("status")).toBeNull();
+    });
+
+    it("says the runs could not be read instead of reading as a quiet, healthy agent", () => {
+        const quiet = {
+            agentId: "valves",
+            pullRequests: 0,
+            posted: 0,
+            dropped: 0,
+        };
+        strip(quiet, true, true);
+
+        expect(
+            screen.getByText(
+                "Could not read this agent's runs, so failed runs do not show here. Reload to try again.",
+            ),
+        ).toBeInTheDocument();
+    });
+
+    it("says nothing about the runs when they were read", () => {
+        strip({ agentId: "valves", pullRequests: 0, posted: 0, dropped: 0 });
+
+        expect(
+            screen.queryByText(/Could not read this agent's runs/),
+        ).toBeNull();
     });
 });
 

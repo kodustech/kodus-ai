@@ -247,4 +247,6 @@ export type CustomAgentStatus = {
 export type CustomAgentsStatus = {
     windowDays: number;
     agents: CustomAgentStatus[];
+    /** The runs could not be read: failures do not show. */
+    runsUnavailable?: boolean;
 };

@@ -134,9 +134,10 @@ describe('summarizeUnfollowedCitations', () => {
 
     it('offers a skill by its SKILL.md and keeps the five most cited', () => {
         const cited = summarizeUnfollowedCitations([
+            // The most cited, so the cap keeps it: it must be offered.
             row(
                 'irrigation-rules/skills/pumps/SKILL.md is not a guide linked to this review',
-                1,
+                7,
                 [1],
             ),
             ...[2, 3, 4, 5, 6].map((n) =>
@@ -147,11 +148,11 @@ describe('summarizeUnfollowedCitations', () => {
         ]).get('valves');
 
         expect(cited?.map((c) => c.file)).toEqual([
+            'irrigation-rules/skills/pumps/SKILL.md',
             'docs/g6.md',
             'docs/g5.md',
             'docs/g4.md',
             'docs/g3.md',
-            'docs/g2.md',
         ]);
     });
 });
@@ -262,6 +263,7 @@ describe('GetCustomAgentsStatusUseCase with run records', () => {
                 ],
             },
         ]);
+        expect(result.runsUnavailable).toBeUndefined();
     });
 
     it('still shows the findings when the run records cannot be read', async () => {
@@ -291,5 +293,7 @@ describe('GetCustomAgentsStatusUseCase with run records', () => {
         expect(result.agents).toEqual([
             { agentId: 'valves', pullRequests: 1, posted: 1, dropped: 0 },
         ]);
+        // Not an empty history: the page says the runs were not read.
+        expect(result.runsUnavailable).toBe(true);
     });
 });

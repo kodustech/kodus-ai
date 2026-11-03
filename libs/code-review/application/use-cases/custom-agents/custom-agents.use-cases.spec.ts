@@ -77,6 +77,81 @@ describe('ResolveCustomAgentUseCase', () => {
         getDefaultBranch: jest.fn().mockResolvedValue('main'),
     };
 
+    it('says the files could not be listed when the listing fails, not that the repository has none', async () => {
+        const knowledgeReader = {
+            resolve: jest.fn().mockResolvedValue([]),
+            discover: jest
+                .fn()
+                .mockRejectedValue(new Error('429 rate limited')),
+        };
+        const useCase = new ResolveCustomAgentUseCase(
+            parametersService(storedConfig()) as any,
+            codeManagementService as any,
+            knowledgeReader,
+        );
+
+        const report = await useCase.execute({
+            organizationAndTeamData,
+            repositoryId: 'repo-1',
+            knowledge: [],
+            discover: true,
+        });
+
+        expect(report.knowledge).toMatchObject({
+            status: 'ok',
+            candidates: [],
+            discoveredIn: {
+                branch: 'main',
+                available: false,
+                reason: 'Could not list the files of ledger on main.',
+            },
+        });
+    });
+
+    it('leaves out an item whose repository is not text and checks the others', async () => {
+        const knowledgeReader = {
+            resolve: jest.fn(async ({ items }: any) =>
+                items.map((item: any) => ({
+                    path: item.path,
+                    kind: item.kind,
+                    found: true,
+                    issues: [],
+                    tokens: 10,
+                })),
+            ),
+            discover: jest.fn().mockResolvedValue([]),
+        };
+        const useCase = new ResolveCustomAgentUseCase(
+            parametersService(storedConfig()) as any,
+            codeManagementService as any,
+            knowledgeReader,
+        );
+
+        const report = await useCase.execute({
+            organizationAndTeamData,
+            repositoryId: 'repo-1',
+            knowledge: [
+                {
+                    path: 'docs/ledger.md',
+                    kind: 'doc',
+                    linkedTo: [{ agentId: 'ledger-agent' }],
+                },
+                {
+                    path: 'docs/odd.md',
+                    kind: 'doc',
+                    repository: 42 as unknown as string,
+                    linkedTo: [{ agentId: 'ledger-agent' }],
+                },
+            ],
+        });
+
+        expect(report.knowledge.status).toBe('ok');
+        const items =
+            report.knowledge.status === 'ok' ? report.knowledge.items : [];
+        expect(items.map((item) => item.path)).toEqual(['docs/ledger.md']);
+        expect(items[0]).toMatchObject({ found: true });
+    });
+
     it('checks the knowledge against the default branch and flags Kody Rules sources', async () => {
         const knowledgeReader = {
             resolve: jest.fn().mockResolvedValue([

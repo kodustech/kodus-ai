@@ -40,6 +40,14 @@ describe("knowledge of another repository", () => {
         ).toBe(true);
     });
 
+    it("reads a stored repository that is not text as naming none, instead of failing the page", () => {
+        const odd = { ...local, repository: 42 as unknown as string };
+
+        expect(() => sameKnowledge(odd, local)).not.toThrow();
+        expect(sameKnowledge(odd, local)).toBe(true);
+        expect(knowledgeKey(odd)).toBe(knowledgeKey(local));
+    });
+
     it("keys a repository in any case as one item, so it is not added twice", () => {
         expect(knowledgeKey(remote)).toBe(
             knowledgeKey({ ...remote, repository: RULES.toUpperCase() }),

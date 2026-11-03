@@ -163,6 +163,30 @@ describe('a guide of another repository linked to the main review', () => {
         expect(outsideMainReview).toEqual([notRead]);
     });
 
+    it('skips an item whose repository is not text, says so, and reads the others', async () => {
+        const odd = {
+            kind: 'doc' as const,
+            path: 'docs/odd.md',
+            repository: 42,
+            linkedTo: [{ agentId: 'valves' }],
+        } as any;
+
+        const result = await resolveReviewKnowledge({
+            ...params(),
+            items: [local, odd],
+        });
+
+        expect(mockResolveAll).toHaveBeenCalledWith(
+            expect.objectContaining({ items: [local] }),
+        );
+        expect(result.warnings).toEqual([
+            expect.objectContaining({
+                kind: 'KNOWLEDGE_UNAVAILABLE',
+                detail: 'docs/odd.md: its repository or ref is not text, so it was not read',
+            }),
+        ]);
+    });
+
     it('never reaches the built-in agents in a review, and the review says so', async () => {
         const result = await resolveReviewKnowledge({
             ...params(),

@@ -1,5 +1,6 @@
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import {
+    hasTextSource,
     KNOWLEDGE_MAIN_REVIEW_TARGET,
     knowledgeSourcePath,
     linksMainReview,
@@ -216,7 +217,9 @@ export async function resolveReviewKnowledge(params: {
  * Guides of another repository are for custom agents only: the main review
  * has no quote gate to check a rule it cites. Settings refuse such a link on
  * save; a config that carries one anyway (written by hand or as code) keeps
- * its custom-agent links, loses the main-review one, and says so.
+ * its custom-agent links, loses the main-review one, and says so. An item
+ * whose repository or ref is not text names no repository: it is skipped,
+ * and said so, instead of failing every other item's read.
  */
 export function mainReviewLinksDropped(all: KnowledgeItem[]): {
     items: KnowledgeItem[];
@@ -225,6 +228,16 @@ export function mainReviewLinksDropped(all: KnowledgeItem[]): {
     const items: KnowledgeItem[] = [];
     const outsideMainReview: ReviewWarning[] = [];
     for (const item of all) {
+        if (!hasTextSource(item)) {
+            outsideMainReview.push({
+                kind: 'KNOWLEDGE_UNAVAILABLE',
+                reason: 'knowledge',
+                contextWindowTokens: 0,
+                modelName: '',
+                detail: `${item.path}: its repository or ref is not text, so it was not read`,
+            });
+            continue;
+        }
         if (!item.repository || !linksMainReview(item)) {
             items.push(item);
             continue;

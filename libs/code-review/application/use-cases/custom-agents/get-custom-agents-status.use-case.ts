@@ -292,7 +292,13 @@ export class GetCustomAgentsStatusUseCase {
         organizationId: string;
         repositoryId: string;
         now?: Date;
-    }): Promise<{ windowDays: number; agents: CustomAgentStatus[] }> {
+    }): Promise<{
+        windowDays: number;
+        agents: CustomAgentStatus[];
+        /** The runs could not be read: failures do not show, and an agent
+         *  with no findings is not known to be healthy. */
+        runsUnavailable?: true;
+    }> {
         const since = new Date(
             (params.now ?? new Date()).getTime() -
                 CUSTOM_AGENT_STATUS_WINDOW_DAYS * 24 * 60 * 60 * 1000,
@@ -303,6 +309,7 @@ export class GetCustomAgentsStatusUseCase {
             'updatedAt': { $gte: since },
         };
         const collection = this.pullRequestsRepository.getNativeCollection();
+        let runsUnavailable = false;
         const [fileRows, prLevelRows, citationRows, runRecords] =
             await Promise.all([
                 collection
@@ -346,6 +353,7 @@ export class GetCustomAgentsStatusUseCase {
                                       since,
                                   },
                               });
+                              runsUnavailable = true;
                               return [] as CustomAgentRunRecord[];
                           })
                     : Promise.resolve([] as CustomAgentRunRecord[]),
@@ -367,6 +375,7 @@ export class GetCustomAgentsStatusUseCase {
         ]);
         return {
             windowDays: CUSTOM_AGENT_STATUS_WINDOW_DAYS,
+            ...(runsUnavailable ? { runsUnavailable: true as const } : {}),
             agents: [...agentIds].map((agentId) => {
                 const status = findingsByAgent.get(agentId) ?? {
                     agentId,
