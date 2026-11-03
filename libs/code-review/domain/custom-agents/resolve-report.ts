@@ -88,8 +88,11 @@ export function knowledgeBudgets(
     resolutions: Array<KnowledgeItemResolution & { repository?: string }>,
 ): KnowledgeTargetBudget[] {
     // The same path in two repositories is two docs.
-    const sourceKey = (entry: { path: string; repository?: string }) =>
-        `${(entry.repository ?? '').toLowerCase()}|${entry.path}`;
+    // Only a string names a repository; anything else reads as this one.
+    const sourceKey = (entry: { path: string; repository?: unknown }) => {
+        const repository = entry.repository;
+        return `${typeof repository === 'string' ? repository.toLowerCase() : ''}|${entry.path}`;
+    };
     const tokensByPath = new Map(
         resolutions.map((resolution) => [
             sourceKey(resolution),

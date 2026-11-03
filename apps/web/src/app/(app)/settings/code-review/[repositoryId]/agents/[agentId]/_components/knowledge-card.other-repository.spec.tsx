@@ -86,6 +86,7 @@ const field = (
         canEdit?: boolean;
         instructions?: string;
         report?: CustomAgentResolveReport;
+        readKnowledge?: KnowledgeItem[];
     } = {},
 ) => {
     render(
@@ -97,6 +98,7 @@ const field = (
             onChange={onChange}
             teamId="team-1"
             repositoryId="repo-1"
+            readKnowledge={over.readKnowledge}
             instructions={
                 over.instructions ??
                 "Read the rules in irrigation-rules before commenting."
@@ -240,6 +242,34 @@ describe("AgentKnowledgeField with another repository", () => {
         expect(mockResolve).toHaveBeenLastCalledWith(
             expect.objectContaining({
                 source: { repository: RULES, ref: "v3" },
+            }),
+        );
+    });
+
+    it("at a directory, lists a repository at the ref the inherited levels pin", () => {
+        // The directory's own list is empty; the repository level pins v4.
+        field([], jest.fn(), {
+            readKnowledge: [
+                {
+                    path: "a.md",
+                    kind: "doc",
+                    repository: RULES,
+                    ref: "v4",
+                    linkedTo: [{ agentId: "valves" }],
+                },
+            ],
+        });
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Add skill or doc" }),
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "irrigation-rules" }),
+        );
+
+        expect(mockResolve).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                source: { repository: RULES, ref: "v4" },
             }),
         );
     });
