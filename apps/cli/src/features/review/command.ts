@@ -32,6 +32,7 @@ import { buildNoChangesMessages } from './no-changes.js';
 import { validateReviewOptions } from './options.js';
 import {
     formatFailOnExitMessage,
+    formatHeavyTrialNotice,
     formatTrialCompletionMessage,
     isHunkPlatformSupported,
     shouldFailReview,
@@ -278,6 +279,7 @@ async function reviewAction(
                     ctx,
                     globalOpts,
                     githubPat: resolveTrialGithubPat(options),
+                    heavy: options.heavy,
                 });
 
                 if (!fallbackResult) {
@@ -332,6 +334,8 @@ async function reviewAction(
                 options.context,
                 globalOpts.verbose,
             );
+
+            warnHeavyInTrial(options.heavy, spinner, ctx, globalOpts);
 
             if (!globalOpts.quiet && !ctx.isAgent) {
                 spinner.text = chalk.cyan('Analyzing code (trial mode)...');
@@ -572,18 +576,34 @@ async function reviewAction(
     }
 }
 
+function warnHeavyInTrial(
+    heavy: boolean | undefined,
+    spinner: Ora,
+    ctx: ReturnType<typeof createCommandContext>,
+    globalOpts: GlobalOptions,
+): void {
+    const notice = formatHeavyTrialNotice(heavy);
+    if (!notice || globalOpts.quiet || ctx.isAgent) {
+        return;
+    }
+    spinner.warn(chalk.yellow(notice));
+    spinner.start();
+}
+
 async function runTrialFallback({
     diff,
     spinner,
     ctx,
     globalOpts,
     githubPat,
+    heavy,
 }: {
     diff: string;
     spinner: Ora;
     ctx: ReturnType<typeof createCommandContext>;
     globalOpts: GlobalOptions;
     githubPat?: string;
+    heavy?: boolean;
 }): Promise<TrialReviewResult | null> {
     if (!globalOpts.quiet && !ctx.isAgent) {
         spinner.start(chalk.cyan('Checking trial limit...'));
@@ -595,6 +615,8 @@ async function runTrialFallback({
         showTrialLimitPrompt(trialStatus);
         return null;
     }
+
+    warnHeavyInTrial(heavy, spinner, ctx, globalOpts);
 
     if (!globalOpts.quiet && !ctx.isAgent) {
         spinner.text = chalk.cyan('Analyzing code (trial mode)...');

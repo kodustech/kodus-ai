@@ -125,6 +125,14 @@ export function formatFailOnExitMessage(
     return `Exiting with code 1 because ${blockingCount} ${issueLabel} ${verbPhrase} \`--fail-on ${failOn}\`.`;
 }
 
+// Heavy mode runs only for a signed-in team; a trial review (anonymous, or the
+// fallback after rejected credentials) runs without it.
+export function formatHeavyTrialNotice(heavy?: boolean): string | null {
+    return heavy
+        ? 'Heavy mode needs a signed-in team (`kodus auth login`). This trial review runs without it.'
+        : null;
+}
+
 export function formatTrialCompletionMessage(
     result: TrialReviewResult,
 ): string {

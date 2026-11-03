@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     formatFailOnExitMessage,
+    formatHeavyTrialNotice,
     formatTrialCompletionMessage,
     isHunkPlatformSupported,
     shouldFailReview,
@@ -148,5 +149,11 @@ describe('review result helpers', () => {
         expect(formatTrialCompletionMessage(rateLimitResult)).toBe(
             'Review complete! (Trial: 2/5 reviews today)',
         );
+    });
+
+    it('tells a trial review asked with --heavy that it runs without heavy mode', () => {
+        expect(formatHeavyTrialNotice(true)).toContain('kodus auth login');
+        expect(formatHeavyTrialNotice(false)).toBeNull();
+        expect(formatHeavyTrialNotice(undefined)).toBeNull();
     });
 });
