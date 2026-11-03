@@ -56,10 +56,17 @@ export const proxy = auth(async (req) => {
         return NextResponse.redirect(new URL("/sign-in", req.url));
     }
 
+    // GitHub's post-install return. Started from settings (a team picked) or
+    // by someone else, /github-integration takes it; started from this
+    // browser's onboarding, the setup page links it to the team being set up.
+    const startedFromOnboarding =
+        req.cookies.has("started-setup-from-new-setup-page") &&
+        !req.cookies.has("selectedTeam");
     if (
         pathname === "/setup/github" &&
         req.nextUrl.searchParams.get("setup_action") === "install" &&
-        req.nextUrl.searchParams.get("installation_id")
+        req.nextUrl.searchParams.get("installation_id") &&
+        !startedFromOnboarding
     ) {
         const url = new URL("/github-integration", req.url);
         url.searchParams.set(
