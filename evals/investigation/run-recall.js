@@ -619,6 +619,9 @@ async function main() {
         // Which coding-agent instructions the cases carried (recall-tests.js);
         // null = none, the nightly default.
         repoInstructions: process.env.RECALL_REPO_INSTRUCTIONS || null,
+        // The floors file the run was gated with (--targets), null for the
+        // default: confirm-gate.js re-gates against the same one.
+        targets: args.targets || null,
         metrics: {
             recall_mean: avg(rows.map((row) => row.metadata?.recall)),
             precision_mean: avg(rows.map((row) => row.metadata?.precision)),
