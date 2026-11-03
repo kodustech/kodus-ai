@@ -16,6 +16,8 @@ import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/ag
 import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
+    SandboxCircuitOpenError,
+    SandboxWaitAbortedError,
     SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -151,8 +153,9 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
             });
 
             // The lease manager owns retry+backoff for the underlying provider
-            // call (3 attempts with 60s/120s backoffs). If acquire() throws here
-            // it means all attempts failed — review continues self-contained.
+            // call (one retry, none on timeouts) and a circuit breaker that
+            // fails fast while sandbox infra is degraded. If acquire() throws
+            // here the review continues self-contained.
             const { sandbox, leaseId } = await this.leaseManager.acquire(
                 prKey,
                 'review',
@@ -169,6 +172,8 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                     unifiedDiff: cliContext?.cliRawDiff,
                     sandboxMetadata: { stage: 'review' },
                 },
+                // A review waits for capacity as long as its job lives
+                { signal: context.parentSignal },
             );
 
             // Override cleanup so the observer's context.sandboxHandle.cleanup()
@@ -247,6 +252,49 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 });
                 return this.updateContext(context, (draft) => {
                     draft.sandboxSuperseded = true;
+                });
+            }
+            // Breaker open: an outage already reported by the failures that
+            // opened it. One warn per review, not an error per review.
+            if (err instanceof SandboxCircuitOpenError) {
+                this.logger.warn({
+                    message: `Sandbox creation circuit open for ${label}, continuing without it`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                        prNumber: context.pullRequest?.number,
+                    },
+                });
+                return context;
+            }
+            // The job timed out while the review waited in line for a
+            // sandbox (a worker slot or room in the E2B plan). The review
+            // never skips its sandbox for lack of capacity; it only stops
+            // waiting once its job is gone.
+            if (err instanceof SandboxWaitAbortedError) {
+                this.logger.warn({
+                    message: `Job aborted while ${label} waited for a sandbox`,
+                    context: this.stageName,
+                    metadata: {
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
+                        prNumber: context?.pullRequest?.number,
+                    },
+                });
+                // Not a clean run: whatever follows has no sandbox
+                return this.updateContext(context, (draft) => {
+                    if (!draft.errors) draft.errors = [];
+                    draft.errors.push({
+                        pipelineId: context.pipelineMetadata?.pipelineId,
+                        stage: this.stageName,
+                        error: err,
+                        severity: 'partial',
+                        metadata: {
+                            waitedMs: err.waitedMs,
+                            prNumber: context.pullRequest?.number,
+                        },
+                    });
                 });
             }
             this.logger.error({

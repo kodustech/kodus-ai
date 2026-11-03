@@ -50,7 +50,18 @@ export function e2bDeploymentTag(apiNodeEnv: string | undefined): string {
 const REPO_DIR = '/home/user/repo';
 
 const TIMEOUTS = {
-    CLONE_MS: 300_000, // 5 min — large repos (cal.com, grafana) need more time for shallow clone
+    // Shallow `git fetch` of the PR head / base branch. Kept at 5 min: the
+    // largest repositories need it on a healthy path, and lowering it would
+    // review them without a sandbox on every PR. Fail-fast on a degraded
+    // proxy comes from not retrying a timeout and from the breaker
+    // (SandboxLeaseManager), not from a shorter fetch.
+    CLONE_MS: 300_000,
+    // Re-syncing a reused sandbox's checkout to the new head. Kept at 5 min:
+    // a timeout here is not a fallback but a review on the stale checkout
+    // (#1313), so this path trades latency for correctness.
+    SYNC_MS: 300_000,
+    // apt-get on sandboxes created without the pre-built template.
+    INSTALL_MS: 300_000,
     PROXY_DAEMON_MS: 10_000,
     PROXY_CONFIG_MS: 5_000,
     VERIFY_MS: 10_000,
@@ -451,7 +462,7 @@ export async function syncE2BSandboxRepo(
         platform,
         checkoutSha,
     } = params;
-    const { logger, logContext, timeoutMs = TIMEOUTS.CLONE_MS } = opts;
+    const { logger, logContext, timeoutMs = TIMEOUTS.SYNC_MS } = opts;
 
     // Same precedence as the create path (checkoutSha > PR refspec > branch
     // tip) — CLI-origin reviews set checkoutSha and leave prNumber undefined,
@@ -832,7 +843,7 @@ export class E2BSandboxService implements ISandboxProvider {
     private async installDependencies(sandbox: Sandbox): Promise<void> {
         const installResult = await sandbox.commands.run(
             'apt-get update -qq && apt-get install -y -qq git ripgrep shadowsocks-libev > /dev/null 2>&1',
-            { timeoutMs: TIMEOUTS.CLONE_MS, user: 'root' },
+            { timeoutMs: TIMEOUTS.INSTALL_MS, user: 'root' },
         );
         this.logger.log({
             message: `[DEBUG] apt-get install exitCode=${installResult.exitCode}`,
