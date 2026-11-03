@@ -1,9 +1,13 @@
 import * as os from 'os';
 import {
+    INBOX_RELEASE_TIMEOUT_MS,
+    parseDrainTimeoutMs,
+} from '@libs/core/workflow/infrastructure/drain-timeout';
+import {
     RabbitSubscribe,
     MessageHandlerErrorBehavior,
 } from '@golevelup/nestjs-rabbitmq';
-import { Injectable, Inject, OnApplicationShutdown } from '@nestjs/common';
+import { BeforeApplicationShutdown, Injectable, Inject } from '@nestjs/common';
 import { ConsumeMessage } from 'amqplib';
 
 import { IJobProcessorService } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
@@ -38,7 +42,7 @@ interface WorkflowJobMessage {
 }
 
 @Injectable()
-export class WorkflowJobConsumer implements OnApplicationShutdown {
+export class WorkflowJobConsumer implements BeforeApplicationShutdown {
     private readonly logger = createLogger(WorkflowJobConsumer.name);
     private readonly instanceId = os.hostname();
     // Default ECS protection time in minutes
@@ -545,13 +549,15 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         );
     }
 
-    async onApplicationShutdown(signal?: string): Promise<void> {
-        const rawDrain = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
-        const parsedDrain = rawDrain ? parseInt(rawDrain, 10) : NaN;
-        const maxWaitMs =
-            Number.isFinite(parsedDrain) && parsedDrain > 0
-                ? parsedDrain
-                : 25_000; // safe fallback: dev/self-hosted default (30s ECS grace - 5s headroom)
+    /**
+     * Drain active jobs and release this host's inbox locks. Runs in
+     * beforeApplicationShutdown: after WorkerDrainService cancelled the
+     * consumers (onModuleDestroy) and before it closes the AMQP connection
+     * (onApplicationShutdown), so running jobs can still ack.
+     */
+    async beforeApplicationShutdown(signal?: string): Promise<void> {
+        // Same reader as the worker's force-exit timer, so the two agree
+        const maxWaitMs = parseDrainTimeoutMs();
 
         this.logger.log({
             message: `Shutdown signal ${signal} received. Waiting for active jobs...`,
@@ -559,10 +565,7 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
             metadata: {
                 activeJobs: this.activeJobs,
                 maxWaitMs,
-                drainTimeoutSource:
-                    Number.isFinite(parsedDrain) && parsedDrain > 0
-                        ? 'API_WORKER_DRAIN_TIMEOUT_MS'
-                        : 'default_25s',
+                configured: process.env.API_WORKER_DRAIN_TIMEOUT_MS ?? null,
             },
         });
 
@@ -609,9 +612,12 @@ export class WorkflowJobConsumer implements OnApplicationShutdown {
         // "dead worker leaves locks" pattern we traced in prod: without
         // this, orphan locks sit around until the reaper cron's 2.5h
         // timeout, blocking other workers from picking up the messages.
+        // Bounded: a slow database must not hold up the AMQP close that follows
         try {
-            const released = await this.inboxRepository.releaseAllByInstance(
-                this.instanceId,
+            const released = await runWithBoundedTimeout(
+                this.inboxRepository.releaseAllByInstance(this.instanceId),
+                INBOX_RELEASE_TIMEOUT_MS,
+                'inbox.releaseAllByInstance',
             );
             if (released > 0) {
                 this.logger.log({
