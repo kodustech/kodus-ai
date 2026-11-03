@@ -742,3 +742,68 @@ describe('attachClassification / getClassification', () => {
         expect(serialized).not.toContain('reviewErrorClassification');
     });
 });
+
+describe('REQUEST_REJECTED (#1687)', () => {
+    const apiError = (statusCode: number, message: string) =>
+        new APICallError({
+            message,
+            url: 'https://api.openai.com/v1/chat/completions',
+            requestBodyValues: {},
+            statusCode,
+            responseBody: JSON.stringify({ error: { message } }),
+        });
+
+    const LUNA =
+        'Function tools with reasoning_effort are not supported for gpt-5.6-luna in /v1/chat/completions';
+
+    it('classifies a 400 no other category explains, quoting the provider in the headline', () => {
+        const info = classifyLLMError(apiError(400, LUNA), 'openai');
+        expect(info.category).toBe(LlmErrorCategory.REQUEST_REJECTED);
+        expect(info.friendlyMessage).toBe(
+            `The provider (openai) refused the request for this model: ${LUNA}`,
+        );
+    });
+
+    it('treats a 422 the same way', () => {
+        expect(
+            classifyLLMError(apiError(422, 'Unprocessable: unknown field "foo"'))
+                .category,
+        ).toBe(LlmErrorCategory.REQUEST_REJECTED);
+    });
+
+    it('falls back to a sentence of its own when the provider said nothing usable', () => {
+        const info = classifyLLMError(errorWithStatus('', 400));
+        expect(info.category).toBe(LlmErrorCategory.REQUEST_REJECTED);
+        expect(info.friendlyMessage).toBe(
+            'The provider refused the request for this model.',
+        );
+    });
+
+    it('leaves a 400 whose wording names a context overflow as CONTEXT_OVERFLOW', () => {
+        expect(
+            classifyLLMError(
+                apiError(
+                    400,
+                    "This model's maximum context length is 128000 tokens. However, your messages resulted in 200000 tokens.",
+                ),
+            ).category,
+        ).toBe(LlmErrorCategory.CONTEXT_OVERFLOW);
+    });
+
+    it('does not cascade to the fallback model and is not terminal', () => {
+        const err = apiError(400, LUNA);
+        expect(shouldFailoverToNextModel(err)).toBe(false);
+        expect(isTerminalCategory(LlmErrorCategory.REQUEST_REJECTED)).toBe(
+            false,
+        );
+    });
+
+    it('leaves non-4xx-request errors where they were', () => {
+        expect(classifyLLMError(apiError(500, 'boom')).category).toBe(
+            LlmErrorCategory.TRANSIENT,
+        );
+        expect(classifyLLMError(new Error('socket hang up')).category).not.toBe(
+            LlmErrorCategory.REQUEST_REJECTED,
+        );
+    });
+});

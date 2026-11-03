@@ -27,6 +27,14 @@ export enum LlmErrorCategory {
     MODEL_ACCESS_DENIED = 'MODEL_ACCESS_DENIED',
     CONTEXT_OVERFLOW = 'CONTEXT_OVERFLOW',
     TRANSIENT = 'TRANSIENT',
+    /**
+     * A 400/422 that no other category explains: the provider refused the
+     * request as built for this model (a parameter it does not accept on that
+     * endpoint, a field it does not know). The cause can be the configuration
+     * or the request we built, so its message blames neither and quotes the
+     * provider. Like UNKNOWN, it is never cascaded to a fallback model.
+     */
+    REQUEST_REJECTED = 'REQUEST_REJECTED',
     UNKNOWN = 'UNKNOWN',
 }
 
@@ -118,6 +126,15 @@ export function classifyLLMError(
     if (category === LlmErrorCategory.UNKNOWN) {
         category = matchByMessage(lower);
     }
+    // Last, so a 400 that says "context length", "invalid api key" or "quota"
+    // keeps the category its wording names.
+    if (
+        category === LlmErrorCategory.UNKNOWN &&
+        (httpStatus === 400 || httpStatus === 422)
+    ) {
+        category = LlmErrorCategory.REQUEST_REJECTED;
+    }
+    const providerMessage = extractProviderMessage(err);
 
     return {
         category,
@@ -132,8 +149,11 @@ export function classifyLLMError(
         friendlyMessage:
             category === LlmErrorCategory.CONTEXT_OVERFLOW
                 ? buildContextOverflowMessage(err, provider)
-                : buildFriendlyMessage(category, provider, lower),
-        providerMessage: extractProviderMessage(err),
+                : category === LlmErrorCategory.REQUEST_REJECTED &&
+                    providerMessage
+                  ? `The provider${provider ? ` (${provider})` : ''} refused the request for this model: ${providerMessage}`
+                  : buildFriendlyMessage(category, provider, lower),
+        providerMessage,
         ...(category === LlmErrorCategory.MODEL_NOT_FOUND &&
         isRoutingRefusal(lower)
             ? { routingRefusal: true }
@@ -559,6 +579,8 @@ function buildFriendlyMessage(
             return `The PR exceeded the maximum context size accepted by the model${providerLabel}.`;
         case LlmErrorCategory.TRANSIENT:
             return `Transient error reaching the provider${providerLabel}. Try again.`;
+        case LlmErrorCategory.REQUEST_REJECTED:
+            return `The provider${providerLabel} refused the request for this model.`;
         default:
             return `Unexpected error while running the code review${providerLabel}.`;
     }

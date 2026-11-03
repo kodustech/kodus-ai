@@ -105,6 +105,9 @@ export function shouldFailoverToNextModel(err: unknown): boolean {
         // would be a guess. Widening it is a separate decision from this one.
         case LlmErrorCategory.CONTEXT_OVERFLOW:
         case LlmErrorCategory.UNKNOWN:
+        // REQUEST_REJECTED: the 400 may be the request we built, which the
+        // fallback would refuse too.
+        case LlmErrorCategory.REQUEST_REJECTED:
             return false;
         case LlmErrorCategory.TRANSIENT:
             return true;
