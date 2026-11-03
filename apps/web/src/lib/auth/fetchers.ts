@@ -108,11 +108,11 @@ export const getInviteData = async (token: string) => {
         });
         return data;
     } catch (error) {
-        if (error instanceof Error) {
-            throw new Error(`Failed to fetch invite data: ${error.message}`);
-        }
-
-        throw error;
+        // Not the original message: it names the URL, and the URL carries the
+        // invitation token.
+        throw Object.assign(new Error("Failed to fetch invite data"), {
+            statusCode: (error as { statusCode?: number })?.statusCode,
+        });
     }
 };
 

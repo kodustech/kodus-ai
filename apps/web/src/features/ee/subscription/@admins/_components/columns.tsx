@@ -32,6 +32,7 @@ import {
 } from "@services/permissions/types";
 import { type MembersSetup } from "@services/setup/types";
 import { getInvitationToken, updateUser } from "@services/users/fetch";
+import { invitationLinkFailure } from "@services/users/invitation-link";
 import { ColumnDef } from "@tanstack/react-table";
 import {
     CheckIcon,
@@ -410,15 +411,16 @@ export const columns: ColumnDef<MembersSetup>[] = [
                                         // The link carries a sealed
                                         // invitation from the API, never the
                                         // user id alone.
-                                        const token = await getInvitationToken(
-                                            row.original.userId,
-                                        ).catch(() => null);
-                                        if (!token) {
+                                        const userId = row.original.userId;
+                                        if (!userId) return;
+                                        let token: string;
+                                        try {
+                                            token =
+                                                await getInvitationToken(userId);
+                                        } catch (error) {
                                             toast({
                                                 variant: "warning",
-                                                title: "No open invitation",
-                                                description:
-                                                    "This user has already accepted the invitation or is no longer pending.",
+                                                ...invitationLinkFailure(error),
                                             });
                                             return;
                                         }
