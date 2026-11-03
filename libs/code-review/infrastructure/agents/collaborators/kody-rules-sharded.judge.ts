@@ -376,10 +376,7 @@ export const SHARD_PR_SYSTEM_PROMPT = `You evaluate PULL-REQUEST-level team rule
 function ruleBlock(rules: Array<Partial<IKodyRule>>): string {
     return rules
         .map((r, i) => {
-            const parts = [
-                `[${i + 1}] ${r.title}`,
-                `  description: ${r.rule}`,
-            ];
+            const parts = [`[${i + 1}] ${r.title}`, `  description: ${r.rule}`];
             if (r.examples?.length) {
                 parts.push(`  examples:`);
                 for (const ex of r.examples) {
@@ -438,7 +435,8 @@ function candidateLines(
     rules.forEach((r, i) => {
         if (!r.uuid) return;
         const lines = detectorHits.get(r.uuid)?.get(file.filename);
-        if (lines?.length) entries.push(`- rule [${i + 1}] -> line(s) ${lines.join(', ')}`);
+        if (lines?.length)
+            entries.push(`- rule [${i + 1}] -> line(s) ${lines.join(', ')}`);
     });
     if (!entries.length) return [];
     return [
@@ -823,7 +821,9 @@ function rulesForFile(
         // existed inside the detector plan. Cheapest clause, so it runs first
         // after the author's glob; the author's `path` still outranks it, since
         // `path` is stated and this is inferred.
-        if (!extensionScopeAppliesToFile(file.filename, r.fileScope?.extensions))
+        if (
+            !extensionScopeAppliesToFile(file.filename, r.fileScope?.extensions)
+        )
             return false;
         // A rule whose declared context need could not be retrieved for this
         // file is not judged here. Sits before the detector clause so it holds
@@ -1047,9 +1047,13 @@ export function inlineLoadedReferences(
 export function findUnresolvedReferenceRules(
     rules: Array<Partial<IKodyRule>>,
     referencesMap: Map<string, LoadedRuleReference[]> | undefined,
+    /** Rules whose reference names no file: nothing was expected, so an
+     *  empty result is not a failure. */
+    withoutFileReferences?: ReadonlySet<string>,
 ): Array<Partial<IKodyRule>> {
     return rules.filter((r) => {
         if (!r.contextReferenceId) return false;
+        if (r.uuid && withoutFileReferences?.has(r.uuid)) return false;
         const refs = r.uuid ? referencesMap?.get(r.uuid) : undefined;
         return !refs || refs.every((ref) => !ref?.content?.trim());
     });
@@ -1235,9 +1239,7 @@ export async function judgeKodyRulesSharded(
     // name instead of reading as "not in the current catalog".
     const ruleTitleByUuid = new Map(
         rules
-            .filter((r): r is Partial<IKodyRule> & { uuid: string } =>
-                !!r.uuid,
-            )
+            .filter((r): r is Partial<IKodyRule> & { uuid: string } => !!r.uuid)
             .map((r) => [r.uuid, r.title ?? r.uuid] as const),
     );
 

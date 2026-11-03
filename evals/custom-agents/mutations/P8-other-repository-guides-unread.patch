@@ -1,0 +1,13 @@
+diff --git a/libs/code-review/infrastructure/agents/core/convention-check.ts b/libs/code-review/infrastructure/agents/core/convention-check.ts
+index 8f5774ed7..be2ec5f4f 100644
+--- a/libs/code-review/infrastructure/agents/core/convention-check.ts
++++ b/libs/code-review/infrastructure/agents/core/convention-check.ts
+@@ -574,7 +574,7 @@ export function guideSourcesFor(
+               }
+             : undefined;
+     }
+-    if (!hasOtherRepository) {
++    if (!hasOtherRepository || knowledgeReader) {
+         return targetBranchReader
+             ? {
+                   readGuide: targetBranchReader,
