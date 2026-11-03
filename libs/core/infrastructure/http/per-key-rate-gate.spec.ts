@@ -1,7 +1,10 @@
 import {
     __resetRateGatesForTest,
     parkRateGate,
+    RateGateWaitExceededError,
     rateGateKey,
+    recordRateGateSuccess,
+    recordRateLimited,
     runWithRateGate,
 } from './per-key-rate-gate';
 
@@ -11,6 +14,8 @@ describe('per-key-rate-gate', () => {
     beforeEach(() => {
         __resetRateGatesForTest();
     });
+
+    afterEach(() => jest.restoreAllMocks());
 
     it('serializes concurrent calls that share a key (single slot)', async () => {
         let active = 0;
@@ -70,8 +75,10 @@ describe('per-key-rate-gate', () => {
         const parkedFrom = Date.now();
         parkRateGate('k', Date.now() + parkMs);
 
-        const ranAt = await runWithRateGate('k', { minIntervalMs: 0 }, async () =>
-            Date.now(),
+        const ranAt = await runWithRateGate(
+            'k',
+            { minIntervalMs: 0 },
+            async () => Date.now(),
         );
 
         expect(ranAt - parkedFrom).toBeGreaterThanOrEqual(parkMs - 5);
@@ -84,8 +91,10 @@ describe('per-key-rate-gate', () => {
         parkRateGate('k', now + 200);
         parkRateGate('k', now + 10); // shorter — must be ignored
 
-        const ranAt = await runWithRateGate('k', { minIntervalMs: 0 }, async () =>
-            Date.now(),
+        const ranAt = await runWithRateGate(
+            'k',
+            { minIntervalMs: 0 },
+            async () => Date.now(),
         );
 
         expect(ranAt - now).toBeGreaterThanOrEqual(195);
@@ -100,5 +109,77 @@ describe('per-key-rate-gate', () => {
         expect(a1).not.toBe(b); // different credential → different bucket
         expect(a1).not.toContain('dXNlcjpwYXNz'); // raw secret not embedded
         expect(a1.startsWith('bitbucket:')).toBe(true);
+    });
+
+    it('rejects a call that would wait past maxWaitMs instead of sleeping', async () => {
+        await runWithRateGate('k', { minIntervalMs: 0 }, async () => undefined);
+        parkRateGate('k', Date.now() + 60_000);
+
+        const fn = jest.fn();
+        const startedAt = Date.now();
+        const result = runWithRateGate(
+            'k',
+            { minIntervalMs: 0, maxWaitMs: 1_000 },
+            fn,
+        );
+
+        await expect(result).rejects.toBeInstanceOf(RateGateWaitExceededError);
+        await expect(result).rejects.toMatchObject({ status: 429 });
+        expect(fn).not.toHaveBeenCalled();
+        // Gave up at once rather than sleeping out the park window
+        expect(Date.now() - startedAt).toBeLessThan(500);
+    });
+
+    it('drains a parked queue at once when every caller has a budget', async () => {
+        await runWithRateGate('k', { minIntervalMs: 0 }, async () => undefined);
+        parkRateGate('k', Date.now() + 60_000);
+
+        const calls = Array.from({ length: 20 }, () =>
+            runWithRateGate(
+                'k',
+                { minIntervalMs: 0, maxWaitMs: 1_000 },
+                async () => 'ran',
+            ).catch((e) => e),
+        );
+        const results = await Promise.all(calls);
+
+        expect(
+            results.every((r) => r instanceof RateGateWaitExceededError),
+        ).toBe(true);
+    });
+
+    it('still waits out a park that fits in maxWaitMs', async () => {
+        await runWithRateGate('k', { minIntervalMs: 0 }, async () => undefined);
+        parkRateGate('k', Date.now() + 50);
+
+        await expect(
+            runWithRateGate(
+                'k',
+                { minIntervalMs: 0, maxWaitMs: 1_000 },
+                async () => 'ran',
+            ),
+        ).resolves.toBe('ran');
+    });
+
+    it('doubles the 429 backoff per 429 in a row, capped, and resets on success', () => {
+        jest.spyOn(Math, 'random').mockReturnValue(0);
+        const backoff = { baseMs: 10_000, maxMs: 60_000 };
+
+        expect(
+            [1, 2, 3, 4, 5].map(() => recordRateLimited('k', backoff)),
+        ).toEqual([10_000, 20_000, 40_000, 60_000, 60_000]);
+
+        recordRateGateSuccess('k');
+        expect(recordRateLimited('k', backoff)).toBe(10_000);
+        // Streaks are per credential
+        expect(recordRateLimited('other', backoff)).toBe(10_000);
+    });
+
+    it('adds at most 20% jitter to the backoff', () => {
+        jest.spyOn(Math, 'random').mockReturnValue(0.999);
+
+        expect(recordRateLimited('k', { baseMs: 10_000, maxMs: 60_000 })).toBe(
+            11_998,
+        );
     });
 });

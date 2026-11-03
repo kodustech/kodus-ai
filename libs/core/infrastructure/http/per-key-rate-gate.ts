@@ -39,6 +39,8 @@ interface GateState {
     nextAllowedAt: number;
     /** Epoch ms until which the key is parked after a 429 (Retry-After). */
     pausedUntil: number;
+    /** 429s in a row on this key; drives the backoff when Retry-After is absent. */
+    rateLimitStreak: number;
 }
 
 const gates = new Map<string, GateState>();
@@ -51,6 +53,35 @@ export interface RateGateOptions {
      * which is the safe choice for a single shared credential.
      */
     concurrency?: number;
+    /**
+     * Longest a call may wait for its turn (queue + park + spacing) before
+     * the gate gives up with {@link RateGateWaitExceededError}. Without it a
+     * credential that keeps answering 429 parks every queued caller
+     * indefinitely: one review stage waited 99 minutes this way. Unset means
+     * no limit.
+     */
+    maxWaitMs?: number;
+}
+
+/**
+ * Thrown by {@link runWithRateGate} when a call would wait longer than
+ * `maxWaitMs`. Carries `status: 429` so `is429Error` and provider error
+ * handling treat it as the rate limit it is.
+ */
+export class RateGateWaitExceededError extends Error {
+    readonly status = 429;
+
+    constructor(
+        readonly key: string,
+        readonly waitedMs: number,
+        /** How long until the gate expects to admit calls again. */
+        readonly retryAfterMs: number,
+    ) {
+        super(
+            `Rate gate ${key}: gave up after waiting ${waitedMs}ms (key parked for another ${retryAfterMs}ms)`,
+        );
+        this.name = 'RateGateWaitExceededError';
+    }
 }
 
 /**
@@ -72,6 +103,7 @@ function getGate(key: string, concurrency: number): GateState {
             limit: pLimit(concurrency),
             nextAllowedAt: 0,
             pausedUntil: 0,
+            rateLimitStreak: 0,
         };
         gates.set(key, gate);
     }
@@ -81,6 +113,8 @@ function getGate(key: string, concurrency: number): GateState {
 /**
  * Runs `fn` under the gate for `key`. Acquires the single slot, waits
  * out any active park window and the min-interval spacing, then runs.
+ * With `maxWaitMs`, rejects instead of waiting past that budget; a
+ * rejected call frees the slot at once, so a parked queue drains fast.
  */
 export async function runWithRateGate<T>(
     key: string,
@@ -89,6 +123,11 @@ export async function runWithRateGate<T>(
 ): Promise<T> {
     const concurrency = options.concurrency ?? 1;
     const gate = getGate(key, concurrency);
+    const enqueuedAt = Date.now();
+    const deadline =
+        options.maxWaitMs === undefined
+            ? Infinity
+            : enqueuedAt + options.maxWaitMs;
 
     return gate.limit(async () => {
         // Park + spacing can both move while we sleep (a sibling call
@@ -97,6 +136,13 @@ export async function runWithRateGate<T>(
             const now = Date.now();
             const waitUntil = Math.max(gate.pausedUntil, gate.nextAllowedAt);
             if (waitUntil <= now) break;
+            if (waitUntil > deadline) {
+                throw new RateGateWaitExceededError(
+                    key,
+                    now - enqueuedAt,
+                    waitUntil - now,
+                );
+            }
             await sleep(waitUntil - now);
         }
         // Reserve the next slot *before* the call so the following caller
@@ -116,6 +162,37 @@ export function parkRateGate(key: string, untilEpochMs: number): void {
     if (gate) {
         gate.pausedUntil = Math.max(gate.pausedUntil, untilEpochMs);
     }
+}
+
+export interface RateLimitBackoffOptions {
+    /** Delay after the first 429 in a row. */
+    baseMs: number;
+    /** Ceiling for the doubling delay. */
+    maxMs: number;
+}
+
+/**
+ * Records a 429 on `key` and returns how long to back off when the
+ * upstream gave no Retry-After: `baseMs` doubled for each 429 in a row,
+ * capped at `maxMs`, with up to 20% jitter so processes sharing a
+ * credential do not retry in lockstep. A fixed delay re-hits a limit that
+ * is still closed; doubling backs off until the window really opens.
+ */
+export function recordRateLimited(
+    key: string,
+    backoff: RateLimitBackoffOptions,
+): number {
+    const gate = getGate(key, 1);
+    gate.rateLimitStreak += 1;
+    const doubled = backoff.baseMs * 2 ** (gate.rateLimitStreak - 1);
+    const delay = Math.min(doubled, backoff.maxMs);
+    return Math.round(delay * (1 + Math.random() * 0.2));
+}
+
+/** Resets the 429 streak on `key` after a response that was not a 429. */
+export function recordRateGateSuccess(key: string): void {
+    const gate = gates.get(key);
+    if (gate) gate.rateLimitStreak = 0;
 }
 
 /** Test-only: drop all gate state so cases don't leak spacing into each other. */

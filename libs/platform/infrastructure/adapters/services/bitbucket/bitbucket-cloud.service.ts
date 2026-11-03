@@ -9,7 +9,10 @@ import {
 } from '@libs/core/infrastructure/http/rate-limit-retry';
 import {
     parkRateGate,
+    RateGateWaitExceededError,
     rateGateKey,
+    recordRateGateSuccess,
+    recordRateLimited,
     runWithRateGate,
 } from '@libs/core/infrastructure/http/per-key-rate-gate';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
@@ -3676,6 +3679,22 @@ export class BitbucketCloudService implements Omit<
         process.env.BITBUCKET_RATE_GATE_429_MAX_RETRIES ?? 4,
     );
 
+    // Longest a call may queue behind a parked credential before it gets a
+    // 429 back. Unbounded, a credential that kept answering 429 held one
+    // review stage for 99 minutes; bounded, the job fails into its own
+    // delayed retry instead.
+    private static readonly RATE_GATE_MAX_WAIT_MS = Number(
+        process.env.BITBUCKET_RATE_GATE_MAX_WAIT_MS ?? 300_000,
+    );
+
+    // Backoff for a 429 without Retry-After: starts at 10s and doubles per
+    // 429 in a row on the same credential, up to a minute (Bitbucket's
+    // burst windows are per minute).
+    private static readonly RATE_LIMIT_BACKOFF = {
+        baseMs: BitbucketCloudService.RATE_GATE_MIN_INTERVAL_MS * 25,
+        maxMs: 60_000,
+    };
+
     private safeFetch(url: string, options: any): Promise<any> {
         // Gate every Bitbucket HTTP call through a single-slot, spaced
         // queue keyed by the app-password (carried in the Authorization
@@ -3694,9 +3713,40 @@ export class BitbucketCloudService implements Omit<
             gateKey,
             {
                 minIntervalMs: BitbucketCloudService.RATE_GATE_MIN_INTERVAL_MS,
+                maxWaitMs: BitbucketCloudService.RATE_GATE_MAX_WAIT_MS,
             },
             () => this.rawFetch(url, options, gateKey),
-        );
+        ).catch((error) => {
+            if (!(error instanceof RateGateWaitExceededError)) throw error;
+            // The SDK turns anything fetch throws into a 500, so answer with
+            // a 429 instead: callers then see the rate limit it really is.
+            this.logger.warn({
+                message: `Bitbucket rate gate: gave up after ${error.waitedMs}ms waiting for a parked credential`,
+                context: BitbucketCloudService.name,
+                metadata: {
+                    url,
+                    gateKey,
+                    waitedMs: error.waitedMs,
+                    retryAfterMs: error.retryAfterMs,
+                },
+            });
+            return new Response(
+                JSON.stringify({
+                    type: 'error',
+                    error: { message: error.message },
+                }),
+                {
+                    status: 429,
+                    statusText: 'Too Many Requests',
+                    headers: {
+                        'content-type': 'application/json',
+                        'retry-after': String(
+                            Math.ceil(error.retryAfterMs / 1000),
+                        ),
+                    },
+                },
+            );
+        });
     }
 
     private async rawFetch(
@@ -3742,9 +3792,14 @@ export class BitbucketCloudService implements Omit<
                 // retry. parseRetryAfterMs falls back to a conservative
                 // cooldown when Bitbucket omits the header (it often does on
                 // per-endpoint burst 429s).
-                const waitMs = this.parseRetryAfterMs(
-                    response.headers.get('retry-after'),
+                const backoffMs = recordRateLimited(
+                    gateKey,
+                    BitbucketCloudService.RATE_LIMIT_BACKOFF,
                 );
+                const waitMs =
+                    this.parseRetryAfterMs(
+                        response.headers.get('retry-after'),
+                    ) ?? backoffMs;
                 parkRateGate(gateKey, Date.now() + waitMs);
                 if (attempt < BitbucketCloudService.RATE_GATE_429_MAX_RETRIES) {
                     this.logger.warn({
@@ -3756,6 +3811,8 @@ export class BitbucketCloudService implements Omit<
                     continue;
                 }
                 // Exhausted: fall through and return the 429 to the caller.
+            } else {
+                recordRateGateSuccess(gateKey);
             }
 
             if (!response.headers.get('content-type')) {
@@ -3772,13 +3829,11 @@ export class BitbucketCloudService implements Omit<
     }
 
     // Parses a Retry-After header (delta-seconds or HTTP-date) into a
-    // forward-looking delay in ms. Falls back to a conservative cooldown
-    // when the header is absent or unparseable — Bitbucket frequently
-    // omits it on per-endpoint burst 429s, and guessing too low just
-    // re-trips the window.
-    private parseRetryAfterMs(raw: string | null): number {
-        const fallbackMs = BitbucketCloudService.RATE_GATE_MIN_INTERVAL_MS * 25;
-        if (!raw) return fallbackMs;
+    // forward-looking delay in ms, or null when the header is absent or
+    // unusable. Bitbucket often omits it on per-endpoint burst 429s; the
+    // caller then backs off exponentially (RATE_LIMIT_BACKOFF).
+    private parseRetryAfterMs(raw: string | null): number | null {
+        if (!raw) return null;
         const asSeconds = Number(raw);
         if (Number.isFinite(asSeconds) && asSeconds >= 0) {
             return Math.round(asSeconds * 1000);
@@ -3786,9 +3841,9 @@ export class BitbucketCloudService implements Omit<
         const asDate = Date.parse(raw);
         if (Number.isFinite(asDate)) {
             const delta = asDate - Date.now();
-            return delta > 0 ? delta : fallbackMs;
+            return delta > 0 ? delta : null;
         }
-        return fallbackMs;
+        return null;
     }
 
     /**
