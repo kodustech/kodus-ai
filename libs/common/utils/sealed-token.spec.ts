@@ -70,6 +70,55 @@ describe('sealed tokens', () => {
         );
     });
 
+    const signedAs = (body: unknown) => {
+        const { createHmac } = jest.requireActual(
+            'node:crypto',
+        ) as typeof import('node:crypto');
+        const data = Buffer.from(JSON.stringify(body)).toString('base64url');
+        const signature = createHmac('sha256', deriveCryptoKey('test/one/v1'))
+            .update(data)
+            .digest('base64url');
+        return `${data}.${signature}`;
+    };
+
+    it('refuses a signed token whose expiry is not a number', () => {
+        // `now <= "9999999999999"` would coerce the string and open it.
+        for (const expiresAt of ['9999999999999', null, undefined]) {
+            expect(
+                reason(() =>
+                    tokens.open(
+                        signedAs({ payload: { id: '42' }, expiresAt }),
+                        0,
+                    ),
+                ),
+            ).toBe('invalid');
+        }
+    });
+
+    it('refuses a valid token with anything appended', () => {
+        const token = tokens.seal({ id: '42' }, 0);
+
+        expect(reason(() => tokens.open(`${token}.x`, 0))).toBe('invalid');
+    });
+
+    it('refuses a signature of another length as invalid, not as a crash', () => {
+        const token = tokens.seal({ id: '42' }, 0);
+
+        expect(reason(() => tokens.open(token.slice(0, -2), 0))).toBe(
+            'invalid',
+        );
+        expect(reason(() => tokens.open(`${token}AA`, 0))).toBe('invalid');
+    });
+
+    it('says why it refused', () => {
+        const expired = new SealedTokenError('expired');
+        const invalid = new SealedTokenError('invalid');
+
+        expect(expired.name).toBe('SealedTokenError');
+        expect(expired.message).toBe('The token expired.');
+        expect(invalid.message).toBe('The token is not one Kodus sealed.');
+    });
+
     it('refuses what is not a token', () => {
         for (const value of [undefined, 42, '', 'abc', 'a.b.c']) {
             expect(reason(() => tokens.open(value, 0))).toBe('invalid');
@@ -82,6 +131,8 @@ describe('sealed tokens', () => {
         );
 
         process.env.API_CRYPTO_KEY = 'abcd';
+        expect(() => deriveCryptoKey('test/one/v1')).toThrow('32 bytes');
+        delete process.env.API_CRYPTO_KEY;
         expect(() => deriveCryptoKey('test/one/v1')).toThrow('32 bytes');
         process.env.API_CRYPTO_KEY = KEY;
     });

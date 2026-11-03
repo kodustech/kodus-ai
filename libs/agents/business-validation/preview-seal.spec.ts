@@ -1,4 +1,9 @@
-import { openPreview, PREVIEW_TTL_MS, sealPreview } from './preview-seal';
+import {
+    openPreview,
+    PREVIEW_TTL_MS,
+    PreviewSealError,
+    sealPreview,
+} from './preview-seal';
 
 describe('preview seal', () => {
     const key = process.env.API_CRYPTO_KEY;
@@ -59,5 +64,25 @@ describe('preview seal', () => {
             prNumber: 7,
             verdict: 'ok',
         });
+    });
+
+    it('names its refusal, and does not call a missing API_CRYPTO_KEY a bad preview', () => {
+        let refusal: unknown;
+        try {
+            openPreview('junk');
+        } catch (err) {
+            refusal = err;
+        }
+        expect(refusal).toBeInstanceOf(PreviewSealError);
+        expect((refusal as Error).name).toBe('PreviewSealError');
+
+        const token = sealPreview({ a: 1 });
+        const previous = process.env.API_CRYPTO_KEY;
+        delete process.env.API_CRYPTO_KEY;
+        try {
+            expect(() => openPreview(token)).toThrow('API_CRYPTO_KEY');
+        } finally {
+            process.env.API_CRYPTO_KEY = previous;
+        }
     });
 });
