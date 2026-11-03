@@ -600,6 +600,9 @@ describe('TeamMemberService — deterministic logic', () => {
                     userId: 'insider',
                     email: 'insider@acme.dev',
                 });
+                // Sealed, not encoded: under another key it does not open.
+                process.env.API_CRYPTO_KEY = 'ef'.repeat(32);
+                expect(openInvitation(token)).toBeNull();
             } finally {
                 process.env.API_CRYPTO_KEY = cryptoKey;
                 process.env.API_USER_INVITE_BASE_URL = baseUrl;

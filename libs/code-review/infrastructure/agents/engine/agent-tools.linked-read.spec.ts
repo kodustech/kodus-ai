@@ -103,6 +103,11 @@ describe('agent tools — readFile on a linked repository', () => {
         const cmd = run.mock.calls[0][0] as string;
         expect(cmd).toContain("f='/home/user/_linked/acme-shared/src/a.ts'");
         expect(cmd).toContain('Symlink detected, refusing to follow');
+        // The root itself must be its own real path: a symlinked root is
+        // refused in the sandbox's shell (read-within-root.spec runs it).
+        expect(cmd).toContain(
+            `if [ "$r" != '/home/user/_linked/acme-shared' ]; then echo "Not a real directory`,
+        );
 
         await expect(rc.read('passwd', 0, 0, '/etc')).rejects.toThrow(
             /Not a repository root/,
