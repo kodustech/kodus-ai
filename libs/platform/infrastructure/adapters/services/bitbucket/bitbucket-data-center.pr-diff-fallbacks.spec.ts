@@ -221,27 +221,6 @@ describe('BitbucketDataCenterService.getFilesByPullRequestId — file entries', 
             }),
         );
     });
-
-    it('lets a transport failure on the listing through: it is not a PR with no files', async () => {
-        const { service } = makeHost({
-            changes: [],
-            wholeDiff: async () => ({ data: { diffs: [] } }),
-        });
-        jest.spyOn(service as any, 'getAxiosInstance').mockReturnValue({
-            get: jest.fn().mockRejectedValue(new Error('socket hang up')),
-        });
-
-        await expect(
-            service.getFilesByPullRequestId({
-                organizationAndTeamData: {
-                    organizationId: 'org-1',
-                    teamId: 't',
-                },
-                repository: { id: 'r1', name: 'api' },
-                prNumber: 7,
-            }),
-        ).rejects.toThrow('socket hang up');
-    });
 });
 
 describe('BitbucketDataCenterService.getFilesByPullRequestId — whole-diff fallbacks', () => {
@@ -349,40 +328,6 @@ describe('BitbucketDataCenterService.getFilesByPullRequestId — whole-diff fall
     });
 });
 
-describe('BitbucketDataCenterService.getFilesByPullRequestId — per-file read failures', () => {
-    it('lets a network failure on a per-file read through instead of a null patch', async () => {
-        const { list } = makeHost({
-            changes: [{ path: 'a.ts', type: 'MODIFY' }],
-            wholeDiff: async () => ({ data: { truncated: true } }),
-            perFile: () => Promise.reject(new Error('socket hang up')),
-        });
-
-        await expect(list()).rejects.toThrow('socket hang up');
-    });
-});
-
-describe('BitbucketDataCenterService.getFilesByPullRequestId — a per-file diff cut short', () => {
-    it('keeps the hunks it sent and warns that the patch is partial', async () => {
-        const { list, logger } = makeHost({
-            changes: [{ path: 'big.ts', type: 'MODIFY' }],
-            wholeDiff: async () => ({ data: { truncated: true } }),
-            perFile: async (path) => ({
-                data: { truncated: true, diffs: [jsonDiff(path, path)] },
-            }),
-        });
-
-        const files = await list();
-
-        expect(files?.[0]?.patch).toBe(PATCH);
-        expect(logger.warn).toHaveBeenCalledWith({
-            message:
-                'Diff of big.ts in PR#7 was truncated; its patch is partial',
-            context: BitbucketDataCenterService.name,
-            metadata: { ...LOG_METADATA, filePath: 'big.ts' },
-        });
-    });
-});
-
 describe('BitbucketDataCenterService.getChangedFilesSinceLastCommit — listing failures', () => {
     const since = (get: jest.Mock) => {
         const { service, logger } = makeHost({
@@ -413,14 +358,6 @@ describe('BitbucketDataCenterService.getChangedFilesSinceLastCommit — listing 
         await expect(run()).rejects.toMatchObject({
             response: { status: 429 },
         });
-    });
-
-    it('lets a transport failure through: it is not "nothing changed" either', async () => {
-        const { run } = since(
-            jest.fn().mockRejectedValue(new Error('socket hang up')),
-        );
-
-        await expect(run()).rejects.toThrow('socket hang up');
     });
 
     it('answers null and logs any other failure', async () => {

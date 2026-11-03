@@ -3,10 +3,7 @@ import {
     isFileMatchingGlobCaseInsensitive,
 } from '@libs/common/utils/glob-utils';
 import { createLogger } from '@libs/core/log/logger';
-import {
-    is429Error,
-    isTransientFetchError,
-} from '@libs/core/infrastructure/http/rate-limit-retry';
+import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
@@ -1372,8 +1369,7 @@ export class BitbucketDataCenterService implements Omit<
             });
         } catch (error) {
             // A rate-limited listing is not a PR with no files
-            // A transport failure is not an empty listing either: let the job retry
-            if (is429Error(error) || isTransientFetchError(error)) throw error;
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message: `Error getting fully populated files for DC PR #${params.prNumber}`,
                 context: BitbucketDataCenterService.name,
@@ -1460,26 +1456,10 @@ export class BitbucketDataCenterService implements Omit<
                             `${repoPath}/pull-requests/${prNumber}/diff`,
                             { params: { path, limit: 1000 } },
                         );
-                        const diffs = data?.diffs || [];
-                        for (const diff of diffs) add(path, diff);
-                        if (
-                            data?.truncated ||
-                            diffs.some((d) => d?.truncated)
-                        ) {
-                            // The host cut this file's diff too: keep the
-                            // hunks it sent, and say the patch is partial
-                            this.logger.warn({
-                                message: `Diff of ${path} in PR#${prNumber} was truncated; its patch is partial`,
-                                context: BitbucketDataCenterService.name,
-                                metadata: { ...logMetadata, filePath: path },
-                            });
-                        }
+                        for (const diff of data?.diffs || []) add(path, diff);
                     } catch (error) {
-                        // A rate limit or a network failure is not an empty
-                        // diff: let the job retry
-                        if (is429Error(error) || isTransientFetchError(error)) {
-                            throw error;
-                        }
+                        // A rate limit is not an empty diff: let the job retry
+                        if (is429Error(error)) throw error;
                         this.logger.error({
                             message: `Could not fetch diff for ${path}`,
                             context: BitbucketDataCenterService.name,
@@ -3560,9 +3540,8 @@ export class BitbucketDataCenterService implements Omit<
                     content: null,
                 }));
         } catch (error) {
-            // A rate limit or a transport failure is not "nothing changed":
-            // let the job retry
-            if (is429Error(error) || isTransientFetchError(error)) throw error;
+            // A rate-limited listing is not "nothing changed": let the job retry
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message:
                     'Error fetching changed files since last commit in Data Center',

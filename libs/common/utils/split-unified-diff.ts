@@ -53,48 +53,6 @@ export function splitUnifiedDiff(diff: string): UnifiedDiffFile[] {
         .filter((file): file is UnifiedDiffFile => !!file);
 }
 
-const HUNK_HEADER = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/;
-
-/**
- * Whether every hunk of a `patch` (as splitUnifiedDiff returns it) holds the
- * lines its `@@` header declares. A diff the host cut short ends inside a
- * hunk, so the file it was cut in fails this. The last hunk may be short by
- * context lines alone (as many old as new): the section's trailing trim drops
- * an empty context line at its very end.
- */
-export function isPatchComplete(patch: string): boolean {
-    if (!patch) return true;
-
-    const hunks: Array<{ old: number; new: number }> = [];
-    for (const line of patch.split('\n')) {
-        const header = line.match(HUNK_HEADER);
-        if (header) {
-            hunks.push({
-                old: Number(header[1] ?? 1),
-                new: Number(header[2] ?? 1),
-            });
-            continue;
-        }
-        const hunk = hunks[hunks.length - 1];
-        if (!hunk) return false;
-        if (line.startsWith('+')) hunk.new--;
-        else if (line.startsWith('-')) hunk.old--;
-        else if (!line.startsWith('\\')) {
-            // Context: ' ' or, from hosts that strip it, an empty line
-            hunk.old--;
-            hunk.new--;
-        }
-    }
-
-    return hunks.every(
-        (hunk, index) =>
-            (hunk.old === 0 && hunk.new === 0) ||
-            (index === hunks.length - 1 &&
-                hunk.old === hunk.new &&
-                hunk.old > 0),
-    );
-}
-
 /**
  * The file's path after the change, as a host lists it. The `---`/`+++`
  * lines and the extended headers carry one path each, so they are read

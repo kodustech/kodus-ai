@@ -521,16 +521,6 @@ describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => 
         );
     });
 
-    it('lets a transport failure on the listing through, full and incremental', async () => {
-        const { service } = makeService(jest.fn());
-        jest.spyOn(service as any, 'getPaginatedResults').mockRejectedValue(
-            new TypeError('fetch failed'),
-        );
-
-        await expect(getFiles(service)).rejects.toThrow('fetch failed');
-        await expect(since(service)).rejects.toThrow('fetch failed');
-    });
-
     it('incremental: answers null, not a throw, when listing fails for another reason', async () => {
         const { service } = makeService(jest.fn());
         jest.spyOn(service as any, 'getPaginatedResults').mockRejectedValue(
@@ -538,57 +528,6 @@ describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => 
         );
 
         await expect(since(service)).resolves.toBeNull();
-    });
-
-    it('incremental: reads every file the whole diff lacks once the host cut it short', async () => {
-        // The whole diff ends inside a.ts's hunk (3 lines declared, 1 sent);
-        // b.ts came after the cut and is not in it at all
-        const cut = [
-            'diff --git a/src/a.ts b/src/a.ts',
-            '--- a/src/a.ts',
-            '+++ b/src/a.ts',
-            '@@ -1,3 +1,3 @@',
-            '-old a',
-            '',
-        ].join('\n');
-        const getDiff = jest.fn((args: { path?: string }) =>
-            Promise.resolve({ data: args.path ? sectionFor(args.path) : cut }),
-        );
-        const { service } = makeService(getDiff as any);
-
-        const files = await since(service);
-
-        expect(getDiff.mock.calls.map(([a]) => a.path)).toEqual([
-            undefined,
-            'src/a.ts',
-            'src/b.ts',
-        ]);
-        expect(files?.map((f) => [f.filename, f.patch])).toEqual([
-            ['src/a.ts', '@@ -1 +1 @@\n-old a\n+new a'],
-            ['src/b.ts', '@@ -0,0 +1 @@\n+new b'],
-        ]);
-        expect(logger(service).warn).toHaveBeenCalledWith(
-            expect.objectContaining({
-                message:
-                    'Whole-PR diff for spec head..last was cut short in src/a.ts; reading 2 missing file(s) one by one',
-                metadata: expect.objectContaining({
-                    organizationId: 'org-1',
-                    cutShort: ['src/a.ts'],
-                    missing: 2,
-                }),
-            }),
-        );
-    });
-
-    it('lets a network failure on a per-file read through instead of a null patch', async () => {
-        const getDiff = jest.fn((args: { path?: string }) =>
-            args.path
-                ? Promise.reject(new TypeError('fetch failed'))
-                : Promise.reject(new Error('diff too large')),
-        );
-        const { service } = makeService(getDiff as any);
-
-        await expect(getFiles(service)).rejects.toThrow('fetch failed');
     });
 
     it('incremental: lets a 429 through instead of answering null', async () => {

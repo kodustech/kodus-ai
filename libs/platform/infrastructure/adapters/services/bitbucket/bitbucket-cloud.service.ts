@@ -17,10 +17,7 @@ import {
 } from '@libs/core/infrastructure/http/per-key-rate-gate';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
-import {
-    isPatchComplete,
-    splitUnifiedDiff,
-} from '@libs/common/utils/split-unified-diff';
+import { splitUnifiedDiff } from '@libs/common/utils/split-unified-diff';
 import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
@@ -2101,8 +2098,7 @@ export class BitbucketCloudService implements Omit<
         } catch (error) {
             // A rate limit is not a PR without files: let the job retry it
             // with backoff instead of reviewing nothing.
-            // A transport failure is not an empty listing either: let the job retry
-            if (is429Error(error) || isTransientFetchError(error)) throw error;
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message: `Error to get files by pull request id: ${params?.prNumber}`,
                 context: BitbucketCloudService.name,
@@ -2220,8 +2216,7 @@ export class BitbucketCloudService implements Omit<
 
             return changedFiles.filter(Boolean);
         } catch (error) {
-            // A transport failure is not an empty listing either: let the job retry
-            if (is429Error(error) || isTransientFetchError(error)) throw error;
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message:
                     'Error to get incremental changed files since last commit',
@@ -5033,10 +5028,6 @@ export class BitbucketCloudService implements Omit<
         // the listing does not have: a missing path may then be a parse
         // mismatch rather than a file this diff leaves untouched.
         let parseMismatch = false;
-        // Files whose section ends before its hunks do: the host cut the
-        // diff short there, and whatever came after the cut is not in it
-        // at all, so a path it lacks proves nothing.
-        const cutShort = new Set<string>();
 
         try {
             const diff = await bitbucketAPI.commits
@@ -5048,11 +5039,7 @@ export class BitbucketCloudService implements Omit<
                 .then((res) => res.data as string);
             const files = splitUnifiedDiff(diff);
             for (const file of files) {
-                if (isPatchComplete(file.patch)) {
-                    patches.set(file.filename, file.patch);
-                } else {
-                    cutShort.add(file.filename);
-                }
+                patches.set(file.filename, file.patch);
             }
             const sections = (diff?.match(/^diff --git /gm) ?? []).length;
             const listed = new Set(paths);
@@ -5071,28 +5058,13 @@ export class BitbucketCloudService implements Omit<
         }
 
         const missing = paths.filter((path) => !patches.has(path));
-        // Without a fill, a path a complete whole diff left out did not
-        // change. A cut or mismatched one proves nothing: read them all.
         if (
             !missing.length ||
-            (wholeDiffRead &&
-                !fillMissingPerFile &&
-                !parseMismatch &&
-                !cutShort.size)
+            (wholeDiffRead && !fillMissingPerFile && !parseMismatch)
         ) {
             return patches;
         }
-        if (cutShort.size) {
-            this.logger.warn({
-                message: `Whole-PR diff for spec ${spec} was cut short in ${[...cutShort].join(', ')}; reading ${missing.length} missing file(s) one by one`,
-                context: BitbucketCloudService.name,
-                metadata: {
-                    ...logMetadata,
-                    cutShort: [...cutShort],
-                    missing: missing.length,
-                },
-            });
-        } else if (wholeDiffRead && parseMismatch) {
+        if (wholeDiffRead && parseMismatch) {
             this.logger.warn({
                 message: `Whole-PR diff for spec ${spec} did not key every file; reading ${missing.length} missing file(s) one by one`,
                 context: BitbucketCloudService.name,
@@ -5121,9 +5093,7 @@ export class BitbucketCloudService implements Omit<
                                 this.convertDiff(diff ?? ''),
                         );
                     } catch (error) {
-                        if (is429Error(error) || isTransientFetchError(error)) {
-                            throw error;
-                        }
+                        if (is429Error(error)) throw error;
                         // null = the read failed, as opposed to a path absent
                         // from the map (not in the diff): callers keep it
                         this.logger.warn({
