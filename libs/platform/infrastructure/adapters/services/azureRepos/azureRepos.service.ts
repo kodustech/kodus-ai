@@ -1750,8 +1750,6 @@ export class AzureReposService implements Omit<
                     baseCommitId: lastCommit.sha,
                     targetCommitId,
                     changeType: change.changeType,
-                    // A rate-limited file is not an unchanged one
-                    rethrowRateLimit: true,
                 });
 
                 if (fileDiff) {
@@ -1773,8 +1771,6 @@ export class AzureReposService implements Omit<
 
             return changedFiles;
         } catch (error) {
-            // A transport failure is not an empty listing either: let the job retry
-            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message: `Failed to get changed files since last commit for PR #${params.prNumber}`,
                 context: AzureReposService.name,
@@ -3992,19 +3988,10 @@ export class AzureReposService implements Omit<
                             baseCommitId,
                             targetCommitId,
                             changeType: change.changeType,
-                            rethrowRateLimit: true,
                         }),
                     ),
                 ),
             );
-
-            // A rate-limited file is not a missing one: the whole listing
-            // fails so the job retries instead of reviewing part of the PR.
-            const rateLimited = settled.find(
-                (result): result is PromiseRejectedResult =>
-                    result.status === 'rejected' && is429Error(result.reason),
-            );
-            if (rateLimited) throw rateLimited.reason;
 
             const successfulFiles: Array<
                 NonNullable<
@@ -4086,8 +4073,6 @@ export class AzureReposService implements Omit<
 
             return fileChanges;
         } catch (error: any) {
-            // A transport failure is not an empty listing either: let the job retry
-            if (is429Error(error) || isTransientFetchError(error)) throw error;
             this.logger.error({
                 message: `Failed to get files for Azure Repos PR #${params.prNumber} in repo ${params.repository.name}`,
                 context: this.getFilesByPullRequestId.name,
