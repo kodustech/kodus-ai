@@ -94,6 +94,34 @@ describe('SandboxConcurrencyLimiter', () => {
         await expect(next).resolves.toBe(true);
         expect(onStale).toHaveBeenCalledWith('leaked', 1_500);
     });
+
+    it('still reports a dropped holder when its sink throws', async () => {
+        let now = 0;
+        const limiter = new SandboxConcurrencyLimiter(
+            1_000,
+            () => now,
+            () => {
+                throw new Error('log sink down');
+            },
+        );
+        const emitWarning = jest
+            .spyOn(process, 'emitWarning')
+            .mockImplementation(() => undefined);
+        try {
+            await limiter.acquire('leaked', 1);
+            const next = limiter.acquire('next', 1);
+            now = 1_500;
+            limiter.setLimit(1);
+
+            await expect(next).resolves.toBe(true);
+            expect(emitWarning).toHaveBeenCalledWith(
+                expect.stringContaining('dropped holder leaked after 1500ms'),
+                { code: 'SANDBOX_STALE_HOLDER_REPORT_LOST' },
+            );
+        } finally {
+            emitWarning.mockRestore();
+        }
+    });
 });
 
 describe('parseLimits', () => {
@@ -169,5 +197,7 @@ describe('SandboxConcurrencyConfigService', () => {
         await expect(service.getLimits()).resolves.toEqual({
             maxPerWorker: 3,
         });
+        // The second answer came from a failed re-read, not the cache
+        expect(findByKey).toHaveBeenCalledTimes(2);
     });
 });

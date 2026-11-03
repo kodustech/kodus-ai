@@ -106,16 +106,16 @@ export function parseLimits(value: unknown): SandboxConcurrencyLimits {
     if (!value || typeof value !== 'object') {
         return DEFAULT_SANDBOX_CONCURRENCY_LIMITS;
     }
-    const raw = value as Record<string, unknown>;
+    const configured = (value as Record<string, unknown>).maxPerWorker;
     const fallback = DEFAULT_SANDBOX_CONCURRENCY_LIMITS.maxPerWorker;
-    const maxPerWorker = nonNegativeInt(raw.maxPerWorker, fallback);
+    const maxPerWorker = nonNegativeInt(configured, fallback);
     if (maxPerWorker > MAX_SANDBOX_PER_WORKER) {
         logger.warn({
             message:
                 'sandbox_concurrency.maxPerWorker is above the ceiling; using the default',
             context: 'SandboxConcurrencyConfig',
             metadata: {
-                configured: raw.maxPerWorker,
+                configured,
                 max: MAX_SANDBOX_PER_WORKER,
                 default: fallback,
             },

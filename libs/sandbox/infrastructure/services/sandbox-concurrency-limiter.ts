@@ -106,8 +106,13 @@ export class SandboxConcurrencyLimiter {
                 dropped = true;
                 try {
                     this.onStaleHolder?.(holderId, now - since);
-                } catch {
-                    // A failing log sink must not block slot accounting
+                } catch (error) {
+                    // A failing sink must not block slot accounting, and the
+                    // drop (a release() that never ran) must still be seen
+                    process.emitWarning(
+                        `SandboxConcurrencyLimiter: dropped holder ${holderId} after ${now - since}ms without release; reporting it failed: ${error instanceof Error ? error.message : String(error)}`,
+                        { code: 'SANDBOX_STALE_HOLDER_REPORT_LOST' },
+                    );
                 }
             }
         }

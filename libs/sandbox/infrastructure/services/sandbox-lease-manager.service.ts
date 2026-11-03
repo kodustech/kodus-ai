@@ -194,12 +194,18 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     readonly concurrencyLimiter = new SandboxConcurrencyLimiter(
         CONCURRENCY_SLOT_STALE_MS,
         Date.now,
-        (slotId, heldMs) =>
+        (slotId, heldMs) => {
+            // The limiter no longer counts this slot: forget it, so the next
+            // acquire on its prKey takes a new one instead of joining it
+            for (const [prKey, slot] of this.prKeySlots) {
+                if (slot.slotId === slotId) this.prKeySlots.delete(prKey);
+            }
             this.logger.warn({
                 message: `SandboxLeaseManager: dropped a sandbox slot held ${heldMs}ms without release`,
                 context: SandboxLeaseManager.name,
                 metadata: { slotId, heldMs },
-            }),
+            });
+        },
     );
     /**
      * Slots are per sandbox, not per lease: the review, its safeguard pass
@@ -207,11 +213,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * one slot. `granted` is shared so concurrent acquires on the same prKey
      * wait on one slot instead of taking two.
      */
-    private readonly prKeySlots = new Map<
+    private readonly prKeySlots = new Map<string, WorkerSlot>();
+    /** The slot each lease holds, kept even after the slot was dropped. */
+    private readonly leaseIdToSlot = new Map<
         string,
-        { slotId: string; refs: number; granted: Promise<boolean> }
+        { prKey: string; slot: WorkerSlot }
     >();
-    private readonly leaseIdToSlotPrKey = new Map<string, string>();
 
     constructor(
         @Inject(SANDBOX_PROVIDER_TOKEN)
@@ -251,7 +258,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         const takesSlot = !options?.replacesOwnSandbox;
 
         try {
-            if (takesSlot) await this.takeSlot(prKey, consumer, signal);
+            const slot = takesSlot
+                ? await this.takeSlot(prKey, consumer, signal)
+                : null;
             try {
                 const result = await this.acquireLease(
                     prKey,
@@ -260,12 +269,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     cloneParams,
                     signal,
                 );
-                if (takesSlot) {
-                    this.leaseIdToSlotPrKey.set(result.leaseId, prKey);
-                }
+                if (slot)
+                    this.leaseIdToSlot.set(result.leaseId, { prKey, slot });
                 return result;
             } catch (err) {
-                if (takesSlot) this.dropSlot(prKey);
+                if (slot) this.dropSlot(prKey, slot);
                 throw err;
             }
         } finally {
@@ -282,7 +290,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         prKey: string,
         consumer: string,
         signal?: AbortSignal,
-    ): Promise<void> {
+    ): Promise<WorkerSlot> {
         let limits =
             (await this.concurrencyConfig?.getLimits()) ??
             DEFAULT_SANDBOX_CONCURRENCY_LIMITS;
@@ -327,11 +335,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                         },
                     });
                 }
-                return;
+                return slot;
             }
 
             if (outcome === 'aborted' || outcome === 'withdrawn') {
-                this.dropSlot(prKey);
+                this.dropSlot(prKey, slot);
                 this.logger.warn({
                     message: `SandboxLeaseManager: stopped waiting for a sandbox slot after ${waitedMs}ms prKey="${prKey}" consumer="${consumer}"`,
                     context: SandboxLeaseManager.name,
@@ -365,13 +373,15 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         }
     }
 
-    /** Drop one reference to prKey's slot; the last one frees the slot. */
-    private dropSlot(prKey: string): void {
-        const slot = this.prKeySlots.get(prKey);
-        if (!slot) return;
+    /**
+     * Drop one reference to a slot; the last one frees it. The slot is passed
+     * in, not looked up: one the limiter dropped as stale was replaced for its
+     * prKey, and a late release must not decrement the replacement.
+     */
+    private dropSlot(prKey: string, slot: WorkerSlot): void {
         slot.refs--;
         if (slot.refs > 0) return;
-        this.prKeySlots.delete(prKey);
+        if (this.prKeySlots.get(prKey) === slot) this.prKeySlots.delete(prKey);
         this.concurrencyLimiter.release(slot.slotId);
     }
 
@@ -554,10 +564,10 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     async release(leaseId: string, opts?: { idleMs?: number }): Promise<void> {
         // Free the worker slot first: whatever happens to the lease doc
         // below, this process no longer holds the sandbox.
-        const slotPrKey = this.leaseIdToSlotPrKey.get(leaseId);
-        if (slotPrKey) {
-            this.leaseIdToSlotPrKey.delete(leaseId);
-            this.dropSlot(slotPrKey);
+        const held = this.leaseIdToSlot.get(leaseId);
+        if (held) {
+            this.leaseIdToSlot.delete(leaseId);
+            this.dropSlot(held.prKey, held.slot);
         }
 
         const prKey = this.leaseIdToPrKey.get(leaseId);
@@ -1004,6 +1014,28 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
         for (let attempt = 0; attempt < CREATE_MAX_ATTEMPTS;) {
             const permit = this.createCircuit.tryAcquire();
+            if (
+                !permit &&
+                capacityWaits > 0 &&
+                this.createCircuit.getState() === 'HALF_OPEN'
+            ) {
+                // Waiting for E2B room, this create gave its probe up and
+                // another took it. That is not an outage verdict: keep
+                // waiting until the probe decides (CLOSED lets this create
+                // through, OPEN ends it below).
+                const delayMs = calculateBackoffInterval(
+                    capacityWaits++,
+                    CAPACITY_WAIT_BACKOFF,
+                );
+                if ((await waitFor(null, delayMs, signal)) === 'aborted') {
+                    throw new SandboxWaitAbortedError(
+                        prKey,
+                        Date.now() - startedAt,
+                        'room in the E2B plan',
+                    );
+                }
+                continue;
+            }
             if (!permit) {
                 const retryInMs = this.createCircuit.remainingOpenMs();
                 this.logger.warn({
@@ -1368,6 +1400,13 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** One worker slot, shared by every lease this process holds on a prKey. */
+interface WorkerSlot {
+    slotId: string;
+    refs: number;
+    granted: Promise<boolean>;
 }
 
 type CapacityWaitOutcome = 'granted' | 'withdrawn' | 'tick' | 'aborted';

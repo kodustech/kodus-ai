@@ -839,7 +839,9 @@ describe('SandboxLeaseManager', () => {
             expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
                 4,
             );
-            expect(manager.createCircuit.getState()).toBe('CLOSED');
+            // Not one plan-full refusal counted as a failure (CLOSED alone
+            // would hold anyway: they all come from one organization)
+            expect((manager.createCircuit as any).failures).toHaveLength(0);
         });
 
         it('stops waiting for room in the E2B plan when the job aborts', async () => {
@@ -860,7 +862,96 @@ describe('SandboxLeaseManager', () => {
             await expect(acquired).rejects.toBeInstanceOf(
                 SandboxWaitAbortedError,
             );
+            expect((manager.createCircuit as any).failures).toHaveLength(0);
+        });
+
+        it('keeps waiting for E2B room when another create took the probe meanwhile', async () => {
+            jest.useFakeTimers({ now: 1_000_000 });
+            const manager = cappedManager(0);
+            const breaker = manager.createCircuit as any;
+            breaker.now = () => Date.now();
+            for (const org of ['a', 'b', 'c', 'a', 'b']) {
+                breaker.recordFailure(org, { probe: false });
+            }
+            jest.setSystemTime(1_000_000 + 2 * 60_000);
+            expect(manager.createCircuit.getState()).toBe('HALF_OPEN');
+
+            let finishOtherProbe!: (value: SandboxInstance) => void;
+            sandboxProvider.createSandboxWithRepo
+                // This create is the probe, and E2B has no room for it
+                .mockRejectedValueOnce(planFull())
+                // Meanwhile another review takes the probe
+                .mockImplementationOnce(
+                    () => new Promise((r) => (finishOtherProbe = r)),
+                );
+
+            const waiting = manager
+                .acquire(prKeyFor(20), 'review', undefined, cloneParamsFor(20))
+                .catch((e) => e);
+            await jest.advanceTimersByTimeAsync(0);
+            const other = manager.acquire(
+                prKeyFor(21),
+                'review',
+                undefined,
+                cloneParamsFor(21),
+            );
+            await jest.advanceTimersByTimeAsync(30_000);
+
+            // Not ejected while the other probe runs
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                2,
+            );
+            finishOtherProbe({
+                type: 'e2b',
+                sandboxId: 'probe-ok',
+                cleanup: jest.fn(),
+                remoteCommands: {} as any,
+                run: jest.fn(),
+                readFile: jest.fn(),
+                writeFile: jest.fn(),
+                repoDir: '/home/user/repo',
+            });
+            await other;
             expect(manager.createCircuit.getState()).toBe('CLOSED');
+
+            await jest.advanceTimersByTimeAsync(70_000);
+            await expect(waiting).resolves.toMatchObject({ wasCreated: true });
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                3,
+            );
+        });
+
+        it('takes a new slot on a prKey whose slot was dropped as stale, and a late release leaves it alone', async () => {
+            jest.useFakeTimers({ now: 1_000_000 });
+            const capped = cappedManager(1);
+            (capped.concurrencyLimiter as any).now = () => Date.now();
+            const old = await capped.acquire(prKeyFor(30), 'review');
+
+            // Two hours on without a release: the next acquire drops it
+            jest.setSystemTime(1_000_000 + 2 * 60 * 60 * 1000 + 1);
+            const other = await capped.acquire(prKeyFor(31), 'review');
+            expect(capped.concurrencyLimiter.active).toBe(1);
+
+            // prKey 30 queues for a slot of its own instead of joining the
+            // dropped one
+            let joined = false;
+            const again = capped
+                .acquire(prKeyFor(30), 'safeguard')
+                .then((r) => ((joined = true), r));
+            await jest.advanceTimersByTimeAsync(1_000);
+            expect(joined).toBe(false);
+            expect(capped.concurrencyLimiter.waiting).toBe(1);
+
+            // The old lease's late release frees nothing that is held
+            await capped.release(old.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(1);
+            expect(capped.concurrencyLimiter.waiting).toBe(1);
+
+            await capped.release(other.leaseId);
+            await expect(again).resolves.toMatchObject({
+                leaseId: expect.any(String),
+            });
+            expect(capped.concurrencyLimiter.active).toBe(1);
         });
     });
 
