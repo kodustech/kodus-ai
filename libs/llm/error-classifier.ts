@@ -450,6 +450,10 @@ function matchByMessage(lower: string): LlmErrorCategory {
     if (
         lower.includes('invalid_api_key') ||
         lower.includes('invalid api key') ||
+        // Google answers a wrong or expired key with HTTP 400, not 401.
+        lower.includes('api_key_invalid') ||
+        lower.includes('api key not valid') ||
+        lower.includes('api key expired') ||
         lower.includes('incorrect api key') ||
         lower.includes('unauthorized') ||
         lower.includes('authentication failed') ||

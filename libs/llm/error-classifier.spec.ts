@@ -168,7 +168,9 @@ describe('classifyLLMError', () => {
 
         it('reads a Google per-minute token quota on a 429 as RATE_LIMIT', () => {
             const err = errorWithStatus(
-                googleQuota('GenerateContentPaidTierInputTokensPerModelPerMinute'),
+                googleQuota(
+                    'GenerateContentPaidTierInputTokensPerModelPerMinute',
+                ),
                 429,
             );
             expect(classifyLLMError(err).category).toBe(
@@ -178,7 +180,9 @@ describe('classifyLLMError', () => {
 
         it('keeps a Google daily quota on a 429 as QUOTA_EXCEEDED', () => {
             const err = errorWithStatus(
-                googleQuota('GenerateRequestsPerDayPerProjectPerModel-FreeTier'),
+                googleQuota(
+                    'GenerateRequestsPerDayPerProjectPerModel-FreeTier',
+                ),
                 429,
             );
             expect(classifyLLMError(err).category).toBe(
@@ -577,12 +581,15 @@ describe('classifyLLMError', () => {
             'the upstream returned status=503',
             'a JSON body {"code":503} came back from the proxy',
             'a JSON body {"statusCode":503} came back from the proxy',
-        ])('status keyword/word-glued 5xx without a real status (%s) → not TRANSIENT', (msg) => {
-            const err = new Error(msg);
-            expect(classifyLLMError(err).category).not.toBe(
-                LlmErrorCategory.TRANSIENT,
-            );
-        });
+        ])(
+            'status keyword/word-glued 5xx without a real status (%s) → not TRANSIENT',
+            (msg) => {
+                const err = new Error(msg);
+                expect(classifyLLMError(err).category).not.toBe(
+                    LlmErrorCategory.TRANSIENT,
+                );
+            },
+        );
 
         it('unrecognized message → UNKNOWN', () => {
             const err = new Error('something weird happened in the SDK');
@@ -764,10 +771,21 @@ describe('REQUEST_REJECTED (#1687)', () => {
         );
     });
 
+    it.each([
+        'API key not valid. Please pass a valid API key.',
+        'API key expired. Please renew the API key.',
+        '{"reason":"API_KEY_INVALID","domain":"googleapis.com"}',
+    ])("keeps Google's 400 for a rejected key as AUTH_INVALID: %s", (msg) => {
+        expect(classifyLLMError(apiError(400, msg), 'google').category).toBe(
+            LlmErrorCategory.AUTH_INVALID,
+        );
+    });
+
     it('treats a 422 the same way', () => {
         expect(
-            classifyLLMError(apiError(422, 'Unprocessable: unknown field "foo"'))
-                .category,
+            classifyLLMError(
+                apiError(422, 'Unprocessable: unknown field "foo"'),
+            ).category,
         ).toBe(LlmErrorCategory.REQUEST_REJECTED);
     });
 
