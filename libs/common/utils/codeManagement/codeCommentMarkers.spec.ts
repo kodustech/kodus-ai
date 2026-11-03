@@ -15,6 +15,7 @@ import {
     isForceReviewCommand,
     isHeavyReviewCommand,
     isKodyMentionNonReview,
+    requestedReviewModeOf,
 } from './codeCommentMarkers';
 
 describe('isReviewCommand', () => {
@@ -391,6 +392,43 @@ describe('isHeavyReviewCommand', () => {
 
     it('leaves --heavy out of the review directive', () => {
         expect(parseReviewDirective('@kody review --heavy the auth flow')).toBe(
+            'the auth flow',
+        );
+    });
+});
+
+describe('requestedReviewModeOf', () => {
+    it('reads --heavy and --balanced in any position of a review command', () => {
+        expect(requestedReviewModeOf('@kody review --heavy')).toBe('heavy');
+        expect(requestedReviewModeOf('@kody review --balanced')).toBe('balanced');
+        expect(requestedReviewModeOf('@kody review auth --balanced')).toBe(
+            'balanced',
+        );
+        expect(requestedReviewModeOf('@mybot review --balanced', 'mybot')).toBe(
+            'balanced',
+        );
+    });
+
+    it('lets --heavy win when both flags are passed', () => {
+        expect(requestedReviewModeOf('@kody review --balanced --heavy')).toBe(
+            'heavy',
+        );
+    });
+
+    it('asks for no mode without a flag, so the mode in settings applies', () => {
+        expect(requestedReviewModeOf('@kody review')).toBeUndefined();
+        expect(requestedReviewModeOf('@kody review --force')).toBeUndefined();
+        expect(
+            requestedReviewModeOf('@kody review balanced checkout path'),
+        ).toBeUndefined();
+        expect(requestedReviewModeOf(undefined)).toBeUndefined();
+    });
+
+    it('leaves --balanced out of the review directive', () => {
+        expect(
+            parseReviewDirective('@kody review --force --balanced the auth flow'),
+        ).toBe('the auth flow');
+        expect(parseReviewDirective('@kody review the auth flow --balanced')).toBe(
             'the auth flow',
         );
     });

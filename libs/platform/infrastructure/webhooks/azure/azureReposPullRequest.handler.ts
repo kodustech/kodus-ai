@@ -12,7 +12,7 @@ import {
     isKodyMentionNonReview,
     isReviewCommand,
     parseReviewDirective,
-    isHeavyReviewCommand,
+    requestedReviewModeOf,
     parseCustomAgentCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { isNewThreadReply } from '@libs/common/utils/codeManagement/threadReply';
@@ -546,7 +546,7 @@ export class AzureReposPullRequestHandler implements IWebhookEventHandler {
                         origin: isForceCommand ? 'command-force' : 'command',
                         triggerCommentId: comment?.id,
                         reviewDirective: parseReviewDirective(comment.body),
-                        heavy: isHeavyReviewCommand(comment.body),
+                        requestedReviewMode: requestedReviewModeOf(comment.body),
                         onlyCustomAgent: customAgentSlug,
                     },
                 };

@@ -3,6 +3,7 @@
  * Kodus Tech. All rights reserved.
  */
 
+import type { RequestedReviewMode } from '@libs/code-review/domain/review-mode';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -201,8 +202,8 @@ export class CodeReviewHandlerService {
         parentSignal?: AbortSignal,
         // Free-text steering directive from `@kody review <directive>`.
         reviewDirective?: string,
-        // `@kody review --heavy` — the M3 lenses next to the generalist.
-        heavy?: boolean,
+        // `@kody review --heavy` / `--balanced`, over the mode in settings.
+        requestedReviewMode?: RequestedReviewMode,
         // `@kody -v <slug>` — run only that custom agent (#2172).
         onlyCustomAgent?: string,
     ) {
@@ -230,7 +231,7 @@ export class CodeReviewHandlerService {
                 triggerCommentId,
                 userGitId,
                 reviewDirective,
-                heavy,
+                requestedReviewMode,
                 ...(onlyCustomAgent ? { onlyCustomAgent } : {}),
                 pipelineMetadata: {
                     lastExecution: {
