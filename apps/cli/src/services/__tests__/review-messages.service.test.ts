@@ -14,7 +14,7 @@ vi.mock('../api/index.js', () => ({
 }));
 
 vi.mock('../auth.service.js', () => ({
-    authService: { getValidToken: vi.fn() },
+    authService: { getValidToken: vi.fn(), getUserToken: vi.fn() },
 }));
 
 vi.mock('../review-settings.service.js', () => ({
@@ -83,6 +83,7 @@ describe('reviewMessagesService', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(authService.getValidToken).mockResolvedValue(USER_TOKEN);
+        vi.mocked(authService.getUserToken).mockResolvedValue(USER_TOKEN);
         vi.mocked(api.config.getTeams).mockResolvedValue([
             { uuid: 'team-1', name: 'Core', status: 'active' },
         ]);
@@ -97,6 +98,8 @@ describe('reviewMessagesService', () => {
 
     it('rejects a team key with the login hint', async () => {
         vi.mocked(authService.getValidToken).mockResolvedValue('kodus_key');
+        // Only a team key: no user credential.
+        vi.mocked(authService.getUserToken).mockResolvedValue(null);
 
         await expect(
             reviewMessagesService.show({ repository: '.' }),
@@ -289,6 +292,7 @@ describe('reviewLanguageService', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(authService.getValidToken).mockResolvedValue(USER_TOKEN);
+        vi.mocked(authService.getUserToken).mockResolvedValue(USER_TOKEN);
         vi.mocked(api.config.getTeams).mockResolvedValue([
             { uuid: 'team-1', name: 'Core', status: 'active' },
         ]);
@@ -332,6 +336,7 @@ describe('reviewLanguageService', () => {
 
     it('rejects a team key', async () => {
         vi.mocked(authService.getValidToken).mockResolvedValue('kodus_key');
+        vi.mocked(authService.getUserToken).mockResolvedValue(null);
 
         await expect(reviewLanguageService.set('pt-BR')).rejects.toMatchObject({
             code: 'AUTH_REQUIRED',
