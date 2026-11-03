@@ -1842,9 +1842,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 mergedInDedup,
             );
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
-            const fileLevelSuggestions = deduped.filter(
-                (s) => !isPrLevelSuggestion(s),
-            );
+            // ValidateSuggestionsStage keys the committable-suggestion checks
+            // on `id` and skips an entry without one, so every inline
+            // suggestion needs one (the PR-level path assigns its own below).
+            const fileLevelSuggestions = deduped
+                .filter((s) => !isPrLevelSuggestion(s))
+                .map((s) => (s.id ? s : { ...s, id: crypto.randomUUID() }));
 
             // Sort file-level suggestions: kody_rules first, then by severity
             // (critical > high > medium > low).
