@@ -188,6 +188,7 @@ describe('CreateSandboxStage', () => {
                     prNumber: 42,
                     sandboxMetadata: { stage: 'review' },
                 }),
+                { signal: undefined },
             );
             // Null sandbox is stored in context — review runs in self-contained mode
             expect(result.sandboxHandle).toBeDefined();
@@ -214,6 +215,7 @@ describe('CreateSandboxStage', () => {
                     prNumber: 42,
                     sandboxMetadata: { stage: 'review' },
                 }),
+                { signal: undefined },
             );
 
             expect(result.sandboxHandle).toBeDefined();
@@ -325,6 +327,20 @@ describe('CreateSandboxStage', () => {
                     metadata: expect.objectContaining({ prNumber: undefined }),
                 }),
             );
+        });
+
+        it("passes the job's signal so a timed-out job leaves the capacity line", async () => {
+            const job = new AbortController();
+            const context = createBaseContext({
+                changedFiles: [{ filename: 'test.ts' } as any],
+            });
+            (context as any).parentSignal = job.signal;
+
+            await (stage as any).executeStage(context);
+
+            expect(mockLeaseManager.acquire.mock.calls[0][4]).toEqual({
+                signal: job.signal,
+            });
         });
 
         it('does not retry acquire itself — retry+backoff lives inside the lease manager', async () => {

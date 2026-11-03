@@ -15,7 +15,6 @@ import { SandboxConcurrencyLimits } from './sandbox-concurrency-limiter';
  */
 export const DEFAULT_SANDBOX_CONCURRENCY_LIMITS: SandboxConcurrencyLimits = {
     maxPerWorker: 0,
-    waitMs: 30_000,
 };
 
 /** Changes to the global parameter reach every worker within this window. */
@@ -25,7 +24,10 @@ const CACHE_TTL_MS = 60_000;
  * Reads the per-worker sandbox cap from the `sandbox_concurrency` global
  * parameter, so it can be tuned in the database without a deploy:
  *
- *   configValue = { "maxPerWorker": 6, "waitMs": 30000 }
+ *   configValue = { "maxPerWorker": 6 }
+ *
+ * A review that finds every slot taken waits in line for one; it never
+ * runs without its sandbox.
  *
  * Any read failure keeps the last known limits (or the defaults): a database
  * hiccup must not block or un-cap sandbox creation.
@@ -79,10 +81,6 @@ export function parseLimits(value: unknown): SandboxConcurrencyLimits {
         maxPerWorker: nonNegativeInt(
             raw.maxPerWorker,
             DEFAULT_SANDBOX_CONCURRENCY_LIMITS.maxPerWorker,
-        ),
-        waitMs: nonNegativeInt(
-            raw.waitMs,
-            DEFAULT_SANDBOX_CONCURRENCY_LIMITS.waitMs,
         ),
     };
 }

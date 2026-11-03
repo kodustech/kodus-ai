@@ -37,17 +37,26 @@ export class SandboxCircuitOpenError extends Error {
 }
 
 /**
- * Thrown by acquire() when this worker already holds its maximum number of
- * sandbox leases and none freed up within the configured wait. The caller
- * continues without a sandbox.
+ * Thrown by acquire() when the caller's signal aborted (the job timed out)
+ * while the review was still waiting for a sandbox: a slot on this worker,
+ * or room in the E2B plan. A review never runs without its sandbox because
+ * of capacity; it waits, and stops waiting only when its job is gone.
  */
-export class SandboxConcurrencyLimitError extends Error {
-    constructor(prKey: string, maxPerWorker: number, waitMs: number) {
+export class SandboxWaitAbortedError extends Error {
+    constructor(prKey: string, waitedMs: number, waitingFor: string) {
         super(
-            `SandboxLeaseManager: worker sandbox limit (${maxPerWorker}) reached for prKey="${prKey}", no slot freed within ${waitMs}ms`,
+            `SandboxLeaseManager: stopped waiting for ${waitingFor} after ${waitedMs}ms prKey="${prKey}" (job aborted)`,
         );
-        this.name = 'SandboxConcurrencyLimitError';
+        this.name = 'SandboxWaitAbortedError';
     }
+}
+
+export interface SandboxAcquireOptions {
+    /**
+     * Aborts the wait for capacity (a worker slot, or E2B plan room). Pass the
+     * job's signal so a timed-out job does not keep its place in line.
+     */
+    signal?: AbortSignal;
 }
 
 export interface AcquireResult {
@@ -75,6 +84,7 @@ export interface ISandboxLeaseManager {
         consumer: string,
         leaseTtlMs?: number,
         cloneParams?: CreateSandboxParams,
+        options?: SandboxAcquireOptions,
     ): Promise<AcquireResult>;
     release(leaseId: string, opts?: { idleMs?: number }): Promise<void>;
     invalidate(prKey: string): Promise<void>;

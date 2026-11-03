@@ -4,8 +4,8 @@
  * Every review holds its sandbox for its whole run, and a worker runs up to
  * `prefetch` reviews in parallel, so N workers can ask E2B for N × prefetch
  * live sandboxes and hit the plan's concurrency limit. The cap keeps each
- * worker inside its share: a lease waits up to `waitMs` for a free slot, and
- * the review continues without a sandbox when none frees up.
+ * worker inside its share. A review never gives its sandbox up: when every
+ * slot is taken it queues (FIFO) until one frees.
  *
  * Slots are keyed by a holder id and released explicitly. A holder older
  * than `staleAfterMs` is dropped on the next acquire, so a lease whose
@@ -16,14 +16,11 @@
 export interface SandboxConcurrencyLimits {
     /** Max leases held at once by this process. 0 or less disables the cap. */
     maxPerWorker: number;
-    /** How long a lease waits for a free slot before giving up. */
-    waitMs: number;
 }
 
 interface Waiter {
     holderId: string;
     resolve: (granted: boolean) => void;
-    timer: NodeJS.Timeout;
 }
 
 export class SandboxConcurrencyLimiter {
@@ -50,38 +47,41 @@ export class SandboxConcurrencyLimiter {
     }
 
     /**
-     * Resolves true once `holderId` holds a slot, false when `waitMs`
-     * elapsed with every slot taken.
+     * Resolves true once `holderId` holds a slot, waiting in line for as long
+     * as it takes; false only when release() withdrew it from the line first.
      */
-    async acquire(
-        holderId: string,
-        limits: SandboxConcurrencyLimits,
-    ): Promise<boolean> {
-        this.maxPerWorker = limits.maxPerWorker;
+    acquire(holderId: string, maxPerWorker: number): Promise<boolean> {
+        this.maxPerWorker = maxPerWorker;
         this.dropStaleHolders();
 
-        if (this.hasFreeSlot()) {
+        if (!this.waiters.length && this.hasFreeSlot()) {
             this.holders.set(holderId, this.now());
-            return true;
+            return Promise.resolve(true);
         }
-        if (limits.waitMs <= 0) return false;
-
         return new Promise<boolean>((resolve) => {
-            const waiter: Waiter = {
-                holderId,
-                resolve,
-                timer: setTimeout(() => {
-                    this.waiters = this.waiters.filter((w) => w !== waiter);
-                    resolve(false);
-                }, limits.waitMs),
-            };
-            this.waiters.push(waiter);
+            this.waiters.push({ holderId, resolve });
+            this.grantWaiters();
         });
     }
 
-    release(holderId: string): void {
-        if (!this.holders.delete(holderId)) return;
+    /** Applies a new cap; raising it admits waiters at once. */
+    setLimit(maxPerWorker: number): void {
+        this.maxPerWorker = maxPerWorker;
+        this.dropStaleHolders();
         this.grantWaiters();
+    }
+
+    /** Frees `holderId`'s slot, or takes it out of the line if still waiting. */
+    release(holderId: string): void {
+        if (this.holders.delete(holderId)) {
+            this.grantWaiters();
+            return;
+        }
+        const index = this.waiters.findIndex((w) => w.holderId === holderId);
+        if (index !== -1) {
+            const [waiter] = this.waiters.splice(index, 1);
+            waiter.resolve(false);
+        }
     }
 
     private hasFreeSlot(): boolean {
@@ -91,7 +91,6 @@ export class SandboxConcurrencyLimiter {
     private grantWaiters(): void {
         while (this.waiters.length && this.hasFreeSlot()) {
             const next = this.waiters.shift()!;
-            clearTimeout(next.timer);
             this.holders.set(next.holderId, this.now());
             next.resolve(true);
         }

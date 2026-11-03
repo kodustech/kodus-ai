@@ -2,75 +2,79 @@ import { SandboxConcurrencyLimiter } from './sandbox-concurrency-limiter';
 import { parseLimits } from './sandbox-concurrency-config.service';
 
 describe('SandboxConcurrencyLimiter', () => {
-    afterEach(() => jest.useRealTimers());
-
     it('never blocks when the cap is disabled', async () => {
         const limiter = new SandboxConcurrencyLimiter(60_000);
-        const limits = { maxPerWorker: 0, waitMs: 0 };
 
         for (let i = 0; i < 50; i++) {
-            await expect(limiter.acquire(`h${i}`, limits)).resolves.toBe(true);
+            await expect(limiter.acquire(`h${i}`, 0)).resolves.toBe(true);
         }
         expect(limiter.active).toBe(50);
     });
 
-    it('grants up to the cap and refuses immediately with waitMs 0', async () => {
-        const limiter = new SandboxConcurrencyLimiter(60_000);
-        const limits = { maxPerWorker: 2, waitMs: 0 };
+    it('queues past the cap instead of refusing, and never gives up on its own', async () => {
+        jest.useFakeTimers();
+        try {
+            const limiter = new SandboxConcurrencyLimiter(24 * 3_600_000);
+            await limiter.acquire('a', 1);
 
-        await expect(limiter.acquire('a', limits)).resolves.toBe(true);
-        await expect(limiter.acquire('b', limits)).resolves.toBe(true);
-        await expect(limiter.acquire('c', limits)).resolves.toBe(false);
+            let settled = false;
+            const waiting = limiter
+                .acquire('b', 1)
+                .then((granted) => (settled = granted));
+
+            // An hour later it is still in line, not refused
+            await jest.advanceTimersByTimeAsync(3_600_000);
+            expect(settled).toBe(false);
+            expect(limiter.waiting).toBe(1);
+
+            limiter.release('a');
+            await expect(waiting).resolves.toBe(true);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
-    it('hands a released slot to the oldest waiter', async () => {
-        jest.useFakeTimers();
+    it('hands released slots out in arrival order', async () => {
         const limiter = new SandboxConcurrencyLimiter(60_000);
-        const limits = { maxPerWorker: 1, waitMs: 30_000 };
-
-        await limiter.acquire('a', limits);
-        const second = limiter.acquire('b', limits);
-        const third = limiter.acquire('c', limits);
-        expect(limiter.waiting).toBe(2);
+        await limiter.acquire('a', 1);
+        const order: string[] = [];
+        const b = limiter.acquire('b', 1).then(() => order.push('b'));
+        const c = limiter.acquire('c', 1).then(() => order.push('c'));
 
         limiter.release('a');
-        await expect(second).resolves.toBe(true);
-        expect(limiter.waiting).toBe(1);
-
+        await b;
         limiter.release('b');
-        await expect(third).resolves.toBe(true);
+        await c;
+
+        expect(order).toEqual(['b', 'c']);
     });
 
-    it('gives up after waitMs when no slot frees', async () => {
-        jest.useFakeTimers();
+    it('admits waiters at once when the cap is raised', async () => {
         const limiter = new SandboxConcurrencyLimiter(60_000);
-        const limits = { maxPerWorker: 1, waitMs: 30_000 };
+        await limiter.acquire('a', 1);
+        const b = limiter.acquire('b', 1);
+        const c = limiter.acquire('c', 1);
 
-        await limiter.acquire('a', limits);
-        const waiting = limiter.acquire('b', limits);
+        limiter.setLimit(3);
 
-        jest.advanceTimersByTime(30_000);
-        await expect(waiting).resolves.toBe(false);
+        await expect(Promise.all([b, c])).resolves.toEqual([true, true]);
+        expect(limiter.active).toBe(3);
+    });
+
+    it('takes a waiter out of the line on release, without granting it', async () => {
+        const limiter = new SandboxConcurrencyLimiter(60_000);
+        await limiter.acquire('a', 1);
+        const b = limiter.acquire('b', 1);
+
+        limiter.release('b');
+
+        await expect(b).resolves.toBe(false);
         expect(limiter.waiting).toBe(0);
-
-        // A later release must not hand the slot to the timed-out waiter
         limiter.release('a');
         expect(limiter.active).toBe(0);
     });
 
     it('drops holders that were never released after staleAfterMs', async () => {
-        let now = 0;
-        const limiter = new SandboxConcurrencyLimiter(1_000, () => now);
-        const limits = { maxPerWorker: 1, waitMs: 0 };
-
-        await limiter.acquire('leaked', limits);
-        await expect(limiter.acquire('b', limits)).resolves.toBe(false);
-
-        now = 1_001;
-        await expect(limiter.acquire('b', limits)).resolves.toBe(true);
-    });
-
-    it('reports each holder it drops as stale', async () => {
         let now = 0;
         const onStale = jest.fn();
         const limiter = new SandboxConcurrencyLimiter(
@@ -78,33 +82,26 @@ describe('SandboxConcurrencyLimiter', () => {
             () => now,
             onStale,
         );
-        const limits = { maxPerWorker: 2, waitMs: 0 };
+        await limiter.acquire('leaked', 1);
+        const next = limiter.acquire('next', 1);
 
-        await limiter.acquire('leaked', limits);
         now = 1_500;
-        await limiter.acquire('fresh', limits);
+        limiter.setLimit(1);
 
-        expect(onStale).toHaveBeenCalledTimes(1);
+        await expect(next).resolves.toBe(true);
         expect(onStale).toHaveBeenCalledWith('leaked', 1_500);
     });
 });
 
 describe('parseLimits', () => {
     it('falls back to the uncapped default for a missing value', () => {
-        expect(parseLimits(undefined)).toEqual({
-            maxPerWorker: 0,
-            waitMs: 30_000,
-        });
+        expect(parseLimits(undefined)).toEqual({ maxPerWorker: 0 });
     });
 
     it('reads numbers and numeric strings, ignoring garbage', () => {
-        expect(parseLimits({ maxPerWorker: '6', waitMs: 10_000 })).toEqual({
+        expect(parseLimits({ maxPerWorker: '6' })).toEqual({
             maxPerWorker: 6,
-            waitMs: 10_000,
         });
-        expect(parseLimits({ maxPerWorker: -1, waitMs: 'soon' })).toEqual({
-            maxPerWorker: 0,
-            waitMs: 30_000,
-        });
+        expect(parseLimits({ maxPerWorker: -1 })).toEqual({ maxPerWorker: 0 });
     });
 });

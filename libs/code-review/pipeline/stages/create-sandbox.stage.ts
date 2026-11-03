@@ -17,7 +17,7 @@ import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
     SandboxCircuitOpenError,
-    SandboxConcurrencyLimitError,
+    SandboxWaitAbortedError,
     SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
@@ -172,6 +172,8 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                     unifiedDiff: cliContext?.cliRawDiff,
                     sandboxMetadata: { stage: 'review' },
                 },
+                // A review waits for capacity as long as its job lives
+                { signal: context.parentSignal },
             );
 
             // Override cleanup so the observer's context.sandboxHandle.cleanup()
@@ -266,11 +268,13 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                 });
                 return context;
             }
-            // Worker at its sandbox cap: expected under load, the cap exists
-            // to keep E2B below its concurrency limit.
-            if (err instanceof SandboxConcurrencyLimitError) {
+            // The job timed out while the review waited in line for a
+            // sandbox (a worker slot or room in the E2B plan). The review
+            // never skips its sandbox for lack of capacity; it only stops
+            // waiting once its job is gone.
+            if (err instanceof SandboxWaitAbortedError) {
                 this.logger.warn({
-                    message: `No free sandbox slot on this worker for ${label}, continuing without it`,
+                    message: `Job aborted while ${label} waited for a sandbox`,
                     context: this.stageName,
                     metadata: {
                         organizationAndTeamData:

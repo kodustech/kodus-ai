@@ -271,6 +271,19 @@ export function isRepositorySpecificSandboxFailure(err: unknown): boolean {
 }
 
 /**
+ * E2B refusing a create because the plan has no room (its concurrent-sandbox
+ * limit, or a rate limit): capacity, not a failure. The caller waits and
+ * tries again; it is neither retried as a failure nor counted by the breaker.
+ */
+export function isSandboxCapacityFailure(err: unknown): boolean {
+    if (!err || typeof err !== 'object') return false;
+    if ((err as { name?: unknown }).name === 'RateLimitError') return true;
+    return /maximum number of concurrent|rate limit(ed| exceeded)/i.test(
+        describeError(err),
+    );
+}
+
+/**
  * A timeout means the network path (proxy, E2B, git host) was slow enough to
  * eat the whole budget; an immediate retry would spend the same budget again.
  */
