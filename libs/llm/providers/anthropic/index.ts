@@ -371,6 +371,15 @@ export const anthropicModule: ProviderModule = {
               '{\n  "thinking": { "type": "enabled", "budgetTokens": 20000 }\n}'
             : '{\n  "thinking": { "type": "adaptive" },\n  "effort": "high"\n}',
     modelListing: anthropicModelListing,
+    selfHostedEnv: (id) =>
+        id === 'anthropic'
+            ? {
+                  // The inference path has always read a Claude key from the
+                  // OpenAI-named var too, so it stays second.
+                  apiKeyVars: ['API_ANTHROPIC_API_KEY', 'API_OPEN_AI_API_KEY'],
+                  baseURLVar: 'API_OPENAI_FORCE_BASE_URL',
+              }
+            : null,
 };
 
 registerProvider(anthropicModule);

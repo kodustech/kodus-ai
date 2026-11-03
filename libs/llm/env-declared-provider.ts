@@ -13,25 +13,25 @@
  * Pure: reads the env it is given, never builds a client, never returns a secret
  * to anyone but the model builder.
  */
-import { stripSdkEndpoint } from './base-url-hygiene';
-import type { ReasoningEffort } from './reasoning-options';
+import { repairBaseUrl } from './base-url-hygiene';
+import { BYOKProvider } from './model-providers';
+import { REGISTRY, type SelfHostedEnvVars } from './providers';
+import {
+    REASONING_EFFORTS,
+    type ReasoningEffort,
+} from './providers/kernel/types';
 
+/** The providers the env path can build (managed-slot.ts `fromDeclared`). Their
+ *  env vars are declared by each provider module (`selfHostedEnv`). */
 export const DECLARABLE_ENV_PROVIDERS = [
-    'openai',
-    'openai_compatible',
-    'anthropic',
-    'google_gemini',
-    'google_vertex',
+    BYOKProvider.OPENAI,
+    BYOKProvider.OPENAI_COMPATIBLE,
+    BYOKProvider.ANTHROPIC,
+    BYOKProvider.GOOGLE_GEMINI,
+    BYOKProvider.GOOGLE_VERTEX,
 ] as const;
 
 export type DeclaredEnvProvider = (typeof DECLARABLE_ENV_PROVIDERS)[number];
-
-const REASONING_EFFORTS: readonly ReasoningEffort[] = [
-    'none',
-    'low',
-    'medium',
-    'high',
-];
 
 const GENERIC_VARS = [
     'API_LLM_API_KEY',
@@ -39,26 +39,15 @@ const GENERIC_VARS = [
     'API_LLM_REASONING_EFFORT',
 ] as const;
 
-/** The provider-named keys, read in order when the generic one is empty.
- *  Anthropic keeps `API_OPEN_AI_API_KEY` after its own name: the inference path
- *  has always read a Claude key from it. */
-const LEGACY_KEY_VARS: Record<DeclaredEnvProvider, readonly string[]> = {
-    openai: ['API_OPEN_AI_API_KEY'],
-    openai_compatible: ['API_OPEN_AI_API_KEY'],
-    anthropic: ['API_ANTHROPIC_API_KEY', 'API_OPEN_AI_API_KEY'],
-    google_gemini: ['API_GOOGLE_AI_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY'],
-    google_vertex: ['API_VERTEX_AI_API_KEY'],
-};
-
-/** Providers whose endpoint can be moved; the legacy var is OpenAI-named. */
-const BASE_URL_PROVIDERS: ReadonlySet<DeclaredEnvProvider> = new Set([
-    'openai',
-    'openai_compatible',
-    'anthropic',
-]);
-const LEGACY_BASE_URL_VAR = 'API_OPENAI_FORCE_BASE_URL';
-
-const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+function envVarsOf(provider: DeclaredEnvProvider): SelfHostedEnvVars {
+    const vars = REGISTRY.get(provider).selfHostedEnv?.(provider);
+    if (!vars) {
+        throw new Error(
+            `Provider "${provider}" declares no self-hosted env vars.`,
+        );
+    }
+    return vars;
+}
 
 const ENDPOINT_SUFFIX = 'ends with the endpoint the provider SDK adds itself';
 
@@ -168,7 +157,8 @@ export function resolveDeclaredEnvProvider(
         };
     }
 
-    if (read(env, 'API_LLM_BASE_URL') && !BASE_URL_PROVIDERS.has(declared)) {
+    const vars = envVarsOf(declared);
+    if (read(env, 'API_LLM_BASE_URL') && !vars.baseURLVar) {
         return {
             kind: 'invalid',
             reason: `API_LLM_BASE_URL is not supported for API_LLM_PROVIDER=${declared}.`,
@@ -176,19 +166,11 @@ export function resolveDeclaredEnvProvider(
     }
 
     const warnings: string[] = [];
-    const key = pick(
-        env,
-        'API_LLM_API_KEY',
-        LEGACY_KEY_VARS[declared],
-        warnings,
-    );
-    const rawBase = BASE_URL_PROVIDERS.has(declared)
-        ? pick(env, 'API_LLM_BASE_URL', [LEGACY_BASE_URL_VAR], warnings)
+    const key = pick(env, 'API_LLM_API_KEY', vars.apiKeyVars, warnings);
+    const rawBase = vars.baseURLVar
+        ? pick(env, 'API_LLM_BASE_URL', [vars.baseURLVar], warnings)
         : {};
-    const baseURL = stripSdkEndpoint(
-        rawBase.value,
-        declared === 'anthropic' ? 'anthropic' : 'openai',
-    );
+    const baseURL = repairBaseUrl(rawBase.value);
     if (baseURL !== rawBase.value) {
         warnings.push(endpointSuffixWarning(rawBase.from!, baseURL!));
     }
@@ -202,22 +184,19 @@ export function resolveDeclaredEnvProvider(
 
     if (key.value) {
         config.apiKey = key.value;
-    } else if (declared === 'google_vertex' && vertexProject(env)) {
+    } else if (declared === BYOKProvider.GOOGLE_VERTEX && vertexProject(env)) {
         config.adcProject = vertexProject(env);
     } else {
-        const accepted = ['API_LLM_API_KEY', ...LEGACY_KEY_VARS[declared]];
+        const accepted = ['API_LLM_API_KEY', ...vars.apiKeyVars];
         return {
             kind: 'invalid',
-            reason: `API_LLM_PROVIDER=${declared} has no API key. Set ${accepted.join(' or ')}${declared === 'google_vertex' ? ', or GOOGLE_CLOUD_PROJECT for keyless ADC' : ''}.`,
+            reason: `API_LLM_PROVIDER=${declared} has no API key. Set ${accepted.join(' or ')}${declared === BYOKProvider.GOOGLE_VERTEX ? ', or GOOGLE_CLOUD_PROJECT for keyless ADC' : ''}.`,
         };
     }
 
-    if (declared === 'openai_compatible') {
-        config.baseURL = baseURL ?? OPENAI_DEFAULT_BASE_URL;
-    } else if (baseURL) {
-        config.baseURL = baseURL;
-    }
-    if (declared === 'google_vertex') {
+    const endpoint = baseURL ?? vars.defaultBaseURL;
+    if (endpoint) config.baseURL = endpoint;
+    if (declared === BYOKProvider.GOOGLE_VERTEX) {
         config.vertexLocation = vertexLocation || 'global';
     }
 

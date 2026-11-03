@@ -15,7 +15,7 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import { DEFAULT_MODEL } from './byok-defaults';
 import { vertexModelFromAdc } from './model-builders';
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from './opencode-go';
-import { stripSdkEndpoint } from './base-url-hygiene';
+import { repairBaseUrl } from './base-url-hygiene';
 import { servedByOpenAi } from './providers/openai/endpoint';
 import {
     resolveDeclaredEnvProvider,
@@ -478,7 +478,7 @@ export function resolveManagedSlot(
                     env.apiKey,
                     envMode,
                     {
-                        baseURL: stripSdkEndpoint(env.baseURL, 'anthropic'),
+                        baseURL: repairBaseUrl(env.baseURL),
                     },
                 );
             case 'openai_native':
@@ -490,7 +490,7 @@ export function resolveManagedSlot(
                     env.apiKey,
                     envMode,
                     env.baseURL
-                        ? { baseURL: stripSdkEndpoint(env.baseURL, 'openai') }
+                        ? { baseURL: repairBaseUrl(env.baseURL) }
                         : undefined,
                 );
             case 'openai_compat': {
@@ -503,7 +503,7 @@ export function resolveManagedSlot(
                 // pointed at OpenCode Go (issue #1880) needs the same
                 // x-opencode-session header attached here — the provider
                 // module's build() never runs on this inline path.
-                const baseURL = stripSdkEndpoint(env.baseURL, 'openai')!;
+                const baseURL = repairBaseUrl(env.baseURL);
                 return {
                     kind: 'inline',
                     model: createOpenAICompatible({

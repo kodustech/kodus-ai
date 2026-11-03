@@ -14,7 +14,7 @@ import {
     endpointSuffixWarning,
     resolveDeclaredEnvProvider,
 } from './env-declared-provider';
-import { stripSdkEndpoint } from './base-url-hygiene';
+import { repairBaseUrl } from './base-url-hygiene';
 import type { ReasoningEffort } from './reasoning-options';
 
 export type EnvLLMProviderId =
@@ -136,10 +136,7 @@ export function describeEnvLLMConfig(
             openaiBaseURL &&
             descriptor.baseUrl === openaiBaseURL
         ) {
-            const used = stripSdkEndpoint(
-                openaiBaseURL,
-                descriptor.providerId === 'anthropic' ? 'anthropic' : 'openai',
-            )!;
+            const used = repairBaseUrl(openaiBaseURL);
             if (used !== openaiBaseURL) {
                 out = {
                     ...out,
@@ -174,11 +171,7 @@ export function describeEnvLLMConfig(
             model: config.model,
             providerId: config.provider,
             providerSource: 'declared',
-            ...(config.provider === 'openai'
-                ? { baseUrl: config.baseURL ?? 'https://api.openai.com/v1' }
-                : config.baseURL
-                  ? { baseUrl: config.baseURL }
-                  : {}),
+            ...(config.baseURL ? { baseUrl: config.baseURL } : {}),
             ...(config.vertexLocation
                 ? { vertexLocation: config.vertexLocation }
                 : {}),

@@ -193,6 +193,15 @@ export const googleGeminiModule: ProviderModule = {
             ? '{\n  "thinkingConfig": { "thinkingBudget": 16000 }\n}'
             : '{\n  "thinkingConfig": { "thinkingLevel": "high" }\n}',
     modelListing: googleGeminiModelListing,
+    selfHostedEnv: (id) =>
+        id === 'google_gemini'
+            ? {
+                  apiKeyVars: [
+                      'API_GOOGLE_AI_API_KEY',
+                      'GOOGLE_GENERATIVE_AI_API_KEY',
+                  ],
+              }
+            : null,
 };
 
 registerProvider(googleGeminiModule);
