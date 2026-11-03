@@ -83,23 +83,37 @@ Todo achado de especialista passa pela mesma verificação dos achados da revis�
 de qualquer coisa ser publicada, e depois pela deduplicação e severidade de sempre — então um
 palpite que não se sustenta é descartado como qualquer outro.
 
+### Heavy por padrão, ou para uma revisão
+
+A configuração **Review mode** em [Code review → General](/pt-BR/how_to_use/code_review/configs/general#modo-de-revisão)
+escolhe como toda revisão de um repositório roda: **Balanced** (o padrão, só a revisão principal) ou
+**Heavy**. Ela vale para as revisões automáticas, para o `@kody review` e para o `kodus review`. Uma
+flag em um comando a sobrescreve naquela revisão:
+
 ```text
 @kody review --heavy
 @kody review --heavy focus on the payment reconciliation logic
+@kody review --balanced
 kodus review --heavy
+kodus review --balanced
 ```
 
-O `--heavy` pode ficar em qualquer posição da linha — antes ou depois do texto de foco — e é
+O `--heavy` roda uma revisão heavy em um repositório configurado como Balanced; o `--balanced` roda
+uma revisão balanced em um repositório configurado como Heavy. Se um comando trouxer as duas, vence
+o `--heavy`.
+
+Qualquer uma das flags pode ficar em qualquer posição da linha — antes ou depois do texto de foco — e é
 removido da diretiva de qualquer jeito, então `@kody review foca na lógica de retry --heavy`
 foca em "foca na lógica de retry".
 
 <Warning>
-  **Para combinar com `--force`, coloque o `--force` primeiro.** O `--force` só é reconhecido
+  **Para combinar uma flag com `--force`, coloque o `--force` primeiro.** O `--force` só é reconhecido
   imediatamente após o comando, então `@kody review --force --heavy` roda uma revisão heavy
   forçada, enquanto `@kody review --heavy --force` roda uma revisão heavy que **não** é forçada.
+  O mesmo vale para o `--balanced`.
 </Warning>
 
-O traço é obrigatório: um `heavy` solto é lido como texto de diretiva, então
+O traço é obrigatório: um `heavy` ou `balanced` solto é lido como texto de diretiva, então
 `@kody review heavy fluxo de checkout` foca em "heavy fluxo de checkout" em vez de ligar a flag.
 
 ### O que esperar
@@ -107,6 +121,10 @@ O traço é obrigatório: um `heavy` solto é lido como texto de diretiva, entã
 - **Disponível para todos**, na Cloud e no self-hosted. Sem pedido de acesso. Na CLI, exige um time logado (`kodus auth login`): uma revisão em modo trial roda sem ele e avisa.
 - **Suas categorias continuam valendo.** Os especialistas de uma categoria desligada não rodam:
   sete são de Bug e dois de Security. Kody Rules e agentes customizados rodam como sempre.
+- **Roda no modelo Heavy.** Em **AI providers → Routing → Code Review**, o **Model for Heavy**
+  escolhe o modelo das revisões heavy e o **Model for Balanced** o das revisões balanced. Sem um
+  modelo Heavy definido, uma revisão heavy usa o padrão da organização. Um modelo definido para um
+  repositório ou diretório em **Code review → General** roda os dois modos.
 - **Custa mais chamadas de modelo, não muito mais tempo.** Os especialistas rodam ao mesmo tempo
   que a revisão principal, então a revisão leva mais ou menos o mesmo tempo, mas usa bem mais
   tokens. Com a sua própria chave de modelo (BYOK), isso entra na conta do seu provedor, e um
@@ -117,8 +135,8 @@ O traço é obrigatório: um `heavy` solto é lido como texto de diretiva, entã
   mode.
 
 <Tip>
-  Use nas mudanças em que deixar algo passar sai caro — uma migration, uma mudança de auth, um
-  fluxo de pagamento — não como padrão.
+  Defina Heavy como Review mode dos repositórios em que deixar algo passar sai caro — um serviço
+  de pagamentos, um módulo de auth — ou peça com `--heavy` em uma única mudança arriscada.
 </Tip>
 
 ## Escrevendo uma Boa Diretiva

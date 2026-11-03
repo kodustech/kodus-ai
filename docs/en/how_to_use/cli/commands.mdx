@@ -43,7 +43,8 @@ kodus review --prompt-only            # Output optimized for AI agents
 | `--rules-only`         | —     | Review using only configured rules (no general suggestions) |
 | `--fast`               | —     | Fast mode: quicker analysis with lighter checks             |
 | `--focus <text>`       | —     | Steer the review at a specific area — see [Steer a Review](/en/how_to_use/code_review/review_directive) |
-| `--heavy`              | —     | Heavy mode: specialist reviewers run next to the main review for higher recall (more tokens) — see [Heavy mode](/en/how_to_use/code_review/review_directive#heavy-mode) |
+| `--heavy`              | —     | Heavy mode: specialist reviewers run next to the main review for higher recall (more tokens), whatever review mode is set — see [Heavy mode](/en/how_to_use/code_review/review_directive#heavy-mode) |
+| `--balanced`           | —     | Balanced mode: the main review alone, on a repository set to Heavy — see [Heavy mode](/en/how_to_use/code_review/review_directive#heavy-mode) |
 | `--interactive`        | `-i`  | Interactive mode: navigate and apply fixes                  |
 | `--fix`                | —     | Automatically apply all fixable issues                      |
 | `--prompt-only`        | —     | Output optimized for AI agents                              |

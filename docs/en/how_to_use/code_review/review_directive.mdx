@@ -83,30 +83,47 @@ Every finding of a specialist goes through the same verification as the main rev
 anything is posted, then through the usual deduplication and severity, so a guess that does not
 hold up is dropped like any other.
 
+### Heavy by default, or for one review
+
+The **Review mode** setting on [Code review → General](/en/how_to_use/code_review/configs/general#review-mode)
+picks how every review of a repository runs: **Balanced** (the default, the main review alone) or
+**Heavy**. It applies to automatic reviews, to `@kody review` and to `kodus review`. A flag on one
+command overrides it for that review:
+
 ```text
 @kody review --heavy
 @kody review --heavy focus on the payment reconciliation logic
+@kody review --balanced
 kodus review --heavy
+kodus review --balanced
 ```
 
-`--heavy` can sit anywhere on the command line — before or after your focus text — and it is
+`--heavy` runs a heavy review on a repository set to Balanced; `--balanced` runs a balanced review
+on a repository set to Heavy. If a command carries both, `--heavy` wins.
+
+Either flag can sit anywhere on the command line — before or after your focus text — and it is
 stripped from the directive either way, so `@kody review focus on the retry logic --heavy`
 focuses on "the retry logic".
 
 <Warning>
-  **To combine it with `--force`, put `--force` first.** `--force` is only recognized
+  **To combine a flag with `--force`, put `--force` first.** `--force` is only recognized
   immediately after the command word, so `@kody review --force --heavy` runs a forced heavy
-  review, while `@kody review --heavy --force` runs a heavy review that is **not** forced.
+  review, while `@kody review --heavy --force` runs a heavy review that is **not** forced. The
+  same goes for `--balanced`.
 </Warning>
 
-A dash is required: a bare `heavy` is read as directive text, so `@kody review heavy checkout
-path` focuses on "heavy checkout path" rather than enabling the flag.
+A dash is required: a bare `heavy` or `balanced` is read as directive text, so `@kody review heavy
+checkout path` focuses on "heavy checkout path" rather than enabling the flag.
 
 ### What to expect
 
 - **Available to everyone**, on Cloud and self-hosted. No opt-in. In the CLI it needs a signed-in team (`kodus auth login`): a trial review runs without it and says so.
 - **Your categories still apply.** The specialists of a category you turned off do not run: seven
   of them are Bug, two are Security. Kody Rules and custom agents run as they always do.
+- **It runs on the Heavy model.** Under **AI providers → Routing → Code Review**, **Model for
+  Heavy** picks the model of heavy reviews and **Model for Balanced** the one of balanced reviews.
+  With no Heavy model set, a heavy review uses the organization default. A model set for a
+  repository or directory in **Code review → General** runs both modes.
 - **It costs more model calls, not much more time.** The specialists run at the same time as the
   main review, so the review takes about as long, but it uses noticeably more tokens. On your own
   model key (BYOK) that is on your provider's bill, and a provider with a low concurrency limit
@@ -117,8 +134,8 @@ path` focuses on "heavy checkout path" rather than enabling the flag.
   mode.
 
 <Tip>
-  Reach for it on the changes where missing something is expensive — a migration, an auth
-  change, a payment path — not as a default.
+  Set Heavy as the review mode of the repositories where missing something is expensive — a
+  payments service, an auth module — or ask for it with `--heavy` on a single risky change.
 </Tip>
 
 ## Writing a Good Directive

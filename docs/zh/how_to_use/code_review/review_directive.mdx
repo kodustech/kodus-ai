@@ -81,22 +81,33 @@ description: "通过 PR 评论或 CLI 使用一次性的评审指令，将 Kody 
 每个专项审查者的发现在发布前都会经过与主审查发现相同的验证，再经过常规的去重和严重级别判定，
 站不住脚的猜测会像其他发现一样被丢弃。
 
+### 默认使用 Heavy，或只用于一次审查
+
+[Code review → General](/zh/how_to_use/code_review/configs/general#审查模式) 中的 **Review mode**
+设置决定一个仓库的每次审查如何运行：**Balanced**（默认，只有主审查）或 **Heavy**。它适用于自动审查、
+`@kody review` 和 `kodus review`。在某条命令上加标志，可以只针对那次审查覆盖它：
+
 ```text
 @kody review --heavy
 @kody review --heavy focus on the payment reconciliation logic
+@kody review --balanced
 kodus review --heavy
+kodus review --balanced
 ```
 
-`--heavy` 可以放在命令行的任意位置 —— 焦点文本之前或之后 —— 无论哪种方式都会从指令中移除，所以
+`--heavy` 会在设为 Balanced 的仓库上运行 heavy 审查；`--balanced` 会在设为 Heavy 的仓库上运行
+balanced 审查。如果命令同时带有两者，以 `--heavy` 为准。
+
+两个标志都可以放在命令行的任意位置 —— 焦点文本之前或之后 —— 无论哪种方式都会从指令中移除，所以
 `@kody review 关注重试逻辑 --heavy` 会聚焦于"关注重试逻辑"。
 
 <Warning>
-  **与 `--force` 组合时，请把 `--force` 放在前面。** `--force` 只有紧跟在命令词之后才会被识别，
+  **将标志与 `--force` 组合时，请把 `--force` 放在前面。** `--force` 只有紧跟在命令词之后才会被识别，
   所以 `@kody review --force --heavy` 会执行强制的 heavy 审查，而 `@kody review --heavy --force`
-  执行的是**未**强制的 heavy 审查。
+  执行的是**未**强制的 heavy 审查。`--balanced` 同理。
 </Warning>
 
-必须带短横线：单独的 `heavy` 会被当作指令文本，所以 `@kody review heavy 结账流程` 会聚焦于
+必须带短横线：单独的 `heavy` 或 `balanced` 会被当作指令文本，所以 `@kody review heavy 结账流程` 会聚焦于
 "heavy 结账流程"，而不是启用该标志。
 
 ### 预期效果
@@ -104,6 +115,10 @@ kodus review --heavy
 - **所有组织均可使用**，云端和自托管都一样，无需申请。在 CLI 中需要已登录的团队（`kodus auth login`）：试用模式的审查会在不启用 heavy 的情况下运行，并给出提示。
 - **你的类别设置依然生效。** 已关闭类别的专项审查者不会运行：其中七个属于 Bug，两个属于
   Security。Kody Rules 和自定义代理照常运行。
+- **它运行在 Heavy 模型上。** 在 **AI providers → Routing → Code Review** 中，**Model for
+  Heavy** 选择 heavy 审查的模型，**Model for Balanced** 选择 balanced 审查的模型。未设置 Heavy
+  模型时，heavy 审查使用组织默认模型。在 **Code review → General** 中为仓库或目录设置的模型会同时
+  用于两种模式。
 - **模型调用更多，但耗时增加不多。** 专项审查者与主审查同时运行，因此审查耗时大致不变，但 token
   用量会明显增加。使用自己的模型密钥（BYOK）时，这部分计入你的服务商账单；并发限制较低的服务商
   可能会让调用排队。
@@ -111,7 +126,8 @@ kodus review --heavy
 - 拉取请求列表会在最近一次审查以 heavy mode 运行的 PR 上显示 **Heavy** 徽章。
 
 <Tip>
-  在遗漏代价高昂的变更上使用它 —— 迁移、认证变更、支付流程 —— 而不是作为默认选项。
+  把遗漏代价高昂的仓库 —— 支付服务、认证模块 —— 的 Review mode 设为 Heavy，或在单个高风险变更上
+  用 `--heavy` 请求它。
 </Tip>
 
 ## 如何写好一条指令

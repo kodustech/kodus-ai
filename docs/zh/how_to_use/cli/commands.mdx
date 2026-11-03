@@ -43,7 +43,8 @@ kodus review --prompt-only            # 为 AI 代理优化的输出
 | `--rules-only` | — | 仅使用配置的规则审查（不生成通用建议） |
 | `--fast` | — | 快速模式：使用更轻量的检查进行更快分析 |
 | `--focus <text>` | — | 将审查引导到特定区域 —— 参见[引导一次审查](/zh/how_to_use/code_review/review_directive) |
-| `--heavy` | — | Heavy mode：专项审查者与主审查并行运行，以提高召回率（消耗更多 token）—— 参见 [Heavy mode](/zh/how_to_use/code_review/review_directive#heavy-mode) |
+| `--heavy` | — | Heavy mode：专项审查者与主审查并行运行，以提高召回率（消耗更多 token），无论设置了哪种审查模式 —— 参见 [Heavy mode](/zh/how_to_use/code_review/review_directive#heavy-mode) |
+| `--balanced` | — | Balanced mode：在设为 Heavy 的仓库上只运行主审查 —— 参见 [Heavy mode](/zh/how_to_use/code_review/review_directive#heavy-mode) |
 | `--interactive` | `-i` | 交互模式：浏览并应用修复 |
 | `--fix` | — | 自动应用所有可修复的问题 |
 | `--prompt-only` | — | 为 AI 代理优化的输出 |
