@@ -365,9 +365,12 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                   lastCommitSha,
               )
             : null;
+        // #2319: an interdiff cannot show a removed reviewed change, so a
+        // push with one is reviewed whole, as ValidateNewCommitsStage does.
+        const useInterdiff = !!interdiff && !interdiff.revertedFiles.length;
 
         const files =
-            interdiff?.files ??
+            (useInterdiff ? interdiff.files : null) ??
             (await this.codeManagementService.getFilesByPullRequestId({
                 organizationAndTeamData,
                 repository,
@@ -382,7 +385,7 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
         }
 
         this.logger.warn({
-            message: `Diff of PR#${pullRequest?.number} since the last review was unreadable; reviewing ${interdiff ? 'its changes since then' : 'the whole PR'}`,
+            message: `Diff of PR#${pullRequest?.number} since the last review was unreadable; reviewing ${useInterdiff ? 'its changes since then' : 'the whole PR'}`,
             context: PullRequestHandlerService.name,
             metadata: {
                 organizationId: organizationAndTeamData?.organizationId,
@@ -391,7 +394,8 @@ export class PullRequestHandlerService implements IPullRequestManagerService {
                 prNumber: pullRequest?.number,
                 lastCommitSha,
                 headSha: pullRequest?.head?.sha,
-                fallback: interdiff ? 'interdiff' : 'full',
+                fallback: useInterdiff ? 'interdiff' : 'full',
+                revertedFiles: interdiff?.revertedFiles.length ?? 0,
                 files: files.length,
                 reason: 'incremental_diff_unavailable',
             },

@@ -122,6 +122,35 @@ describe('PullRequestHandlerService — unreadable incremental diff', () => {
         );
     });
 
+    it('reads the whole PR when the push removed a change the last review saw', async () => {
+        const reviewed = {
+            filename: 'src/pay.ts',
+            patch: '@@ -1,3 +1,5 @@\n function pay(order) {\n+    if (!order) return;\n+    log(order.id);\n     charge(order);\n }',
+        };
+        const guardRemoved = {
+            filename: 'src/pay.ts',
+            patch: '@@ -1,3 +1,4 @@\n function pay(order) {\n+    log(order.id);\n     charge(order);\n }',
+        };
+        const { service, logger } = makeService({
+            sinceLastCommit: null,
+            atCommit: [reviewed],
+            prFiles: [guardRemoved],
+        });
+
+        await expect(metadata(service, lastCommit)).resolves.toEqual([
+            guardRemoved,
+        ]);
+        expect(logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    reason: 'incremental_diff_unavailable',
+                    fallback: 'full',
+                    revertedFiles: 1,
+                }),
+            }),
+        );
+    });
+
     it('accepts the last reviewed commit as a bare sha', async () => {
         const { service, codeManagementService } = makeService({
             sinceLastCommit: null,
