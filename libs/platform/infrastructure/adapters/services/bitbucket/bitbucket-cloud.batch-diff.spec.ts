@@ -575,6 +575,17 @@ describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => 
         );
     });
 
+    it('lets a network failure on a per-file read through instead of a null patch', async () => {
+        const getDiff = jest.fn((args: { path?: string }) =>
+            args.path
+                ? Promise.reject(new TypeError('fetch failed'))
+                : Promise.reject(new Error('diff too large')),
+        );
+        const { service } = makeService(getDiff as any);
+
+        await expect(getFiles(service)).rejects.toThrow('fetch failed');
+    });
+
     it('incremental: lets a 429 through instead of answering null', async () => {
         const getDiff = jest.fn().mockRejectedValue(rateLimited());
         const { service } = makeService(getDiff);

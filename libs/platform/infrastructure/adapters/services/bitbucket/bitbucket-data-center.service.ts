@@ -1458,8 +1458,11 @@ export class BitbucketDataCenterService implements Omit<
                         );
                         for (const diff of data?.diffs || []) add(path, diff);
                     } catch (error) {
-                        // A rate limit is not an empty diff: let the job retry
-                        if (is429Error(error)) throw error;
+                        // A rate limit or a network failure is not an empty
+                        // diff: let the job retry
+                        if (is429Error(error) || isTransientFetchError(error)) {
+                            throw error;
+                        }
                         this.logger.error({
                             message: `Could not fetch diff for ${path}`,
                             context: BitbucketDataCenterService.name,

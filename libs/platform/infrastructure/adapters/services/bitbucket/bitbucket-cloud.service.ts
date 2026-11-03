@@ -5081,7 +5081,9 @@ export class BitbucketCloudService implements Omit<
                                 this.convertDiff(diff ?? ''),
                         );
                     } catch (error) {
-                        if (is429Error(error)) throw error;
+                        if (is429Error(error) || isTransientFetchError(error)) {
+                            throw error;
+                        }
                         // null = the read failed, as opposed to a path absent
                         // from the map (not in the diff): callers keep it
                         this.logger.warn({

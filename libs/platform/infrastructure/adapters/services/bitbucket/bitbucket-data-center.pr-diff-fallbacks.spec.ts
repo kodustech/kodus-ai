@@ -349,6 +349,18 @@ describe('BitbucketDataCenterService.getFilesByPullRequestId — whole-diff fall
     });
 });
 
+describe('BitbucketDataCenterService.getFilesByPullRequestId — per-file read failures', () => {
+    it('lets a network failure on a per-file read through instead of a null patch', async () => {
+        const { list } = makeHost({
+            changes: [{ path: 'a.ts', type: 'MODIFY' }],
+            wholeDiff: async () => ({ data: { truncated: true } }),
+            perFile: () => Promise.reject(new Error('socket hang up')),
+        });
+
+        await expect(list()).rejects.toThrow('socket hang up');
+    });
+});
+
 describe('BitbucketDataCenterService.getChangedFilesSinceLastCommit — listing failures', () => {
     const since = (get: jest.Mock) => {
         const { service, logger } = makeHost({
