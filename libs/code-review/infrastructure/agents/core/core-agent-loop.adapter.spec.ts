@@ -228,7 +228,7 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
 
         const normal = makeModel();
         await runAgentLoopViaCore(
-            makeInput(normal.model, { reviewMode: 'normal' }),
+            makeInput(normal.model, { reviewMode: 'balanced' }),
             secrets,
         );
 
@@ -1033,13 +1033,13 @@ describe('runAgentLoopViaCore — model policy and threaded review context', () 
         it('keeps a review without a sandbox off the heavy passes', async () => {
             const plain = makeModel();
             await runAgentLoopViaCore(
-                makeInput(plain.model, { reviewMode: 'normal' }),
+                makeInput(plain.model, { reviewMode: 'balanced' }),
                 { ...secrets, remoteCommands: undefined },
             );
             const listed = makeModel();
             await runAgentLoopViaCore(
                 makeInput(listed.model, {
-                    reviewMode: 'normal',
+                    reviewMode: 'balanced',
                     repoInstructions,
                     listsRepoInstructions: true,
                 }),

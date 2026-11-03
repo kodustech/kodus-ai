@@ -39,7 +39,7 @@ function input(over: Record<string, unknown> = {}): any {
         repositoryFullName: 'example/shop',
         languageResultPrompt: 'en-US',
         remoteCommands: undefined,
-        reviewMode: 'normal',
+        reviewMode: 'balanced',
         maxSteps: 34,
         ...over,
     };
@@ -96,5 +96,23 @@ describe('GeneralistAgentProvider — settings by model', () => {
             maxSteps: 4,
             skipSynthesisRescue: undefined,
         });
+    });
+});
+
+describe('the model a generalist review routes', () => {
+    it('routes codeReviewHeavy for a heavy review and codeReview otherwise', async () => {
+        resolveModelMock.mockResolvedValue({
+            byokConfig: { provider: 'openai', model: 'gpt-x' },
+            main: { role: 'main', modelName: 'gpt-x', maxInputTokens: 1_000_000 },
+        });
+        const generalist = new GeneralistAgentProvider({} as any, {} as any);
+
+        await generalist.execute(input({ heavy: true }));
+        await generalist.execute(input());
+
+        expect(resolveModelMock.mock.calls.map((call) => call[2])).toEqual([
+            'codeReviewHeavy',
+            'codeReview',
+        ]);
     });
 });

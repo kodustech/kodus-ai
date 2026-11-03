@@ -37,6 +37,7 @@ import {
     shouldReviewBranches,
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { routeCodeReviewModel } from './route-code-review-model';
+import { isHeavyReview } from '@libs/code-review/domain/review-mode';
 import { unknownCustomAgentReply } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import {
     CUSTOM_AGENTS_PLAN_REQUIRED,
@@ -161,15 +162,22 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     context.organizationAndTeamData,
                 );
 
-            // The codeReview task's routed slot, or none → the env/managed
-            // default resolves downstream, matching a missing config.
+            // The mode the command asked for, else the one in settings.
+            const heavy = isHeavyReview(
+                context.requestedReviewMode,
+                context.codeReviewConfig?.reviewMode,
+            );
+
+            // The review's routed slot, or none → the env/managed default
+            // resolves downstream, matching a missing config.
             const routed = routeCodeReviewModel(
                 byokConfig?.configValue,
                 context.codeReviewConfig,
+                heavy,
             );
             if (routed.blocked) {
                 this.logger.warn({
-                    message: `BYOK routing BLOCKED for codeReview — falling back to env/managed default: ${routed.reason}`,
+                    message: `BYOK routing BLOCKED for ${heavy ? 'codeReviewHeavy' : 'codeReview'} — falling back to env/managed default: ${routed.reason}`,
                     context: this.stageName,
                     metadata: {
                         prNumber: context?.pullRequest?.number,
@@ -181,6 +189,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             }
 
             context = this.updateContext(context, (draft) => {
+                draft.heavy = heavy;
                 // Materialize the routed model into the resolved slot the pipeline
                 // threads downstream (the handle stages read their limit/telemetry
                 // metadata off).

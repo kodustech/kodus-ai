@@ -1,5 +1,6 @@
 import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import type { OrchestratorInput } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
+import { agentReviewMode } from '@libs/code-review/domain/review-mode';
 import { buildRepoLookup } from '@libs/code-review/infrastructure/agents/collaborators/repo-lookup';
 import { createLogger } from '@libs/core/log/logger';
 import { trialDefaultModel } from '@libs/llm/byok-to-vercel';
@@ -130,7 +131,9 @@ export function buildOrchestratorInput(
             context.repository?.defaultBranch,
         callGraph: computed.callGraph,
         callGraphJson: context.callGraphJson,
-        reviewMode: context.codeReviewConfig?.reviewMode || 'normal',
+        // The agents' step budget and verify policy: a heavy review runs them
+        // as a balanced one (its lenses come from `heavy` below).
+        reviewMode: agentReviewMode(context.codeReviewConfig?.reviewMode),
         // Heavy mode (`@kody review --heavy` / CLI `--heavy`): the M3 lenses
         // run next to the generalist. Any org, no gate.
         heavy: context.heavy || undefined,

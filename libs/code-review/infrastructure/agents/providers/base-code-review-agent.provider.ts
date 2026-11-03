@@ -56,7 +56,7 @@ import {
     type AgentModelParams,
     type ResolvedAgentModel,
 } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
-import type { NormalizedModel } from '@libs/llm/byok-config';
+import { LLM_TASK, type NormalizedModel } from '@libs/llm/byok-config';
 import { providerErrorFromResult } from '@libs/code-review/infrastructure/agents/collaborators/provider-error';
 import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
@@ -180,12 +180,19 @@ export abstract class BaseCodeReviewAgentProvider {
     /**
      * The run's model and, when the agent checks its findings on a model of
      * its own, the check slot (#2172). The built-in agents route `codeReview`
-     * and verify on the same model.
+     * — `codeReviewHeavy` for the agent that runs the lenses in a heavy
+     * review — and verify on the same model.
      */
     protected async resolveModels(
         input: ReviewAgentInput,
     ): Promise<ResolvedAgentModel & { checkByokConfig?: NormalizedModel }> {
-        return resolveReviewAgentModel(input, this.permissionValidationService);
+        return resolveReviewAgentModel(
+            input,
+            this.permissionValidationService,
+            this.runsHeavyLenses() && input.heavy
+                ? LLM_TASK.codeReviewHeavy
+                : LLM_TASK.codeReview,
+        );
     }
 
     /**

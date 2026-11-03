@@ -600,7 +600,7 @@ export class ReviewOrchestratorService {
 
     private getMaxStepsForAgent(
         agentName: string,
-        reviewMode?: 'fast' | 'normal' | 'deep',
+        reviewMode?: 'fast' | 'balanced' | 'deep',
         changedFilesCount = 0,
     ): number {
         if (reviewMode === 'deep') {

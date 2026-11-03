@@ -108,6 +108,41 @@ describe('ValidateConfigStage — v2 routing', () => {
         expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
+    it('runs heavy on the Heavy model when the repository is set to Heavy, unless --balanced asks otherwise', async () => {
+        mockOrganizationParametersService.findByKey.mockResolvedValue({
+            configValue: v2({
+                taskOverrides: { codeReviewHeavy: 'm-B' },
+                defaultModelId: 'm-A',
+            }),
+        });
+        const setToHeavy = (requestedReviewMode?: 'balanced' | 'heavy') => {
+            const context = buildContext(undefined);
+            (context.codeReviewConfig as any).reviewMode = 'heavy';
+            return { ...context, requestedReviewMode };
+        };
+
+        const heavy = await stage.execute(setToHeavy());
+        expect(heavy.heavy).toBe(true);
+        expect(heavy.codeReviewConfig.byokConfig?.model).toBe('gpt-5-mini');
+
+        const balanced = await stage.execute(setToHeavy('balanced'));
+        expect(balanced.heavy).toBe(false);
+        expect(balanced.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
+    });
+
+    it('runs heavy when --heavy asks for it on a Balanced repository', async () => {
+        mockOrganizationParametersService.findByKey.mockResolvedValue({
+            configValue: v2({ defaultModelId: 'm-A' }),
+        });
+
+        const result = await stage.execute({
+            ...buildContext(undefined),
+            requestedReviewMode: 'heavy',
+        });
+
+        expect(result.heavy).toBe(true);
+    });
+
     it('does not crash when there is no BYOK config', async () => {
         mockOrganizationParametersService.findByKey.mockResolvedValue(null);
 

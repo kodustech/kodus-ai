@@ -189,7 +189,7 @@ describe('CustomAgentTryRunnerService', () => {
         const codeBaseConfig = {
             getConfig: jest.fn(async () => ({
                 languageResultPrompt: 'pt-BR',
-                reviewMode: 'normal',
+                reviewMode: 'balanced',
                 byokModelId: 'repo-model',
                 customAgents: [],
                 knowledge: [],
@@ -235,7 +235,7 @@ describe('CustomAgentTryRunnerService', () => {
         const { runner, codeBaseConfig } = setup();
         codeBaseConfig.getConfig.mockResolvedValue({
             languageResultPrompt: 'pt-BR',
-            reviewMode: 'normal',
+            reviewMode: 'balanced',
             byokModelId: 'repo-model',
             customAgents: [],
             knowledge: [],
