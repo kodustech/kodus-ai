@@ -79,13 +79,14 @@ describe('BitbucketDataCenterService.getChangedFilesSinceLastCommit', () => {
         expect(files.map((f: { filename: string }) => f.filename)).toEqual([
             'zz/own.ts',
         ]);
-        // From the last reviewed commit to the PR head.
+        // `compare` lists what `from` has that `to` lacks: what the PR head
+        // has since the last reviewed commit.
         expect(get).toHaveBeenCalledWith(
             '/projects/PRJ/repos/api/compare/changes',
             {
                 params: expect.objectContaining({
-                    from: 'reviewed-sha',
-                    to: 'head-sha',
+                    from: 'head-sha',
+                    to: 'reviewed-sha',
                     start: 0,
                 }),
             },

@@ -3425,10 +3425,12 @@ export class BitbucketDataCenterService implements Omit<
             const latestPrCommit = prResponse.data.fromRef.latestCommit;
 
             const repoPath = `/projects/${repoConfig.workspaceId}/repos/${repoConfig.name}`;
+            // What `from` has that `to` lacks: the head's changes since the
+            // last reviewed commit.
             const compared = await this.readAllPages(
                 axiosClient,
                 `${repoPath}/compare/changes`,
-                { from: lastCommit.sha, to: latestPrCommit },
+                { from: latestPrCommit, to: lastCommit.sha },
             );
             // Files the target branch brought in through a merge are in the
             // compare; only the PR's own changes are kept (#2268).
