@@ -279,6 +279,15 @@ describe('AzureReposRequestHelper.getRepositoryContentFile — branch or tag', (
         );
     });
 
+    it('does not retry the default branch as a tag', async () => {
+        axiosInstance.get.mockRejectedValueOnce(versionNotFound());
+
+        await expect(
+            helper.getRepositoryContentFile(params),
+        ).rejects.toBeDefined();
+        expect(axiosInstance.get).toHaveBeenCalledTimes(1);
+    });
+
     it('reads refs/tags/ directly as a tag, and rethrows other errors', async () => {
         axiosInstance.get.mockResolvedValueOnce({ data: { content: 't' } });
         await helper.getRepositoryContentFile({

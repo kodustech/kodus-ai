@@ -1,6 +1,7 @@
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { createLogger } from '@libs/core/log/logger';
 import {
     toBranchName,
     type SandboxInstance,
@@ -9,6 +10,8 @@ import {
 import { parseKnowledgeSourcePath } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 import { normalizeRepoPath } from './knowledge-path';
+
+const logger = createLogger('KnowledgeRepositories');
 
 /**
  * Read-only view of the PR's TARGET branch. Skills and docs are always read
@@ -26,6 +29,9 @@ export interface BaseBranchReader {
     /** Branch a given path is read on, for messages: `ref`, except for a
      *  skill or doc of another repository (`owner/repo:path`). */
     refFor?(path: string): string;
+    /** The path names a file of another, linked repository (a reviewed
+     *  repository's path can hold a colon too). */
+    isOtherRepository?(path: string): boolean;
     readFile(path: string): Promise<BaseBranchReadResult>;
     /** Regular files under a directory, recursively, as repo-relative paths. */
     listFiles(dir: string): Promise<string[]>;
@@ -313,7 +319,8 @@ export class CodeManagementBaseBranchReader implements BaseBranchReader {
             return { status: 'missing' };
         }
 
-        const data = response?.data;
+        // Most providers wrap the file in `data`; Forgejo returns it flat.
+        const data = response?.data ?? response;
         if (data?.type === 'symlink') {
             return { status: 'refused', reason: 'symbolic links are not read' };
         }
@@ -429,6 +436,10 @@ export class MultiRepositoryKnowledgeReader implements BaseBranchReader {
         );
     }
 
+    isOtherRepository(path: string): boolean {
+        return this.sourceOf(path) !== undefined;
+    }
+
     async readFile(path: string): Promise<BaseBranchReadResult> {
         const route = this.route(path);
         if (route === 'refused') {
@@ -524,8 +535,20 @@ export async function resolveKnowledgeRepositories(params: {
             .getRepositories?.({
                 organizationAndTeamData: params.organizationAndTeamData,
             })
-            .catch(() => {
+            .catch((error: Error) => {
                 listingFailed = true;
+                logger.warn({
+                    message:
+                        "[AGENT] The integration's repositories could not be listed; skills and docs of other repositories were not read",
+                    context: 'resolveKnowledgeRepositories',
+                    error,
+                    metadata: {
+                        organizationAndTeamData: params.organizationAndTeamData,
+                        repositories: [...wanted.values()].map(
+                            (entry) => entry.repository,
+                        ),
+                    },
+                });
                 return undefined;
             })) ?? [];
     const byName = new Map<string, KnowledgeRepositoryListing>();
@@ -553,7 +576,23 @@ export async function resolveKnowledgeRepositories(params: {
                     organizationAndTeamData: params.organizationAndTeamData,
                     repository: { id: String(repo.id), name: repo.name },
                 })
-                .catch(() => undefined)) ||
+                .catch((error: Error) => {
+                    // Knowledge never fails a review: read at the branch the
+                    // listing names, and leave a trace of why.
+                    logger.warn({
+                        message: `[AGENT] Default branch of ${repository} could not be read; using the listing's`,
+                        context: 'resolveKnowledgeRepositories',
+                        error,
+                        metadata: {
+                            organizationAndTeamData:
+                                params.organizationAndTeamData,
+                            repository,
+                            repositoryId: String(repo.id),
+                            fallback: repo.default_branch || 'main',
+                        },
+                    });
+                    return undefined;
+                })) ||
             repo.default_branch ||
             'main';
         const source: KnowledgeRepositorySource = {

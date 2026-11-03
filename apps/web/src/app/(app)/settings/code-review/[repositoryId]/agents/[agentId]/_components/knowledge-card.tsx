@@ -146,6 +146,8 @@ export const useKnowledgeSourceListing = (params: {
     source: KnowledgeSource;
     /** The page-level check, which lists the reviewed repository. */
     report?: CustomAgentResolveReport;
+    /** That check failed: this repository's list is not coming. */
+    reportFailed?: boolean;
     enabled: boolean;
     /** The "Other repository…" picker is open: list every repository. */
     listConnected?: boolean;
@@ -204,19 +206,38 @@ export const useKnowledgeSourceListing = (params: {
             connectedKnowledge?.repositoryVisibility,
         // This repository is listed by the page's check: loading only until
         // it answers, whatever it answered.
-        loading: params.source.repository ? remoteLoading : !params.report,
-        // A request that failed is not an empty repository: say so.
+        loading: params.source.repository
+            ? remoteLoading
+            : !params.report && !params.reportFailed,
+        // A request that failed is not an empty repository: say so. While
+        // the picked repository loads, the previous answer is a placeholder
+        // and names another repository: say nothing until this one answers.
         unavailable: !params.source.repository
             ? params.report?.knowledge.status === "unavailable"
                 ? params.report.knowledge.reason
-                : undefined
-            : remote.data?.knowledge.status === "unavailable"
-              ? remote.data.knowledge.reason
-              : remote.isError && !remoteLoading
-                ? `Could not read ${params.source.repository}. Try again.`
-                : undefined,
+                : !params.report && params.reportFailed
+                  ? "Could not read this repository. Try again."
+                  : undefined
+            : remoteLoading
+              ? undefined
+              : remote.data?.knowledge.status === "unavailable"
+                ? remote.data.knowledge.reason
+                : remote.isError
+                  ? `Could not read ${params.source.repository}. Try again.`
+                  : undefined,
     };
 };
+
+/** The branch or tag a repository is pinned to: the last item's that sets
+ *  one, as a review reads it (`resolveKnowledgeRepositories`). */
+const pinnedRef = (knowledge: KnowledgeItem[], repository: string) =>
+    [...knowledge]
+        .reverse()
+        .find(
+            (item) =>
+                item.repository?.toLowerCase() === repository.toLowerCase() &&
+                item.ref,
+        )?.ref;
 
 /**
  * Where skills and docs are added from: this repository, a linked one, or
@@ -285,12 +306,7 @@ export const KnowledgeSourceBar = ({
         !first.some((name) => name.toLowerCase() === selected)
             ? [...first, source.repository]
             : first;
-    const refOf = (repository: string) =>
-        knowledge.find(
-            (item) =>
-                item.repository?.toLowerCase() === repository.toLowerCase() &&
-                item.ref,
-        )?.ref;
+    const refOf = (repository: string) => pinnedRef(knowledge, repository);
     const open = (repository?: string) => {
         setPicking(false);
         setEditingRef(false);
@@ -495,6 +511,7 @@ export const AgentKnowledgeField = ({
     agentId,
     knowledge,
     report,
+    reportFailed,
     canEdit,
     onChange,
     teamId,
@@ -504,6 +521,8 @@ export const AgentKnowledgeField = ({
     agentId: string;
     knowledge: KnowledgeItem[];
     report?: CustomAgentResolveReport;
+    /** The page's check failed. */
+    reportFailed?: boolean;
     canEdit: boolean;
     onChange: (next: KnowledgeItem[]) => void;
     teamId?: string;
@@ -526,6 +545,7 @@ export const AgentKnowledgeField = ({
         repositoryId,
         source,
         report,
+        reportFailed,
         enabled: adding,
         listConnected: pickerOpen,
     });
@@ -565,11 +585,7 @@ export const AgentKnowledgeField = ({
           )
         : [];
     const browse = (repository: string) => {
-        const ref = knowledge.find(
-            (item) =>
-                item.repository?.toLowerCase() === repository.toLowerCase() &&
-                item.ref,
-        )?.ref;
+        const ref = pinnedRef(knowledge, repository);
         setSource({ repository, ...(ref && { ref }) });
         setAdding(true);
     };

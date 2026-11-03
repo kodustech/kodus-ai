@@ -182,6 +182,12 @@ describe("AgentKnowledgeField with another repository", () => {
                 linkedTo: [{ agentId: "valves" }],
             },
             { path: "b.md", kind: "doc", linkedTo: [{ agentId: "valves" }] },
+            {
+                path: "c.md",
+                kind: "doc",
+                repository: RULES,
+                linkedTo: [{ agentId: "valves" }],
+            },
         ];
         const onChange = field(knowledge);
 
@@ -202,7 +208,40 @@ describe("AgentKnowledgeField with another repository", () => {
         expect(onChange).toHaveBeenLastCalledWith([
             { ...knowledge[0], ref: "v3" },
             knowledge[1],
+            { ...knowledge[2], ref: "v3" },
         ]);
+    });
+
+    it("lists a repository at the last ref pinned to it, as a review reads it", () => {
+        field([
+            {
+                path: "a.md",
+                kind: "doc",
+                repository: RULES,
+                ref: "v2",
+                linkedTo: [{ agentId: "valves" }],
+            },
+            {
+                path: "c.md",
+                kind: "doc",
+                repository: RULES,
+                ref: "v3",
+                linkedTo: [{ agentId: "valves" }],
+            },
+        ]);
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Add skill or doc" }),
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "irrigation-rules" }),
+        );
+
+        expect(mockResolve).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                source: { repository: RULES, ref: "v3" },
+            }),
+        );
     });
 
     it("says why a repository cannot be listed", () => {
@@ -447,6 +486,37 @@ describe("AgentKnowledgeField with another repository", () => {
         expect(screen.queryByText(/No skills or docs found/)).toBeNull();
     });
 
+    it("keeps the previous repository's failure off while the picked one loads", () => {
+        // The hook keeps the last answer as a placeholder while it fetches.
+        mockResolve.mockImplementation((params) =>
+            params?.source?.repository && params.enabled !== false
+                ? {
+                      isLoading: false,
+                      isFetching: true,
+                      data: {
+                          knowledge: {
+                              status: "unavailable",
+                              reason: "Could not read greenhouse/old-rules.",
+                          },
+                      },
+                  }
+                : { isLoading: false, isFetching: false, data: undefined },
+        );
+        field([]);
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Add skill or doc" }),
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "irrigation-rules" }),
+        );
+
+        expect(screen.getByText(`Reading ${RULES}…`)).toBeInTheDocument();
+        expect(
+            screen.queryByText("Could not read greenhouse/old-rules."),
+        ).toBeNull();
+    });
+
     it("stops loading this repository's list once the page check answers, even unavailable", () => {
         mockResolve.mockReturnValue({
             isLoading: false,
@@ -474,6 +544,26 @@ describe("AgentKnowledgeField with another repository", () => {
         expect(answered.result.current).toMatchObject({
             loading: false,
             unavailable: "Could not read the repository.",
+        });
+    });
+
+    it("stops loading this repository's list when the page check fails, and says so", () => {
+        mockResolve.mockReturnValue({
+            isLoading: false,
+            isFetching: false,
+            data: undefined,
+        });
+        const failed = renderHook(() =>
+            useKnowledgeSourceListing({
+                source: {},
+                enabled: true,
+                reportFailed: true,
+            }),
+        );
+
+        expect(failed.result.current).toMatchObject({
+            loading: false,
+            unavailable: "Could not read this repository. Try again.",
         });
     });
 });

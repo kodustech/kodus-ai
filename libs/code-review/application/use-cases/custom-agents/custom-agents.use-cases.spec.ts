@@ -305,11 +305,10 @@ describe('ResolveCustomAgentUseCase', () => {
 
         it("falls back to the listing's default branch when the provider cannot say", async () => {
             const knowledgeReader = reader();
-            const { getDefaultBranch: _none, ...withoutDefault } = cm;
             const useCase = new ResolveCustomAgentUseCase(
                 parametersService(storedConfig()) as any,
                 {
-                    ...withoutDefault,
+                    ...cm,
                     // The reviewed repository answers; the rules one fails.
                     getDefaultBranch: jest.fn(async ({ repository }) => {
                         if (repository.id === 'repo-9') throw new Error('500');
@@ -334,6 +333,30 @@ describe('ResolveCustomAgentUseCase', () => {
                         name: 'ledger-rules',
                         branch: 'trunk',
                     },
+                }),
+            );
+        });
+
+        it('lists this repository when the source is not a string, instead of failing the check', async () => {
+            const knowledgeReader = reader();
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                cm as any,
+                knowledgeReader,
+            );
+
+            const report = await useCase.execute({
+                organizationAndTeamData,
+                repositoryId: 'repo-1',
+                knowledge: [],
+                discover: true,
+                source: { repository: 12, ref: ['v3'] } as any,
+            });
+
+            expect(report.knowledge.status).toBe('ok');
+            expect(knowledgeReader.discover).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    repository: expect.objectContaining({ id: 'repo-1' }),
                 }),
             );
         });
@@ -363,6 +386,42 @@ describe('ResolveCustomAgentUseCase', () => {
             });
 
             expect(lister.getRepositories).not.toHaveBeenCalled();
+        });
+
+        it('lists the repositories once for edits in a row, and again after a failure', async () => {
+            const lister = {
+                ...cm,
+                getRepositories: jest
+                    .fn()
+                    .mockRejectedValueOnce(new Error('503'))
+                    .mockResolvedValue(listing),
+            };
+            const useCase = new ResolveCustomAgentUseCase(
+                parametersService(storedConfig()) as any,
+                lister as any,
+                reader(),
+            );
+            const check = () =>
+                useCase.execute({
+                    organizationAndTeamData,
+                    repositoryId: 'repo-1',
+                    knowledge: [
+                        {
+                            path: 'stack/ledger/rules/postings.md',
+                            kind: 'doc',
+                            repository: RULES,
+                            linkedTo: [],
+                        },
+                    ],
+                });
+
+            await check();
+            await check();
+            await check();
+
+            // The failed listing is not kept; the next one is, for the edit
+            // after it.
+            expect(lister.getRepositories).toHaveBeenCalledTimes(2);
         });
 
         it('finds a Bitbucket or Azure repository listed without a full name', async () => {

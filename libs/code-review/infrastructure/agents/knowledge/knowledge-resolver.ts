@@ -10,7 +10,6 @@ import {
     CUSTOM_AGENT_LIMITS,
     KNOWLEDGE_MAIN_REVIEW_TARGET,
     knowledgeSourcePath,
-    parseKnowledgeSourcePath,
     type KnowledgeItem,
     type KnowledgeLinkTarget,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -140,6 +139,24 @@ export function locateSkill(path: string): SkillLocation | null {
     };
 }
 
+/**
+ * `locateSkill` for an item whose path may be qualified (`owner/repo:path`):
+ * the skill is located inside its own repository, so a skill at that
+ * repository's root is named after its folder, not `repo:folder`.
+ */
+function locateLinkedSkill(item: KnowledgeItem): SkillLocation | null {
+    const prefix = item.repository ? `${item.repository}:` : '';
+    if (!prefix || !item.path.startsWith(prefix)) return locateSkill(item.path);
+    const location = locateSkill(item.path.slice(prefix.length));
+    return location
+        ? {
+              skillFile: `${prefix}${location.skillFile}`,
+              folder: location.folder ? `${prefix}${location.folder}` : null,
+              expectedName: location.expectedName,
+          }
+        : null;
+}
+
 export class KnowledgeResolver {
     private readonly reads = new Map<string, Promise<BaseBranchReadResult>>();
     private readonly listings = new Map<string, Promise<string[]>>();
@@ -222,7 +239,7 @@ export class KnowledgeResolver {
         const names = new Set<string>();
 
         for (const item of items) {
-            const location = locateSkill(item.path);
+            const location = locateLinkedSkill(item);
             if (!location) {
                 warnings.push({
                     code: 'SKILL_INVALID',
@@ -431,9 +448,13 @@ export class KnowledgeResolver {
         return this.reader.refFor?.(path) ?? this.reader.ref;
     }
 
-    /** `{ ref }` for a file of another repository, nothing otherwise. */
+    /** `{ ref }` for a file of another repository, nothing otherwise. The
+     *  reader decides: `docs/payments:2024.md` parses like `owner/repo:path`
+     *  but is read from the reviewed repository. */
     private otherRef(path: string): { ref?: string } {
-        return parseKnowledgeSourcePath(path) ? { ref: this.refOf(path) } : {};
+        return this.reader.isOtherRepository?.(path)
+            ? { ref: this.refOf(path) }
+            : {};
     }
 
     private read(path: string): Promise<BaseBranchReadResult> {

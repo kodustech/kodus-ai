@@ -2,6 +2,7 @@ import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engi
 import {
     KNOWLEDGE_MAIN_REVIEW_TARGET,
     knowledgeSourcePath,
+    linksMainReview,
     type CustomAgentConfig,
     type KnowledgeItem,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -58,10 +59,12 @@ export async function resolveReviewKnowledge(params: {
     /** The pull request, for the logs. */
     prNumber?: number;
 }): Promise<ReviewKnowledge> {
-    const items = params.items ?? [];
-    if (!items.length) return { warnings: [] };
+    const { items, outsideMainReview } = mainReviewLinksDropped(
+        params.items ?? [],
+    );
+    if (!items.length) return { warnings: outsideMainReview };
     const { baseBranch, repository, customAgents } = params;
-    if (!baseBranch || !repository?.id) return { warnings: [] };
+    if (!baseBranch || !repository?.id) return { warnings: outsideMainReview };
     const ids = {
         organizationId: params.organizationAndTeamData?.organizationId,
         teamId: params.organizationAndTeamData?.teamId,
@@ -181,7 +184,7 @@ export async function resolveReviewKnowledge(params: {
         return {
             byTarget,
             reader,
-            warnings,
+            warnings: [...outsideMainReview, ...warnings],
             ...(repositories.sources.length && {
                 sources: repositories.sources.map((entry) => entry.source),
             }),
@@ -196,6 +199,7 @@ export async function resolveReviewKnowledge(params: {
         });
         return {
             warnings: [
+                ...outsideMainReview,
                 {
                     kind: 'KNOWLEDGE_UNAVAILABLE',
                     reason: 'knowledge',
@@ -206,4 +210,36 @@ export async function resolveReviewKnowledge(params: {
             ],
         };
     }
+}
+
+/**
+ * Guides of another repository are for custom agents only: the main review
+ * has no quote gate to check a rule it cites. Settings refuse such a link on
+ * save; a config that carries one anyway (written by hand or as code) keeps
+ * its custom-agent links, loses the main-review one, and says so.
+ */
+export function mainReviewLinksDropped(all: KnowledgeItem[]): {
+    items: KnowledgeItem[];
+    outsideMainReview: ReviewWarning[];
+} {
+    const items: KnowledgeItem[] = [];
+    const outsideMainReview: ReviewWarning[] = [];
+    for (const item of all) {
+        if (!item.repository || !linksMainReview(item)) {
+            items.push(item);
+            continue;
+        }
+        outsideMainReview.push({
+            kind: 'KNOWLEDGE_UNAVAILABLE',
+            reason: 'knowledge',
+            contextWindowTokens: 0,
+            modelName: '',
+            detail: `${knowledgeSourcePath(item)}: guides of another repository are for custom agents only, so the main review did not read it`,
+        });
+        const linkedTo = (item.linkedTo ?? []).filter(
+            (target) => target !== KNOWLEDGE_MAIN_REVIEW_TARGET,
+        );
+        if (linkedTo.length) items.push({ ...item, linkedTo });
+    }
+    return { items, outsideMainReview };
 }

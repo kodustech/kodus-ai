@@ -123,9 +123,20 @@ const NOT_LISTED = (repository: string) =>
 const GLOBAL_KNOWLEDGE =
     "Skills and docs are files of each repository: they are read from the pull request's target branch when a review runs there.";
 
+/** How long a listing of the integration's repositories is reused. A
+ *  repository connected in Git settings shows up within it. */
+const LISTING_TTL_MS = 30 * 1000;
+
 @Injectable()
 export class ResolveCustomAgentUseCase {
     private readonly logger = createLogger(ResolveCustomAgentUseCase.name);
+    /** The integration's repositories per team, listed in the last
+     *  `LISTING_TTL_MS`: the settings screens check the draft on every edit,
+     *  and each listing pages the whole integration. Failures are not kept. */
+    private readonly listings = new Map<
+        string,
+        { at: number; repositories: RepositoryListing[] }
+    >();
 
     constructor(
         @Inject(PARAMETERS_SERVICE_TOKEN)
@@ -224,15 +235,21 @@ export class ResolveCustomAgentUseCase {
             return { status: 'unavailable', reason: NOT_BOUND };
         }
         try {
-            const sourceRepository =
-                source?.repository?.trim() &&
-                KNOWLEDGE_REPOSITORY_PATTERN.test(source.repository.trim())
+            // Any JSON can arrive here: only a string can name a source.
+            const wantedRepository =
+                typeof source?.repository === 'string'
                     ? source.repository.trim()
+                    : '';
+            const wantedRef =
+                typeof source?.ref === 'string' ? source.ref.trim() : '';
+            const sourceRepository =
+                wantedRepository &&
+                KNOWLEDGE_REPOSITORY_PATTERN.test(wantedRepository)
+                    ? wantedRepository
                     : undefined;
             const sourceRef =
-                source?.ref?.trim() &&
-                KNOWLEDGE_REF_PATTERN.test(source.ref.trim())
-                    ? source.ref.trim()
+                wantedRef && KNOWLEDGE_REF_PATTERN.test(wantedRef)
+                    ? wantedRef
                     : undefined;
             const others = new Set(
                 [...knowledge.map((item) => item.repository), sourceRepository]
@@ -479,15 +496,24 @@ export class ResolveCustomAgentUseCase {
         needed: boolean,
     ): Promise<{ repositories: RepositoryListing[]; failed: boolean }> {
         if (!needed) return { repositories: [], failed: false };
+        const key = `${organizationAndTeamData.organizationId}:${organizationAndTeamData.teamId}`;
+        const now = Date.now();
+        const kept = this.listings.get(key);
+        if (kept && now - kept.at < LISTING_TTL_MS) {
+            return { repositories: kept.repositories, failed: false };
+        }
         try {
             const listed =
                 ((await this.codeManagementService.getRepositories({
                     organizationAndTeamData,
                 })) as RepositoryListing[]) ?? [];
-            return {
-                repositories: listed.filter(isConnectedRepository),
-                failed: false,
-            };
+            const repositories = listed.filter(isConnectedRepository);
+            for (const [team, entry] of this.listings) {
+                if (now - entry.at >= LISTING_TTL_MS)
+                    this.listings.delete(team);
+            }
+            this.listings.set(key, { at: now, repositories });
+            return { repositories, failed: false };
         } catch (error) {
             this.logger.warn({
                 message: 'Could not list repositories for skills and docs',

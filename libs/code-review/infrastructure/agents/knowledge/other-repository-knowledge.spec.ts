@@ -5,6 +5,16 @@
  * repositories the config links.
  * Fixture domain: an invented greenhouse-irrigation team and its rules repo.
  */
+const mockWarn = jest.fn();
+jest.mock('@libs/core/log/logger', () => ({
+    createLogger: () => ({
+        log: jest.fn(),
+        warn: (...args: unknown[]) => mockWarn(...args),
+        error: jest.fn(),
+        debug: jest.fn(),
+    }),
+}));
+
 import { guideSourcesFor } from '@libs/code-review/infrastructure/agents/core/convention-check';
 
 import {
@@ -185,6 +195,33 @@ describe('resolveKnowledgeRepositories', () => {
         expect(result.sources[0].source.ref).toBe('v3');
     });
 
+    it("logs a default branch the provider failed to give, and reads at the listing's", async () => {
+        mockWarn.mockClear();
+        const cm = {
+            ...provider({}),
+            getDefaultBranch: jest.fn(async () => {
+                throw new Error('403 rate limited');
+            }),
+        };
+        const result = await resolveKnowledgeRepositories({
+            items: [{ repository: RULES }],
+            codeManagement: cm,
+            organizationAndTeamData: ORG,
+        });
+
+        expect(result.sources[0].source.ref).toBe('trunk');
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationAndTeamData: ORG,
+                    repository: RULES,
+                    repositoryId: '20',
+                    fallback: 'trunk',
+                }),
+            }),
+        );
+    });
+
     it('reads at the listing default branch when the provider has no default-branch call', async () => {
         const { getDefaultBranch: _none, ...cm } = provider({}) as any;
         const result = await resolveKnowledgeRepositories({
@@ -208,6 +245,14 @@ describe('resolveKnowledgeRepositories', () => {
         });
 
         expect(result).toMatchObject({ missing: [RULES], listingFailed: true });
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: {
+                    organizationAndTeamData: ORG,
+                    repositories: [RULES],
+                },
+            }),
+        );
     });
 
     it('does not read a repository the integration lists but the team did not connect', async () => {
@@ -390,6 +435,89 @@ describe('KnowledgeResolver with another repository', () => {
         ]);
         expect(renderKnowledgeSection(resolved)).toContain(
             'A path written `owner/repo:path` is a file of that other repository',
+        );
+    });
+
+    it('names a skill at the root of the rules repository after its folder', async () => {
+        const reader = new MultiRepositoryKnowledgeReader(
+            new InMemoryBaseBranchReader({}),
+            [
+                {
+                    source: {
+                        fullName: RULES,
+                        id: '20',
+                        name: 'irrigation-rules',
+                        ref: 'trunk',
+                    },
+                    reader: new InMemoryBaseBranchReader({
+                        'migrations/SKILL.md': skillMarkdown(
+                            'migrations',
+                            'How the team writes migrations.',
+                        ),
+                    }),
+                },
+            ],
+        );
+
+        const resolved = await new KnowledgeResolver(reader).resolve({
+            items: [
+                {
+                    kind: 'skill',
+                    repository: RULES,
+                    path: 'migrations',
+                    linkedTo: [{ agentId: 'valves' }],
+                },
+            ],
+            target: { agentId: 'valves' },
+        });
+
+        expect(resolved.warnings).toEqual([]);
+        expect(resolved.skills).toEqual([
+            expect.objectContaining({
+                name: 'migrations',
+                path: `${RULES}:migrations/SKILL.md`,
+                folder: `${RULES}:migrations`,
+                ref: 'trunk',
+            }),
+        ]);
+    });
+
+    it("keeps a reviewed-repository path with a colon as this repository's file", async () => {
+        // `docs/payments:2024.md` parses like owner/repo:path, but names no
+        // linked repository: it is read here, and the prompt says nothing of
+        // another repository.
+        const reader = new MultiRepositoryKnowledgeReader(
+            new InMemoryBaseBranchReader({ 'docs/payments:2024.md': '# 2024' }),
+            [
+                {
+                    source: {
+                        fullName: RULES,
+                        id: '20',
+                        name: 'irrigation-rules',
+                        ref: 'trunk',
+                    },
+                    reader: new InMemoryBaseBranchReader({}),
+                },
+            ],
+        );
+
+        const resolved = await new KnowledgeResolver(reader).resolve({
+            items: [
+                {
+                    kind: 'doc',
+                    path: 'docs/payments:2024.md',
+                    linkedTo: [{ agentId: 'valves' }],
+                },
+            ],
+            target: { agentId: 'valves' },
+        });
+
+        expect(resolved.docs).toEqual([
+            expect.objectContaining({ path: 'docs/payments:2024.md' }),
+        ]);
+        expect(resolved.docs[0]).not.toHaveProperty('ref');
+        expect(renderKnowledgeSection(resolved)).not.toContain(
+            'owner/repo:path',
         );
     });
 

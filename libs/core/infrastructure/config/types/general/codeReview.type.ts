@@ -674,10 +674,20 @@ export function knowledgeLinkProblems(
     return problems;
 }
 
+/** The item is linked to the main review (the built-in agents). */
+export function linksMainReview(item: {
+    linkedTo?: readonly unknown[];
+}): boolean {
+    return (item.linkedTo ?? []).includes(KNOWLEDGE_MAIN_REVIEW_TARGET);
+}
+
 /**
  * Skills and docs that name their source wrongly: a `ref` without a
  * `repository` (the reviewed repository is always read on the PR's target
- * branch), two refs for one repository, or the same entry twice.
+ * branch), two refs for one repository, the same entry twice, or a guide of
+ * another repository linked to the main review. Guides of another repository
+ * are for custom agents only: the main review has no quote gate to check a
+ * rule it cites, and reaches team guides through coding-agent instructions.
  */
 export function knowledgeSourceProblems(
     knowledge:
@@ -686,6 +696,7 @@ export function knowledgeSourceProblems(
               kind?: string;
               repository?: string;
               ref?: string;
+              linkedTo?: readonly unknown[];
           }>
         | undefined,
 ): string[] {
@@ -711,6 +722,11 @@ export function knowledgeSourceProblems(
         if (item.ref && !item.repository) {
             problems.push(
                 `${item.path} sets a ref but no repository; the reviewed repository is read on the pull request's target branch`,
+            );
+        }
+        if (item.repository && linksMainReview(item)) {
+            problems.push(
+                `${knowledgeSourcePath({ path: item.path, repository: item.repository })} is a guide of another repository, which only custom agents follow; unlink it from the main review`,
             );
         }
         const key = knowledgeItemKey({

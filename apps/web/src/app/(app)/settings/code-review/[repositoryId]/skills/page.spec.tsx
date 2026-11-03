@@ -31,6 +31,7 @@ const doc: KnowledgeItem = {
 const setKnowledge = jest.fn();
 const save = jest.fn();
 let mockReport: unknown;
+let mockKnowledge: KnowledgeItem[] = [doc];
 
 jest.mock("../_custom-agents/use-custom-agents-form", () => ({
     reviewScopeHref: () => "/settings/code-review/repo-1/review-scope",
@@ -42,7 +43,7 @@ jest.mock("../_custom-agents/use-custom-agents-form", () => ({
         directoryId: "dir-1",
         agents: [drip],
         linkableAgents: [valves, drip],
-        knowledge: [doc],
+        knowledge: mockKnowledge,
         // The doc link this save keeps is unsaved.
         isDirty: mockReport !== undefined,
         isSubmitting: false,
@@ -52,19 +53,31 @@ jest.mock("../_custom-agents/use-custom-agents-form", () => ({
     }),
 }));
 
+let mockReportFailed = false;
 jest.mock("@services/custom-agents/hooks", () => ({
-    useResolveCustomAgent: () => ({ isLoading: false, data: mockReport }),
+    useResolveCustomAgent: () => ({
+        isLoading: false,
+        isError: mockReportFailed,
+        data: mockReport,
+    }),
 }));
 
 jest.mock("@services/permissions/hooks", () => ({
     usePermission: () => true,
 }));
 
-const TRIAL = { valid: true, subscriptionStatus: "trial", planType: "teams_managed" };
+const TRIAL = {
+    valid: true,
+    subscriptionStatus: "trial",
+    planType: "teams_managed",
+};
 let mockLicense: Record<string, unknown> = TRIAL;
-jest.mock("src/features/ee/subscription/_providers/subscription-context", () => ({
-    useSubscriptionContext: () => ({ license: mockLicense }),
-}));
+jest.mock(
+    "src/features/ee/subscription/_providers/subscription-context",
+    () => ({
+        useSubscriptionContext: () => ({ license: mockLicense }),
+    }),
+);
 
 jest.mock("src/core/utils/gate-hit", () => ({
     captureGateHit: jest.fn(),
@@ -174,5 +187,100 @@ describe("Skills & docs page on free", () => {
             screen.getByRole("heading", { name: "Unlock custom agents" }),
         ).toBeInTheDocument();
         expect(screen.queryByText("docs/irrigation.md")).toBeNull();
+    });
+});
+
+describe("Skills & docs page with a guide of another repository", () => {
+    // Guides of another repository are for custom agents only: the main
+    // review has no quote gate for a rule they hold.
+    const RULES = "greenhouse/irrigation-rules";
+    const pumps = (linkedTo: KnowledgeItem["linkedTo"]): KnowledgeItem => ({
+        path: "stack/node/pumps.md",
+        kind: "doc",
+        repository: RULES,
+        linkedTo,
+    });
+    beforeEach(() => {
+        mockReport = {
+            repository: { branch: "main" },
+            knowledge: {
+                status: "ok",
+                items: [],
+                candidates: [],
+                budgets: [],
+                linkedRepositories: [RULES],
+            },
+        };
+        setKnowledge.mockClear();
+    });
+    afterEach(() => {
+        mockReport = undefined;
+        mockKnowledge = [doc];
+    });
+
+    it("adds only from this repository, with no source to pick", () => {
+        mockKnowledge = [doc, pumps([{ agentId: "valves" }])];
+        render(<SkillsAndDocsPage />);
+
+        expect(screen.getByText("Found in the repository")).toBeInTheDocument();
+        expect(screen.queryByText("From")).toBeNull();
+        expect(screen.queryByText("Other repository…")).toBeNull();
+    });
+
+    it("links it to custom agents, never to the main review", () => {
+        mockKnowledge = [doc, pumps([{ agentId: "valves" }])];
+        render(<SkillsAndDocsPage />);
+
+        expect(
+            screen.queryByRole("checkbox", {
+                name: `${RULES}:stack/node/pumps.md for Main review`,
+            }),
+        ).toBeNull();
+        expect(
+            screen.getByRole("checkbox", {
+                name: `${RULES}:stack/node/pumps.md for Valves reviewer`,
+            }),
+        ).toBeChecked();
+        // This repository's doc still links to the main review.
+        expect(
+            screen.getByRole("checkbox", {
+                name: "docs/irrigation.md for Main review",
+            }),
+        ).toBeInTheDocument();
+    });
+
+    it("shows a main-review link saved before so it can be unchecked", () => {
+        mockKnowledge = [pumps(["main-review", { agentId: "valves" }])];
+        render(<SkillsAndDocsPage />);
+
+        expect(
+            screen.getByText(
+                "Guides of another repository are for custom agents only. Uncheck Main review to save.",
+            ),
+        ).toBeInTheDocument();
+        fireEvent.click(
+            screen.getByRole("checkbox", {
+                name: `${RULES}:stack/node/pumps.md for Main review`,
+            }),
+        );
+        expect(setKnowledge).toHaveBeenCalledWith([
+            pumps([{ agentId: "valves" }]),
+        ]);
+    });
+});
+
+describe("Skills & docs page when the check fails", () => {
+    afterEach(() => {
+        mockReportFailed = false;
+    });
+
+    it("says the repository could not be read instead of loading forever", () => {
+        mockReportFailed = true;
+        const { container } = render(<SkillsAndDocsPage />);
+
+        expect(
+            screen.getByText("Could not read this repository. Try again."),
+        ).toBeInTheDocument();
+        expect(container.querySelector(".animate-spin")).toBeNull();
     });
 });

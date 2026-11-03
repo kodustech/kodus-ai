@@ -96,7 +96,13 @@ describe('quote gate with a guide of another repository', () => {
         );
 
         expect(result.passed).toEqual([]);
-        expect(result.rejected).toHaveLength(1);
+        // Recognized as the linked guide, then not readable: not the
+        // "not a guide linked to this review" rejection.
+        expect(result.rejected).toEqual([
+            expect.objectContaining({
+                detail: `${RULES_DOC} not found on the target branch`,
+            }),
+        ]);
     });
 
     it('never reads another repository through the target branch when nothing can read it', () => {
