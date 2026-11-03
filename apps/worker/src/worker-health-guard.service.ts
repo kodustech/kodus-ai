@@ -466,14 +466,20 @@ export class WorkerHealthGuardService
         // exit. A fixed 30s killed the process mid-drain whenever
         // API_WORKER_DRAIN_TIMEOUT_MS was longer (prod uses 240s), before the
         // inbox locks were released.
+        const forceExitMs = forceExitAfterMs();
         const forceExitTimer = setTimeout(() => {
             this.logger.error({
                 message: 'Graceful shutdown timed out. Force exiting.',
                 context: WorkerHealthGuardService.name,
-                metadata: { instanceId: this.instanceId },
+                metadata: {
+                    instanceId: this.instanceId,
+                    exitCode: code,
+                    timeoutMs: forceExitMs,
+                    drainTimeoutMs: parseDrainTimeoutMs(),
+                },
             });
             process.exit(code);
-        }, forceExitAfterMs());
+        }, forceExitMs);
 
         // process.kill(process.pid, 'SIGTERM') triggers NestJS shutdown hooks
         // (enableShutdownHooks is called in main.ts), which runs:

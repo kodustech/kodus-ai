@@ -1,4 +1,6 @@
 import {
+    MAX_DRAIN_TIMEOUT_MS,
+    parseDrainTimeoutMs,
     SHUTDOWN_AFTER_DRAIN_MS,
     WorkerDrainService,
 } from './worker-drain.service';
@@ -169,6 +171,35 @@ describe('WorkerDrainService', () => {
             // 2 cancels (5s each) + close (15s) + inbox release room (10s)
             expect(SHUTDOWN_AFTER_DRAIN_MS).toBe(25_000);
             expect(forceExitAfterMs()).toBe(240_000 + 25_000 + 10_000);
+        } finally {
+            if (prev === undefined)
+                delete process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+            else process.env.API_WORKER_DRAIN_TIMEOUT_MS = prev;
+        }
+    });
+
+    it.each([
+        ['an extra zero', '2400000000'],
+        ['above the ceiling', String(MAX_DRAIN_TIMEOUT_MS + 1)],
+        ['zero', '0'],
+        ['not a number', 'soon'],
+    ])('falls back to the default drain budget for %s', (_label, value) => {
+        const prev = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+        process.env.API_WORKER_DRAIN_TIMEOUT_MS = value;
+        try {
+            expect(parseDrainTimeoutMs()).toBe(25_000);
+        } finally {
+            if (prev === undefined)
+                delete process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+            else process.env.API_WORKER_DRAIN_TIMEOUT_MS = prev;
+        }
+    });
+
+    it('keeps a drain budget inside the bounds', () => {
+        const prev = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+        process.env.API_WORKER_DRAIN_TIMEOUT_MS = '240000';
+        try {
+            expect(parseDrainTimeoutMs()).toBe(240_000);
         } finally {
             if (prev === undefined)
                 delete process.env.API_WORKER_DRAIN_TIMEOUT_MS;

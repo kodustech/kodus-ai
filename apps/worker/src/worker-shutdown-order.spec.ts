@@ -27,7 +27,11 @@ describe('worker shutdown order', () => {
     it('cancels consumers, then drains jobs, then closes the connection', async () => {
         const amqpConnection = {
             consumerTags: ['tag-code-review'],
-            cancelConsumer: jest.fn(async () => {
+            cancelConsumer: jest.fn(async (tag: string) => {
+                // The real client knows only registered tags
+                if (tag !== 'tag-code-review') {
+                    throw new Error(`unknown consumer tag ${tag}`);
+                }
                 order.push('cancel-consumers');
             }),
             close: jest.fn(async () => {
@@ -52,6 +56,9 @@ describe('worker shutdown order', () => {
 
         await app.close();
 
+        expect(amqpConnection.cancelConsumer).toHaveBeenCalledWith(
+            'tag-code-review',
+        );
         expect(order).toEqual([
             'cancel-consumers',
             'drain-jobs-and-release-inbox',
