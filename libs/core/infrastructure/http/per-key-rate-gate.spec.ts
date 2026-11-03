@@ -15,7 +15,10 @@ describe('per-key-rate-gate', () => {
         __resetRateGatesForTest();
     });
 
-    afterEach(() => jest.restoreAllMocks());
+    afterEach(() => {
+        jest.useRealTimers();
+        jest.restoreAllMocks();
+    });
 
     it('serializes concurrent calls that share a key (single slot)', async () => {
         let active = 0;
@@ -75,10 +78,8 @@ describe('per-key-rate-gate', () => {
         const parkedFrom = Date.now();
         parkRateGate('k', Date.now() + parkMs);
 
-        const ranAt = await runWithRateGate(
-            'k',
-            { minIntervalMs: 0 },
-            async () => Date.now(),
+        const ranAt = await runWithRateGate('k', { minIntervalMs: 0 }, async () =>
+            Date.now(),
         );
 
         expect(ranAt - parkedFrom).toBeGreaterThanOrEqual(parkMs - 5);
@@ -91,10 +92,8 @@ describe('per-key-rate-gate', () => {
         parkRateGate('k', now + 200);
         parkRateGate('k', now + 10); // shorter — must be ignored
 
-        const ranAt = await runWithRateGate(
-            'k',
-            { minIntervalMs: 0 },
-            async () => Date.now(),
+        const ranAt = await runWithRateGate('k', { minIntervalMs: 0 }, async () =>
+            Date.now(),
         );
 
         expect(ranAt - now).toBeGreaterThanOrEqual(195);
@@ -112,22 +111,30 @@ describe('per-key-rate-gate', () => {
     });
 
     it('rejects a call that would wait past maxWaitMs instead of sleeping', async () => {
+        jest.useFakeTimers();
         await runWithRateGate('k', { minIntervalMs: 0 }, async () => undefined);
         parkRateGate('k', Date.now() + 60_000);
 
         const fn = jest.fn();
-        const startedAt = Date.now();
-        const result = runWithRateGate(
+        const error = await runWithRateGate(
             'k',
             { minIntervalMs: 0, maxWaitMs: 1_000 },
             fn,
-        );
+        ).catch((e) => e);
 
-        await expect(result).rejects.toBeInstanceOf(RateGateWaitExceededError);
-        await expect(result).rejects.toMatchObject({ status: 429 });
+        // Gave up at once, and says how long the key stays parked
+        expect(error).toBeInstanceOf(RateGateWaitExceededError);
+        expect(error).toMatchObject({
+            status: 429,
+            name: 'RateGateWaitExceededError',
+            key: 'k',
+            waitedMs: 0,
+            retryAfterMs: 60_000,
+        });
+        expect(error.message).toBe(
+            'Rate gate k: gave up after waiting 0ms (key parked for another 60000ms)',
+        );
         expect(fn).not.toHaveBeenCalled();
-        // Gave up at once rather than sleeping out the park window
-        expect(Date.now() - startedAt).toBeLessThan(500);
     });
 
     it('drains a parked queue at once when every caller has a budget', async () => {
@@ -149,6 +156,7 @@ describe('per-key-rate-gate', () => {
     });
 
     it('charges queue time against the budget while the key is rate limited', async () => {
+        jest.useFakeTimers();
         recordRateLimited('k', { baseMs: 0, maxMs: 0 });
         const holder = runWithRateGate('k', { minIntervalMs: 0 }, () =>
             sleep(120),
@@ -157,10 +165,15 @@ describe('per-key-rate-gate', () => {
             'k',
             { minIntervalMs: 0, maxWaitMs: 50 },
             async () => 'ran',
-        );
+        ).catch((e) => e);
 
+        await jest.advanceTimersByTimeAsync(120);
         await holder;
-        await expect(queued).rejects.toBeInstanceOf(RateGateWaitExceededError);
+        const error = await queued;
+
+        expect(error).toBeInstanceOf(RateGateWaitExceededError);
+        // It waited behind the holder; nothing is parked, so no retry delay
+        expect(error).toMatchObject({ waitedMs: 120, retryAfterMs: 0 });
     });
 
     it('never cuts a healthy queue short, however long it waited', async () => {
@@ -202,6 +215,10 @@ describe('per-key-rate-gate', () => {
         expect(recordRateLimited('k', backoff)).toBe(10_000);
         // Streaks are per credential
         expect(recordRateLimited('other', backoff)).toBe(10_000);
+    });
+
+    it('resetting the streak of a key never seen is a no-op', () => {
+        expect(() => recordRateGateSuccess('never-seen')).not.toThrow();
     });
 
     it('adds at most 20% jitter to the backoff', () => {

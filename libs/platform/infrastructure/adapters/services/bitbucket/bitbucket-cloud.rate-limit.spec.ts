@@ -118,15 +118,99 @@ describe('BitbucketCloudService — 429 backoff and wait budget', () => {
 
         const response = await safeFetch(service);
 
+        // A 429 the SDK reads like Bitbucket's own: JSON error, seconds left
         expect(response.status).toBe(429);
-        expect(Number(response.headers.get('retry-after'))).toBeGreaterThan(
-            25 * 60,
-        );
+        expect(response.statusText).toBe('Too Many Requests');
+        expect(response.headers.get('content-type')).toBe('application/json');
+        const retryAfter = Number(response.headers.get('retry-after'));
+        expect(retryAfter).toBeGreaterThan(29 * 60);
+        expect(retryAfter).toBeLessThanOrEqual(30 * 60);
+        await expect(response.json()).resolves.toEqual({
+            type: 'error',
+            error: {
+                message: expect.stringContaining('gave up after waiting'),
+            },
+        });
         expect(fetchMock).not.toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith(
             expect.objectContaining({
                 metadata: expect.objectContaining({ gateKey }),
             }),
         );
+    });
+
+    it('lets any other fetch failure through as is, not as a 429', async () => {
+        global.fetch = jest
+            .fn()
+            .mockRejectedValue(new TypeError('fetch failed')) as any;
+        const { service } = makeService();
+
+        await expect(safeFetch(service)).rejects.toThrow('fetch failed');
+    });
+
+    it('starts the backoff over after a response that was not a 429', async () => {
+        jest.useFakeTimers();
+        const fetchMock = jest
+            .fn()
+            .mockResolvedValueOnce(respond(429))
+            .mockResolvedValueOnce(respond(200))
+            .mockResolvedValueOnce(respond(429))
+            .mockResolvedValueOnce(respond(200));
+        global.fetch = fetchMock as any;
+        const { service } = makeService();
+
+        const first = safeFetch(service);
+        await jest.advanceTimersByTimeAsync(10_000);
+        await expect(first).resolves.toMatchObject({ status: 200 });
+
+        const second = safeFetch(service);
+        // 10s again, not 20s: the success reset the streak
+        await jest.advanceTimersByTimeAsync(10_500);
+        await expect(second).resolves.toMatchObject({ status: 200 });
+        expect(fetchMock).toHaveBeenCalledTimes(4);
+    });
+
+    it('honours a Retry-After given as an HTTP date', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-11-03T12:00:00Z'));
+        const fetchMock = jest
+            .fn()
+            .mockResolvedValueOnce(
+                respond(429, {
+                    'retry-after': 'Tue, 03 Nov 2026 12:00:03 GMT',
+                }),
+            )
+            .mockResolvedValueOnce(respond(200));
+        global.fetch = fetchMock as any;
+        const { service } = makeService();
+
+        const result = safeFetch(service);
+        await jest.advanceTimersByTimeAsync(2_900);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await jest.advanceTimersByTimeAsync(200);
+
+        await expect(result).resolves.toMatchObject({ status: 200 });
+    });
+
+    it('falls back to the backoff for a Retry-After date already past', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-11-03T12:00:00Z'));
+        const fetchMock = jest
+            .fn()
+            .mockResolvedValueOnce(
+                respond(429, {
+                    'retry-after': 'Tue, 03 Nov 2026 11:00:00 GMT',
+                }),
+            )
+            .mockResolvedValueOnce(respond(200));
+        global.fetch = fetchMock as any;
+        const { service } = makeService();
+
+        const result = safeFetch(service);
+        await jest.advanceTimersByTimeAsync(9_000);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await jest.advanceTimersByTimeAsync(1_100);
+
+        await expect(result).resolves.toMatchObject({ status: 200 });
     });
 });

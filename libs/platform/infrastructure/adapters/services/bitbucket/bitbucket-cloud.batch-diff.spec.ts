@@ -264,3 +264,244 @@ describe('BitbucketCloudService.getChangedFilesSinceLastCommit — deletions and
         ]);
     });
 });
+
+describe('BitbucketCloudService — whole-diff fallbacks and their logs', () => {
+    const since = (service: BitbucketCloudService) =>
+        service.getChangedFilesSinceLastCommit({
+            organizationAndTeamData: org as any,
+            repository: { id: 'repo-1', name: 'web' },
+            prNumber: 7,
+            lastCommit: { sha: 'last' },
+        });
+    const sectionFor = (path: string) =>
+        wholeDiff
+            .split(/(?=^diff --git )/m)
+            .find((section) => section.includes(`b/${path}`))!;
+    const rateLimited = () =>
+        Object.assign(new Error('Too Many Requests'), {
+            name: 'HTTPError',
+            status: 429,
+        });
+    const logger = (service: BitbucketCloudService) =>
+        (service as any).logger as { warn: jest.Mock };
+
+    it('reads a file the whole PR diff left out on its own, with the PR spec', async () => {
+        const getDiff = jest.fn((args: { path?: string }) =>
+            Promise.resolve({
+                data: args.path
+                    ? sectionFor(args.path)
+                    : sectionFor('src/a.ts'),
+            }),
+        );
+        const { service } = makeService(getDiff as any);
+
+        const files = await getFiles(service);
+
+        expect(getDiff).toHaveBeenCalledTimes(2);
+        expect(getDiff.mock.calls[1][0]).toEqual({
+            repo_slug: '{repo-1}',
+            workspace: '{ws-1}',
+            spec: 'head..base',
+            path: 'src/b.ts',
+        });
+        expect(files?.map((f) => f.patch)).toEqual([
+            '@@ -1 +1 @@\n-old a\n+new a',
+            '@@ -0,0 +1 @@\n+new b',
+        ]);
+    });
+
+    it('keys a removed file by its old path in the full listing', async () => {
+        const removed = [
+            'diff --git a/src/gone.ts b/src/gone.ts',
+            'deleted file mode 100644',
+            '--- a/src/gone.ts',
+            '+++ /dev/null',
+            '@@ -1 +0,0 @@',
+            '-bye',
+            '',
+        ].join('\n');
+        const getDiff = jest.fn().mockResolvedValue({ data: removed });
+        const { service } = makeService(getDiff);
+        jest.spyOn(service as any, 'getPaginatedResults').mockResolvedValue([
+            {
+                status: 'removed',
+                old: { path: 'src/gone.ts' },
+                lines_added: 0,
+                lines_removed: 1,
+            },
+        ]);
+
+        const files = await getFiles(service);
+
+        expect(getDiff).toHaveBeenCalledTimes(1);
+        expect(files?.map((f) => f.patch)).toEqual(['@@ -1 +0,0 @@\n-bye']);
+    });
+
+    it('keeps what follows the 4 header lines of a per-file diff it cannot split', async () => {
+        const getDiff = jest.fn((args: { path?: string }) =>
+            args.path
+                ? Promise.resolve({
+                      data: [
+                          'Index: src/b.ts',
+                          '===================================================================',
+                          '--- src/b.ts',
+                          '+++ src/b.ts',
+                          '@@ -1 +1 @@',
+                          '-old b',
+                          '+new b',
+                      ].join('\n'),
+                  })
+                : Promise.reject(new Error('diff too large')),
+        );
+        const { service } = makeService(getDiff as any);
+
+        const files = await getFiles(service);
+
+        expect(files?.find((f) => f.filename === 'src/b.ts')?.patch).toBe(
+            '@@ -1 +1 @@\n-old b\n+new b',
+        );
+    });
+
+    it('logs the failed whole diff with the organization and falls back', async () => {
+        const getDiff = jest.fn((args: { path?: string }) =>
+            args.path
+                ? Promise.resolve({ data: sectionFor(args.path) })
+                : Promise.reject(new Error('diff too large')),
+        );
+        const { service } = makeService(getDiff as any);
+
+        await getFiles(service);
+
+        expect(logger(service).warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                    prNumber: 7,
+                    repoId: 'repo-1',
+                    files: 2,
+                }),
+            }),
+        );
+    });
+
+    it('lets a 429 on a per-file read through', async () => {
+        const getDiff = jest.fn((args: { path?: string }) =>
+            args.path
+                ? Promise.reject(rateLimited())
+                : Promise.reject(new Error('diff too large')),
+        );
+        const { service } = makeService(getDiff as any);
+
+        await expect(getFiles(service)).rejects.toMatchObject({ status: 429 });
+    });
+
+    it('answers null, not a throw, when listing fails for another reason', async () => {
+        const { service } = makeService(jest.fn());
+        jest.spyOn(service as any, 'getPaginatedResults').mockRejectedValue(
+            new Error('500 from Bitbucket'),
+        );
+
+        await expect(getFiles(service)).resolves.toBeNull();
+    });
+
+    it('incremental: reads files one by one when the whole diff fails', async () => {
+        const getDiff = jest.fn((args: { path?: string }) =>
+            args.path
+                ? Promise.resolve({ data: sectionFor(args.path) })
+                : Promise.reject(new Error('diff too large')),
+        );
+        const { service } = makeService(getDiff as any);
+
+        const files = await since(service);
+
+        expect(files?.map((f) => f.filename)).toEqual(['src/a.ts', 'src/b.ts']);
+    });
+
+    it('incremental: a diff keying a file the listing lacks is read again per file, and warned with the organization', async () => {
+        // Every section keyed, but one names a file the listing lacks
+        const extra =
+            sectionFor('src/a.ts') +
+            [
+                'diff --git a/src/elsewhere.ts b/src/elsewhere.ts',
+                '--- a/src/elsewhere.ts',
+                '+++ b/src/elsewhere.ts',
+                '@@ -1 +1 @@',
+                '-x',
+                '+y',
+                '',
+            ].join('\n');
+        const getDiff = jest.fn((args: { path?: string }) =>
+            Promise.resolve({
+                data: args.path ? sectionFor(args.path) : extra,
+            }),
+        );
+        const { service } = makeService(getDiff as any);
+
+        const files = await since(service);
+
+        expect(getDiff.mock.calls.map(([a]) => a.path)).toEqual([
+            undefined,
+            'src/b.ts',
+        ]);
+        expect(files?.map((f) => f.filename)).toEqual(['src/a.ts', 'src/b.ts']);
+        expect(logger(service).warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    missing: 1,
+                }),
+            }),
+        );
+    });
+
+    it('incremental: drops a file whose diff since the last commit has no hunks', async () => {
+        const modeOnly =
+            sectionFor('src/a.ts') +
+            [
+                'diff --git a/src/b.ts b/src/b.ts',
+                'old mode 100644',
+                'new mode 100755',
+                '',
+            ].join('\n');
+        const getDiff = jest.fn().mockResolvedValue({ data: modeOnly });
+        const { service } = makeService(getDiff);
+
+        const files = await since(service);
+
+        expect(files?.map((f) => f.filename)).toEqual(['src/a.ts']);
+        expect(files?.[0]).toMatchObject({
+            sha: 'head',
+            additions: 1,
+            deletions: 1,
+            changes: 2,
+        });
+    });
+
+    it('incremental: logs a failed per-file read with the path and organization', async () => {
+        const getDiff = jest.fn((args: { path?: string }) =>
+            args.path
+                ? Promise.reject(new Error('502 Bad Gateway'))
+                : Promise.reject(new Error('diff too large')),
+        );
+        const { service } = makeService(getDiff as any);
+
+        await since(service);
+
+        expect(logger(service).warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    organizationId: 'org-1',
+                    path: 'src/b.ts',
+                }),
+            }),
+        );
+    });
+
+    it('incremental: lets a 429 through instead of answering null', async () => {
+        const getDiff = jest.fn().mockRejectedValue(rateLimited());
+        const { service } = makeService(getDiff);
+
+        await expect(since(service)).rejects.toMatchObject({ status: 429 });
+    });
+});
