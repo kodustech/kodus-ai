@@ -41,23 +41,26 @@ export class KodyRulesTenantGuard implements CanActivate {
         const user = request.user;
         const organizationId = user?.organization?.uuid;
 
-        const teamId = request.body?.teamId ?? request.query?.teamId;
+        // Both are read: JSON bodies are parsed on every method, so a value
+        // in the body must not hide the one in the query a GET handler reads.
+        const teamIds = namedIds(request, 'teamId');
 
-        if (!organizationId || !teamId) {
+        if (!organizationId || !teamIds.length) {
             throw new NotFoundException('Team not found');
         }
 
-        const teamOrganizationId =
-            await this.teamService.findOneOrganizationIdByTeamId(teamId);
+        for (const teamId of teamIds) {
+            const teamOrganizationId =
+                await this.teamService.findOneOrganizationIdByTeamId(teamId);
 
-        if (!teamOrganizationId || teamOrganizationId !== organizationId) {
-            throw new NotFoundException('Team not found');
+            if (!teamOrganizationId || teamOrganizationId !== organizationId) {
+                throw new NotFoundException('Team not found');
+            }
         }
 
-        const repositoryId =
-            request.body?.repositoryId ?? request.query?.repositoryId;
+        const repoIds = namedIds(request, 'repositoryId');
 
-        if (repositoryId) {
+        if (repoIds.length) {
             const action =
                 request.method === 'GET' ? Action.Read : Action.Create;
 
@@ -65,10 +68,21 @@ export class KodyRulesTenantGuard implements CanActivate {
                 user,
                 action,
                 resource: ResourceType.KodyRules,
-                repoIds: [repositoryId],
+                repoIds,
             });
         }
 
         return true;
     }
+}
+
+/** Every non-empty value of `key` in the body and the query, once each. */
+function namedIds(
+    request: { body?: Record<string, unknown>; query?: Record<string, unknown> },
+    key: string,
+): string[] {
+    const values = [request.body?.[key], request.query?.[key]]
+        .flat()
+        .filter((value): value is string => typeof value === 'string' && !!value);
+    return [...new Set(values)];
 }
