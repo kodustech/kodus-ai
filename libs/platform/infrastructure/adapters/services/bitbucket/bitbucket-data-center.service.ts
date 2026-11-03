@@ -364,8 +364,7 @@ export class BitbucketDataCenterService implements Omit<
                 config: {
                     hasRepositories: hasRepositories,
                     status: bitbucketRepositories?.installationStatus,
-                    host:
-                        bitbucketOrg?.authIntegration?.authDetails?.host ?? '',
+                    host: bitbucketOrg?.authIntegration?.authDetails?.host ?? '',
                 },
                 category: IntegrationCategory.CODE_MANAGEMENT,
             };
