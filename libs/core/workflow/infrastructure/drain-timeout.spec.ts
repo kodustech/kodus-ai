@@ -28,6 +28,17 @@ describe('parseDrainTimeoutMs warnings', () => {
 
             expect(parseDrainTimeoutMs()).toBe(25_000);
             expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message:
+                        'API_WORKER_DRAIN_TIMEOUT_MS is not a whole number of milliseconds in range; using the default',
+                    metadata: {
+                        configured,
+                        max: 600_000,
+                        default: 25_000,
+                    },
+                }),
+            );
         },
     );
 
