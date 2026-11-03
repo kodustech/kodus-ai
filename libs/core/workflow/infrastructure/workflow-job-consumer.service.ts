@@ -612,7 +612,7 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
         // "dead worker leaves locks" pattern we traced in prod: without
         // this, orphan locks sit around until the reaper cron's 2.5h
         // timeout, blocking other workers from picking up the messages.
-        // Bounded: a slow Mongo must not hold up the AMQP close that follows
+        // Bounded: a slow database must not hold up the AMQP close that follows
         try {
             const released = await runWithBoundedTimeout(
                 this.inboxRepository.releaseAllByInstance(this.instanceId),
