@@ -41,6 +41,7 @@ export type CapabilityGateResult = {
 type Requirement = "structuredOutput" | "toolCalling" | null;
 const TASK_REQUIREMENT: Record<LlmTask, Requirement> = {
     codeReview: "structuredOutput",
+    codeReviewHeavy: "structuredOutput",
     kodyRulesReview: "structuredOutput",
     ruleGeneration: "structuredOutput",
     businessValidation: "toolCalling",

@@ -58,6 +58,7 @@ import { IsRequestChangesActive } from "./_components/is-request-changes-active"
 import { KodusConfigFileOverridesWebPreferences } from "./_components/kodus-config-file-overrides-web-preferences";
 import { LanguageSelector } from "./_components/language-selector";
 import { PullRequestApprovalActive } from "./_components/pull-request-approval-active";
+import { ReviewMode } from "./_components/review-mode";
 import { RunOnDraft } from "./_components/run-on-draft";
 import { ShowStatusFeedback } from "./_components/show-status-feedback";
 
@@ -288,6 +289,12 @@ export default function General() {
                     <div data-field-name="runOnDraft">
                         <RunOnDraft />
                     </div>
+                </div>
+
+                <div
+                    data-field-name="reviewMode"
+                    className="border-card-lv3/60 bg-card-lv1 min-w-0 overflow-hidden rounded-xl border">
+                    <ReviewMode />
                 </div>
 
                 {repositoryId !== "global" && (

@@ -193,3 +193,26 @@ describe("ModelCombobox — per-agent picker", () => {
         ).toBeInTheDocument();
     });
 });
+
+describe("RoutingTab — Code Review card", () => {
+    it("routes Balanced through codeReview and Heavy through its own row, Heavy inheriting the default when unset", () => {
+        render(
+            <TooltipProvider>
+                <RoutingTab
+                    config={openRouterConfig(MODELS, {
+                        defaultModelId: "m-1",
+                        taskOverrides: { codeReview: "m-3" },
+                    })}
+                    llmConfigStatus={null}
+                    onGoToProviders={jest.fn()}
+                />
+            </TooltipProvider>,
+        );
+
+        const balanced = screen.getByText("Model for Balanced").parentElement!;
+        const heavy = screen.getByText("Model for Heavy").parentElement!;
+
+        expect(balanced).toHaveTextContent(/GPT 5/);
+        expect(heavy).toHaveTextContent(/Use default · .*Claude Sonnet/);
+    });
+});

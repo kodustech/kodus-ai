@@ -23,6 +23,7 @@ import type {
  */
 export const TASK_LABELS: Record<LlmTask, string> = {
     codeReview: "Code Review",
+    codeReviewHeavy: "Code Review (Heavy)",
     kodyRulesReview: "Kody Rules (review)",
     ruleGeneration: "Kody Rules (generation)",
     businessValidation: "Business Rules",
@@ -40,6 +41,8 @@ export const TASK_LABELS: Record<LlmTask, string> = {
 export const TASK_DESCRIPTIONS: Record<LlmTask, string> = {
     codeReview:
         "Reviews every pull request and posts inline comments. Runs on each PR — highest volume.",
+    codeReviewHeavy:
+        "Runs a heavy review: the main reviewer plus nine specialists. Used when the review mode is Heavy or a review asks for --heavy.",
     kodyRulesReview:
         "Checks your custom rules against the changes during a review.",
     ruleGeneration: "Drafts new custom rules from your codebase, on demand.",

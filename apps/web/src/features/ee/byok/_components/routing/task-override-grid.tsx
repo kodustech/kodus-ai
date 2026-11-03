@@ -335,13 +335,21 @@ type AgentCard = {
     /** Overrides the task's default description — used where the card title isn't
      *  the raw task name (e.g. "Kody Rules" fronting the kodyRulesReview task). */
     desc?: string;
+    /** Sub-rows, each routing its own task under the card's identity. */
+    rows?: { task: LlmTask; label: string }[];
 };
 
 const AGENT_CARDS: AgentCard[] = [
     {
+        // One card, one model per review mode: Balanced keeps the codeReview
+        // task every existing override already points at; Heavy is its own.
         task: "codeReview",
         Icon: GitPullRequestIcon,
         title: "Code Review",
+        rows: [
+            { task: "codeReview", label: "Model for Balanced" },
+            { task: "codeReviewHeavy", label: "Model for Heavy" },
+        ],
     },
     {
         // Kody Rules routes ONE user-configurable task (kodyRulesReview) — rule
@@ -414,8 +422,25 @@ export const TaskOverrideGrid = (props: {
                                 </span>
                             </div>
                         </div>
-                        <TaskModelControl task={card.task} {...props} />
+                        {!card.rows && (
+                            <TaskModelControl task={card.task} {...props} />
+                        )}
                     </div>
+                    {card.rows?.map((row) => (
+                        <div
+                            key={row.task}
+                            data-routing-anchor={
+                                row.task === card.task
+                                    ? undefined
+                                    : `task:${row.task}`
+                            }
+                            className="border-card-lv3/50 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                            <span className="text-text-primary text-sm">
+                                {row.label}
+                            </span>
+                            <TaskModelControl task={row.task} {...props} />
+                        </div>
+                    ))}
                 </div>
             ))}
         </div>
