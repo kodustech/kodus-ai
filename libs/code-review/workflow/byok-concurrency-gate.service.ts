@@ -5,8 +5,23 @@ import { createHash } from 'crypto';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import type { BYOKConfig, NormalizedModel } from '@libs/llm/byok-config';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { overrideContext } from '@libs/llm/routing-strategy';
+import {
+    isHeavyReview,
+    type RequestedReviewMode,
+} from '@libs/code-review/domain/review-mode';
+import { getMappedPlatform } from '@libs/common/utils/webhooks';
+import { stripCurlyBracesFromUUIDs } from '@libs/platform/domain/platformIntegrations/types/webhooks/webhooks-bitbucket.type';
+import {
+    IParametersService,
+    PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 
-import { OrganizationParametersKey } from '@libs/core/domain/enums';
+import {
+    OrganizationParametersKey,
+    ParametersKey,
+    PlatformType,
+} from '@libs/core/domain/enums';
 import {
     IWorkflowJobRepository,
     WORKFLOW_JOB_REPOSITORY_TOKEN,
@@ -47,6 +62,8 @@ export class ByokConcurrencyGateService {
         private readonly outboxRepository: IOutboxMessageRepository,
         @Inject(MESSAGE_BROKER_SERVICE_TOKEN)
         private readonly messageBroker: IMessageBrokerService,
+        @Inject(PARAMETERS_SERVICE_TOKEN)
+        private readonly parametersService?: IParametersService,
     ) {}
 
     async tryEnter(
@@ -225,7 +242,9 @@ export class ByokConcurrencyGateService {
                     organizationAndTeamData,
                 );
 
-            // Resolve the codeReview slot through the SAME resolution primitive
+            const route = await this.reviewRoute(job);
+
+            // Resolve the review's slot through the SAME resolution primitive
             // every consumer uses (`resolveTaskSlot`: isByokConfig guard →
             // StaticTaskStrategy → resolveModelSlot) — NOT a parallel resolver.
             // The slot carries CIPHERTEXT apiKey and is used only for the scope
@@ -233,7 +252,13 @@ export class ByokConcurrencyGateService {
             // route to the slot WITHOUT building a model (no buildModelFromSlot).
             const { slot: mainConfig } = resolveTaskSlot(
                 byokParameter?.configValue as BYOKConfig | null | undefined,
-                LLM_TASK.codeReview,
+                route.heavy ? LLM_TASK.codeReviewHeavy : LLM_TASK.codeReview,
+                {
+                    ctx: overrideContext(
+                        route.byokModelId,
+                        route.byokModel,
+                    ),
+                },
             );
 
             if (
@@ -262,6 +287,86 @@ export class ByokConcurrencyGateService {
 
             return null;
         }
+    }
+
+    /**
+     * The review mode and the repository's model this job's review runs on, as
+     * far as the gate can tell before the pipeline: the mode the command asked
+     * for, else the one set globally or on the repository, and the
+     * repository's model. A mode or model set only on a directory or in
+     * kodus-config.yml needs the PR's files and is not seen here; the per-call
+     * limiter still applies the real model's limit.
+     */
+    private async reviewRoute(job: IWorkflowJob): Promise<{
+        heavy: boolean;
+        byokModelId?: string;
+        byokModel?: string;
+    }> {
+        const payload = (job.payload ?? {}) as Record<string, any>;
+        const codeManagementPayload = payload.codeManagementPayload ?? {};
+        const requested = codeManagementPayload.requestedReviewMode as
+            | RequestedReviewMode
+            | undefined;
+        const teamId = job.organizationAndTeamData?.teamId;
+        if (!this.parametersService || !teamId) {
+            return { heavy: isHeavyReview(requested, undefined) };
+        }
+
+        const platformType = payload.platformType as PlatformType;
+        let repositoryId: string | undefined;
+        try {
+            repositoryId = getMappedPlatform(platformType)?.mapRepository({
+                payload:
+                    platformType === PlatformType.BITBUCKET
+                        ? stripCurlyBracesFromUUIDs(codeManagementPayload)
+                        : codeManagementPayload,
+            })?.id;
+        } catch {
+            // An unmappable payload gates on the global config.
+        }
+
+        // A config that cannot be read gates on the command's mode alone,
+        // rather than dropping the gate.
+        const parameter = await this.parametersService
+            .findOne({
+                configKey: ParametersKey.CODE_REVIEW_CONFIG,
+                team: { uuid: teamId },
+                active: true,
+            })
+            .catch((error) => {
+                this.logger.warn({
+                    message:
+                        '[BYOK-CONCURRENCY-GATE] failed to read the code review config, gating on the requested mode',
+                    context: ByokConcurrencyGateService.name,
+                    metadata: {
+                        jobId: job.id,
+                        organizationId:
+                            job.organizationAndTeamData?.organizationId,
+                        teamId,
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    },
+                });
+                return null;
+            });
+        const globalConfig = parameter?.configValue?.configs ?? {};
+        const repoConfig =
+            (repositoryId !== undefined &&
+                parameter?.configValue?.repositories?.find(
+                    (repo) => String(repo.id) === String(repositoryId),
+                )?.configs) ||
+            {};
+
+        return {
+            heavy: isHeavyReview(
+                requested,
+                repoConfig.reviewMode ?? globalConfig.reviewMode,
+            ),
+            byokModelId: repoConfig.byokModelId,
+            byokModel: repoConfig.byokModel,
+        };
     }
 
     private buildScopeKey(

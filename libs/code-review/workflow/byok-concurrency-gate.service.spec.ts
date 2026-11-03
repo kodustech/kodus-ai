@@ -389,4 +389,81 @@ describe('ByokConcurrencyGateService', () => {
             );
         });
     });
+
+    describe('the model a review is gated on', () => {
+        // Two models with their own limits: m1 for Balanced, m2 for Heavy,
+        // m3 a repository's own model.
+        const twoModeConfig = (): any => ({
+            version: 2,
+            credentials: [
+                { id: 'c1', provider: 'anthropic', apiKey: 'sk-a' },
+                { id: 'c2', provider: 'openai', apiKey: 'sk-b' },
+            ],
+            models: [
+                { id: 'm1', credentialId: 'c1', model: 'claude-sonnet-4-5', maxConcurrentRequests: 3 },
+                { id: 'm2', credentialId: 'c2', model: 'gpt-x', maxConcurrentRequests: 1 },
+                { id: 'm3', credentialId: 'c2', model: 'gpt-y', maxConcurrentRequests: 2 },
+            ],
+            routing: { defaultModelId: 'm1', taskOverrides: { codeReviewHeavy: 'm2' } },
+        });
+        const githubJob = (requestedReviewMode?: string) =>
+            makeJob({
+                payload: {
+                    platformType: 'GITHUB',
+                    codeManagementPayload: {
+                        requestedReviewMode,
+                        repository: { id: 42, name: 'repo', full_name: 'org/repo' },
+                    },
+                },
+            });
+        const gate = (codeReviewConfig: any) => {
+            const parametersService = {
+                findOne: jest.fn().mockResolvedValue({ configValue: codeReviewConfig }),
+            };
+            orgParamsService.findByKey.mockResolvedValue({ configValue: twoModeConfig() });
+            distributedLockService.acquire.mockResolvedValue({ release: jest.fn() });
+            return new ByokConcurrencyGateService(
+                orgParamsService as any,
+                distributedLockService as any,
+                jobRepository as any,
+                outboxRepository as any,
+                messageBroker as any,
+                parametersService as any,
+            );
+        };
+        const gatedModel = () =>
+            String(distributedLockService.acquire.mock.calls[0][0]).split('::')[5].split(':slot')[0];
+
+        it('gates a --heavy review on the Heavy model', async () => {
+            await gate({ configs: {} }).tryEnter(githubJob('heavy'));
+            expect(gatedModel()).toBe('gpt-x');
+        });
+
+        it('gates on the Heavy model when the repository is set to Heavy, and --balanced back on Balanced', async () => {
+            const config = { configs: {}, repositories: [{ id: '42', configs: { reviewMode: 'heavy' } }] };
+
+            await gate(config).tryEnter(githubJob());
+            expect(gatedModel()).toBe('gpt-x');
+
+            distributedLockService.acquire.mockClear();
+            await gate(config).tryEnter(githubJob('balanced'));
+            expect(gatedModel()).toBe('claude-sonnet-4-5');
+        });
+
+        it("gates on the repository's own model in both modes", async () => {
+            const config = {
+                configs: { reviewMode: 'heavy' },
+                repositories: [{ id: '42', configs: { byokModelId: 'm3' } }],
+            };
+            await gate(config).tryEnter(githubJob());
+            expect(gatedModel()).toBe('gpt-y');
+        });
+
+        it('gates on the Balanced model when the code review config cannot be read', async () => {
+            const service = gate({});
+            (service as any).parametersService.findOne.mockRejectedValue(new Error('db down'));
+            await service.tryEnter(githubJob());
+            expect(gatedModel()).toBe('claude-sonnet-4-5');
+        });
+    });
 });
