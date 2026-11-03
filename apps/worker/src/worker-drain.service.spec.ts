@@ -42,12 +42,18 @@ describe('WorkerDrainService', () => {
             close: jest.fn().mockResolvedValue(undefined),
         };
 
-        await new WorkerDrainService(amqpConnection as any).onApplicationShutdown(
-            'SIGTERM',
-        );
+        const drain = new WorkerDrainService(amqpConnection as any);
+        const log = jest.spyOn((drain as any).logger, 'log');
+        await drain.onApplicationShutdown('SIGTERM');
 
         expect(amqpConnection.cancelConsumer).toHaveBeenCalledTimes(2);
         expect(amqpConnection.close).toHaveBeenCalled();
+        expect(log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Worker drain: RabbitMQ consumers cancelled',
+                metadata: { cancelled: 1, failed: 1 },
+            }),
+        );
     });
 
     it('still closes when a cancel never settles (half-open connection)', async () => {
@@ -218,6 +224,95 @@ describe('WorkerDrainService', () => {
         } finally {
             if (prev !== undefined)
                 process.env.API_WORKER_DRAIN_TIMEOUT_MS = prev;
+        }
+    });
+
+    it('is a no-op on module destroy without an AMQP connection', async () => {
+        await expect(
+            new WorkerDrainService(undefined).onModuleDestroy(),
+        ).resolves.toBeUndefined();
+    });
+
+    it('logs the drain budget when it starts cancelling', async () => {
+        const amqpConnection = {
+            consumerTags: ['a'],
+            cancelConsumer: jest.fn().mockResolvedValue(undefined),
+            close: jest.fn(),
+        };
+        const drain = new WorkerDrainService(amqpConnection as any);
+        const log = jest.spyOn((drain as any).logger, 'log');
+
+        await drain.onModuleDestroy();
+
+        expect(log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Worker drain: cancelling RabbitMQ consumers',
+                metadata: { drainTimeoutMs: expect.any(Number) },
+            }),
+        );
+    });
+
+    it('reports no cancellation when there are no consumers', async () => {
+        const amqpConnection = {
+            consumerTags: [],
+            cancelConsumer: jest.fn(),
+            close: jest.fn().mockResolvedValue(undefined),
+        };
+        const drain = new WorkerDrainService(amqpConnection as any);
+        const log = jest.spyOn((drain as any).logger, 'log');
+
+        await drain.onApplicationShutdown('SIGTERM');
+
+        expect(amqpConnection.cancelConsumer).not.toHaveBeenCalled();
+        expect(
+            log.mock.calls.some(
+                ([entry]: any[]) =>
+                    entry?.message ===
+                    'Worker drain: RabbitMQ consumers cancelled',
+            ),
+        ).toBe(false);
+    });
+
+    it('logs the close timeout and leaves no timer behind after a clean close', async () => {
+        jest.useFakeTimers();
+        try {
+            const stuck = {
+                consumerTags: [],
+                cancelConsumer: jest.fn(),
+                close: jest.fn(() => new Promise(() => {})),
+            };
+            const drain = new WorkerDrainService(stuck as any);
+            const error = jest.spyOn((drain as any).logger, 'error');
+            const done = drain.onApplicationShutdown('SIGTERM');
+            await jest.advanceTimersByTimeAsync(15_000);
+            await done;
+            expect((error.mock.calls[0][0] as any).error.message).toBe(
+                'Connection close timeout after 15000ms',
+            );
+
+            const clean = {
+                consumerTags: [],
+                cancelConsumer: jest.fn(),
+                close: jest.fn().mockResolvedValue(undefined),
+            };
+            await new WorkerDrainService(clean as any).onApplicationShutdown(
+                'SIGTERM',
+            );
+            expect(jest.getTimerCount()).toBe(0);
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+
+    it('accepts a drain budget of exactly the ceiling', () => {
+        const prev = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+        process.env.API_WORKER_DRAIN_TIMEOUT_MS = String(MAX_DRAIN_TIMEOUT_MS);
+        try {
+            expect(parseDrainTimeoutMs()).toBe(MAX_DRAIN_TIMEOUT_MS);
+        } finally {
+            if (prev === undefined)
+                delete process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+            else process.env.API_WORKER_DRAIN_TIMEOUT_MS = prev;
         }
     });
 });
