@@ -228,9 +228,11 @@ describe('WorkerDrainService', () => {
     });
 
     it('is a no-op on module destroy without an AMQP connection', async () => {
-        await expect(
-            new WorkerDrainService(undefined).onModuleDestroy(),
-        ).resolves.toBeUndefined();
+        const drain = new WorkerDrainService(undefined);
+        const log = jest.spyOn((drain as any).logger, 'log');
+
+        await expect(drain.onModuleDestroy()).resolves.toBeUndefined();
+        expect(log).not.toHaveBeenCalled();
     });
 
     it('logs the drain budget when it starts cancelling', async () => {
