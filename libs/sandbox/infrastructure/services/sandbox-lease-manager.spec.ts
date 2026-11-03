@@ -734,7 +734,9 @@ describe('SandboxLeaseManager', () => {
             );
             job.abort();
 
-            await expect(second).rejects.toBeInstanceOf(SandboxWaitAbortedError);
+            await expect(second).rejects.toBeInstanceOf(
+                SandboxWaitAbortedError,
+            );
             expect(capped.concurrencyLimiter.waiting).toBe(0);
             await capped.release(first.leaseId);
             expect(capped.concurrencyLimiter.active).toBe(0);

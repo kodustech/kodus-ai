@@ -41,7 +41,9 @@ describe('CreateSandboxStage', () => {
                 read: jest.fn(),
                 listDir: jest.fn(),
             },
-            run: jest.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
+            run: jest
+                .fn()
+                .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
             readFile: jest.fn().mockResolvedValue(''),
             writeFile: jest.fn().mockResolvedValue(undefined),
         },
@@ -148,7 +150,13 @@ describe('CreateSandboxStage', () => {
                     },
                     cleanup: jest.fn(),
                     repoDir: '/home/user/repo',
-                    run: jest.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
+                    run: jest
+                        .fn()
+                        .mockResolvedValue({
+                            stdout: '',
+                            stderr: '',
+                            exitCode: 0,
+                        }),
                     readFile: jest.fn().mockResolvedValue(''),
                     writeFile: jest.fn().mockResolvedValue(undefined),
                 },
@@ -164,7 +172,10 @@ describe('CreateSandboxStage', () => {
             // With the lease manager, availability is no longer a guard in the stage.
             // The manager returns a null sandbox when E2B is not configured.
             const nullAcquireResult: AcquireResult = {
-                sandbox: { ...NULL_SANDBOX_INSTANCE, cleanup: jest.fn().mockResolvedValue(undefined) },
+                sandbox: {
+                    ...NULL_SANDBOX_INSTANCE,
+                    cleanup: jest.fn().mockResolvedValue(undefined),
+                },
                 leaseId: 'null-lease-id',
                 sandboxId: '',
                 wasCreated: true,

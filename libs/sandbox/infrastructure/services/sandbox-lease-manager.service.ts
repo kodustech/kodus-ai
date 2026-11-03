@@ -985,7 +985,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         let capacityWaits = 0;
         let lastErr: unknown;
 
-        for (let attempt = 0; attempt < CREATE_MAX_ATTEMPTS; ) {
+        for (let attempt = 0; attempt < CREATE_MAX_ATTEMPTS;) {
             const permit = this.createCircuit.tryAcquire();
             if (!permit) {
                 const retryInMs = this.createCircuit.remainingOpenMs();
@@ -1369,15 +1369,15 @@ function waitFor(
             resolve('aborted');
             return;
         }
-        let timer: NodeJS.Timeout | undefined;
         const onAbort = () => done('aborted');
-        const done = (outcome: CapacityWaitOutcome) => {
+        const timer = setTimeout(() => done('tick'), ms);
+        signal?.addEventListener('abort', onAbort, { once: true });
+        granted?.then((ok) => done(ok ? 'granted' : 'withdrawn'));
+
+        function done(outcome: CapacityWaitOutcome) {
             clearTimeout(timer);
             signal?.removeEventListener('abort', onAbort);
             resolve(outcome);
-        };
-        timer = setTimeout(() => done('tick'), ms);
-        signal?.addEventListener('abort', onAbort, { once: true });
-        granted?.then((ok) => done(ok ? 'granted' : 'withdrawn'));
+        }
     });
 }
