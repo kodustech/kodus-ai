@@ -1617,7 +1617,7 @@ describe('KodyRulesSyncService.syncFromChangedFiles — renamed rule file', () =
 
     const makeService = (
         rules: any[],
-        opts: { centralized?: boolean } = {},
+        opts: { centralized?: boolean; content?: string } = {},
     ) => {
         const store = rules.map((r) => ({ ...r }));
         const write = (dto: any) => {
@@ -1647,7 +1647,9 @@ describe('KodyRulesSyncService.syncFromChangedFiles — renamed rule file', () =
         deps[4] = { execute: jest.fn().mockResolvedValue({}) };
         deps[5] = createOrUpdateKodyRulesUseCase;
         const service = new (KodyRulesSyncService as any)(...deps);
-        jest.spyOn(service, 'getMergedFileContent').mockResolvedValue('body');
+        jest.spyOn(service, 'getMergedFileContent').mockResolvedValue(
+            opts.content ?? 'body',
+        );
         jest.spyOn(service, 'templateFileToRule').mockResolvedValue({
             kind: 'rule',
             rule: { title: 't', rule: 'r', path: '**/*.ts' },
@@ -1659,21 +1661,26 @@ describe('KodyRulesSyncService.syncFromChangedFiles — renamed rule file', () =
         return { service, store };
     };
 
-    const record = (uuid: string, createdAt: string) => ({
+    const record = (
+        uuid: string,
+        createdAt: string,
+        extra: Record<string, unknown> = {},
+    ) => ({
         uuid,
         repositoryId: 'repo-1',
         sourcePath: OLD,
         status: KodyRulesStatus.ACTIVE,
         createdAt,
+        ...extra,
     });
 
-    const sync = (service: any) =>
+    const sync = (service: any, from = OLD, to = NEW) =>
         service.syncFromChangedFiles({
             organizationAndTeamData: ORG,
             repository: { id: 'repo-1', name: 'repo' },
             pullRequestNumber: 7,
             files: [
-                { filename: NEW, previous_filename: OLD, status: 'renamed' },
+                { filename: to, previous_filename: from, status: 'renamed' },
             ],
         });
 
@@ -1713,6 +1720,51 @@ describe('KodyRulesSyncService.syncFromChangedFiles — renamed rule file', () =
         expect(store.find((r) => r.uuid === 'older').status).toBe(
             KodyRulesStatus.DELETED,
         );
+    });
+
+    it('renaming onto a path that already holds a stale record leaves exactly 1 live there', async () => {
+        const { service, store } = makeService([
+            record('stale', '2026-01-01T00:00:00Z'),
+            record('b', '2026-01-02T00:00:00Z', { sourcePath: NEW }),
+        ]);
+
+        await sync(service, NEW, OLD);
+
+        expect(live(store, OLD).map((r) => r.uuid)).toEqual(['b']);
+        expect(live(store, NEW)).toEqual([]);
+        expect(store.find((r) => r.uuid === 'stale').status).toBe(
+            KodyRulesStatus.DELETED,
+        );
+    });
+
+    it('retires the stale destination record but spares the re-keyed one in centralized mode', async () => {
+        const { service, store } = makeService(
+            [
+                record('stale', '2026-01-01T00:00:00Z'),
+                record('b', '2026-01-02T00:00:00Z', { sourcePath: NEW }),
+            ],
+            { centralized: true },
+        );
+
+        await sync(service, NEW, OLD);
+
+        expect(live(store, NEW).map((r) => r.uuid)).toEqual(['b']);
+        expect(live(store, OLD)).toEqual([]);
+    });
+
+    it('a rename to a file carrying @kody-ignore retires both paths', async () => {
+        const { service, store } = makeService(
+            [
+                record('a', '2026-01-01T00:00:00Z'),
+                record('stale', '2026-01-02T00:00:00Z', { sourcePath: NEW }),
+            ],
+            { content: '<!-- @kody-ignore -->\nbody' },
+        );
+
+        await sync(service);
+
+        expect(live(store, OLD)).toEqual([]);
+        expect(live(store, NEW)).toEqual([]);
     });
 });
 

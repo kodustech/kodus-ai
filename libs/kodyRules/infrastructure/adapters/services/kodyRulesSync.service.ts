@@ -727,11 +727,15 @@ export class KodyRulesSyncService {
         } = params;
 
         if (this.shouldIgnoreFile(content)) {
-            await this.deleteRuleBySourcePath({
-                organizationAndTeamData,
-                repositoryId: repository.id,
-                sourcePath: previousPath ?? filePath,
-            });
+            // A rename retires the old path and the new one alike.
+            for (const sourcePath of [previousPath, filePath]) {
+                if (!sourcePath) continue;
+                await this.deleteRuleBySourcePath({
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                    sourcePath,
+                });
+            }
             return { outcome: 'removed' };
         }
 
@@ -789,16 +793,23 @@ export class KodyRulesSyncService {
                   this.systemUserInfo,
               );
 
-        // A rename re-keys the newest old-path record in place (above);
-        // any other record still on the old path would stay live for a
-        // file that no longer exists.
+        // A rename re-keys the newest old-path record in place (above).
+        // Any other record still on the old path would stay live for a file
+        // that no longer exists. The new path did not exist before this
+        // merge, so any record already on it is stale too (e.g. left by an
+        // earlier rename that lost track of its old path). The record kept
+        // is the re-keyed one, or the one just created; in centralized mode
+        // the write is deferred and only the re-keyed uuid is known.
         if (previousPath) {
-            await this.deleteRuleBySourcePath({
-                organizationAndTeamData,
-                repositoryId: repository.id,
-                sourcePath: previousPath,
-                keepUuid: existing?.uuid,
-            });
+            const keepUuid = existing?.uuid ?? this.getRuleId(result);
+            for (const sourcePath of [previousPath, filePath]) {
+                await this.deleteRuleBySourcePath({
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                    sourcePath,
+                    keepUuid,
+                });
+            }
         }
 
         // In centralized PR mode the mutation returns PR metadata, not the
