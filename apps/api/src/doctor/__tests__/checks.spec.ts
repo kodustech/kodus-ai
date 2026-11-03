@@ -451,6 +451,23 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             ).toBeUndefined();
         });
 
+        it('reports a base URL carrying the SDK endpoint with its own fix', async () => {
+            const env = cleanEnv();
+            env.API_OPENAI_FORCE_BASE_URL =
+                'https://proxy.example/v1/chat/completions';
+            const results = await llmCheck(llmDeps()).run(ctx({ env }));
+            expect(
+                results.find((r) => r.check === 'llm.env_base_url'),
+            ).toMatchObject({
+                status: 'warn',
+                title: 'API_OPENAI_FORCE_BASE_URL ends with the endpoint the provider SDK adds itself; https://proxy.example/v1 is used.',
+            });
+            expect(
+                results.find((r) => r.check === 'llm.env_conflict'),
+            ).toBeUndefined();
+            expectActionable(results);
+        });
+
         it('warns when the generic and the legacy key disagree', async () => {
             const env = cleanEnv();
             env.API_LLM_PROVIDER = 'openai';

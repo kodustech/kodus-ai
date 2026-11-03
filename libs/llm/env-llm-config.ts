@@ -10,7 +10,11 @@
  */
 
 import { servedByOpenAi } from './providers/openai/endpoint';
-import { resolveDeclaredEnvProvider } from './env-declared-provider';
+import {
+    endpointSuffixWarning,
+    resolveDeclaredEnvProvider,
+} from './env-declared-provider';
+import { stripSdkEndpoint } from './base-url-hygiene';
 import type { ReasoningEffort } from './reasoning-options';
 
 export type EnvLLMProviderId =
@@ -123,10 +127,36 @@ export function describeEnvLLMConfig(
         ? temperatureOverrideParsed
         : undefined;
 
-    const baseDescriptor = (descriptor: EnvLLMDescriptor): EnvLLMDescriptor =>
-        temperatureOverride !== undefined
-            ? { ...descriptor, temperatureOverride }
-            : descriptor;
+    const baseDescriptor = (descriptor: EnvLLMDescriptor): EnvLLMDescriptor => {
+        let out = descriptor;
+        // The inferred path dials API_OPENAI_FORCE_BASE_URL without the endpoint
+        // its SDK appends (managed-slot.ts); show that URL, and say why.
+        if (
+            descriptor.providerSource !== 'declared' &&
+            openaiBaseURL &&
+            descriptor.baseUrl === openaiBaseURL
+        ) {
+            const used = stripSdkEndpoint(
+                openaiBaseURL,
+                descriptor.providerId === 'anthropic' ? 'anthropic' : 'openai',
+            )!;
+            if (used !== openaiBaseURL) {
+                out = {
+                    ...out,
+                    baseUrl: used,
+                    warnings: [
+                        endpointSuffixWarning(
+                            'API_OPENAI_FORCE_BASE_URL',
+                            used,
+                        ),
+                    ],
+                };
+            }
+        }
+        return temperatureOverride !== undefined
+            ? { ...out, temperatureOverride }
+            : out;
+    };
 
     const declared = resolveDeclaredEnvProvider(env);
     if (declared.kind === 'invalid') {

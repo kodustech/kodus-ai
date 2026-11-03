@@ -54,7 +54,10 @@ describe('describeEnvLLMConfig', () => {
                 API_OPEN_AI_API_KEY: 'sk-test',
                 API_OPENAI_FORCE_BASE_URL: 'https://litellm.example.com/v1',
             } as any),
-        ).toMatchObject({ providerId: 'openai_compatible', baseUrl: 'https://litellm.example.com/v1' });
+        ).toMatchObject({
+            providerId: 'openai_compatible',
+            baseUrl: 'https://litellm.example.com/v1',
+        });
     });
 
     it('defaults the OpenAI-compatible baseURL when only the key is set', () => {
@@ -361,9 +364,9 @@ describe('describeEnvLLMConfig — mutation hardening', () => {
     });
 
     it('treats decodable JSON without project_id as a plain key (Gemini AI Studio)', () => {
-        const noProject = Buffer.from(
-            JSON.stringify({ foo: 'bar' }),
-        ).toString('base64');
+        const noProject = Buffer.from(JSON.stringify({ foo: 'bar' })).toString(
+            'base64',
+        );
         expect(
             describeEnvLLMConfig({
                 API_LLM_PROVIDER_MODEL: 'gemini-2.5-pro',
@@ -553,6 +556,42 @@ describe('describeEnvLLMConfig — mutation hardening', () => {
             providerId: 'anthropic',
             baseUrl: undefined,
             temperatureOverride: 0.3,
+        });
+    });
+});
+
+describe('describeEnvLLMConfig — inferred base URL carrying the SDK endpoint', () => {
+    it('shows the URL actually called and says why', () => {
+        expect(
+            describeEnvLLMConfig({
+                API_LLM_PROVIDER_MODEL: 'gpt-4.1-mini',
+                API_OPEN_AI_API_KEY: 'sk-x',
+                API_OPENAI_FORCE_BASE_URL:
+                    'https://api.openai.com/v1/chat/completions',
+            } as any),
+        ).toEqual({
+            configured: true,
+            model: 'gpt-4.1-mini',
+            providerId: 'openai_compatible',
+            baseUrl: 'https://api.openai.com/v1',
+            warnings: [
+                'API_OPENAI_FORCE_BASE_URL ends with the endpoint the provider SDK adds itself; https://api.openai.com/v1 is used.',
+            ],
+        });
+    });
+
+    it('leaves a base URL without the endpoint exactly as before', () => {
+        expect(
+            describeEnvLLMConfig({
+                API_LLM_PROVIDER_MODEL: 'gpt-4.1-mini',
+                API_OPEN_AI_API_KEY: 'sk-x',
+                API_OPENAI_FORCE_BASE_URL: 'https://proxy.example/api/v1/',
+            } as any),
+        ).toEqual({
+            configured: true,
+            model: 'gpt-4.1-mini',
+            providerId: 'openai_compatible',
+            baseUrl: 'https://proxy.example/api/v1/',
         });
     });
 });

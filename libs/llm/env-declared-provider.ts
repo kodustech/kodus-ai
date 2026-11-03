@@ -60,6 +60,17 @@ const LEGACY_BASE_URL_VAR = 'API_OPENAI_FORCE_BASE_URL';
 
 const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 
+const ENDPOINT_SUFFIX = 'ends with the endpoint the provider SDK adds itself';
+
+/** A base URL var whose endpoint suffix was dropped, and the URL used instead. */
+export function endpointSuffixWarning(varName: string, used: string): string {
+    return `${varName} ${ENDPOINT_SUFFIX}; ${used} is used.`;
+}
+
+export function isEndpointSuffixWarning(warning: string): boolean {
+    return warning.includes(ENDPOINT_SUFFIX);
+}
+
 export interface DeclaredEnvModel {
     provider: DeclaredEnvProvider;
     model: string;
@@ -179,9 +190,7 @@ export function resolveDeclaredEnvProvider(
         declared === 'anthropic' ? 'anthropic' : 'openai',
     );
     if (baseURL !== rawBase.value) {
-        warnings.push(
-            `${rawBase.from} ends with the endpoint the provider SDK adds itself; ${baseURL} is used.`,
-        );
+        warnings.push(endpointSuffixWarning(rawBase.from!, baseURL!));
     }
     const vertexLocation = read(env, 'API_VERTEX_AI_LOCATION');
 
