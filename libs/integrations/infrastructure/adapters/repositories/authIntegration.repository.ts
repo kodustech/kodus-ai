@@ -135,9 +135,14 @@ export class AuthIntegrationRepository implements IAuthIntegrationRepository {
             const authIntegrations =
                 await this.authIntegrationRepository.find(findOptions);
 
-            return mapSimpleModelToEntity(
-                authIntegrations,
-                AuthIntegrationEntity,
+            // One entity per row. mapSimpleModelToEntity maps a single model:
+            // handed the array, it read the indexes and returned one empty
+            // entity, so no caller ever saw a row's organization.
+            return authIntegrations.map((model) =>
+                mapSimpleModelToEntity<
+                    AuthIntegrationModel,
+                    AuthIntegrationEntity
+                >(model, AuthIntegrationEntity),
             );
         } catch (error) {
             // Rethrown, as findOne does: "no rows" must never stand in for

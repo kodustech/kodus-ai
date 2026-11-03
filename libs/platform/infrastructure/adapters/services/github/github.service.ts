@@ -545,15 +545,23 @@ export class GithubService
 
             return res;
         } catch (err) {
-            // The logger redacts the PAT (`token`) and GitHub's authorization
-            // code and state (SENSITIVE_KEYS in libs/core/log/logger.ts).
+            // Named fields only: params carries the PAT and GitHub's
+            // authorization code and state.
             this.logger.error({
                 message:
                     'Failed to list repositories when creating integration',
                 context: GithubService.name,
                 serviceName: GithubService.name,
                 error: err,
-                metadata: params,
+                metadata: {
+                    organizationAndTeamData: params?.organizationAndTeamData,
+                    authMode: params?.authMode,
+                    host: params?.host,
+                    installationId:
+                        params?.authMode === AuthMode.OAUTH
+                            ? params?.code
+                            : undefined,
+                },
             });
             throw new BadRequestException(err);
         }
