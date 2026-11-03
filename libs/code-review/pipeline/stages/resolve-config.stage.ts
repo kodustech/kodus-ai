@@ -1,3 +1,5 @@
+import { StageMessageHelper } from '@libs/core/infrastructure/pipeline/utils/stage-message.helper';
+import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pipeline-reasons.const';
 import { PullRequestChangesUnreadableError } from '@libs/code-review/domain/errors/pull-request-changes-unreadable.error';
 import { Inject, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
@@ -115,8 +117,30 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
                 draft.preliminaryFiles = preliminaryFiles;
             });
         } catch (error) {
-            // Not a configuration problem: the run fails with its own message.
-            if (error instanceof PullRequestChangesUnreadableError) throw error;
+            // Not a configuration problem. Set here: a thrown error would be
+            // overwritten by the next stage's own skip.
+            if (error instanceof PullRequestChangesUnreadableError) {
+                this.logger.warn({
+                    message: error.message,
+                    context: this.stageName,
+                    metadata: {
+                        organizationId:
+                            context?.organizationAndTeamData?.organizationId,
+                        prNumber: context?.pullRequest?.number,
+                        repositoryId: context?.repository?.id,
+                        reason: 'changes_unreadable',
+                    },
+                });
+                return this.updateContext(context, (draft) => {
+                    draft.statusInfo = {
+                        status: AutomationStatus.SKIPPED,
+                        message: StageMessageHelper.skippedWithReason(
+                            PipelineReasons.FILES.UNREADABLE,
+                            error.message,
+                        ),
+                    };
+                });
+            }
             this.logger.error({
                 message: `Error in ResolveConfigStage for PR#${context?.pullRequest?.number}`,
                 error,

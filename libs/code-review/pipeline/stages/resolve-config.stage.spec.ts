@@ -1,3 +1,5 @@
+import { StageMessageHelper } from '@libs/core/infrastructure/pipeline/utils/stage-message.helper';
+import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pipeline-reasons.const';
 import { PullRequestChangesUnreadableError } from '@libs/code-review/domain/errors/pull-request-changes-unreadable.error';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ModuleRef } from '@nestjs/core';
@@ -80,7 +82,7 @@ describe('ResolveConfigStage — input contract', () => {
         stage = module.get(ResolveConfigStage);
     });
 
-    it('rethrows when the PR changes cannot be read, instead of blaming the config', async () => {
+    it('skips with an unreadable-changes reason when the PR changes cannot be read, instead of blaming the config', async () => {
         prManager.getChangedFilesMetadata.mockRejectedValue(
             new PullRequestChangesUnreadableError(42, 'sha-prev'),
         );
@@ -88,9 +90,18 @@ describe('ResolveConfigStage — input contract', () => {
             lastExecution: { lastAnalyzedCommit: 'sha-prev' },
         } as any);
 
-        await expect(stage.execute(context)).rejects.toBeInstanceOf(
-            PullRequestChangesUnreadableError,
+        const result = await stage.execute(context);
+
+        // A thrown error would be recorded and then overwritten by the next
+        // stage's own skip, so the reason is set here.
+        expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
+        expect(result.statusInfo.message).toBe(
+            StageMessageHelper.skippedWithReason(
+                PipelineReasons.FILES.UNREADABLE,
+                'Could not read the changes of PR#42: neither the diff since sha-prev nor the whole PR was readable',
+            ),
         );
+        expect(codeBaseConfig.getConfig).not.toHaveBeenCalled();
     });
 
     it('threads org + repo + PR into getChangedFilesMetadata with the last analyzed commit as base, and builds the config from those files', async () => {
