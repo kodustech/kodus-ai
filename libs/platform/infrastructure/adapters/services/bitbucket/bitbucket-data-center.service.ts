@@ -1337,6 +1337,7 @@ export class BitbucketDataCenterService implements Omit<
                 repoPath,
                 prNumber,
                 paths: files.map((file: any) => file.path.toString),
+                organizationAndTeamData,
             });
 
             return files.map((file: any) => {
@@ -1388,10 +1389,17 @@ export class BitbucketDataCenterService implements Omit<
         repoPath: string;
         prNumber: number;
         paths: string[];
+        organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<
         Map<string, { patch: string; additions: number; deletions: number }>
     > {
         const { axiosClient, repoPath, prNumber, paths } = params;
+        const logMetadata = {
+            organizationId: params.organizationAndTeamData?.organizationId,
+            teamId: params.organizationAndTeamData?.teamId,
+            repoPath,
+            prNumber,
+        };
         const patches = new Map<
             string,
             { patch: string; additions: number; deletions: number }
@@ -1415,7 +1423,7 @@ export class BitbucketDataCenterService implements Omit<
                 this.logger.warn({
                     message: `Whole diff of PR#${prNumber} was truncated; reading files one by one`,
                     context: BitbucketDataCenterService.name,
-                    metadata: { prNumber, files: paths.length },
+                    metadata: { ...logMetadata, files: paths.length },
                 });
             } else {
                 for (const diff of diffs) {
@@ -1430,7 +1438,7 @@ export class BitbucketDataCenterService implements Omit<
                 message: `Whole diff of PR#${prNumber} failed; reading files one by one`,
                 context: BitbucketDataCenterService.name,
                 error,
-                metadata: { prNumber, files: paths.length },
+                metadata: { ...logMetadata, files: paths.length },
             });
         }
 
@@ -1453,7 +1461,7 @@ export class BitbucketDataCenterService implements Omit<
                         this.logger.error({
                             message: `Could not fetch diff for ${path}`,
                             context: BitbucketDataCenterService.name,
-                            metadata: { filePath: path, prNumber },
+                            metadata: { ...logMetadata, filePath: path },
                             error,
                         });
                     }
@@ -3502,6 +3510,8 @@ export class BitbucketDataCenterService implements Omit<
                 content: null,
             }));
         } catch (error) {
+            // A rate-limited listing is not "nothing changed": let the job retry
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message:
                     'Error fetching changed files since last commit in Data Center',

@@ -225,17 +225,45 @@ describe('BitbucketDataCenterService — PR diffs', () => {
             });
         });
 
-        it('lets a 429 on a file diff through instead of an empty patch', async () => {
-            const { service } = makeService(
-                hostWith({
-                    '/pull-requests/7/diff': () =>
-                        Promise.reject(rateLimited()),
-                }),
-            );
+        it('lets a 429 on a per-file diff read through instead of an empty patch', async () => {
+            // The whole diff comes back truncated, so the per-file reads run;
+            // only those (they carry params.path) answer 429.
+            const get = jest.fn((url: string, config?: any) => {
+                if (url.endsWith('/pull-requests/7')) {
+                    return Promise.resolve({
+                        data: { fromRef: { latestCommit: 'head' } },
+                    });
+                }
+                if (url.endsWith('/pull-requests/7/changes')) {
+                    return Promise.resolve({
+                        data: {
+                            values: [
+                                { path: { toString: 'a.ts' }, type: 'MODIFY' },
+                            ],
+                        },
+                    });
+                }
+                if (url.endsWith('/pull-requests/7/diff')) {
+                    return config?.params?.path
+                        ? Promise.reject(rateLimited())
+                        : Promise.resolve({
+                              data: { truncated: true, diffs: [] },
+                          });
+                }
+                return Promise.reject(new Error(`unexpected ${url}`));
+            });
+            const { service } = makeService(get);
 
             await expect(list(service)).rejects.toMatchObject({
                 response: { status: 429 },
             });
+            expect(
+                get.mock.calls.some(
+                    ([url, config]) =>
+                        url.endsWith('/diff') &&
+                        config?.params?.path === 'a.ts',
+                ),
+            ).toBe(true);
         });
     });
 

@@ -206,3 +206,61 @@ describe('BitbucketCloudService.getChangedFilesSinceLastCommit — batch diff', 
         ]);
     });
 });
+
+describe('BitbucketCloudService.getChangedFilesSinceLastCommit — deletions and failed reads', () => {
+    const since = (service: BitbucketCloudService) =>
+        service.getChangedFilesSinceLastCommit({
+            organizationAndTeamData: org as any,
+            repository: { id: 'repo-1', name: 'web' },
+            prNumber: 7,
+            lastCommit: { sha: 'last' },
+        });
+
+    it('does not read unchanged files one by one when the diff holds a deletion', async () => {
+        const withDeletion = [
+            'diff --git a/src/a.ts b/src/a.ts',
+            '--- a/src/a.ts',
+            '+++ b/src/a.ts',
+            '@@ -1 +1 @@',
+            '-old a',
+            '+new a',
+            'diff --git a/src/gone.ts b/src/gone.ts',
+            'deleted file mode 100644',
+            '--- a/src/gone.ts',
+            '+++ /dev/null',
+            '@@ -1 +0,0 @@',
+            '-bye',
+            '',
+        ].join('\n');
+        const getDiff = jest.fn().mockResolvedValue({ data: withDeletion });
+        const { service } = makeService(getDiff);
+        jest.spyOn(service as any, 'getPaginatedResults').mockResolvedValue([
+            ...diffstat,
+            { status: 'removed', old: { path: 'src/gone.ts' } },
+        ]);
+
+        const files = await since(service);
+
+        // src/b.ts did not change since the last commit: no per-file read
+        expect(getDiff).toHaveBeenCalledTimes(1);
+        expect(files?.map((f) => f.filename)).toEqual(['src/a.ts']);
+    });
+
+    it('keeps a file whose diff could not be read instead of dropping it as unchanged', async () => {
+        const getDiff = jest.fn((args: { path?: string }) =>
+            args.path === 'src/b.ts'
+                ? Promise.reject(new Error('502 Bad Gateway'))
+                : Promise.resolve({
+                      data: `${wholeDiff.split(/(?=^diff --git a\/src\/b)/m)[0]}diff --git unparseable-header\n`,
+                  }),
+        );
+        const { service } = makeService(getDiff as any);
+
+        const files = await since(service);
+
+        expect(files?.map((f) => [f.filename, f.patch])).toEqual([
+            ['src/a.ts', '@@ -1 +1 @@\n-old a\n+new a'],
+            ['src/b.ts', null],
+        ]);
+    });
+});

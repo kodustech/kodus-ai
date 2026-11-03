@@ -1050,7 +1050,8 @@ export class AzureReposService implements Omit<
                 token,
             }),
         ]);
-        if (!reviewerId) throw new Error('Unable to identify reviewer from PAT.');
+        if (!reviewerId)
+            throw new Error('Unable to identify reviewer from PAT.');
         await this.azureReposRequestHelper.votePullRequest({
             orgName,
             token,
@@ -1290,7 +1291,8 @@ export class AzureReposService implements Omit<
         targetUrl?: string;
         updatedDate?: string;
     }): CheckEvidence {
-        const unfinished = status.state === 'pending' || status.state === 'notSet';
+        const unfinished =
+            status.state === 'pending' || status.state === 'notSet';
         const name = status.context?.genre
             ? `${status.context.genre}/${status.context?.name ?? ''}`
             : (status.context?.name ?? '');
@@ -1750,6 +1752,8 @@ export class AzureReposService implements Omit<
                     baseCommitId: lastCommit.sha,
                     targetCommitId,
                     changeType: change.changeType,
+                    // A rate-limited file is not an unchanged one
+                    rethrowRateLimit: true,
                 });
 
                 if (fileDiff) {
@@ -1771,6 +1775,7 @@ export class AzureReposService implements Omit<
 
             return changedFiles;
         } catch (error) {
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message: `Failed to get changed files since last commit for PR #${params.prNumber}`,
                 context: AzureReposService.name,
@@ -2716,7 +2721,10 @@ export class AzureReposService implements Omit<
             // which grows with the organization rather than with the
             // selection. Keyed exactly like the prune step so the two cannot
             // disagree about what counts as the same subscription.
-            const subscriptionIndex = new Map<string, AzureRepoSubscription[]>();
+            const subscriptionIndex = new Map<
+                string,
+                AzureRepoSubscription[]
+            >();
 
             for (const subscription of surviving) {
                 const key = AzureReposService.subscriptionKey(
@@ -3106,9 +3114,9 @@ export class AzureReposService implements Omit<
             // in it. The last chunk arrives with the complete selection and
             // runs this once.
             if (!params.deferWebhooks) {
-                void this.createWebhook(
-                    params.organizationAndTeamData,
-                ).catch(() => undefined);
+                void this.createWebhook(params.organizationAndTeamData).catch(
+                    () => undefined,
+                );
             }
         } catch (err) {
             this.logger.error({
@@ -3988,10 +3996,19 @@ export class AzureReposService implements Omit<
                             baseCommitId,
                             targetCommitId,
                             changeType: change.changeType,
+                            rethrowRateLimit: true,
                         }),
                     ),
                 ),
             );
+
+            // A rate-limited file is not a missing one: the whole listing
+            // fails so the job retries instead of reviewing part of the PR.
+            const rateLimited = settled.find(
+                (result): result is PromiseRejectedResult =>
+                    result.status === 'rejected' && is429Error(result.reason),
+            );
+            if (rateLimited) throw rateLimited.reason;
 
             const successfulFiles: Array<
                 NonNullable<
@@ -4073,6 +4090,7 @@ export class AzureReposService implements Omit<
 
             return fileChanges;
         } catch (error: any) {
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message: `Failed to get files for Azure Repos PR #${params.prNumber} in repo ${params.repository.name}`,
                 context: this.getFilesByPullRequestId.name,
@@ -4640,7 +4658,9 @@ export class AzureReposService implements Omit<
             return { removed: 0, surviving: existingSubscriptions };
         }
 
-        const staleIds = new Set(stale.map(({ subscription }) => subscription.id));
+        const staleIds = new Set(
+            stale.map(({ subscription }) => subscription.id),
+        );
         let removed = 0;
 
         for (const { subscription, reason } of stale) {
@@ -4722,31 +4742,31 @@ export class AzureReposService implements Omit<
 
         const tasks = AzureReposService.WEBHOOK_EVENTS.map(
             ({ type, resourceVersion }) =>
-            this.createOrReplaceHook({
-                orgName: organizationName,
-                token: userToken,
-                projectId,
-                repoId,
-                eventType: type,
-                resourceVersion,
-                webhookUrl,
-                encryptedToken,
-                passId,
-                subscriptionIndex,
-                teamId,
-            }).catch((error) => {
-                this.logger.error({
-                    message: `Erro no hook ${type}: ${error.message ?? error}`,
-                    context: this.createNotificationChannel.name,
-                    error,
-                    metadata: {
-                        eventType: type,
-                        organizationName,
-                        projectId,
-                        repoId,
-                    },
-                });
-            }),
+                this.createOrReplaceHook({
+                    orgName: organizationName,
+                    token: userToken,
+                    projectId,
+                    repoId,
+                    eventType: type,
+                    resourceVersion,
+                    webhookUrl,
+                    encryptedToken,
+                    passId,
+                    subscriptionIndex,
+                    teamId,
+                }).catch((error) => {
+                    this.logger.error({
+                        message: `Erro no hook ${type}: ${error.message ?? error}`,
+                        context: this.createNotificationChannel.name,
+                        error,
+                        metadata: {
+                            eventType: type,
+                            organizationName,
+                            projectId,
+                            repoId,
+                        },
+                    });
+                }),
         );
 
         // Aguardar todas, mas já lidamos com erros acima
@@ -5091,7 +5111,9 @@ export class AzureReposService implements Omit<
             startLine: lineComment?.start_line,
             endLine: lineComment?.line,
             prompt: resolveAgentPrompt(lineComment?.suggestion),
-            improvedCode: this.dedentCode(lineComment?.body?.improvedCode || ''),
+            improvedCode: this.dedentCode(
+                lineComment?.body?.improvedCode || '',
+            ),
             language: lineComment?.suggestion?.language || repository?.language,
         });
 

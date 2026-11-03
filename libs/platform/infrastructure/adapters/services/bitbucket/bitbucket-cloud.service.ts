@@ -2059,6 +2059,7 @@ export class BitbucketCloudService implements Omit<
                 spec: `${sourceHash}..${destinationHash}`,
                 paths: changedPrFiles.map(pathForDiff).filter(Boolean),
                 fillMissingPerFile: true,
+                logContext: { organizationAndTeamData, prNumber },
             });
 
             // No file contents here: every caller reads them later through
@@ -2154,25 +2155,33 @@ export class BitbucketCloudService implements Omit<
                 );
 
             // One diff since the last reviewed commit instead of one per file.
-            // A file missing from it did not change since that commit.
+            // A file missing from it did not change since that commit. Both
+            // sides of each entry are listed: a deletion is keyed by its old
+            // path, and must not look like a parse mismatch.
             const patches = await this.readPatchesByPath({
                 bitbucketAPI,
                 repo,
                 spec: `${pr.source?.commit?.hash}..${lastCommit.sha}`,
-                paths: allFilesInPR
-                    .map((file) => file.new?.path)
-                    .filter(Boolean),
+                paths: [
+                    ...new Set(
+                        allFilesInPR
+                            .flatMap((file) => [file.new?.path, file.old?.path])
+                            .filter(Boolean),
+                    ),
+                ],
                 fillMissingPerFile: false,
+                logContext: { organizationAndTeamData, prNumber },
             });
 
             // No contents, same as getFilesByPullRequestId: the caller
             // (PullRequestHandlerService) reads them per kept file.
             const changedFiles = allFilesInPR.map((file) => {
                 const path = file.new?.path;
-                const diff = path ? patches.get(path) : undefined;
-                if (!path || !diff?.trim()) {
-                    return null;
-                }
+                if (!path || !patches.has(path)) return null;
+                // null: its diff could not be read. Kept, so a failed read
+                // never passes for an unchanged file.
+                const diff = patches.get(path);
+                if (diff !== null && !diff.trim()) return null;
 
                 return {
                     filename: path,
@@ -4958,8 +4967,21 @@ export class BitbucketCloudService implements Omit<
         spec: string;
         paths: string[];
         fillMissingPerFile: boolean;
+        /** Who the read is for, carried into every log line. */
+        logContext: {
+            organizationAndTeamData: OrganizationAndTeamData;
+            prNumber: number;
+        };
     }): Promise<Map<string, string | null>> {
         const { bitbucketAPI, repo, spec, paths, fillMissingPerFile } = params;
+        const logMetadata = {
+            organizationId:
+                params.logContext.organizationAndTeamData?.organizationId,
+            teamId: params.logContext.organizationAndTeamData?.teamId,
+            prNumber: params.logContext.prNumber,
+            repoId: repo.id,
+            spec,
+        };
         const patches = new Map<string, string | null>();
         let wholeDiffRead = false;
         // Whole-diff sections the parser could not key, or keyed to a path
@@ -4991,7 +5013,7 @@ export class BitbucketCloudService implements Omit<
                 message: `Whole-PR diff failed for spec ${spec}; falling back to per-file diffs`,
                 context: BitbucketCloudService.name,
                 error,
-                metadata: { repoId: repo.id, files: paths.length },
+                metadata: { ...logMetadata, files: paths.length },
             });
         }
 
@@ -5006,7 +5028,7 @@ export class BitbucketCloudService implements Omit<
             this.logger.warn({
                 message: `Whole-PR diff for spec ${spec} did not key every file; reading ${missing.length} missing file(s) one by one`,
                 context: BitbucketCloudService.name,
-                metadata: { repoId: repo.id, missing: missing.length },
+                metadata: { ...logMetadata, missing: missing.length },
             });
         }
 
@@ -5032,6 +5054,14 @@ export class BitbucketCloudService implements Omit<
                         );
                     } catch (error) {
                         if (is429Error(error)) throw error;
+                        // null = the read failed, as opposed to a path absent
+                        // from the map (not in the diff): callers keep it
+                        this.logger.warn({
+                            message: `Could not read the diff of ${path} for spec ${spec}`,
+                            context: BitbucketCloudService.name,
+                            error,
+                            metadata: { ...logMetadata, path },
+                        });
                         patches.set(path, null);
                     }
                 }),
