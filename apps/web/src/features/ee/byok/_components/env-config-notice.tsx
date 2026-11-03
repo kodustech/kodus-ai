@@ -82,7 +82,7 @@ export const EnvConfigNotice = ({ env }: { env: LLMConfigStatus["env"] }) => {
                                 </>
                             ) : (
                                 <>
-                                    (guessed from the model name; set{" "}
+                                    (guessed from the model name and the keys set; set{" "}
                                     <EnvDataValue>API_LLM_PROVIDER</EnvDataValue>{" "}
                                     to choose it)
                                 </>

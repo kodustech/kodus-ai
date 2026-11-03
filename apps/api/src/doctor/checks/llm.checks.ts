@@ -84,8 +84,8 @@ function envModelResults(
             : {
                   check: 'llm.env_provider',
                   status: 'ok',
-                  title: `The server model (${label}) uses a provider guessed from the model name.`,
-                  fix: 'Set API_LLM_PROVIDER to state the provider instead of relying on the model name.',
+                  title: `The server model (${label}) uses a provider guessed from the model name and the keys and base URL set.`,
+                  fix: 'Set API_LLM_PROVIDER to state the provider instead of letting Kodus guess it.',
               },
     );
 
