@@ -1,4 +1,4 @@
-import { splitUnifiedDiff } from './split-unified-diff';
+import { isPatchComplete, splitUnifiedDiff } from './split-unified-diff';
 
 describe('splitUnifiedDiff', () => {
     it('splits a multi-file git diff into one patch per file, from its first hunk', () => {
@@ -409,5 +409,43 @@ describe('splitUnifiedDiff — edge shapes of the name lines', () => {
                 '+y',
             ),
         ).toEqual(['"weird']);
+    });
+});
+
+describe('isPatchComplete', () => {
+    it.each([
+        ['no patch (binary, mode change)', ''],
+        [
+            'every hunk as long as its header says',
+            '@@ -1,2 +1,2 @@\n a\n-b\n+B\n@@ -9 +9,2 @@\n c\n+d',
+        ],
+        ['an omitted count, which means 1', '@@ -3 +3 @@\n-x\n+y'],
+        [
+            'a no-newline marker, which is not a line',
+            '@@ -1 +1 @@\n-x\n\\ No newline at end of file\n+y',
+        ],
+        [
+            'an empty line a host left as context',
+            '@@ -1,3 +1,3 @@\n a\n\n-b\n+B',
+        ],
+        [
+            'a last hunk short only by trailing context',
+            '@@ -1,3 +1,3 @@\n-b\n+B\n a',
+        ],
+    ])('accepts %s', (_label, patch) => {
+        expect(isPatchComplete(patch)).toBe(true);
+    });
+
+    it.each([
+        ['a hunk cut before its added lines', '@@ -0,0 +1,3 @@\n+a'],
+        ['a hunk cut before its removed lines', '@@ -1,3 +0,0 @@\n-a'],
+        [
+            'an earlier hunk short by context',
+            '@@ -1,3 +1,3 @@\n-b\n+B\n@@ -9 +9 @@\n-x\n+y',
+        ],
+        ['a hunk holding more lines than declared', '@@ -1 +1 @@\n-x\n+y\n+z'],
+        ['lines before any hunk header', '-x\n+y'],
+    ])('rejects %s', (_label, patch) => {
+        expect(isPatchComplete(patch)).toBe(false);
     });
 });

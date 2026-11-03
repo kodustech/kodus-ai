@@ -17,7 +17,10 @@ import {
 } from '@libs/core/infrastructure/http/per-key-rate-gate';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
-import { splitUnifiedDiff } from '@libs/common/utils/split-unified-diff';
+import {
+    isPatchComplete,
+    splitUnifiedDiff,
+} from '@libs/common/utils/split-unified-diff';
 import {
     isFileMatchingGlob,
     isFileMatchingGlobCaseInsensitive,
@@ -4976,8 +4979,8 @@ export class BitbucketCloudService implements Omit<
         const { bitbucketAPI, repo, spec, paths, fillMissingPerFile } = params;
         const logMetadata = {
             organizationId:
-                params.logContext.organizationAndTeamData?.organizationId,
-            teamId: params.logContext.organizationAndTeamData?.teamId,
+                params.logContext.organizationAndTeamData.organizationId,
+            teamId: params.logContext.organizationAndTeamData.teamId,
             prNumber: params.logContext.prNumber,
             repoId: repo.id,
             spec,
@@ -4988,6 +4991,9 @@ export class BitbucketCloudService implements Omit<
         // the listing does not have: a missing path may then be a parse
         // mismatch rather than a file this diff leaves untouched.
         let parseMismatch = false;
+        // Files whose section ends before its hunks do: the host cut the
+        // diff short there. Each is read again on its own.
+        const cutShort = new Set<string>();
 
         try {
             const diff = await bitbucketAPI.commits
@@ -4999,7 +5005,11 @@ export class BitbucketCloudService implements Omit<
                 .then((res) => res.data as string);
             const files = splitUnifiedDiff(diff);
             for (const file of files) {
-                patches.set(file.filename, file.patch);
+                if (isPatchComplete(file.patch)) {
+                    patches.set(file.filename, file.patch);
+                } else {
+                    cutShort.add(file.filename);
+                }
             }
             const sections = (diff?.match(/^diff --git /gm) ?? []).length;
             const listed = new Set(paths);
@@ -5018,17 +5028,25 @@ export class BitbucketCloudService implements Omit<
         }
 
         const missing = paths.filter((path) => !patches.has(path));
-        if (
-            !missing.length ||
-            (wholeDiffRead && !fillMissingPerFile && !parseMismatch)
-        ) {
-            return patches;
+        // Without a fill, a path the whole diff left out did not change;
+        // only the files it cut short still need a read of their own
+        const toRead =
+            !wholeDiffRead || fillMissingPerFile || parseMismatch
+                ? missing
+                : missing.filter((path) => cutShort.has(path));
+        if (!toRead.length) return patches;
+        if (cutShort.size) {
+            this.logger.warn({
+                message: `Whole-PR diff for spec ${spec} was cut short in ${cutShort.size} file(s); reading them one by one`,
+                context: BitbucketCloudService.name,
+                metadata: { ...logMetadata, cutShort: [...cutShort] },
+            });
         }
         if (wholeDiffRead && parseMismatch) {
             this.logger.warn({
-                message: `Whole-PR diff for spec ${spec} did not key every file; reading ${missing.length} missing file(s) one by one`,
+                message: `Whole-PR diff for spec ${spec} did not key every file; reading ${toRead.length} missing file(s) one by one`,
                 context: BitbucketCloudService.name,
-                metadata: { ...logMetadata, missing: missing.length },
+                metadata: { ...logMetadata, missing: toRead.length },
             });
         }
 
@@ -5036,7 +5054,7 @@ export class BitbucketCloudService implements Omit<
             BitbucketCloudService.PER_FILE_REQUEST_CONCURRENCY,
         );
         await Promise.all(
-            missing.map((path) =>
+            toRead.map((path) =>
                 limit(async () => {
                     try {
                         const diff = await bitbucketAPI.commits

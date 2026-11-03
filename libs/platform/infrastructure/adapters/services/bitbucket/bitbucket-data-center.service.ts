@@ -1393,8 +1393,8 @@ export class BitbucketDataCenterService implements Omit<
     > {
         const { axiosClient, repoPath, prNumber, paths } = params;
         const logMetadata = {
-            organizationId: params.organizationAndTeamData?.organizationId,
-            teamId: params.organizationAndTeamData?.teamId,
+            organizationId: params.organizationAndTeamData.organizationId,
+            teamId: params.organizationAndTeamData.teamId,
             repoPath,
             prNumber,
         };

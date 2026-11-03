@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { isAxiosError } from 'axios';
 import pLimit from 'p-limit';
 
+import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { createLogger } from '@libs/core/log/logger';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
@@ -2178,6 +2179,9 @@ export class ForgejoService implements Omit<
                         },
                         query: { page, limit },
                     });
+                    // The client answers an HTTP error instead of throwing
+                    // it: a 429 page would end the listing early
+                    if (is429Error(result)) throw result;
                     return result.data ?? [];
                 }),
                 repoDownloadPullDiffOrPatch({
@@ -2188,14 +2192,21 @@ export class ForgejoService implements Omit<
                         index: params.prNumber,
                         diffType: 'diff',
                     },
-                }).catch((error) => {
-                    this.logger.warn({
-                        message: `Failed to fetch diff for PR#${params.prNumber}, continuing without patch data`,
-                        context: ForgejoService.name,
-                        error,
-                    });
-                    return { data: '' };
-                }),
+                })
+                    .then((result) => {
+                        if (is429Error(result)) throw result;
+                        return result;
+                    })
+                    .catch((error) => {
+                        // A rate limit is not a PR without patches
+                        if (is429Error(error)) throw error;
+                        this.logger.warn({
+                            message: `Failed to fetch diff for PR#${params.prNumber}, continuing without patch data`,
+                            context: ForgejoService.name,
+                            error,
+                        });
+                        return { data: '' };
+                    }),
             ]);
 
             const diffContent = (diffResult.data as string) ?? '';
@@ -2224,6 +2235,8 @@ export class ForgejoService implements Omit<
                 previous_filename: f.previous_filename,
             }));
         } catch (error) {
+            // Let the job retry instead of reviewing a fileless PR
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message: 'Error getting files by PR ID',
                 context: ForgejoService.name,
