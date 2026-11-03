@@ -21,7 +21,10 @@ export const getInvitationToken = async (userId: string): Promise<string> => {
     const response = await axiosAuthorized.fetcher<{ data: { token: string } }>(
         pathToApiUrl(`/user/${encodeURIComponent(userId)}/invitation-token`),
     );
-    return response.data.token;
+    // A 2xx without a token must not become a link to /invite/undefined.
+    const token = response.data?.token;
+    if (!token) throw new Error("The API returned no invitation token");
+    return token;
 };
 
 export const updateUser = async (

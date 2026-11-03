@@ -77,9 +77,19 @@ describe("invite page", () => {
 
             expect(getByText("We could not load this invitation")).toBeTruthy();
             expect(queryByText("Invalid or expired invitation")).toBeNull();
-            expect(JSON.stringify(error.mock.calls)).not.toContain(
-                "secret.token",
-            );
+            // Every logged argument, an Error's message and stack included
+            // (JSON.stringify drops them).
+            const logged = error.mock.calls
+                .flat()
+                .map((arg) =>
+                    arg instanceof Error
+                        ? `${arg.message} ${arg.stack}`
+                        : typeof arg === "string"
+                          ? arg
+                          : JSON.stringify(arg),
+                )
+                .join(" ");
+            expect(logged).not.toContain("secret.token");
         } finally {
             error.mockRestore();
         }

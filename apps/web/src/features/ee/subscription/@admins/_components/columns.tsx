@@ -412,7 +412,15 @@ export const columns: ColumnDef<MembersSetup>[] = [
                                         // invitation from the API, never the
                                         // user id alone.
                                         const userId = row.original.userId;
-                                        if (!userId) return;
+                                        if (!userId) {
+                                            toast({
+                                                variant: "warning",
+                                                ...invitationLinkFailure(
+                                                    undefined,
+                                                ),
+                                            });
+                                            return;
+                                        }
                                         let token: string;
                                         try {
                                             token =
