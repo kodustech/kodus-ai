@@ -110,6 +110,24 @@ describe('ValidateNewCommitsStage', () => {
         await expect(stage.execute(context)).rejects.toThrow('boom');
     });
 
+    it('carries the base branch of the last review in lastExecution', async () => {
+        mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            {
+                dataExecution: {
+                    lastAnalyzedCommit: 'sha-1',
+                    reviewedBaseBranch: 'develop',
+                },
+            },
+        );
+        mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+            [{ sha: 'sha-1' }, { sha: 'sha-2', parents: [{ sha: 'sha-1' }] }],
+        );
+
+        const result = await stage.execute(context);
+
+        expect(result.lastExecution?.reviewedBaseBranch).toBe('develop');
+    });
+
     it('should skip if no NEW commits are found (using PipelineReasons)', async () => {
         // Mock last execution exists
         mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(

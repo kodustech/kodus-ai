@@ -31,7 +31,8 @@ import {
     rolePriority,
 } from "@services/permissions/types";
 import { type MembersSetup } from "@services/setup/types";
-import { updateUser } from "@services/users/fetch";
+import { getInvitationToken, updateUser } from "@services/users/fetch";
+import { invitationLinkFailure } from "@services/users/invitation-link";
 import { ColumnDef } from "@tanstack/react-table";
 import {
     CheckIcon,
@@ -406,8 +407,34 @@ export const columns: ColumnDef<MembersSetup>[] = [
                                 <DropdownMenuItem
                                     leftIcon={<CopyIcon />}
                                     disabled={!canEdit}
-                                    onSelect={() => {
-                                        const inviteLink = `${window.location.origin}/invite/${row.original.userId}`;
+                                    onSelect={async () => {
+                                        // The link carries a sealed
+                                        // invitation from the API, never the
+                                        // user id alone.
+                                        const userId = row.original.userId;
+                                        if (!userId) {
+                                            // Retrying cannot help: there
+                                            // is no account to invite.
+                                            toast({
+                                                variant: "warning",
+                                                title: "No account to invite",
+                                                description:
+                                                    "This member has no Kodus account yet. Invite them by email instead.",
+                                            });
+                                            return;
+                                        }
+                                        let token: string;
+                                        try {
+                                            token =
+                                                await getInvitationToken(userId);
+                                        } catch (error) {
+                                            toast({
+                                                variant: "warning",
+                                                ...invitationLinkFailure(error),
+                                            });
+                                            return;
+                                        }
+                                        const inviteLink = `${window.location.origin}/invite/${encodeURIComponent(token)}`;
                                         const copied =
                                             ClipboardHelpers.copyTextToClipboard(
                                                 inviteLink,

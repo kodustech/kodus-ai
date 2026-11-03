@@ -103,7 +103,14 @@ import {
     stripCustomAgentFixes,
     type CustomAgentsById,
 } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-presentation';
-import { summarizeCustomAgentRuns } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
+import {
+    CUSTOM_AGENT_RUN_LOG_TOKEN,
+    type ICustomAgentRunLog,
+} from '@libs/code-review/domain/custom-agents/contracts';
+import {
+    summarizeCustomAgentRuns,
+    toCustomAgentRunRecords,
+} from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-summary';
 import {
     customAgentSlug,
     ignoredFilesForCustomAgents,
@@ -417,6 +424,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // without it the instruction index is listed on every review.
         @Optional()
         private readonly cacheService?: CacheService,
+        // Optional so specs that construct the stage manually still compile;
+        // without it the agent page cannot say an agent is failing.
+        @Optional()
+        @Inject(CUSTOM_AGENT_RUN_LOG_TOKEN)
+        private readonly customAgentRunLog?: ICustomAgentRunLog,
     ) {
         super();
     }
@@ -736,6 +748,37 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 })),
             },
         });
+    }
+
+    /**
+     * Keeps how each agent that ran ended (ran, failed, incomplete, and why)
+     * so its page can say it is failing. Never blocks or fails the review.
+     */
+    private recordCustomAgentRuns(
+        context: CodeReviewPipelineContext,
+        runs: ReturnType<typeof summarizeCustomAgentRuns>,
+    ): void {
+        const organizationId = context.organizationAndTeamData?.organizationId;
+        const repositoryId = context.repository?.id;
+        const prNumber = context.pullRequest?.number;
+        if (!this.customAgentRunLog || !organizationId || !repositoryId) return;
+        if (typeof prNumber !== 'number') return;
+        const records = toCustomAgentRunRecords({
+            organizationId,
+            repositoryId: String(repositoryId),
+            prNumber,
+            runs,
+            at: new Date(),
+        });
+        if (!records.length) return;
+        void this.customAgentRunLog.record(records).catch((error) =>
+            this.logger.warn({
+                message: `[AGENT] Could not record custom agent runs for PR#${prNumber}`,
+                context: this.stageName,
+                error,
+                metadata: { organizationId, repositoryId, prNumber },
+            }),
+        );
     }
 
     /**
@@ -1688,8 +1731,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // The CLI output that names a custom agent finding's file and the
             // team rule it applies, after formatting so the rewrite cannot
             // paraphrase or drop them (#2172).
+            const knowledgeSources = reviewKnowledge.sources;
+            const ruleSources = knowledgeSources?.length
+                ? {
+                      sources: knowledgeSources,
+                      platform: context.platformType,
+                      // Unknown visibility counts as public.
+                      reviewedIsPublic:
+                          reviewKnowledge.reviewedRepository?.visibility !==
+                          'private',
+                  }
+                : undefined;
             for (const s of deduped) {
-                const citation = findingCitation(s, cliRuns);
+                const citation = findingCitation(s, cliRuns, ruleSources);
                 if (!citation) continue;
                 s.suggestionContent = `${s.suggestionContent || ''}${citation}`;
                 s.fullExplanation = `${s.fullExplanation || ''}${citation}`;
@@ -1841,6 +1895,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 allDiscarded,
                 mergedInDedup,
             );
+            this.recordCustomAgentRuns(context, customAgentSummaries);
             const prLevelSuggestions = deduped.filter(isPrLevelSuggestion);
             const fileLevelSuggestions = deduped.filter(
                 (s) => !isPrLevelSuggestion(s),

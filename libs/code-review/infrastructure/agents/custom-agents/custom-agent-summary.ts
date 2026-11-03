@@ -1,3 +1,4 @@
+import type { CustomAgentRunRecord } from '@libs/code-review/domain/custom-agents/contracts';
 import type {
     CodeSuggestion,
     CustomAgentConfig,
@@ -91,4 +92,35 @@ function notRunReason(
     return inScope.every((f) => removed.has(f.filename))
         ? 'deleted-files'
         : 'ignored-paths';
+}
+
+/**
+ * The run records kept for the agent's page: one per agent that started
+ * (ran, failed or stopped short), with its reason. Agents that did not run
+ * (no matching files) are not runs.
+ */
+export function toCustomAgentRunRecords(params: {
+    organizationId: string;
+    repositoryId: string;
+    prNumber: number;
+    runs: ReadonlyArray<Pick<CustomAgentRun, 'id' | 'status' | 'reason'>>;
+    at: Date;
+}): CustomAgentRunRecord[] {
+    return params.runs.flatMap((run) =>
+        run.status === 'ran' ||
+        run.status === 'failed' ||
+        run.status === 'incomplete'
+            ? [
+                  {
+                      organizationId: params.organizationId,
+                      repositoryId: params.repositoryId,
+                      prNumber: params.prNumber,
+                      agentId: run.id,
+                      status: run.status,
+                      ...(run.reason && { reason: run.reason }),
+                      at: params.at,
+                  },
+              ]
+            : [],
+    );
 }

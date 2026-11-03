@@ -55,6 +55,7 @@ import {
     CustomAgentConfig,
     customAgentSlugClashMessage,
     knowledgeLinkProblems,
+    knowledgeSourceProblems,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
     CodeReviewParameter,
@@ -282,6 +283,13 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     if (problems.length > 0) {
                         throw new BadRequestException(problems.join('; '));
                     }
+                }
+            }
+
+            if (Array.isArray(configValue?.knowledge)) {
+                const problems = knowledgeSourceProblems(configValue.knowledge);
+                if (problems.length > 0) {
+                    throw new BadRequestException(problems.join('; '));
                 }
             }
 
@@ -1074,7 +1082,9 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             const before = resolveBefore(id);
             const after = resolveAfter(id);
 
-            if (before.repoInstructionsEnabled !== after.repoInstructionsEnabled) {
+            if (
+                before.repoInstructionsEnabled !== after.repoInstructionsEnabled
+            ) {
                 this.logger.log({
                     message: `Coding-agent instructions in review turned ${after.repoInstructionsEnabled ? 'on' : 'off'} for repository`,
                     context: UpdateOrCreateCodeReviewParameterUseCase.name,

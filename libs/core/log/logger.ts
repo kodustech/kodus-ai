@@ -299,6 +299,10 @@ const SENSITIVE_KEYS = new Set([
     'awsaccesskeyid',
     'awssessiontoken',
     'jwt',
+    // GitHub's user authorization of the App: the code becomes a user
+    // token, and the state seals who asked for the link.
+    'githubcode',
+    'githubstate',
     'credential',
     'connectionstring',
     'ssn',
@@ -451,7 +455,7 @@ function stringifyUnknownError(value: unknown): string {
 // fail-open, so every name in SENSITIVE_KEYS must match one of these stems —
 // a spec walks the set and fails when a new key has no stem here.
 const EMBEDDED_SECRET_HINT =
-    /auth|cookie|token|secret|passw|key|credential|jwt|connection|ssn|cpf|cvv|card/i;
+    /auth|cookie|token|secret|passw|key|credential|jwt|connection|ssn|cpf|cvv|card|github[_-]?(?:code|state)/i;
 
 // Linear patterns (no nested or overlapping quantifiers).
 // The optional leading `+`/`-` covers unified-diff lines, which get logged.

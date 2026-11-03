@@ -5,6 +5,7 @@ import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/servic
 import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 import { createSubmoduleProbe } from '@libs/code-review/infrastructure/agents/engine/uninitialized-submodules';
+import { isLineNumber } from '@libs/sandbox/infrastructure/providers/read-within-root';
 import {
     isSecretFilePath,
     secretFileRefusal,
@@ -86,6 +87,26 @@ function mkTool(
         inputSchema: jsonSchema(schema),
         execute: exec,
     };
+}
+
+/**
+ * A tool argument as a line number: absent is 0, a numeric string is read,
+ * and with `clampNegative` a negative integer becomes 1. Anything else is
+ * null (refused).
+ */
+function toLineNumber(
+    value: unknown,
+    { clampNegative = false }: { clampNegative?: boolean } = {},
+): number | null {
+    if (value === undefined || value === null || value === '') return 0;
+    const n =
+        typeof value === 'string' && /^\s*-?\d+\s*$/.test(value)
+            ? Number(value)
+            : value;
+    if (clampNegative && Number.isSafeInteger(n) && (n as number) < 0) {
+        return 1;
+    }
+    return isLineNumber(n) ? n : null;
 }
 
 function addLineNumbers(content: string, baseLineNumber: number): string {
@@ -613,8 +634,19 @@ export function buildAgentTools(
                 // Tolerate models sending file/filePath instead of path
                 let filePath: string =
                     args.path || args.filePath || args.file || '';
-                const startLine = args.startLine || args.start_line || 0;
-                const endLine = args.endLine || args.end_line || 0;
+                // The schema is not enforced at runtime: a model may send a
+                // numeric string, or anything else. Only line numbers reach
+                // the sandbox, which builds a sed address from them.
+                // `startLine=grepLine-20` near the top of a file is below 1:
+                // it means "from the first line".
+                const startLine = toLineNumber(
+                    args.startLine ?? args.start_line,
+                    { clampNegative: true },
+                );
+                const endLine = toLineNumber(args.endLine ?? args.end_line);
+                if (startLine === null || endLine === null) {
+                    return 'Error: startLine and endLine must be non-negative integers (line numbers).';
+                }
                 // Strip leading slash — paths are relative to repo root
                 filePath = filePath.replace(/^\/+/, '');
                 if (!filePath) {
@@ -624,35 +656,19 @@ export function buildAgentTools(
                 const linked = await resolveLinkedRoot(args.repo);
                 if (!linked.ok) return `Error: ${linked.error}`;
 
-                // Linked-repo hop: cat/sed under the cloned root via exec.
+                // Linked-repo hop: the provider's own read, rooted at the
+                // clone, refuses a symlink and a path that leaves it, exactly
+                // as it does for the PR's repository.
                 if (linked.rootPath) {
-                    if (!remoteCommands.exec) {
-                        return 'Error: sandbox exec unavailable for linked-repo read';
-                    }
                     const target = safeLinkedPath(linked.rootPath, filePath);
                     if (!target.ok) return `Error: ${target.error}`;
                     try {
-                        // A symlink is not read, as the local sandbox's own
-                        // read refuses one: the secret-file guard checks the
-                        // name the agent asked for, not the file it points to.
-                        const link = await remoteCommands.exec(
-                            `find ${shSingleQuote(target.abs)} -maxdepth 0 -type l`,
+                        const stdout = await remoteCommands.read(
+                            filePath,
+                            startLine,
+                            endLine,
+                            linked.rootPath,
                         );
-                        if (
-                            link.exitCode === 0 &&
-                            link.stdout.trim() === target.abs
-                        ) {
-                            return `Error: ${filePath} in linked repo ${linked.repository} is a symlink; read the file it points to instead.`;
-                        }
-                        const cmd =
-                            startLine === 0 && endLine === 0
-                                ? `cat ${shSingleQuote(target.abs)}`
-                                : `sed -n '${startLine < 1 ? 1 : startLine},${endLine}p' ${shSingleQuote(target.abs)}`;
-                        const { stdout, stderr, exitCode } =
-                            await remoteCommands.exec(cmd);
-                        if (!stdout && (stderr || exitCode !== 0)) {
-                            return `Error reading ${filePath} from linked repo ${linked.repository}: ${(stderr || `exit ${exitCode}`).trim()}`;
-                        }
                         if (!stdout) {
                             return startLine > 0
                                 ? `readFile: no content in [${linked.repository}] ${filePath} for the requested range`

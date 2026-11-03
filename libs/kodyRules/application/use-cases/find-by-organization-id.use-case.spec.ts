@@ -38,6 +38,8 @@ describe('FindByOrganizationIdKodyRulesUseCase', () => {
             request,
             kodyRulesService,
             contextReferenceService,
+            // Org-wide member: no repository restriction.
+            { getRepositoryScope: jest.fn().mockResolvedValue(null) },
         );
     });
 

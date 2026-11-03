@@ -53,9 +53,8 @@ export class SSOLoginUseCase implements IUseCase {
                             `${firstName || ''} ${lastName || ''}`.trim() ||
                             email,
                         password: randomBytes(32).toString('base64').slice(0, 32),
-                        organizationId,
                     },
-                    { preVerified: true },
+                    { preVerified: true, organizationId },
                 );
             } else if (UNCONFIRMED_STATUSES.includes(user.status as STATUS)) {
                 await this.usersService.update(

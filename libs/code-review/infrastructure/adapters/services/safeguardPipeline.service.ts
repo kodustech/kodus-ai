@@ -285,11 +285,14 @@ export class SafeguardPipelineService {
                         // reuse the PR's own review lease (that sandbox may be
                         // the stale one being replaced).
                         const renewPrKey = `${organizationAndTeamData?.organizationId}:safeguard-renew:${prNumber}:${randomUUID()}`;
+                        // This job already holds the PR's slot: the renewal
+                        // replaces its sandbox and must not queue behind it
                         const acquired = await this.leaseManager.acquire(
                             renewPrKey,
                             'safeguard-renewal',
                             SAFEGUARD_RENEWAL_LEASE_TTL_MS,
                             freshCloneParams,
+                            { replacesOwnSandbox: true },
                         );
                         newSandbox = acquired.sandbox;
                         currentRemoteCommands = newSandbox.remoteCommands;

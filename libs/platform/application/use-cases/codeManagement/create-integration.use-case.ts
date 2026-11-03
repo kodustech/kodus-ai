@@ -56,6 +56,9 @@ export class CreateIntegrationUseCase implements IUseCase {
                 ...params,
                 organizationAndTeamData,
                 authMode,
+                // Who links: a GitHub App installation is linked only for the
+                // user its GitHub authorization was issued to.
+                userId: this.request.user?.uuid,
             },
             params.integrationType,
         );

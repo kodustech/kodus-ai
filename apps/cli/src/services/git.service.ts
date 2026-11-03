@@ -9,6 +9,7 @@ import {
     extractOrgRepoFromRemote,
     inferPlatformFromRemote,
 } from '../utils/git-remote.js';
+import { gitEnvironmentToKeep } from '../utils/git-environment.js';
 import { parseGitStatus } from '../utils/git-status.js';
 import { countDiffChanges } from '../utils/git-diff.js';
 import {
@@ -26,7 +27,7 @@ class GitService {
     private verbose: boolean = false;
 
     constructor() {
-        this.git = simpleGit();
+        this.git = simpleGit({ allowEnvironment: gitEnvironmentToKeep() });
     }
 
     setVerbose(verbose: boolean): void {

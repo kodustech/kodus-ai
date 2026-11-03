@@ -5,6 +5,8 @@ import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
     AcquireResult,
+    SandboxCircuitOpenError,
+    SandboxWaitAbortedError,
     SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
@@ -187,6 +189,7 @@ describe('CreateSandboxStage', () => {
                     prNumber: 42,
                     sandboxMetadata: { stage: 'review' },
                 }),
+                { signal: undefined },
             );
             // Null sandbox is stored in context — review runs in self-contained mode
             expect(result.sandboxHandle).toBeDefined();
@@ -213,6 +216,7 @@ describe('CreateSandboxStage', () => {
                     prNumber: 42,
                     sandboxMetadata: { stage: 'review' },
                 }),
+                { signal: undefined },
             );
 
             expect(result.sandboxHandle).toBeDefined();
@@ -268,6 +272,101 @@ describe('CreateSandboxStage', () => {
             // The review is moot, so it is not reported as one that lost its
             // checkout (#2066).
             expect(result.sandboxSuperseded).toBe(true);
+        });
+
+        it('continues without a sandbox on an open circuit, as a warn and not an error', async () => {
+            mockLeaseManager.acquire.mockRejectedValue(
+                new SandboxCircuitOpenError(
+                    '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:5',
+                    30_000,
+                ),
+            );
+            const context = createBaseContext({
+                changedFiles: [{ filename: 'test.ts' } as any],
+            });
+
+            const result = await (stage as any).executeStage(context);
+            const logger = (stage as any).logger;
+
+            expect(result.sandboxHandle).toBeUndefined();
+            expect(result.sandboxSuperseded).toBeUndefined();
+            expect(logger.error).not.toHaveBeenCalled();
+            expect(logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'Sandbox creation circuit open',
+                    ),
+                    metadata: expect.objectContaining({ prNumber: 42 }),
+                }),
+            );
+        });
+
+        it('logs an open circuit for a CLI review, which has no pull request', async () => {
+            mockLeaseManager.acquire.mockRejectedValue(
+                new SandboxCircuitOpenError('org:repo-1:cli:feat', 30_000),
+            );
+            const context = createBaseContext({
+                origin: 'cli',
+                pullRequest: undefined,
+                changedFiles: [{ filename: 'test.ts' } as any],
+            } as any);
+            (context as any).gitContext = {
+                branch: 'feat',
+                remote: 'https://github.com/org/test-repo.git',
+            };
+
+            const result = await (stage as any).executeStage(context);
+            const logger = (stage as any).logger;
+
+            expect(result).toBe(context);
+            expect(logger.error).not.toHaveBeenCalled();
+            expect(logger.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'circuit open for branch feat',
+                    ),
+                    metadata: expect.objectContaining({ prNumber: undefined }),
+                }),
+            );
+        });
+
+        it('marks the run partial when the job aborts while waiting for a sandbox', async () => {
+            mockLeaseManager.acquire.mockRejectedValue(
+                new SandboxWaitAbortedError(
+                    '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo-1:42',
+                    90_000,
+                    'a sandbox slot on this worker',
+                ),
+            );
+            const context = createBaseContext({
+                changedFiles: [{ filename: 'test.ts' } as any],
+            });
+
+            const result = await (stage as any).executeStage(context);
+
+            expect(result.sandboxHandle).toBeUndefined();
+            expect(result.errors).toEqual([
+                expect.objectContaining({
+                    severity: 'partial',
+                    error: expect.any(SandboxWaitAbortedError),
+                    metadata: { waitedMs: 90_000, prNumber: 42 },
+                }),
+            ]);
+            expect((stage as any).logger.error).not.toHaveBeenCalled();
+        });
+
+        it("passes the job's signal so a timed-out job leaves the capacity line", async () => {
+            const job = new AbortController();
+            const context = createBaseContext({
+                changedFiles: [{ filename: 'test.ts' } as any],
+            });
+            (context as any).parentSignal = job.signal;
+
+            await (stage as any).executeStage(context);
+
+            expect(mockLeaseManager.acquire.mock.calls[0][4]).toEqual({
+                signal: job.signal,
+            });
         });
 
         it('does not retry acquire itself — retry+backoff lives inside the lease manager', async () => {

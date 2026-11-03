@@ -67,7 +67,10 @@ describe('ImplementationVerificationProcessor', () => {
         };
         automationExecutionService = {
             findLatestExecutionByFilters: jest.fn().mockResolvedValue({
-                dataExecution: { lastAnalyzedCommit: { sha: 'reviewed-sha' } },
+                dataExecution: {
+                    lastAnalyzedCommit: { sha: 'reviewed-sha' },
+                    reviewedBaseBranch: 'develop',
+                },
             }),
         };
         suggestionService = {
@@ -131,6 +134,7 @@ describe('ImplementationVerificationProcessor', () => {
             expect.anything(),
             [],
             { sha: 'reviewed-sha' },
+            'develop',
         );
     });
 

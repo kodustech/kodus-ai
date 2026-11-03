@@ -85,9 +85,10 @@ function resolveTrialGithubPat(
 }
 
 export function createReviewCommand(): Command {
-    return new Command('review')
-        .description(
-            `Analyze modified files for code review
+    return (
+        new Command('review')
+            .description(
+                `Analyze modified files for code review
 
 Examples:
   kodus review
@@ -95,53 +96,57 @@ Examples:
   kodus review --branch main
   kodus review src/auth.ts src/config.ts
   kodus review --fail-on error`,
-        )
-        .argument('[files...]', 'Specific files to analyze')
-        .option('-s, --staged', 'Analyze only staged files')
-        .option('-c, --commit <sha>', 'Analyze diff from a specific commit')
-        .option(
-            '-b, --branch <name>',
-            'Compare current branch against specified branch (e.g., main)',
-        )
-        .option(
-            '--rules-only',
-            'Review using only configured rules (no general suggestions)',
-        )
-        .option('--fast', 'Fast mode: quicker analysis with lighter checks')
-        .option(
-            '--focus <text>',
-            'Steer the review at a specific area, e.g. --focus "the auth and session logic"',
-        )
-        // Heavy mode was removed. The flag stays, hidden, so a script that
-        // still passes it runs a normal review instead of failing.
-        .addOption(new Option('--heavy').hideHelp())
-        .option(
-            '-i, --interactive',
-            'Interactive mode: navigate and apply fixes',
-        )
-        .option('--fix', 'Automatically apply all fixable issues')
-        .option(
-            '--prompt-only',
-            'Output optimized for AI agents (minimal, structured)',
-        )
-        .option(
-            '--fail-on <severity>',
-            'Exit with code 1 if issues meet or exceed severity (info, warning, error, critical)',
-        )
-        .option('--context <file>', 'Custom context file to include in review')
-        .option(
-            '--fields <csv>',
-            'Select response fields (JSON/agent mode only), e.g. summary,issues.file',
-        )
-        .option(
-            '--github-pat <token>',
-            'GitHub Personal Access Token (read:repo). Trial users only — needed to clone private repos. Can also be set via KODUS_GITHUB_PAT env var. Held in memory only, never persisted.',
-        )
-        .option(
-            '--no-hunk',
-            'Skip the hunk TUI viewer and use the legacy interactive list (interactive sessions only)',
-        )
-        .action(reviewAction);
+            )
+            .argument('[files...]', 'Specific files to analyze')
+            .option('-s, --staged', 'Analyze only staged files')
+            .option('-c, --commit <sha>', 'Analyze diff from a specific commit')
+            .option(
+                '-b, --branch <name>',
+                'Compare current branch against specified branch (e.g., main)',
+            )
+            .option(
+                '--rules-only',
+                'Review using only configured rules (no general suggestions)',
+            )
+            .option('--fast', 'Fast mode: quicker analysis with lighter checks')
+            .option(
+                '--focus <text>',
+                'Steer the review at a specific area, e.g. --focus "the auth and session logic"',
+            )
+            // Heavy mode was removed. The flag stays, hidden, so a script that
+            // still passes it runs a normal review instead of failing.
+            .addOption(new Option('--heavy').hideHelp())
+            .option(
+                '-i, --interactive',
+                'Interactive mode: navigate and apply fixes',
+            )
+            .option('--fix', 'Automatically apply all fixable issues')
+            .option(
+                '--prompt-only',
+                'Output optimized for AI agents (minimal, structured)',
+            )
+            .option(
+                '--fail-on <severity>',
+                'Exit with code 1 if issues meet or exceed severity (info, warning, error, critical)',
+            )
+            .option(
+                '--context <file>',
+                'Custom context file to include in review',
+            )
+            .option(
+                '--fields <csv>',
+                'Select response fields (JSON/agent mode only), e.g. summary,issues.file',
+            )
+            .option(
+                '--github-pat <token>',
+                'GitHub Personal Access Token (read:repo). Trial users only — needed to clone private repos. Can also be set via KODUS_GITHUB_PAT env var. Held in memory only, never persisted.',
+            )
+            .option(
+                '--no-hunk',
+                'Skip the hunk TUI viewer and use the legacy interactive list (interactive sessions only)',
+            )
+            .action(reviewAction)
+    );
 }
 
 async function reviewAction(

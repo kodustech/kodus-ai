@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@components/ui/button";
 import {
@@ -18,12 +18,21 @@ import { useEffectOnce } from "@hooks/use-effect-once";
 import { useReactQueryInvalidateQueries } from "@hooks/use-invalidate-queries";
 import { createCodeManagementIntegration } from "@services/codeManagement/fetch";
 import { SETUP_PATHS } from "@services/setup";
+import { startGithubInstallationAuthorization } from "@services/setup/github-installation-authorization";
 import { useGetGithubOrganizationName } from "@services/setup/hooks";
 import { deleteCookie, getCookie } from "cookies-next/client";
 import { SaveIcon } from "lucide-react";
+import {
+    GITHUB_CODE_PARAM,
+    GITHUB_ERROR_PARAM,
+    GITHUB_STATE_PARAM,
+    githubAuthorizationErrorMessage,
+    needsGithubInstallationAuthorization,
+} from "src/core/integrations/github-installation-authorization";
 import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { PlatformType } from "src/core/types";
+import { apiErrorMessage } from "src/core/utils/api-error";
 import { ClientSideCookieHelpers } from "src/core/utils/cookie";
 import { useOrganizationContext } from "src/features/organization/_providers/organization-context";
 
@@ -60,16 +69,40 @@ export default function Redirect() {
         [],
     );
 
+    const code = searchParams.get("code");
+    const installationId = searchParams.get("installation_id");
+    const githubCode = searchParams.get(GITHUB_CODE_PARAM);
+    const githubState = searchParams.get(GITHUB_STATE_PARAM);
+    const githubError = searchParams.get(GITHUB_ERROR_PARAM);
+    // A GitHub installation is linked only with GitHub's authorization of
+    // the user (see github-installation-authorization); get it first.
+    const needsGithubAuthorization = useMemo(
+        () =>
+            needsGithubInstallationAuthorization({
+                integration: params.id,
+                installationId,
+                githubCode,
+                githubState,
+                githubError,
+            }),
+        [params.id, installationId, githubCode, githubState, githubError],
+    );
+
     useEffectOnce(() => {
-        ClientSideCookieHelpers("started-setup-from-new-setup-page").delete();
+        // This page mounts twice when it goes to GitHub's authorization and
+        // back. Keep the setup marker for the mount that links, or the user
+        // leaves the setup for the settings page.
+        if (!needsGithubAuthorization && !githubError) {
+            ClientSideCookieHelpers(
+                "started-setup-from-new-setup-page",
+            ).delete();
+        }
     });
 
     useEffect(() => {
         setHasMounted(true);
     }, []);
-
-    const code = searchParams.get("code");
-    const installationId = searchParams.get("installation_id");
+    const authorizingRef = useRef(false);
 
     useEffect(() => {
         const id =
@@ -83,7 +116,33 @@ export default function Redirect() {
     }, [params]);
 
     useEffect(() => {
-        if (hasMounted) {
+        if (
+            hasMounted &&
+            organizationId &&
+            needsGithubAuthorization &&
+            !authorizingRef.current
+        ) {
+            authorizingRef.current = true;
+            startGithubInstallationAuthorization(
+                installationId!,
+                `/setup/github?installation_id=${encodeURIComponent(installationId!)}`,
+            ).catch((err) => {
+                authorizingRef.current = false;
+                leaveAfterGithubFailure(apiErrorMessage(err));
+            });
+        }
+    }, [hasMounted, organizationId, needsGithubAuthorization, installationId]);
+
+    useEffect(() => {
+        if (hasMounted && githubError) {
+            leaveAfterGithubFailure(
+                githubAuthorizationErrorMessage(githubError),
+            );
+        }
+    }, [hasMounted, githubError]);
+
+    useEffect(() => {
+        if (hasMounted && !needsGithubAuthorization && !githubError) {
             const selectedTeamCookie = getCookie("selectedTeam") as any;
             const savedTeam =
                 selectedTeamCookie &&
@@ -121,6 +180,8 @@ export default function Redirect() {
         router,
         organizationId,
         hasMounted,
+        needsGithubAuthorization,
+        githubError,
     ]);
 
     useEffect(() => {
@@ -157,20 +218,40 @@ export default function Redirect() {
 
         if (integration === INTEGRATIONS_KEY.GITHUB) {
             if (organizationId) {
-                integrationResponse = await createCodeManagementIntegration({
-                    integrationType: PlatformType.GITHUB,
-                    code,
-                    organizationAndTeamData,
-                    installationId,
-                });
+                try {
+                    integrationResponse = await createCodeManagementIntegration(
+                        {
+                            integrationType: PlatformType.GITHUB,
+                            code,
+                            organizationAndTeamData,
+                            installationId,
+                            githubCode: githubCode ?? undefined,
+                            githubState: githubState ?? undefined,
+                        },
+                    );
+                } catch (err) {
+                    // A refused link (the installation belongs to another
+                    // organization, the authorization expired) is a 4xx:
+                    // say why and go back to where it started, instead of
+                    // leaving the user on "Connecting…".
+                    leaveAfterGithubFailure(apiErrorMessage(err));
+                    return;
+                }
             }
         } else if (integration === INTEGRATIONS_KEY.GITLAB) {
             if (organizationId) {
-                integrationResponse = await createCodeManagementIntegration({
-                    code,
-                    integrationType: PlatformType.GITLAB,
-                    organizationAndTeamData,
-                });
+                try {
+                    integrationResponse = await createCodeManagementIntegration(
+                        {
+                            code,
+                            integrationType: PlatformType.GITLAB,
+                            organizationAndTeamData,
+                        },
+                    );
+                } catch (err) {
+                    leaveAfterLinkFailure("GitLab", apiErrorMessage(err));
+                    return;
+                }
             }
         }
 
@@ -311,6 +392,36 @@ export default function Redirect() {
         }
     };
 
+    const cancelIntegration = () => {
+        setShowConfirmation(false);
+        deleteCookie("selectedTeam", { path: "/" });
+        ClientSideCookieHelpers("global-selected-team-id").set(teamId);
+        router.replace(`/settings/git`);
+    };
+
+    /** Say why GitHub was not connected and go back to where it started. */
+    function leaveAfterGithubFailure(message: string | undefined) {
+        leaveAfterLinkFailure("GitHub", message);
+    }
+
+    function leaveAfterLinkFailure(
+        provider: string,
+        message: string | undefined,
+    ) {
+        toast({
+            title: `Integration with ${provider} failed`,
+            description:
+                message ?? `${provider} could not be connected. Try again.`,
+            variant: "warning",
+        });
+        setIsIntegrating(false);
+        if (isSetup) {
+            router.replace("/setup/connecting-git-tool");
+        } else {
+            cancelIntegration();
+        }
+    }
+
     const handleConfirmIntegration = () => {
         setIsIntegrating(true);
         newIntegration();
@@ -325,17 +436,14 @@ export default function Redirect() {
         );
     }
 
-    const cancelIntegration = () => {
-        setShowConfirmation(false);
-        deleteCookie("selectedTeam", { path: "/" });
-        ClientSideCookieHelpers("global-selected-team-id").set(teamId);
-        router.replace(`/settings/git`);
-    };
-
     return (
         <Suspense>
             {(() => {
-                if (isIntegrating && integration) {
+                // Also while GitHub's authorization starts or comes back.
+                if (
+                    integration &&
+                    (isIntegrating || needsGithubAuthorization || githubError)
+                ) {
                     return (
                         <Page.Root>
                             <Page.Content className="flex-row items-center justify-center">

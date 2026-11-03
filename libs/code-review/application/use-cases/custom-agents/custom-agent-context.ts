@@ -5,6 +5,7 @@ import { ParametersKey } from '@libs/core/domain/enums';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import type { IParametersService } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import type { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { toBranchName } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
 /** The stored code review config of a team, or undefined when none exists. */
 export async function loadCodeReviewConfigValue(
@@ -41,5 +42,10 @@ export async function resolveRepositoryRef(params: {
         repository: { id: repository.id, name: repository.name },
     });
 
-    return { id: repository.id, name: repository.name, branch };
+    // Azure answers `refs/heads/main`; every other provider the plain name.
+    return {
+        id: repository.id,
+        name: repository.name,
+        branch: toBranchName(branch) ?? branch,
+    };
 }

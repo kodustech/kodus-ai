@@ -85,8 +85,13 @@ function makeService(getDiff: jest.Mock) {
                     destination: { commit: { hash: 'base' } },
                 },
             }),
-            getDiffStat: jest.fn().mockResolvedValue({ data: {} }),
+            // The incremental read pages the diffstat itself (readAllPages);
+            // answer it with the same list the test set for the full one
+            getDiffStat: jest.fn(async () => ({
+                data: { values: await (service as any).getPaginatedResults() },
+            })),
         },
+        hasNextPage: () => false,
         commits: { getDiff },
         source: { read },
     });

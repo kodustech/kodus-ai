@@ -64,7 +64,12 @@ import {
     CheckPolicies,
     PolicyGuard,
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
-import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
+import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
+import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
+import {
+    checkPermissions,
+    checkRepoPermissions,
+} from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
 import {
     ApiBearerAuth,
     ApiCreatedResponse,
@@ -128,6 +133,7 @@ export class PullRequestController implements OnApplicationShutdown {
         private readonly jwtService: JwtService,
         private readonly configService: ConfigService,
         private readonly eventEmitter: EventEmitter2,
+        private readonly authorizationService: AuthorizationService,
     ) {
         this.jwtConfig = this.configService.get<JWT>('jwtConfig');
     }
@@ -473,6 +479,8 @@ export class PullRequestController implements OnApplicationShutdown {
 
         const bearerToken = authHeader?.replace(/^Bearer\s+/i, '');
         let organizationId: string | undefined;
+        // Set on the JWT route only: a team CLI key is team-wide.
+        let jwtUser: Partial<IUser> | undefined;
 
         // Route 1: Team CLI key (via x-team-key or Bearer kodus_...)
         if (teamKey || bearerToken?.startsWith('kodus_')) {
@@ -515,6 +523,7 @@ export class PullRequestController implements OnApplicationShutdown {
             if (!organizationId) {
                 throw new UnauthorizedException('Invalid JWT payload');
             }
+            jwtUser = user;
         } else {
             throw new UnauthorizedException('Team API key or JWT required');
         }
@@ -547,6 +556,15 @@ export class PullRequestController implements OnApplicationShutdown {
         }
 
         const pr = prEntity.toObject();
+
+        if (jwtUser) {
+            await this.authorizationService.ensure({
+                user: jwtUser,
+                action: Action.Read,
+                resource: ResourceType.PullRequests,
+                repoIds: [String(pr.repository?.id)],
+            });
+        }
         const { response, suggestionsCount } =
             await this.getPullRequestSuggestionsUseCase.execute({
                 organizationId,
@@ -655,9 +673,10 @@ export class PullRequestController implements OnApplicationShutdown {
     @ApiBearerAuth('jwt')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
-        checkPermissions({
+        checkRepoPermissions({
             action: Action.Read,
             resource: ResourceType.PullRequests,
+            repo: { key: { query: 'repositoryId' } },
         }),
     )
     @ApiOperation({
@@ -723,6 +742,19 @@ export class PullRequestController implements OnApplicationShutdown {
         repositories = repositories.filter(
             (r: any) => r && (r.selected === true || r.isSelected === true),
         );
+
+        // A repo-scoped member only backfills their own repositories.
+        const repositoryScope =
+            await this.authorizationService.getRepositoryScope({
+                user: this.request.user,
+                action: Action.Create,
+                resource: ResourceType.PullRequests,
+            });
+        if (repositoryScope !== null) {
+            repositories = repositories.filter((r: any) =>
+                repositoryScope.includes(String(r.id)),
+            );
+        }
 
         if (repositoryIds && repositoryIds.length > 0) {
             repositories = repositories.filter(

@@ -8,7 +8,7 @@ tag: 'beta'
 
 ## Skills & docs
 
-Las skills y los docs son guías que ya viven en tu repositorio. Kodus no las copia: las lee de la **rama de destino del pull request** en cada revisión. Así, los cambios en esa rama aplican sin volver a la configuración, y un pull request no puede cambiar la regla que lo evalúa.
+Las skills y los docs son guías que ya viven en tu repositorio. Kodus no las copia: las lee de la **rama de destino del pull request** en cada revisión. Así, los cambios en esa rama aplican sin volver a la configuración, y un pull request no puede cambiar la regla que lo evalúa. Una guía también puede venir de otro repositorio, como un repositorio de reglas compartido (consulta **Desde otro repositorio** más abajo).
 
 | | Skill | Doc |
 | --- | --- | --- |
@@ -54,6 +54,22 @@ Hay dos lugares para vincular una skill o un doc:
 
 En el nivel global, la página Skills & docs solo acepta rutas escritas a mano. Cada repositorio se lee por separado; abre la configuración de un repositorio para ver si cada ruta existe ahí.
 
+### Citados por hallazgos descartados
+
+Cuando las revisiones descartan hallazgos porque citan un archivo que el agente no sigue ("is not a guide linked to this review"), **Skills & docs** del agente muestra ese archivo en **Cited by dropped findings**, con cuántos hallazgos se descartaron. **Follow** lo vincula, desde este repositorio o desde el repositorio donde está. Solo se ofrecen archivos que existen.
+
+### Desde otro repositorio
+
+Es común que un equipo mantenga sus reglas en un repositorio y las aplique en varios. Elígelo en **From** al añadir un skill o doc en la página de un agente: primero aparecen los repositorios vinculados, y **Other repository…** lista todos los repositorios conectados a Kodus (seleccionados en Git settings). Si el repositorio de reglas no aparece, conéctalo ahí primero.
+
+- Una guía de otro repositorio se lee en la **rama por defecto** de ese repositorio, o en la rama o tag que definas con **Use a branch or tag instead**. Una rama o tag por repositorio. Un pull request nunca lo cambia.
+- Es solo para custom agents. La revisión principal lee las guías del repositorio revisado y sus instrucciones de agentes de código, no las de otro repositorio, por eso la página Skills & docs no ofrece **Main review** para ella.
+- Se carga como una guía del repositorio revisado, en cada review, sin sandbox y aunque el cambio no toque el otro repositorio.
+- El agente la cita como `owner/repo:ruta`, y el comentario enlaza el archivo.
+- Cuando el repositorio de reglas es privado y el revisado es público, el comentario nombra el archivo sin citar el texto.
+
+Cuando las instrucciones de un agente nombran un repositorio vinculado del que no sigue nada, su página lo indica y ofrece **Browse its rules**.
+
 <Warning>
   Un archivo marcado como **Also a Kody Rules source** ya alimenta las Kody Rules. Vincularlo también a un agente puede hacer que la misma regla comente dos veces.
 </Warning>
@@ -78,6 +94,8 @@ Un hallazgo de convención debe **citar** la regla que aplica. Kodus verifica la
 **Rule** (`docs/ledger.md`):
 > A reversal is a new entry, never an UPDATE of the original.
 ```
+
+Una regla de otro repositorio se cita como `owner/repo:ruta`, con un enlace al archivo en la rama de la que se leyó.
 
 ## Plugins (MCP)
 
