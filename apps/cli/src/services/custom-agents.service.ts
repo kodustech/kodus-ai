@@ -109,6 +109,17 @@ export type CustomAgentTemplateId =
 export const TRY_POLL_INTERVAL_MS = 4000;
 // A run on a large pull request takes minutes; past this the run is lost (its
 // worker died) rather than slow, and the CLI must not poll forever.
+/** JSON with object keys sorted, as the API fingerprints agent lists. */
+function stableStringify(value: unknown): string {
+    return JSON.stringify(value, (_key, entry) =>
+        entry && typeof entry === 'object' && !Array.isArray(entry)
+            ? Object.fromEntries(
+                  Object.entries(entry).sort(([a], [b]) => a.localeCompare(b)),
+              )
+            : entry,
+    );
+}
+
 export const PLAN_NOT_ALLOWED_MESSAGE =
     "Custom agents and skills & docs run on the Teams and Enterprise plans and during the trial. This organization's plan left the change out, so nothing was saved.";
 
@@ -1092,16 +1103,28 @@ class CustomAgentsService {
         view: LevelView,
         next: { agents?: CustomAgent[]; knowledge?: KnowledgeItem[] },
     ): Promise<void> {
+        // Compared the way the API fingerprints a list (stableStringify in
+        // libs/code-review/domain/custom-agents/revision.ts): a save that
+        // only reorders keys or adds nothing is a no-op there too, and its
+        // unchanged revision must not read as the plan dropping it.
         const changed = (
             [
-                ['customAgents', next.agents, view.agents],
-                ['knowledge', next.knowledge, view.knowledge],
+                [
+                    'customAgents',
+                    next.agents?.map(prepareAgentForSave),
+                    view.agents.map(prepareAgentForSave),
+                ],
+                [
+                    'knowledge',
+                    next.knowledge && prepareKnowledgeForSave(next.knowledge),
+                    prepareKnowledgeForSave(view.knowledge),
+                ],
             ] as const
         )
             .filter(
                 ([, sent, before]) =>
                     sent !== undefined &&
-                    JSON.stringify(sent) !== JSON.stringify(before),
+                    stableStringify(sent) !== stableStringify(before),
             )
             .map(([field]) => field);
         if (changed.length === 0) {
@@ -1419,15 +1442,21 @@ class CustomAgentsService {
             unavailable =
                 'Skills and docs are files of each repository. Pass a repository to check that each one exists there.';
         } else if (target.check !== false) {
+            let failure = '';
             const report = await customAgentsApi
                 .resolve(ctx.accessToken, {
                     teamId: ctx.teamId,
                     repositoryId: view.repositoryId,
                     knowledge: prepareKnowledgeForSave(view.knowledge),
                 })
-                .catch(() => null);
+                .catch((error: unknown) => {
+                    // Keep the API's reason: a 403, a rate limit and a 5xx
+                    // call for different things.
+                    failure = error instanceof Error ? error.message : '';
+                    return null;
+                });
             if (!report) {
-                unavailable = "Couldn't read the repository right now.";
+                unavailable = `Couldn't read the repository right now${failure ? `: ${failure}` : '.'}`;
             } else if (report.knowledge.status === 'ok') {
                 reports = report.knowledge.items;
                 branch = report.repository?.branch;

@@ -100,7 +100,10 @@ function printProductivity(metrics: Record<string, unknown>): void {
     );
 }
 
-function printKodusReview(metrics: Record<string, unknown>): void {
+function printKodusReview(
+    metrics: Record<string, unknown>,
+    failed: Set<string>,
+): void {
     const weekly = (metrics.implementationRateWeekly ?? []) as Array<{
         sent?: number;
         implemented?: number;
@@ -116,8 +119,11 @@ function printKodusReview(metrics: Record<string, unknown>): void {
         { sent: 0, implemented: 0 },
     );
     const rate = totals.sent > 0 ? totals.implemented / totals.sent : null;
+    // A failed series sums to zero: say it is unavailable instead.
     cliInfo(
-        `Suggestions: ${totals.sent} sent, ${totals.implemented} implemented (${formatPercent(rate)})`,
+        failed.has('implementationRateWeekly')
+            ? 'Suggestions: unavailable'
+            : `Suggestions: ${totals.sent} sent, ${totals.implemented} implemented (${formatPercent(rate)})`,
     );
 
     const ignored = metrics.ignoredCriticals as { count?: number } | null;
@@ -157,7 +163,16 @@ function printKodusReview(metrics: Record<string, unknown>): void {
     );
 }
 
-function printIntent(metrics: Record<string, unknown>): void {
+function printIntent(
+    metrics: Record<string, unknown>,
+    failed: Set<string>,
+): void {
+    if (failed.has('intent')) {
+        cliInfo(
+            chalk.yellow('Delivered-as-asked data is unavailable right now.'),
+        );
+        return;
+    }
     const intent = metrics.intent as {
         pullRequests?: number;
         metRate?: number;
@@ -185,7 +200,7 @@ function printIntent(metrics: Record<string, unknown>): void {
     cliInfo(
         `Not in the task ${formatPercent(intent.notInTaskRate)}, without a task ${formatPercent(intent.withoutTaskRate)}`,
     );
-    for (const row of intent.byAuthor ?? []) {
+    for (const row of Array.isArray(intent.byAuthor) ? intent.byAuthor : []) {
         cliInfo(
             `  ${row.author}: ${row.pullRequests} PRs, ${formatPercent(row.metRate)} as asked`,
         );
@@ -197,7 +212,14 @@ function printIntent(metrics: Record<string, unknown>): void {
     );
 }
 
-function printCodeAreas(metrics: Record<string, unknown>): void {
+function printCodeAreas(
+    metrics: Record<string, unknown>,
+    failed: Set<string>,
+): void {
+    if (failed.has('areaRiskMap')) {
+        cliInfo(chalk.yellow('The code area map is unavailable right now.'));
+        return;
+    }
     const response = metrics.areaRiskMap as {
         rankedAreaPaths?: string[];
         map?: {
@@ -209,12 +231,14 @@ function printCodeAreas(metrics: Record<string, unknown>): void {
             }>;
         };
     } | null;
+    const directories = response?.map?.directDirectories;
+    const rankedPaths = response?.rankedAreaPaths;
     const byPath = new Map(
-        (response?.map?.directDirectories ?? []).map(
+        (Array.isArray(directories) ? directories : []).map(
             (area) => [area.path, area] as const,
         ),
     );
-    const ranked = (response?.rankedAreaPaths ?? [])
+    const ranked = (Array.isArray(rankedPaths) ? rankedPaths : [])
         .map((path) => byPath.get(path))
         .filter((area): area is NonNullable<typeof area> => !!area);
 
@@ -230,6 +254,7 @@ function printCodeAreas(metrics: Record<string, unknown>): void {
 }
 
 function printResult(result: CockpitTabResult): void {
+    const failed = new Set(Object.keys(result.errors));
     const scope = result.repository
         ? result.repository.fullName
         : 'all repositories';
@@ -242,16 +267,15 @@ function printResult(result: CockpitTabResult): void {
     if (result.tab === 'productivity') {
         printProductivity(result.metrics);
     } else if (result.tab === 'kodus-review') {
-        printKodusReview(result.metrics);
+        printKodusReview(result.metrics, failed);
     } else if (result.tab === 'intent') {
-        printIntent(result.metrics);
+        printIntent(result.metrics, failed);
     } else {
-        printCodeAreas(result.metrics);
+        printCodeAreas(result.metrics, failed);
     }
 
-    const failed = Object.keys(result.errors);
-    if (failed.length > 0) {
-        cliInfo(chalk.yellow(`Unavailable: ${failed.join(', ')}`));
+    if (failed.size > 0) {
+        cliInfo(chalk.yellow(`Unavailable: ${[...failed].join(', ')}`));
     }
     if (result.hidden.length > 0) {
         cliInfo(

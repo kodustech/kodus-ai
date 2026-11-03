@@ -524,6 +524,24 @@ class ReviewSettingsService {
             buildConfigDelta(setting.key, leaf.overriddenValue),
         );
 
+        // Same check as set: on a plan below Teams the API answers success
+        // and keeps the override of a plan-gated key.
+        if (!isCentralizedPr(result) && PLAN_GATED_KEYS.has(setting.key)) {
+            const after = await this.loadScopeConfigs(ctx, scope, {
+                includeFileOverlay: false,
+            });
+            const stored = readLeaf(after.configs, setting.key);
+            if (
+                stored?.level === scope.level &&
+                JSON.stringify(stored.value) === JSON.stringify(leaf.value)
+            ) {
+                throw new CommandError(
+                    'API_REQUEST_FAILED',
+                    `'${setting.key}' runs on the Teams and Enterprise plans and during the trial. This organization's plan left the change out, so the override is still in place.`,
+                );
+            }
+        }
+
         return {
             team: ctx.teamName,
             scope,

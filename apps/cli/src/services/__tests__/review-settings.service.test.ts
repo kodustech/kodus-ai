@@ -628,6 +628,45 @@ describe('reviewSettingsService', () => {
     });
 
     describe('unset', () => {
+        it('fails an unset the plan left out, instead of reporting it reverted', async () => {
+            const base = FORMATTED as any;
+            // The override is still there after the save.
+            configApi.getFormattedCodeReviewParameter.mockResolvedValue({
+                ...base,
+                configValue: {
+                    ...base.configValue,
+                    repositories: base.configValue.repositories.map(
+                        (repo: any) =>
+                            repo.id === 'repo-1'
+                                ? {
+                                      ...repo,
+                                      configs: {
+                                          ...repo.configs,
+                                          linkedRepositories: {
+                                              value: [
+                                                  { repository: 'acme/docs' },
+                                              ],
+                                              level: 'repository',
+                                              overriddenValue: [],
+                                              overriddenLevel: 'default',
+                                          },
+                                      },
+                                  }
+                                : repo,
+                    ),
+                },
+            } as never);
+
+            await expect(
+                reviewSettingsService.unset(
+                    { repository: 'kodus-ai' },
+                    'linkedRepositories',
+                ),
+            ).rejects.toMatchObject({
+                message: expect.stringContaining('override is still in place'),
+            });
+        });
+
         it('looks for the override in the saved config, not the file overlay', async () => {
             await reviewSettingsService.unset(
                 { repository: 'kodus-ai' },

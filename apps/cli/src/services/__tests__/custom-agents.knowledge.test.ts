@@ -133,6 +133,18 @@ describe('customAgentsService skills & docs', () => {
         api.save.mockResolvedValue({});
     });
 
+    it("keeps the API's reason when the repository can't be read", async () => {
+        api.resolve.mockRejectedValue(new Error('Too many requests'));
+
+        const result = await customAgentsService.listKnowledge({
+            repo: 'kodus-ai',
+        });
+
+        expect(JSON.stringify(result)).toContain(
+            "Couldn't read the repository right now: Too many requests",
+        );
+    });
+
     it('lists the items of a repository with who follows them and the branch report', async () => {
         api.resolve.mockResolvedValue({
             repository: { id: 'repo-1', name: 'kodus-ai', branch: 'main' },

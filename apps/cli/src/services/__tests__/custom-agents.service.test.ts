@@ -149,6 +149,20 @@ describe('customAgentsService', () => {
         expect(api.getCodeReviewConfig).not.toHaveBeenCalled();
     });
 
+    it('does not read an unchanged list as the plan dropping it', async () => {
+        // Same content (instructions set to what is stored): the API keeps
+        // the same fingerprint, which is a no-op, not a plan refusal.
+        api.getCodeReviewConfig.mockReset().mockResolvedValue(config());
+
+        await expect(
+            customAgentsService.update(
+                'security',
+                { instructions: 'Trace untrusted input.' },
+                {},
+            ),
+        ).resolves.toBeDefined();
+    });
+
     it('fails when the plan left the agents out of the save', async () => {
         // The API answers success but writes nothing: the list reads back
         // with the same fingerprint.
