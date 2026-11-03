@@ -241,6 +241,15 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
                     orphanedBaseCommit.interdiff = {
                         fallback: 'previous_diff_unavailable',
                     };
+                } else if (interdiff.revertedFiles.length) {
+                    // #2319: the push removed a change the last review had
+                    // seen. An interdiff only lists what the new diff adds, so
+                    // the removal cannot be read from it: review the whole
+                    // current PR instead of skipping with "no changes".
+                    forceFullRerun = true;
+                    orphanedBaseCommit.interdiff = {
+                        fallback: 'interdiff_cannot_represent_removals',
+                    };
                 } else {
                     rebaseInterdiffFiles = interdiff.files;
                     orphanedBaseCommit.interdiff = {

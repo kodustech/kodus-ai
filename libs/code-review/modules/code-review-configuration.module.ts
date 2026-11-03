@@ -1,3 +1,4 @@
+import { CustomAgentRunsModule } from '@libs/code-review/modules/custom-agent-runs.module';
 import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { ContextReferenceModule } from '@libs/code-review/modules/contextReference.module';
 import { PromptsModule } from '@libs/code-review/modules/prompts.module';
@@ -32,6 +33,7 @@ import { CustomAgentsEngineModule } from './custom-agents-engine.module';
 
 @Module({
     imports: [
+        CustomAgentRunsModule,
         PermissionsModule,
         forwardRef(() => ParametersModule),
         forwardRef(() => OrganizationParametersModule),

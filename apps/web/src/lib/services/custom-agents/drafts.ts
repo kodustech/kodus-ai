@@ -71,10 +71,9 @@ export const isPinnedInstall = (install: string): boolean => {
     const [, ...rest] = install.trim().split(/\s+/);
     const specs = rest
         .filter((token) => !token.startsWith("-"))
-        .filter((token, index, all) =>
-            all.slice(0, index + 1).every((t) => INSTALL_VERBS.has(t))
-                ? false
-                : true,
+        .filter(
+            (token, index, all) =>
+                !all.slice(0, index + 1).every((t) => INSTALL_VERBS.has(t)),
         );
     return specs.length > 0 && specs.every((spec) => PINNED_SPEC.test(spec));
 };
@@ -426,6 +425,29 @@ export const agentUsageLine = (
     ].join(" · ");
 };
 
+type KnowledgeIdentity = Pick<KnowledgeItem, "path" | "kind" | "repository">;
+
+/** One skill or doc is the same entry when its repository, path and kind
+ *  match: the same path in two repositories is two entries. */
+export const sameKnowledge = (a: KnowledgeIdentity, b: KnowledgeIdentity) =>
+    a.path === b.path &&
+    a.kind === b.kind &&
+    (a.repository ?? "").toLowerCase() === (b.repository ?? "").toLowerCase();
+
+/** How a skill or doc is named once read: its path, or `owner/repo:path`. */
+export const knowledgeSourcePath = (
+    item: Pick<KnowledgeItem, "path" | "repository">,
+) => (item.repository ? `${item.repository}:${item.path}` : item.path);
+
+/** Stable key for lists: kind, repository and path. */
+/** One key per skill or doc, as sameKnowledge compares: the repository in
+ *  any case. */
+export const knowledgeKey = (item: KnowledgeIdentity) =>
+    `${item.kind}:${knowledgeSourcePath({
+        ...item,
+        ...(item.repository && { repository: item.repository.toLowerCase() }),
+    })}`;
+
 const sameTarget = (a: KnowledgeLinkTarget, b: KnowledgeLinkTarget) =>
     typeof a === "string" || typeof b === "string"
         ? a === b
@@ -511,15 +533,21 @@ export const knowledgeBudgetNote = (
  */
 export const setKnowledgeLink = (
     knowledge: KnowledgeItem[],
-    item: Pick<KnowledgeItem, "path" | "kind">,
+    item: Pick<KnowledgeItem, "path" | "kind" | "repository" | "ref">,
     target: KnowledgeLinkTarget,
     linked: boolean,
 ): KnowledgeItem[] => {
-    const index = knowledge.findIndex(
-        (entry) => entry.path === item.path && entry.kind === item.kind,
-    );
+    const index = knowledge.findIndex((entry) => sameKnowledge(entry, item));
     const current: KnowledgeItem =
-        index >= 0 ? knowledge[index] : { ...item, linkedTo: [] };
+        index >= 0
+            ? knowledge[index]
+            : {
+                  path: item.path,
+                  kind: item.kind,
+                  ...(item.repository && { repository: item.repository }),
+                  ...(item.repository && item.ref && { ref: item.ref }),
+                  linkedTo: [],
+              };
     const others = current.linkedTo.filter(
         (entry) => !sameTarget(entry, target),
     );
@@ -565,7 +593,7 @@ export const knowledgeItemFromPath = (
         : { path, kind: "skill" };
 };
 
-type NamedKnowledge = Pick<KnowledgeItem, "path" | "kind"> & { name?: string };
+type NamedKnowledge = KnowledgeIdentity & { name?: string };
 
 /** What one agent follows, skills first, each with the name it shows. */
 export const followedBy = (
@@ -574,10 +602,15 @@ export const followedBy = (
     named: NamedKnowledge[] = [],
 ) => {
     const linked = knowledge.filter((item) => isLinked(item, { agentId }));
+    // Keyed as sameKnowledge compares: the repository in any case.
+    const keyOf = (item: KnowledgeIdentity) =>
+        `${item.kind}:${(item.repository ?? "").toLowerCase()}:${item.path}`;
+    const names = new Map<string, string | undefined>();
+    for (const entry of named) {
+        if (!names.has(keyOf(entry))) names.set(keyOf(entry), entry.name);
+    }
     const nameOf = (item: KnowledgeItem) =>
-        named.find(
-            (entry) => entry.path === item.path && entry.kind === item.kind,
-        )?.name ??
+        names.get(keyOf(item)) ??
         (item.kind === "skill" ? skillFolderName(item.path) : item.path);
     return {
         skills: linked
@@ -619,10 +652,152 @@ export const agentStatusLine = (
             : `Runs on ${scopeLabel(agent)}`;
     // Usage is counted per repository.
     if (isGlobal) return where;
+    const failed = status?.health?.failedPullRequests ?? 0;
+    const failedNote = failed ? ` · failed on ${plural(failed, "PR")}` : "";
     if (!status || status.pullRequests === 0) {
-        return `${where} · no findings in ${windowDays} days`;
+        // Runs that all failed left no finding: say so instead of "nothing
+        // to report", which reads the same as a healthy quiet agent.
+        return status?.health?.runs
+            ? `${where} · ${plural(status.health.runs, "run")}, nothing posted${failedNote} in ${windowDays} days`
+            : `${where} · no findings in ${windowDays} days`;
     }
-    return `${where} · ${plural(status.pullRequests, "PR")} · ${status.posted} posted in ${windowDays} days`;
+    return `${where} · ${plural(status.pullRequests, "PR")} · ${status.posted} posted${failedNote} in ${windowDays} days`;
+};
+
+/** What fixes a failing agent: its model, or the AI provider's account. */
+export type RunProblemAction = "model" | "providers";
+
+const RUN_PROBLEMS: Array<{
+    match: RegExp;
+    detail: string;
+    action?: RunProblemAction;
+}> = [
+    {
+        match: /^MODEL_NOT_FOUND\b/,
+        detail: "The model it is set to no longer exists on your AI provider.",
+        action: "model",
+    },
+    {
+        match: /^MODEL_ACCESS_DENIED\b/,
+        detail: "Your AI provider account can't use the model it is set to.",
+        action: "model",
+    },
+    {
+        match: /^CONTEXT_OVERFLOW\b/,
+        detail: "The model's context window is too small for this agent.",
+        action: "model",
+    },
+    {
+        match: /^AUTH_INVALID\b/,
+        detail: "Your AI provider rejected the key.",
+        action: "providers",
+    },
+    {
+        match: /^QUOTA_EXCEEDED\b/,
+        detail: "Your AI provider account is out of credits or over its limit.",
+        action: "providers",
+    },
+    {
+        match: /^RATE_LIMIT\b/,
+        detail: "Your AI provider rate-limited the runs.",
+        action: "providers",
+    },
+    {
+        match: /^TRANSIENT\b/,
+        detail: "Your AI provider was unavailable. The next review tries again.",
+    },
+    {
+        match: /^max-steps$/,
+        detail: "It hit its step limit before finishing. Narrower files or instructions help.",
+    },
+    {
+        match: /^truncated$/,
+        detail: "The model's answer was cut off.",
+        action: "model",
+    },
+    {
+        match: /^no-result$/,
+        detail: "It finished without reporting its findings.",
+    },
+];
+
+/**
+ * What the agent page says when the newest runs did not finish: how many in
+ * a row, why, and what fixes it. Nothing once the newest run finished.
+ */
+export const runProblem = (
+    health: CustomAgentStatus["health"],
+): {
+    tone: "danger" | "warning";
+    title: string;
+    detail: string;
+    action?: RunProblemAction;
+} | null => {
+    if (!health || health.streak === 0 || health.last.status === "ran") {
+        return null;
+    }
+    const failed = health.last.status === "failed";
+    const runs =
+        health.streak === 1 ? "The last run" : `The last ${health.streak} runs`;
+    const known = RUN_PROBLEMS.find((p) =>
+        p.match.test(health.last.reason ?? ""),
+    );
+    return {
+        tone: failed ? "danger" : "warning",
+        title: `${runs} ${failed ? "failed" : "stopped before finishing"}`,
+        detail:
+            known?.detail ??
+            (failed
+                ? "The run failed before posting anything."
+                : "It stopped before finishing."),
+        ...(known?.action && { action: known.action }),
+    };
+};
+
+/** Guide files and skill folders a cited path can name. */
+const citedKnowledge = (
+    path: string,
+    repository?: string,
+): KnowledgeIdentity => {
+    const skill = /^(.*)\/SKILL\.md$/i.exec(path);
+    return {
+        path: skill ? skill[1] : path,
+        kind: skill ? "skill" : "doc",
+        ...(repository && { repository }),
+    };
+};
+
+/**
+ * The skills and docs a file a finding cited can be, most likely first:
+ * `owner/repo:path` names one; `repo/path` or `owner/repo/path` names a file
+ * of that repository; a bare path is this repository's, else one of the
+ * repositories its skills and docs come from. The check of each candidate
+ * decides which one exists.
+ */
+export const citationCandidates = (
+    file: string,
+    repositories: string[],
+): KnowledgeIdentity[] => {
+    const cited = file.replace(/^\/+/, "");
+    const qualified = /^([^:\s]+\/[^:\s]+):(.+)$/.exec(cited);
+    if (qualified) return [citedKnowledge(qualified[2], qualified[1])];
+    const prefixed = repositories.flatMap((repository) => {
+        const full = `${repository.toLowerCase()}/`;
+        const name = `${(repository.split("/").pop() ?? "").toLowerCase()}/`;
+        const lower = cited.toLowerCase();
+        if (lower.startsWith(full)) {
+            return [citedKnowledge(cited.slice(full.length), repository)];
+        }
+        if (name !== "/" && lower.startsWith(name)) {
+            return [citedKnowledge(cited.slice(name.length), repository)];
+        }
+        return [];
+    });
+    return [
+        ...prefixed,
+        citedKnowledge(cited),
+        ...repositories.map((repository) => citedKnowledge(cited, repository)),
+    ];
 };
 
 const PLUGIN_NAMES_BY_ID: Record<string, string> = {
@@ -682,23 +857,22 @@ export const agentChips = (
  */
 export const setAgentKnowledge = (
     knowledge: KnowledgeItem[],
-    item: Pick<KnowledgeItem, "path" | "kind">,
+    item: Pick<KnowledgeItem, "path" | "kind" | "repository" | "ref">,
     agentId: string,
     on: boolean,
 ): KnowledgeItem[] => {
     const next = setKnowledgeLink(knowledge, item, { agentId }, on);
     if (on) return next;
     return next.filter(
-        (entry) =>
-            entry.linkedTo.length > 0 ||
-            entry.path !== item.path ||
-            entry.kind !== item.kind,
+        (entry) => entry.linkedTo.length > 0 || !sameKnowledge(entry, item),
     );
 };
 
 export type KnowledgeChoice = {
     path: string;
     kind: KnowledgeItem["kind"];
+    repository?: string;
+    ref?: string;
     name?: string;
     linked: boolean;
     kodyRuleSource: boolean;
@@ -713,32 +887,37 @@ export const knowledgeChoices = (
     candidates: KnowledgeCandidate[],
     agentId: string,
 ): KnowledgeChoice[] => {
-    const found = (item: Pick<KnowledgeItem, "path" | "kind">) =>
-        candidates.find(
-            (candidate) =>
-                candidate.path === item.path && candidate.kind === item.kind,
-        );
+    // Keyed as sameKnowledge compares: the repository in any case.
+    const keyOf = (item: KnowledgeIdentity) =>
+        `${item.kind}:${(item.repository ?? "").toLowerCase()}:${item.path}`;
+    const byKey = new Map<string, KnowledgeCandidate>();
+    for (const candidate of candidates) {
+        if (!byKey.has(keyOf(candidate)))
+            byKey.set(keyOf(candidate), candidate);
+    }
+    const found = (item: KnowledgeIdentity) => byKey.get(keyOf(item));
     const registered = knowledge.map((item) => ({
         path: item.path,
         kind: item.kind,
+        ...(item.repository && { repository: item.repository }),
+        ...(item.ref && { ref: item.ref }),
         name: found(item)?.name,
         linked: isLinked(item, { agentId }),
         kodyRuleSource: found(item)?.kodyRuleSource ?? false,
     }));
-    const taken = new Set(knowledge.map((item) => `${item.kind}:${item.path}`));
+    const taken = new Set(knowledge.map(knowledgeKey));
     const discovered = candidates
+        // The first candidate of each key, which byKey kept.
         .filter(
-            (candidate, index, all) =>
-                !taken.has(`${candidate.kind}:${candidate.path}`) &&
-                all.findIndex(
-                    (other) =>
-                        other.path === candidate.path &&
-                        other.kind === candidate.kind,
-                ) === index,
+            (candidate) =>
+                !taken.has(knowledgeKey(candidate)) &&
+                byKey.get(keyOf(candidate)) === candidate,
         )
         .map((candidate) => ({
             path: candidate.path,
             kind: candidate.kind,
+            ...(candidate.repository && { repository: candidate.repository }),
+            ...(candidate.ref && { ref: candidate.ref }),
             name: candidate.name,
             linked: false,
             kodyRuleSource: candidate.kodyRuleSource,
@@ -904,7 +1083,43 @@ export const prepareAgentsForSave = (agents: CustomAgent[]): CustomAgent[] =>
 export const prepareKnowledgeForSave = (
     knowledge: KnowledgeItem[],
 ): KnowledgeItem[] =>
-    knowledge.map(({ path, kind, linkedTo }) => ({ path, kind, linkedTo }));
+    knowledge.map(({ path, kind, repository, ref, linkedTo }) => ({
+        path,
+        kind,
+        ...(repository && { repository }),
+        ...(repository && ref && { ref }),
+        linkedTo,
+    }));
+
+/**
+ * Repositories the agent's instructions name (as `owner/repo` or by the
+ * repository's name alone) that it follows no skill or doc from. A team that
+ * writes "read the rules in our rules repository" usually means those rules
+ * to back its findings, and a finding can only cite what the agent follows.
+ */
+export const mentionedButNotFollowed = (
+    instructions: string,
+    repositories: string[],
+    knowledge: KnowledgeItem[],
+    agentId: string,
+): string[] => {
+    const text = instructions.toLowerCase();
+    const followed = new Set(
+        knowledge
+            .filter((item) => item.repository && isLinked(item, { agentId }))
+            .map((item) => item.repository!.toLowerCase()),
+    );
+    return repositories.filter((repository) => {
+        const full = repository.toLowerCase();
+        const name = full.split("/").pop() ?? full;
+        const named =
+            text.includes(full) ||
+            new RegExp(
+                `(^|[^a-z0-9_.-])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z0-9_-])`,
+            ).test(text);
+        return named && !followed.has(full);
+    });
+};
 
 export const withoutSecretValues = (agent: CustomAgent): CustomAgent => {
     const [prepared] = prepareAgentsForSave([agent]);

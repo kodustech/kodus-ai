@@ -70,7 +70,7 @@ describe('classifySeverity — input assembly & fail-safe degradation', () => {
 
         await classifySeverity(suggestions, { severity: { flags: custom } } as any);
 
-        expect(buildMock).toHaveBeenCalledWith(suggestions, custom);
+        expect(buildMock).toHaveBeenCalledWith(suggestions, custom, undefined);
     });
 
     it('falls back to DEFAULT_SEVERITY_FLAGS when no flags are configured', async () => {
@@ -78,7 +78,7 @@ describe('classifySeverity — input assembly & fail-safe degradation', () => {
 
         await classifySeverity(suggestions, undefined);
 
-        expect(buildMock).toHaveBeenCalledWith(suggestions, DEFAULT_SEVERITY_FLAGS);
+        expect(buildMock).toHaveBeenCalledWith(suggestions, DEFAULT_SEVERITY_FLAGS, undefined);
     });
 
     it('threads the BYOK slot and the org id into the model call', async () => {

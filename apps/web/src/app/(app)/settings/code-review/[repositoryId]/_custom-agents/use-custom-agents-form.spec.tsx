@@ -116,7 +116,9 @@ const Probe = () => {
         <div>
             <span data-testid="dirty">{isDirty ? "unsaved" : "saved"}</span>
             <span data-testid="inherited">{inheritedAgents.length}</span>
-            <button onClick={() => setAgents([...agents, sprinkler])}>add</button>
+            <button onClick={() => setAgents([...agents, sprinkler])}>
+                add
+            </button>
             <button
                 onClick={() =>
                     setAgents(
@@ -129,7 +131,13 @@ const Probe = () => {
                 {agents.map((agent) => agent.name).join(",")}
             </span>
             <span data-testid="review-knowledge">
-                {reviewKnowledge.map((item) => item.path).join(",")}
+                {reviewKnowledge
+                    .map((item) =>
+                        item.repository
+                            ? `${item.repository}:${item.path}`
+                            : item.path,
+                    )
+                    .join(",")}
             </span>
             <span data-testid="linkable">
                 {linkableAgents.map((agent) => agent.name).join(",")}
@@ -363,7 +371,9 @@ describe("customAgentsSaveErrorMessage", () => {
                 "Couldn't save.",
                 [ledger, audit],
             ),
-        ).toBe("Audit reviewer: tools.astGrepConfig allows at most 64000 bytes");
+        ).toBe(
+            "Audit reviewer: tools.astGrepConfig allows at most 64000 bytes",
+        );
     });
 
     it("names each agent when the server joined several refusals in one message", () => {
@@ -488,15 +498,51 @@ describe("useCustomAgentsForm — at a directory", () => {
         renderProbe({
             customAgents: { value: [], level: "repository" },
             knowledge: {
-                value: [doc("docs/zones.md", ["ledger"]), doc("docs/drip.md", ["drip"])],
+                value: [
+                    doc("docs/zones.md", ["ledger"]),
+                    doc("docs/drip.md", ["drip"]),
+                ],
                 level: "directory",
-                overriddenValue: [doc("docs/style.md", ["ledger"]), doc("docs/zones.md", ["audit"])],
+                overriddenValue: [
+                    doc("docs/style.md", ["ledger"]),
+                    doc("docs/zones.md", ["audit"]),
+                ],
                 overriddenLevel: "repository",
             },
         });
 
         expect(screen.getByTestId("review-knowledge")).toHaveTextContent(
             "docs/style.md,docs/zones.md,docs/drip.md",
+        );
+    });
+
+    it("replaces only the item of the same repository and path, as the server merges", () => {
+        const doc = (path: string, agents: string[], repository?: string) =>
+            ({
+                kind: "doc",
+                path,
+                agents,
+                ...(repository && { repository }),
+            }) as any;
+        renderProbe({
+            customAgents: { value: [], level: "repository" },
+            knowledge: {
+                value: [doc("docs/zones.md", ["ledger"])],
+                level: "directory",
+                overriddenValue: [
+                    doc("docs/zones.md", ["audit"]),
+                    doc(
+                        "docs/zones.md",
+                        ["audit"],
+                        "greenhouse/irrigation-rules",
+                    ),
+                ],
+                overriddenLevel: "repository",
+            },
+        });
+
+        expect(screen.getByTestId("review-knowledge")).toHaveTextContent(
+            "docs/zones.md,greenhouse/irrigation-rules:docs/zones.md",
         );
     });
 

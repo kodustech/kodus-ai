@@ -1,0 +1,22 @@
+[
+ "advanced-date-override-handling-and-timezone-compatibility-improvements-cal-com",
+ "async-import-of-the-appstore-packages-cal-com",
+ "comprehensive-workflow-reminder-management-for-booking-lifecycle-events-cal-com",
+ "feat-add-calendar-cache-status-and-actions-22532-cal-com",
+ "add-comprehensive-email-validation-for-blocked-users-discourse-cursor",
+ "feature-per-topic-unsubscribe-option-in-emails-discourse-cursor",
+ "scale-color-lightness-must-use-secondary-for-dark-themes-discourse-cursor",
+ "ux-show-complete-url-path-if-website-domain-is-same-as-instance-domain-discourse-cursor",
+ "advanced-query-processing-architecture-grafana-codex",
+ "advanced-sql-analytics-framework-grafana-codex",
+ "authzservice-improve-authz-caching-grafana-codex",
+ "database-performance-optimizations-grafana-codex",
+ "add-authzclientcryptoprovider-for-authorization-client-cryptographic-operations-keycloak",
+ "add-groups-resource-type-and-scopes-to-authorization-schema-keycloak",
+ "add-rolling-updates-feature-flag-and-compatibility-framework-keycloak",
+ "implement-recovery-key-support-for-user-storage-providers-keycloak",
+ "enhanced-pagination-performance-for-high-volume-audit-logs-sentry",
+ "feat-upsampling-support-upsampled-error-count-with-performance-optimizations-sentry",
+ "feat-uptime-add-ability-to-use-queues-to-manage-parallelism-sentry",
+ "optimize-spans-buffer-insertion-with-eviction-during-insert-sentry"
+]

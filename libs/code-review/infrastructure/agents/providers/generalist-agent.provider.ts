@@ -1,5 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 
+import { createLogger } from '@libs/core/log/logger';
+
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
@@ -11,6 +13,10 @@ import {
     ReviewFindingLabel,
 } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import { buildGeneralistReviewPrompt } from '@libs/code-review/infrastructure/agents/prompts/review-prompt-blocks';
+import { finderRunSettings } from '@libs/code-review/infrastructure/agents/core/finder-model-profile';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+
+const logger = createLogger('GeneralistAgentProvider');
 
 const hasRepoInstructions = (input: ReviewAgentInput): boolean =>
     (input.repoInstructions?.files?.length ?? 0) > 0;
@@ -51,6 +57,36 @@ export class GeneralistAgentProvider extends BaseCodeReviewAgentProvider {
 
     protected getCategoryLabel(): string {
         return 'generalist';
+    }
+
+    /** Step cap and synthesis rescue of the model's family
+     *  (finder-model-profile.ts). Read from the primary model: a fallback
+     *  model that serves a call keeps the primary's settings. */
+    protected applyModelSettings(
+        input: ReviewAgentInput,
+        modelName: string,
+        byokConfig?: NormalizedModel,
+    ): ReviewAgentInput {
+        const { profile, maxSteps, skipSynthesisRescue } = finderRunSettings(
+            input,
+            modelName,
+        );
+        if (!profile) return input;
+        logger.log({
+            message: `[AGENT] Generalist finder settings for ${modelName}: family=${profile.family}, maxSteps=${maxSteps ?? 'default'}, synthesisRescue=${!skipSynthesisRescue}`,
+            context: GeneralistAgentProvider.name,
+            metadata: {
+                organizationId: input.organizationAndTeamData?.organizationId,
+                teamId: input.organizationAndTeamData?.teamId,
+                prNumber: input.prNumber,
+                primaryModelName: modelName,
+                fallbackModelName: byokConfig?.fallback?.model,
+                family: profile.family,
+                maxSteps,
+                skipSynthesisRescue,
+            },
+        });
+        return { ...input, maxSteps, skipSynthesisRescue };
     }
 
     protected supportsMixedLabels(): boolean {

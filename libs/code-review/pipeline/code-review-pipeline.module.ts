@@ -1,3 +1,4 @@
+import { CustomAgentRunsModule } from '@libs/code-review/modules/custom-agent-runs.module';
 import { CloneParamsResolverService } from './services/clone-params-resolver.service';
 import { Module, forwardRef } from '@nestjs/common';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
@@ -92,6 +93,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
 
 @Module({
     imports: [
+        CustomAgentRunsModule,
         // Explicit even though FeatureGateModule is @Global(): the pipeline
         // (AgentReviewStage) injects FeatureGateService, so declaring it here
         // guarantees availability for any consumer instead of relying on a

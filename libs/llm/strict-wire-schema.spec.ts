@@ -329,6 +329,8 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/code-review/infrastructure/agents/engine/repeat-check.ts', // REPEAT_CHECK_SCHEMA via jsonSchema(), pass-through, born strict (#2097)
         // Second-doors → LLM.run migration.
         'libs/cli-review/infrastructure/services/public-pr-grouping.service.ts', // GroupingSchema — all-required zod (no `.optional()`), so strict-wire conversion is a no-op; public-demo path on a fixed Gemini default, never OpenAI-strict.
+        // Enrichment (#1821), inline zod schema.
+        'libs/code-review/infrastructure/agents/engine/enrich-content.ts', // RESULT_ZOD — all-required
     ]);
 
     it('every runStructuredReviewCall call site is registered (schema is under test)', () => {

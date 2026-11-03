@@ -198,6 +198,26 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
         });
     });
 
+    it("anchors a finding without lines on the first hunk and keeps the agent's label", async () => {
+        const { stage } = makeStage(
+            output([
+                finding({
+                    relevantLinesStart: undefined,
+                    relevantLinesEnd: undefined,
+                }),
+            ]),
+        );
+
+        const result = await run(stage, makeContext([agent()]));
+
+        const [posted] = result.validSuggestions;
+        expect(posted.suggestionContent).toContain(
+            'The entry is booked on one side only.',
+        );
+        expect(posted.relevantLinesStart).toBeGreaterThan(0);
+        expect(posted.label).toBe('custom_agent');
+    });
+
     it('applies the agent severity floor even without a team filter', async () => {
         const { stage } = makeStage(
             output([
@@ -270,6 +290,38 @@ describe('AgentReviewStage — custom agents (#2172)', () => {
             ],
         });
         expect(JSON.stringify(entry)).not.toContain('Rounding note.');
+    });
+
+    it('logs why an agent failed or stopped short', async () => {
+        const { stage } = makeStage(
+            output([], {
+                customAgentRuns: [
+                    {
+                        id: 'agent-ledger',
+                        name: 'Ledger Rules',
+                        slug: 'ledger-rules',
+                        status: 'failed',
+                        reason: 'RATE_LIMIT (HTTP 429)',
+                        droppedByVerify: 0,
+                    },
+                ],
+            }),
+        );
+        const log = jest
+            .spyOn((stage as any).logger, 'log')
+            .mockImplementation(() => undefined);
+
+        await run(stage, makeContext([agent()]));
+
+        const entry = log.mock.calls
+            .map(([e]: any[]) => e)
+            .find((e: any) =>
+                String(e?.message).startsWith('[AGENT] Custom agents outcome'),
+            );
+        expect(entry?.metadata.agents[0]).toMatchObject({
+            status: 'failed',
+            reason: 'RATE_LIMIT (HTTP 429)',
+        });
     });
 
     it('logs why the checks dropped each finding', async () => {

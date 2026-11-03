@@ -60,7 +60,9 @@ describe('agent-review.stage — discarded suggestions carry a delivery status',
         // 8: #2097's repeat check discards what an earlier comment raised.
         // 9: #2171 keeps findings whose verify run failed apart.
         // 10: #2172 keeps a custom agent's findings below its own floor apart.
-        expect(discardBlocks()).toHaveLength(10);
+        // 11: anchoring drops a finding on a file the PR does not change (#1821).
+        // 12: label normalization drops a category the team turned off (#1821).
+        expect(discardBlocks()).toHaveLength(13);
     });
 
     it.each(discardBlocks().map((b, i) => [i, b] as const))(

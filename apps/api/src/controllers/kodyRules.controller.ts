@@ -100,6 +100,7 @@ import {
     KodyRulesSyncStatusResponseDto,
 } from '../dtos/kody-rules-response.dto';
 import { TenantScopeGuard } from '../guards/tenant-scope.guard';
+import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 
 @ApiTags('Kody Rules')
 @ApiStandardResponses()
@@ -140,7 +141,32 @@ export class KodyRulesController {
         private readonly countRulesByRepositoryUseCase: CountRulesByRepositoryUseCase,
         @Inject(REQUEST)
         private readonly request: UserRequest,
+
+        private readonly authorizationService: AuthorizationService,
     ) {}
+
+    /**
+     * Type-level policies above only say "may touch Kody Rules". A member
+     * limited to some repositories must also be refused the others, so every
+     * handler that takes an optional repository checks it here. `global` is
+     * the org-level scope every member already reads.
+     */
+    private async ensureRepositoryAccess(
+        action: Action,
+        repositoryIds: Array<string | undefined>,
+    ): Promise<void> {
+        const repoIds = repositoryIds.filter(
+            (id): id is string => !!id && id !== 'global',
+        );
+        if (!repoIds.length) return;
+
+        await this.authorizationService.ensure({
+            user: this.request.user,
+            action,
+            resource: ResourceType.KodyRules,
+            repoIds,
+        });
+    }
 
     @ApiBearerAuth('jwt')
     @Post('/create-or-update')
@@ -479,6 +505,24 @@ export class KodyRulesController {
             throw new Error('Organization ID not found');
         }
 
+        // Without a list the use case generates for every repository, so a
+        // repo-scoped member is narrowed to their own.
+        if (body.repositoriesIds?.length) {
+            await this.ensureRepositoryAccess(
+                Action.Create,
+                body.repositoriesIds,
+            );
+        } else {
+            const scope = await this.authorizationService.getRepositoryScope({
+                user: this.request.user,
+                action: Action.Create,
+                resource: ResourceType.KodyRules,
+            });
+            if (scope !== null) {
+                body = { ...body, repositoriesIds: scope };
+            }
+        }
+
         return this.generateKodyRulesUseCase.execute(
             body,
             this.request.user.organization.uuid,
@@ -583,6 +627,8 @@ export class KodyRulesController {
         @Query('repositoryId')
         repositoryId?: string,
     ) {
+        await this.ensureRepositoryAccess(Action.Read, [repositoryId]);
+
         return this.checkSyncStatusUseCase.execute(teamId, repositoryId);
     }
 
@@ -620,9 +666,10 @@ export class KodyRulesController {
     @Post('/sync-ide-rules')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
     @CheckPolicies(
-        checkPermissions({
+        checkRepoPermissions({
             action: Action.Create,
             resource: ResourceType.KodyRules,
+            repo: { key: { body: 'repositoryId' } },
         }),
     )
     @ApiOperation({
@@ -645,9 +692,10 @@ export class KodyRulesController {
     @Post('/fast-sync-ide-rules')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
     @CheckPolicies(
-        checkPermissions({
+        checkRepoPermissions({
             action: Action.Create,
             resource: ResourceType.KodyRules,
+            repo: { key: { body: 'repositoryId' } },
         }),
     )
     @ApiOperation({
@@ -842,9 +890,10 @@ export class KodyRulesController {
     @Post('/resync-ide-rules')
     @UseGuards(PolicyGuard, KodyRulesTenantGuard)
     @CheckPolicies(
-        checkPermissions({
+        checkRepoPermissions({
             action: Action.Create,
             resource: ResourceType.KodyRules,
+            repo: { key: { body: 'repositoryId' } },
         }),
     )
     @ApiOperation({
@@ -887,6 +936,9 @@ export class KodyRulesController {
         if (!organizationId) {
             throw new Error('Organization ID not found');
         }
+
+        await this.ensureRepositoryAccess(Action.Update, [body.repositoryId]);
+
         const teamId = (this.request.user as any).team?.uuid;
 
         return this.manageImportedKodyRulesUseCase.execute({
@@ -924,6 +976,8 @@ export class KodyRulesController {
         if (!organizationId) {
             throw new Error('Organization ID not found');
         }
+
+        await this.ensureRepositoryAccess(Action.Read, [repositoryId]);
 
         return this.manageImportedKodyRulesUseCase.count({
             organizationAndTeamData: { organizationId, teamId },

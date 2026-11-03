@@ -1,5 +1,8 @@
 import { OrganizationEntity } from '../entities/organization.entity';
-import { IOrganization } from '../interfaces/organization.interface';
+import {
+    CreateOrganization,
+    IOrganization,
+} from '../interfaces/organization.interface';
 
 export const ORGANIZATION_REPOSITORY_TOKEN = Symbol.for(
     'OrganizationRepository',
@@ -12,7 +15,7 @@ export interface IOrganizationRepository {
     ): Promise<OrganizationEntity | undefined>;
     findById(uuid: string): Promise<OrganizationEntity | undefined>;
     create(
-        organizationEntity: IOrganization,
+        organizationEntity: CreateOrganization,
     ): Promise<OrganizationEntity | undefined>;
     deleteOne(filter: Partial<IOrganization>): Promise<void>;
     update(
