@@ -839,6 +839,49 @@ describe('ExecuteCliReviewUseCase', () => {
             mockExecute.mockRestore();
         });
 
+        it('follows the review mode in settings unless --heavy or --balanced asks otherwise', async () => {
+            const { useCase } = createMocks();
+            const realDefault = (useCase as any).getDefaultConfig.bind(useCase);
+            jest.spyOn(useCase as any, 'getDefaultConfig').mockImplementation(
+                () => ({ ...realDefault(), reviewMode: 'heavy' }),
+            );
+            const seen: any[] = [];
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: any) => {
+                    seen.push(context);
+                    return {
+                        cliResponse: {
+                            summary: 'No issues',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 100,
+                        },
+                    };
+                });
+
+            for (const config of [
+                {},
+                { balanced: true },
+                { balanced: true, heavy: true },
+                { fast: true },
+            ]) {
+                await useCase.execute({
+                    organizationAndTeamData: orgAndTeam,
+                    input: { diff: '+ hello', config } as any,
+                    isTrialMode: true,
+                });
+            }
+
+            expect(seen.map((c) => c.heavy)).toEqual([true, false, true, false]);
+
+            mockExecute.mockRestore();
+        });
+
         it('should pass resolved repositoryId to pipeline context', async () => {
             const {
                 useCase,

@@ -64,8 +64,10 @@ export interface CliReviewConfig {
      * before it reaches the prompt.
      */
     focus?: string;
-    /** Heavy mode: the M3 lenses run next to the generalist. */
+    /** `--heavy` / `--balanced`: the review mode asked for, over the one set
+     *  in settings. `--heavy` wins when both are passed. */
     heavy?: boolean;
+    balanced?: boolean;
     files?: CliFileInput[];
 }
 

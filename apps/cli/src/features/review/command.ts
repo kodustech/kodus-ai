@@ -56,6 +56,7 @@ type ReviewCommandOptions = {
     fast?: boolean;
     focus?: string;
     heavy?: boolean;
+    balanced?: boolean;
     interactive?: boolean;
     fix?: boolean;
     promptOnly?: boolean;
@@ -114,7 +115,11 @@ Examples:
         )
         .option(
             '--heavy',
-            'Heavy mode: specialist reviewers run next to the main review for higher recall (more tokens)',
+            'Heavy mode: specialist reviewers run next to the main review for higher recall (more tokens), whatever review mode is set',
+        )
+        .option(
+            '--balanced',
+            'Balanced mode: the main review alone, on a repository set to Heavy',
         )
         .option(
             '-i, --interactive',
@@ -234,6 +239,7 @@ async function reviewAction(
                         branch: options.branch,
                         focus: options.focus,
                         heavy: options.heavy,
+                        balanced: options.balanced,
                         quiet: globalOpts.quiet,
                         onProgress: (status) => {
                             if (globalOpts.quiet || ctx.isAgent) {

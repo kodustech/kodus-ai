@@ -54,6 +54,7 @@ class ReviewService {
             branch?: string;
             focus?: string;
             heavy?: boolean;
+            balanced?: boolean;
             quiet?: boolean;
             onProgress?: (status: string) => void;
         },

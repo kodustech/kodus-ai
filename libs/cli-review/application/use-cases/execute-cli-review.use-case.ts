@@ -1,3 +1,4 @@
+import { isHeavyReview } from '@libs/code-review/domain/review-mode';
 import { Injectable, Inject } from '@nestjs/common';
 import { IdGenerator } from '@libs/core/utils/id-generator';
 import { createLogger } from '@libs/core/log/logger';
@@ -227,9 +228,17 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 // CLI equivalent of `@kody review focus on X` — same sanitize +
                 // cap as the PR-comment path. Steers the finder when set.
                 reviewDirective: normalizeReviewDirective(input.config?.focus),
-                // Heavy mode: the M3 lenses run next to the generalist. Asked
-                // together with --fast, the review runs fast only.
-                heavy: input.config?.heavy === true && !isFastMode,
+                // Heavy mode: the M3 lenses run next to the generalist. The
+                // flag asked for, else the review mode in settings; a --fast
+                // review runs fast only.
+                heavy: isHeavyReview(
+                    input.config?.heavy
+                        ? 'heavy'
+                        : input.config?.balanced
+                          ? 'balanced'
+                          : undefined,
+                    effectiveConfig?.reviewMode,
+                ),
                 validSuggestions: [],
                 discardedSuggestions: [],
                 preparedFileContexts: [],
