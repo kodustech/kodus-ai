@@ -769,7 +769,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     await this.sandboxProvider.createSandboxWithRepo(
                         cloneParams,
                     );
-                this.createCircuit.recordSuccess();
+                this.createCircuit.recordSuccess(permit);
                 return sandbox;
             } catch (err) {
                 lastErr = err;

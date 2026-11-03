@@ -1,3 +1,5 @@
+import { createLogger } from '@libs/core/log/logger';
+
 /**
  * Per-process circuit breaker around sandbox creation.
  *
@@ -14,8 +16,11 @@
  *   tenant whose git host is down (or whose huge repos always time out)
  *   must not turn sandboxes off for every other tenant on the worker.
  * - OPEN: every request is rejected until `openMs` has elapsed.
- * - HALF_OPEN: exactly one probe request is let through. Success closes the
- *   breaker; failure re-opens it for another `openMs`.
+ * - HALF_OPEN: exactly one probe request is let through. Its success closes
+ *   the breaker; its failure re-opens it for another `openMs`. A probe that
+ *   has not reported within `probeTimeoutMs` is replaced by a new one, so a
+ *   create that never settles cannot keep the breaker HALF_OPEN for good.
+ *   Reports from creates admitted before the trip are ignored either way.
  *
  * State is in memory, per worker process: each worker learns the outage on
  * its own after a handful of failures, which is enough to cap the damage
@@ -29,6 +34,7 @@ export interface SandboxCircuitBreakerOptions {
     failureThreshold: number;
     minDistinctOrgs: number;
     openMs: number;
+    probeTimeoutMs: number;
 }
 
 export const DEFAULT_SANDBOX_CIRCUIT_OPTIONS: SandboxCircuitBreakerOptions = {
@@ -36,6 +42,8 @@ export const DEFAULT_SANDBOX_CIRCUIT_OPTIONS: SandboxCircuitBreakerOptions = {
     failureThreshold: 5,
     minDistinctOrgs: 3,
     openMs: 2 * 60_000,
+    // Above a whole create (2 attempts of create + 2-min fetch + install)
+    probeTimeoutMs: 10 * 60_000,
 };
 
 /**
@@ -64,10 +72,12 @@ interface FailureRecord {
 }
 
 export class SandboxCreateCircuitBreaker {
+    private readonly logger = createLogger(SandboxCreateCircuitBreaker.name);
     private state: SandboxCircuitState = 'CLOSED';
     private failures: FailureRecord[] = [];
     private openedAt = 0;
     private probeInFlight = false;
+    private probeGrantedAt = 0;
 
     constructor(
         private readonly options: SandboxCircuitBreakerOptions = DEFAULT_SANDBOX_CIRCUIT_OPTIONS,
@@ -98,13 +108,27 @@ export class SandboxCreateCircuitBreaker {
         this.refreshState();
         if (this.state === 'CLOSED') return { probe: false };
         if (this.state === 'OPEN') return null;
-        if (this.probeInFlight) return null;
+        if (
+            this.probeInFlight &&
+            this.now() - this.probeGrantedAt < this.options.probeTimeoutMs
+        ) {
+            return null;
+        }
         this.probeInFlight = true;
+        this.probeGrantedAt = this.now();
         return { probe: true };
     }
 
-    /** Any successful create is proof the infrastructure works again. */
-    recordSuccess(): void {
+    /**
+     * A create succeeded. While CLOSED that just clears the window. Once the
+     * breaker tripped, only the probe's success proves recovery: a slow
+     * create admitted before the trip that lands afterwards says nothing
+     * about the outage, and closing on it would end fail-fast early.
+     */
+    recordSuccess(permit: SandboxCircuitPermit): void {
+        this.refreshState();
+        if (this.state === 'OPEN') return;
+        if (this.state === 'HALF_OPEN' && !permit.probe) return;
         this.probeInFlight = false;
         this.failures = [];
         this.transition('CLOSED', 0, 0);
@@ -187,9 +211,25 @@ export class SandboxCreateCircuitBreaker {
                 distinctOrgs,
                 openMs: this.options.openMs,
             });
-        } catch {
-            // The callback is the owner's logger: a failure there cannot be
-            // logged through it, and the state change already happened.
+        } catch (error) {
+            // The state change already happened; a broken sink must not fail
+            // sandbox creation, but the lost transition is reported here.
+            try {
+                this.logger.error({
+                    message: `SandboxCreateCircuitBreaker: could not report the ${from} -> ${to} transition`,
+                    context: SandboxCreateCircuitBreaker.name,
+                    error,
+                    metadata: {
+                        from,
+                        to,
+                        failures,
+                        distinctOrgs,
+                        openMs: this.options.openMs,
+                    },
+                });
+            } catch {
+                // Nothing left to report through
+            }
         }
     }
 
@@ -206,7 +246,7 @@ export class SandboxCreateCircuitBreaker {
  * healthy proxy would get blamed for a revoked token.
  */
 const REPOSITORY_SPECIFIC_FAILURE =
-    /authentication failed|could not read username|repository not found|couldn't find remote ref|not our ref|invalid username or password|http basic: access denied|the requested url returned error: (401|403|404)|terminal prompts disabled|does not appear to be a git repository|permission denied \(publickey\)/i;
+    /authentication failed|could not read username|repository not found|repository '[^']*' not found|could not be found or you don't have permission|either does not exist or you do not have access|requires a username|couldn't find remote ref|not our ref|invalid username or password|http basic: access denied|the requested url returned error: (401|403|404)|terminal prompts disabled|does not appear to be a git repository|permission denied \(publickey\)/i;
 
 export function isRepositorySpecificSandboxFailure(err: unknown): boolean {
     const text = describeError(err);

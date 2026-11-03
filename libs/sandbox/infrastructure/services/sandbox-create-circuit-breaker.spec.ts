@@ -9,6 +9,7 @@ const OPTIONS = {
     failureThreshold: 3,
     minDistinctOrgs: 2,
     openMs: 30_000,
+    probeTimeoutMs: 120_000,
 };
 
 /** A create admitted while CLOSED: not the probe. */
@@ -74,11 +75,12 @@ describe('SandboxCreateCircuitBreaker', () => {
 
         advance(30_000);
         expect(breaker.getState()).toBe('HALF_OPEN');
-        expect(breaker.tryAcquire()).toEqual({ probe: true });
+        const probe = breaker.tryAcquire()!;
+        expect(probe).toEqual({ probe: true });
         // Second caller while the probe is in flight is rejected
         expect(breaker.tryAcquire()).toBeNull();
 
-        breaker.recordSuccess();
+        breaker.recordSuccess(probe);
         expect(breaker.getState()).toBe('CLOSED');
         expect(breaker.tryAcquire()).toEqual({ probe: false });
     });
@@ -127,6 +129,36 @@ describe('SandboxCreateCircuitBreaker', () => {
         expect(breaker.getState()).toBe('OPEN');
     });
 
+    it('ignores a late success from a create admitted before the trip', () => {
+        const { breaker, fail, advance } = makeBreaker();
+        const early = breaker.tryAcquire()!;
+        fail('org-a', 'org-b', 'org-c');
+
+        // Lands while OPEN: the outage is not over
+        breaker.recordSuccess(early);
+        expect(breaker.getState()).toBe('OPEN');
+
+        // Lands while HALF_OPEN: only the probe decides
+        advance(30_000);
+        const probe = breaker.tryAcquire()!;
+        breaker.recordSuccess(early);
+        expect(breaker.getState()).toBe('HALF_OPEN');
+        breaker.recordSuccess(probe);
+        expect(breaker.getState()).toBe('CLOSED');
+    });
+
+    it('replaces a probe that never reports, instead of staying HALF_OPEN for good', () => {
+        const { breaker, fail, advance } = makeBreaker();
+        fail('org-a', 'org-b', 'org-c');
+        advance(30_000);
+
+        expect(breaker.tryAcquire()).toEqual({ probe: true });
+        advance(119_000);
+        expect(breaker.tryAcquire()).toBeNull();
+        advance(1_000);
+        expect(breaker.tryAcquire()).toEqual({ probe: true });
+    });
+
     it('does not stretch the OPEN window with failures from creates already in flight', () => {
         const { breaker, fail, advance } = makeBreaker();
 
@@ -147,7 +179,7 @@ describe('SandboxCreateCircuitBreaker', () => {
         const states = () =>
             onTransition.mock.calls.map(([t]) => `${t.from}->${t.to}`);
 
-        breaker.recordSuccess();
+        breaker.recordSuccess(CLOSED_PERMIT);
         expect(onTransition).not.toHaveBeenCalled();
 
         fail('org-a', 'org-b', 'org-b');
@@ -163,8 +195,7 @@ describe('SandboxCreateCircuitBreaker', () => {
         const probe = breaker.tryAcquire()!;
         breaker.recordFailure('org-c', probe);
         advance(30_000);
-        breaker.tryAcquire();
-        breaker.recordSuccess();
+        breaker.recordSuccess(breaker.tryAcquire()!);
 
         expect(states()).toEqual([
             'CLOSED->OPEN',
@@ -201,6 +232,10 @@ describe('sandbox failure classification', () => {
         'fatal: could not read Username for https://gitlab.com: terminal prompts disabled',
         'The requested URL returned error: 403',
         'HTTP Basic: Access denied',
+        'Bitbucket authentication requires a username (app password) or an Atlassian API token, but neither was provided.',
+        "fatal: repository 'https://bitbucket.org/acme/app.git/' not found",
+        "remote: The project you were looking for could not be found or you don't have permission to view it.",
+        'remote: Repository either does not exist or you do not have access.',
     ])('treats "%s" as repository-specific', (message) => {
         expect(isRepositorySpecificSandboxFailure(new Error(message))).toBe(
             true,
