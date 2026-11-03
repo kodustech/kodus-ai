@@ -104,6 +104,36 @@ describe('SandboxConcurrencyLimiter', () => {
                 throw new Error('log sink down');
             },
         );
+        const warn = jest.fn();
+        (limiter as any).logger = { warn };
+
+        await limiter.acquire('leaked', 1);
+        const next = limiter.acquire('next', 1);
+        now = 1_500;
+        limiter.setLimit(1);
+
+        await expect(next).resolves.toBe(true);
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: { holderId: 'leaked', heldMs: 1_500 },
+            }),
+        );
+    });
+
+    it('falls back to stderr when the logger is down too', async () => {
+        let now = 0;
+        const limiter = new SandboxConcurrencyLimiter(
+            1_000,
+            () => now,
+            () => {
+                throw new Error('log sink down');
+            },
+        );
+        (limiter as any).logger = {
+            warn: () => {
+                throw new Error('logger down');
+            },
+        };
         const emitWarning = jest
             .spyOn(process, 'emitWarning')
             .mockImplementation(() => undefined);
@@ -115,7 +145,7 @@ describe('SandboxConcurrencyLimiter', () => {
 
             await expect(next).resolves.toBe(true);
             expect(emitWarning).toHaveBeenCalledWith(
-                expect.stringContaining('dropped holder leaked after 1500ms'),
+                'SandboxConcurrencyLimiter: dropped holder leaked after 1500ms without release',
                 { code: 'SANDBOX_STALE_HOLDER_REPORT_LOST' },
             );
         } finally {

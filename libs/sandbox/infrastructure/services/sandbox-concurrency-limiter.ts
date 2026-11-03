@@ -1,3 +1,5 @@
+import { createLogger } from '@libs/core/log/logger';
+
 /**
  * Caps how many sandbox leases one worker process holds at once.
  *
@@ -24,6 +26,7 @@ interface Waiter {
 }
 
 export class SandboxConcurrencyLimiter {
+    private readonly logger = createLogger(SandboxConcurrencyLimiter.name);
     private readonly holders = new Map<string, number>();
     private waiters: Waiter[] = [];
     private maxPerWorker = 0;
@@ -109,13 +112,32 @@ export class SandboxConcurrencyLimiter {
                 } catch (error) {
                     // A failing sink must not block slot accounting, and the
                     // drop (a release() that never ran) must still be seen
-                    process.emitWarning(
-                        `SandboxConcurrencyLimiter: dropped holder ${holderId} after ${now - since}ms without release; reporting it failed: ${error instanceof Error ? error.message : String(error)}`,
-                        { code: 'SANDBOX_STALE_HOLDER_REPORT_LOST' },
-                    );
+                    this.reportLostStaleHolder(holderId, now - since, error);
                 }
             }
         }
         if (dropped) this.grantWaiters();
+    }
+
+    private reportLostStaleHolder(
+        holderId: string,
+        heldMs: number,
+        error: unknown,
+    ): void {
+        try {
+            this.logger.warn({
+                message: `SandboxConcurrencyLimiter: dropped holder ${holderId} after ${heldMs}ms without release (its report failed)`,
+                context: SandboxConcurrencyLimiter.name,
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
+                metadata: { holderId, heldMs },
+            });
+        } catch {
+            // The logger is down too: stderr is the last sink left
+            process.emitWarning(
+                `SandboxConcurrencyLimiter: dropped holder ${holderId} after ${heldMs}ms without release`,
+                { code: 'SANDBOX_STALE_HOLDER_REPORT_LOST' },
+            );
+        }
     }
 }
