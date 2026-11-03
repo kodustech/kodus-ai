@@ -310,9 +310,20 @@ describe('GitHub installation linking', () => {
             ).rejects.toBeInstanceOf(BadRequestException);
         }
 
+        // The web sends an OAuth code in `code` when there is no
+        // installation id: it is not logged either.
+        await expect(
+            svc.createAuthIntegration({
+                authMode: 'oauth',
+                code: 'gh-oauth-code-in-code',
+                organizationAndTeamData: { organizationId: ORG, teamId: 't1' },
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
         const logged = JSON.stringify(
             error.mock.calls.map(([e]) => e.metadata),
         );
+        expect(logged).not.toContain('gh-oauth-code-in-code');
         expect(logged).not.toContain('ghp_secret_pat');
         expect(logged).not.toContain('gh-oauth-code');
         expect(logged).not.toContain('sealed.state');

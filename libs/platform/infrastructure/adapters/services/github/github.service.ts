@@ -557,10 +557,11 @@ export class GithubService
                     organizationAndTeamData: params?.organizationAndTeamData,
                     authMode: params?.authMode,
                     host: params?.host,
-                    installationId:
-                        params?.authMode === AuthMode.OAUTH
-                            ? params?.code
-                            : undefined,
+                    // `code` is the installation id for an App link, but the
+                    // web falls back to an OAuth code: log only an id.
+                    installationId: isInstallationId(params?.code)
+                        ? params.code
+                        : undefined,
                 },
             });
             throw new BadRequestException(err);
