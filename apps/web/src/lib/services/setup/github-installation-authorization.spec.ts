@@ -3,16 +3,18 @@ import { startGithubInstallationAuthorization } from "./github-installation-auth
 
 const mockUrl = jest.fn();
 const mockCookieOptions = jest.fn();
-jest.mock("src/core/utils/cookie", () => {
-    const actual = jest.requireActual("src/core/utils/cookie");
-    return {
-        ...actual,
-        ClientSideCookieHelpers: (name: string, options: unknown) => {
-            mockCookieOptions(name, options);
-            return actual.ClientSideCookieHelpers(name, options);
-        },
-    };
-});
+// A document.cookie stand-in for cookies-next, which only apps/web installs
+// (the root jest of the mutation gate has no apps/web dependencies).
+jest.mock("src/core/utils/cookie", () => ({
+    ClientSideCookieHelpers: (name: string, options: unknown) => {
+        mockCookieOptions(name, options);
+        return {
+            set: (value: string) => {
+                document.cookie = `${name}=${encodeURIComponent(value)}; path=/`;
+            },
+        };
+    },
+}));
 jest.mock("./fetch", () => ({
     getGithubInstallationAuthorizationUrl: (id: string) => mockUrl(id),
 }));
