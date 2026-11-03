@@ -599,7 +599,9 @@ export async function resolveKnowledgeRepositories(params: {
             fullName: repository,
             id: String(repo.id),
             name: repo.name,
-            ref: readAt,
+            // Azure answers its default branch as `refs/heads/main`: links,
+            // labels and reads take the plain name, as every other provider.
+            ref: toBranchName(readAt) ?? readAt,
             visibility: repo.visibility,
             httpUrl: repo.http_url,
         };

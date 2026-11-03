@@ -181,6 +181,20 @@ describe('resolveKnowledgeRepositories', () => {
         });
     });
 
+    it('keeps the plain branch name when the provider answers a full ref (Azure)', async () => {
+        const cm = {
+            ...provider({}),
+            getDefaultBranch: jest.fn(async () => 'refs/heads/develop'),
+        };
+        const result = await resolveKnowledgeRepositories({
+            items: [{ repository: RULES }],
+            codeManagement: cm,
+            organizationAndTeamData: ORG,
+        });
+
+        expect(result.sources[0].source.ref).toBe('develop');
+    });
+
     it('reads at the ref of the last item that pins one, as a directory overrides', async () => {
         const result = await resolveKnowledgeRepositories({
             items: [

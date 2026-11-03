@@ -151,12 +151,14 @@ export const useCustomAgentsForm = () => {
         agents,
         (agent) => agent.id,
     );
-    // The skills and docs a review here reads, merged the same way by path:
-    // what Try it runs with and what the rows count.
+    // The skills and docs a review here reads, merged as the server merges
+    // them (`withDirectoryAgentLists`): by repository and path, so the same
+    // path in another repository is another item. What Try it runs with and
+    // what the rows count.
     const reviewKnowledge = addOrReplace(
         inheritedList(loadedKnowledge, level),
         knowledge,
-        (item) => item.path,
+        (item) => `${(item.repository ?? "").toLowerCase()}:${item.path}`,
     );
     const dirtyKeys = Object.keys(dirtyFields ?? {});
     // What the settings layout's leave guard counts, so the pages that save
