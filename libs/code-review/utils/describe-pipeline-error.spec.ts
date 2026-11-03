@@ -3,6 +3,7 @@ import {
     attachClassification,
 } from '@libs/llm/error-classifier';
 
+import { resolveDeclaredEnvProvider } from '@libs/llm/env-declared-provider';
 import { invalidEnvConfigError } from '@libs/llm/managed-slot';
 
 import { describePipelineError } from './describe-pipeline-error';
@@ -68,13 +69,20 @@ describe('describePipelineError', () => {
     });
 
     it('keeps the whole reason of an invalid self-hosted env model (#1687)', () => {
-        const error = invalidEnvConfigError(
-            'API_LLM_PROVIDER=anthropic has no API key. Set API_LLM_API_KEY or API_ANTHROPIC_API_KEY or API_OPEN_AI_API_KEY.',
-        );
+        // The real reason, longer than the 160 chars an unclassified message
+        // is cut to, with the actionable half at its end.
+        const resolution = resolveDeclaredEnvProvider({
+            API_LLM_PROVIDER_MODEL: 'gemini-3-pro',
+            API_LLM_PROVIDER: 'google_vertex',
+        } as any);
+        if (resolution.kind !== 'invalid') throw new Error('expected invalid');
+        const error = invalidEnvConfigError(resolution.reason);
+        expect(error.message.length).toBeGreaterThan(160);
 
         const { text, classified } = describePipelineError(wrap(error));
         expect(classified).toBe(true);
-        expect(text).toContain('Set API_LLM_API_KEY');
+        expect(text).toContain('has no API key');
+        expect(text).toContain('keyless ADC');
     });
 
     it('returns empty for a missing error rather than throwing', () => {

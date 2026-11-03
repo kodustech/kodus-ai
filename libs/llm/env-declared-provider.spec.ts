@@ -58,7 +58,8 @@ describe('resolveDeclaredEnvProvider', () => {
                 env({
                     API_LLM_PROVIDER: 'anthropic_compatible',
                     API_LLM_API_KEY: 'k',
-                    API_LLM_BASE_URL: 'https://api.moonshot.ai/anthropic',
+                    API_LLM_BASE_URL:
+                        'https://api.moonshot.ai/anthropic/v1/messages',
                 }),
             ),
         ).toEqual({
@@ -67,9 +68,11 @@ describe('resolveDeclaredEnvProvider', () => {
                 provider: 'anthropic_compatible',
                 model: 'some-model',
                 apiKey: 'k',
-                baseURL: 'https://api.moonshot.ai/anthropic',
+                baseURL: 'https://api.moonshot.ai/anthropic/v1',
             },
-            warnings: [],
+            warnings: [
+                'API_LLM_BASE_URL ends with the endpoint the provider SDK adds itself; https://api.moonshot.ai/anthropic/v1 is used.',
+            ],
         });
     });
 
