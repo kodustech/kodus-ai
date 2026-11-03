@@ -176,4 +176,33 @@ describe('BitbucketCloudService.getChangedFilesSinceLastCommit — batch diff', 
         expect(files?.map((f) => f.filename)).toEqual(['src/a.ts']);
         expect(read).not.toHaveBeenCalled();
     });
+
+    it('reads a missing file on its own when the whole diff has a section it could not key', async () => {
+        const onlyA = wholeDiff.split(/(?=^diff --git a\/src\/b)/m)[0];
+        const bSection = wholeDiff
+            .split(/(?=^diff --git )/m)
+            .find((section) => section.includes('b/src/b.ts'));
+        const getDiff = jest.fn((args: { path?: string }) =>
+            Promise.resolve({
+                data: args.path
+                    ? bSection
+                    : `${onlyA}diff --git unparseable-header\n`,
+            }),
+        );
+        const { service } = makeService(getDiff as any);
+
+        const files = await service.getChangedFilesSinceLastCommit({
+            organizationAndTeamData: org as any,
+            repository: { id: 'repo-1', name: 'web' },
+            prNumber: 7,
+            lastCommit: { sha: 'last' },
+        });
+
+        expect(getDiff).toHaveBeenCalledTimes(2);
+        expect(getDiff.mock.calls[1][0].path).toBe('src/b.ts');
+        expect(files?.map((f) => [f.filename, f.patch])).toEqual([
+            ['src/a.ts', '@@ -1 +1 @@\n-old a\n+new a'],
+            ['src/b.ts', '@@ -0,0 +1 @@\n+new b'],
+        ]);
+    });
 });

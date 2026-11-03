@@ -148,6 +148,35 @@ describe('per-key-rate-gate', () => {
         ).toBe(true);
     });
 
+    it('charges queue time against the budget while the key is rate limited', async () => {
+        recordRateLimited('k', { baseMs: 0, maxMs: 0 });
+        const holder = runWithRateGate('k', { minIntervalMs: 0 }, () =>
+            sleep(120),
+        );
+        const queued = runWithRateGate(
+            'k',
+            { minIntervalMs: 0, maxWaitMs: 50 },
+            async () => 'ran',
+        );
+
+        await holder;
+        await expect(queued).rejects.toBeInstanceOf(RateGateWaitExceededError);
+    });
+
+    it('never cuts a healthy queue short, however long it waited', async () => {
+        const holder = runWithRateGate('k', { minIntervalMs: 0 }, () =>
+            sleep(120),
+        );
+        const queued = runWithRateGate(
+            'k',
+            { minIntervalMs: 0, maxWaitMs: 50 },
+            async () => 'ran',
+        );
+
+        await holder;
+        await expect(queued).resolves.toBe('ran');
+    });
+
     it('still waits out a park that fits in maxWaitMs', async () => {
         await runWithRateGate('k', { minIntervalMs: 0 }, async () => undefined);
         parkRateGate('k', Date.now() + 50);

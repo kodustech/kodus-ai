@@ -4962,6 +4962,10 @@ export class BitbucketCloudService implements Omit<
         const { bitbucketAPI, repo, spec, paths, fillMissingPerFile } = params;
         const patches = new Map<string, string | null>();
         let wholeDiffRead = false;
+        // Whole-diff sections the parser could not key, or keyed to a path
+        // the listing does not have: a missing path may then be a parse
+        // mismatch rather than a file this diff leaves untouched.
+        let parseMismatch = false;
 
         try {
             const diff = await bitbucketAPI.commits
@@ -4971,9 +4975,15 @@ export class BitbucketCloudService implements Omit<
                     spec,
                 })
                 .then((res) => res.data as string);
-            for (const file of splitUnifiedDiff(diff)) {
+            const files = splitUnifiedDiff(diff);
+            for (const file of files) {
                 patches.set(file.filename, file.patch);
             }
+            const sections = (diff?.match(/^diff --git /gm) ?? []).length;
+            const listed = new Set(paths);
+            parseMismatch =
+                files.length < sections ||
+                files.some((file) => !listed.has(file.filename));
             wholeDiffRead = true;
         } catch (error) {
             if (is429Error(error)) throw error;
@@ -4986,8 +4996,18 @@ export class BitbucketCloudService implements Omit<
         }
 
         const missing = paths.filter((path) => !patches.has(path));
-        if (!missing.length || (wholeDiffRead && !fillMissingPerFile)) {
+        if (
+            !missing.length ||
+            (wholeDiffRead && !fillMissingPerFile && !parseMismatch)
+        ) {
             return patches;
+        }
+        if (wholeDiffRead && parseMismatch) {
+            this.logger.warn({
+                message: `Whole-PR diff for spec ${spec} did not key every file; reading ${missing.length} missing file(s) one by one`,
+                context: BitbucketCloudService.name,
+                metadata: { repoId: repo.id, missing: missing.length },
+            });
         }
 
         const limit = pLimit(

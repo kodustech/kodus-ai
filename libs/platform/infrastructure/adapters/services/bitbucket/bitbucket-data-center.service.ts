@@ -360,7 +360,8 @@ export class BitbucketDataCenterService implements Omit<
                 config: {
                     hasRepositories: hasRepositories,
                     status: bitbucketRepositories?.installationStatus,
-                    host: bitbucketOrg?.authIntegration?.authDetails?.host ?? '',
+                    host:
+                        bitbucketOrg?.authIntegration?.authDetails?.host ?? '',
                 },
                 category: IntegrationCategory.CODE_MANAGEMENT,
             };
@@ -1346,6 +1347,7 @@ export class BitbucketDataCenterService implements Omit<
                             );
                             content = rawRes.data;
                         } catch (err) {
+                            if (is429Error(err)) throw err;
                             this.logger.error({
                                 message: `Could not fetch raw content for ${filePath} at commit ${sourceCommit}`,
                                 context: BitbucketDataCenterService.name,
@@ -1373,6 +1375,8 @@ export class BitbucketDataCenterService implements Omit<
                             deletions += unified.deletions;
                         }
                     } catch (err) {
+                        // A rate limit is not an empty diff: let the job retry
+                        if (is429Error(err)) throw err;
                         this.logger.error({
                             message: `Could not fetch diff for ${filePath}`,
                             context: BitbucketDataCenterService.name,
@@ -1405,6 +1409,8 @@ export class BitbucketDataCenterService implements Omit<
 
             return prFilesWithDiffAndContents;
         } catch (error) {
+            // A rate-limited listing is not a PR with no files
+            if (is429Error(error)) throw error;
             this.logger.error({
                 message: `Error getting fully populated files for DC PR #${params.prNumber}`,
                 context: BitbucketDataCenterService.name,

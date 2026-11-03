@@ -15,15 +15,17 @@ export function splitUnifiedDiff(diff: string): UnifiedDiffFile[] {
     return diff
         .split(/(?=^diff --git )/m)
         .map((section) => {
-            const header = section.match(/^diff --git a\/(.+?) b\/(.+?)$/m);
-            if (!header) return null;
+            if (!section.startsWith('diff --git ')) return null;
 
             const hunkStart = section.search(/^@@ /m);
             const head =
                 hunkStart === -1 ? section : section.slice(0, hunkStart);
             const patch =
                 hunkStart === -1 ? '' : section.slice(hunkStart).trimEnd();
-            const renamedFrom = head.match(/^rename from (.+)$/m)?.[1];
+
+            const filename = newPath(head);
+            if (!filename) return null;
+            const renamedFrom = extendedHeaderPath(head, 'rename from');
 
             let additions = 0;
             let deletions = 0;
@@ -33,7 +35,7 @@ export function splitUnifiedDiff(diff: string): UnifiedDiffFile[] {
             }
 
             const file: UnifiedDiffFile = {
-                filename: header[2],
+                filename,
                 status: /^new file mode/m.test(head)
                     ? 'added'
                     : /^deleted file mode/m.test(head)
@@ -49,4 +51,109 @@ export function splitUnifiedDiff(diff: string): UnifiedDiffFile[] {
             return file;
         })
         .filter((file): file is UnifiedDiffFile => !!file);
+}
+
+/**
+ * The file's path after the change, as a host lists it. The `---`/`+++`
+ * lines and the extended headers carry one path each, so they are read
+ * first; the `diff --git a/X b/Y` line is ambiguous when a path contains
+ * " b/" and is only the last resort (a mode-only or binary change).
+ */
+function newPath(head: string): string | null {
+    const plus = markerPath(head, '+++');
+    if (plus && plus !== '/dev/null') return stripPrefix(plus, 'b/');
+    if (plus === '/dev/null') {
+        const minus = markerPath(head, '---');
+        if (minus && minus !== '/dev/null') return stripPrefix(minus, 'a/');
+    }
+    return (
+        extendedHeaderPath(head, 'rename to') ??
+        extendedHeaderPath(head, 'copy to') ??
+        gitHeaderNewPath(head)
+    );
+}
+
+function markerPath(head: string, marker: '+++' | '---'): string | null {
+    const escaped = marker.replace(/[+]/g, '\\+');
+    const raw = head.match(new RegExp(`^${escaped} (.+)$`, 'm'))?.[1];
+    // git ends the name with a tab when it contains a space
+    return raw === undefined ? null : unquote(raw.replace(/\t$/, ''));
+}
+
+function extendedHeaderPath(head: string, label: string): string | undefined {
+    const raw = head.match(new RegExp(`^${label} (.+)$`, 'm'))?.[1];
+    return raw === undefined ? undefined : unquote(raw);
+}
+
+function gitHeaderNewPath(head: string): string | null {
+    const rest = head.match(/^diff --git (.+)$/m)?.[1];
+    if (!rest) return null;
+
+    // Quoted (non-ASCII or special characters): "a/…" "b/…"
+    const quoted = rest.match(
+        /^(?:"(?:[^"\\]|\\.)*"|\S+) ("(?:[^"\\]|\\.)*")$/,
+    );
+    if (quoted) return stripPrefix(unquote(quoted[1]), 'b/');
+
+    // Same path on both sides: "a/P b/P", split in the middle so a path
+    // containing " b/" is not cut at the wrong place.
+    const half = (rest.length - 5) / 2;
+    if (
+        Number.isInteger(half) &&
+        rest.startsWith('a/') &&
+        rest.slice(2 + half, 5 + half) === ' b/' &&
+        rest.slice(2, 2 + half) === rest.slice(5 + half)
+    ) {
+        return rest.slice(5 + half);
+    }
+
+    const lastB = rest.lastIndexOf(' b/');
+    return lastB === -1 ? null : rest.slice(lastB + 3);
+}
+
+function stripPrefix(path: string, prefix: 'a/' | 'b/'): string {
+    return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+}
+
+const C_ESCAPES: Record<string, number> = {
+    'a': 7,
+    'b': 8,
+    't': 9,
+    'n': 10,
+    'v': 11,
+    'f': 12,
+    'r': 13,
+    '"': 34,
+    '\\': 92,
+};
+
+/**
+ * git quotes a path holding non-ASCII or special characters as a C string:
+ * `"src/caf\303\251.ts"`. The octal escapes are UTF-8 bytes.
+ */
+function unquote(raw: string): string {
+    if (!(raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"'))) {
+        return raw;
+    }
+    const body = raw.slice(1, -1);
+    const bytes: number[] = [];
+    for (let i = 0; i < body.length; i++) {
+        const ch = body[i];
+        if (ch !== '\\') {
+            bytes.push(...Buffer.from(ch, 'utf8'));
+            continue;
+        }
+        const octal = body.slice(i + 1, i + 4);
+        const next = body[i + 1];
+        if (/^[0-7]{3}$/.test(octal)) {
+            bytes.push(parseInt(octal, 8));
+            i += 3;
+        } else if (next !== undefined && next in C_ESCAPES) {
+            bytes.push(C_ESCAPES[next]);
+            i += 1;
+        } else {
+            bytes.push(92);
+        }
+    }
+    return Buffer.from(bytes).toString('utf8');
 }

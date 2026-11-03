@@ -87,4 +87,52 @@ describe('splitUnifiedDiff', () => {
     it('returns nothing for an empty diff', () => {
         expect(splitUnifiedDiff('')).toEqual([]);
     });
+
+    it('keys a path that contains " b/" by its full name', () => {
+        const diff = [
+            'diff --git a/src/a b/f.ts b/src/a b/f.ts',
+            'index 1111111..2222222 100644',
+            '--- a/src/a b/f.ts\t',
+            '+++ b/src/a b/f.ts\t',
+            '@@ -1 +1 @@',
+            '-x',
+            '+y',
+        ].join('\n');
+
+        expect(splitUnifiedDiff(diff).map((f) => f.filename)).toEqual([
+            'src/a b/f.ts',
+        ]);
+    });
+
+    it('decodes a quoted non-ASCII path', () => {
+        const diff = [
+            'diff --git "a/docs/caf\\303\\251.md" "b/docs/caf\\303\\251.md"',
+            'index 1111111..2222222 100644',
+            '--- "a/docs/caf\\303\\251.md"',
+            '+++ "b/docs/caf\\303\\251.md"',
+            '@@ -1 +1 @@',
+            '-x',
+            '+y',
+        ].join('\n');
+
+        expect(splitUnifiedDiff(diff).map((f) => f.filename)).toEqual([
+            'docs/café.md',
+        ]);
+    });
+
+    it('keys a change with no ---/+++ lines from the git header', () => {
+        const diff = [
+            'diff --git a/bin/run me.sh b/bin/run me.sh',
+            'old mode 100644',
+            'new mode 100755',
+            'diff --git "a/img/\\303\\251.png" "b/img/\\303\\251.png"',
+            'index 1111111..2222222 100644',
+            'Binary files "a/img/\\303\\251.png" and "b/img/\\303\\251.png" differ',
+        ].join('\n');
+
+        expect(splitUnifiedDiff(diff).map((f) => f.filename)).toEqual([
+            'bin/run me.sh',
+            'img/é.png',
+        ]);
+    });
 });

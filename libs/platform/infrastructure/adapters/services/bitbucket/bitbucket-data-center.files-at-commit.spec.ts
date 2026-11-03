@@ -96,6 +96,71 @@ describe('BitbucketDataCenterService — PR diffs', () => {
         ]);
     });
 
+    describe('getFilesByPullRequestId under a rate limit', () => {
+        const rateLimited = () =>
+            Object.assign(new Error('Request failed with status code 429'), {
+                response: { status: 429 },
+            });
+        const hostWith = (overrides: Record<string, () => Promise<any>>) =>
+            jest.fn((url: string) => {
+                for (const [suffix, answer] of Object.entries(overrides)) {
+                    if (url.endsWith(suffix)) return answer();
+                }
+                if (url.endsWith('/pull-requests/7')) {
+                    return Promise.resolve({
+                        data: { fromRef: { latestCommit: 'head' } },
+                    });
+                }
+                if (url.endsWith('/pull-requests/7/changes')) {
+                    return Promise.resolve({
+                        data: {
+                            values: [
+                                { path: { toString: 'a.ts' }, type: 'MODIFY' },
+                            ],
+                        },
+                    });
+                }
+                if (url.endsWith('/pull-requests/7/diff')) {
+                    return Promise.resolve({
+                        data: { diffs: [jsonDiff('a.ts', 'a.ts')] },
+                    });
+                }
+                return Promise.resolve({ data: 'content' });
+            });
+        const list = (service: BitbucketDataCenterService) =>
+            service.getFilesByPullRequestId({
+                organizationAndTeamData: org,
+                repository,
+                prNumber: 7,
+            });
+
+        it('lets a 429 on the file listing through instead of returning no files', async () => {
+            const { service } = makeService(
+                hostWith({
+                    '/pull-requests/7/changes': () =>
+                        Promise.reject(rateLimited()),
+                }),
+            );
+
+            await expect(list(service)).rejects.toMatchObject({
+                response: { status: 429 },
+            });
+        });
+
+        it('lets a 429 on a file diff through instead of an empty patch', async () => {
+            const { service } = makeService(
+                hostWith({
+                    '/pull-requests/7/diff': () =>
+                        Promise.reject(rateLimited()),
+                }),
+            );
+
+            await expect(list(service)).rejects.toMatchObject({
+                response: { status: 429 },
+            });
+        });
+    });
+
     describe('getPullRequestFilesAtCommit', () => {
         const read = (service: BitbucketDataCenterService) =>
             service.getPullRequestFilesAtCommit({
@@ -174,13 +239,11 @@ describe('BitbucketDataCenterService — PR diffs', () => {
 
         it('lets a rate limit through, so the review is not rerun in full', async () => {
             const { service } = makeService(
-                jest
-                    .fn()
-                    .mockRejectedValue(
-                        Object.assign(new Error('Too Many Requests'), {
-                            status: 429,
-                        }),
-                    ),
+                jest.fn().mockRejectedValue(
+                    Object.assign(new Error('Too Many Requests'), {
+                        status: 429,
+                    }),
+                ),
             );
 
             await expect(read(service)).rejects.toMatchObject({ status: 429 });

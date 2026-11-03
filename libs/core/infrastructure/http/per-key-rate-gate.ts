@@ -54,11 +54,12 @@ export interface RateGateOptions {
      */
     concurrency?: number;
     /**
-     * Longest a call may wait for its turn (queue + park + spacing) before
-     * the gate gives up with {@link RateGateWaitExceededError}. Without it a
-     * credential that keeps answering 429 parks every queued caller
-     * indefinitely: one review stage waited 99 minutes this way. Unset means
-     * no limit.
+     * Longest a call may wait for its turn before the gate gives up with
+     * {@link RateGateWaitExceededError}: a park it would sleep past the
+     * budget, or, while the key is in a 429 streak, any wait (queue
+     * included) past it. Without it a credential that keeps answering 429
+     * parks every queued caller indefinitely: one review stage waited 99
+     * minutes this way. Unset means no limit.
      */
     maxWaitMs?: number;
 }
@@ -135,6 +136,17 @@ export async function runWithRateGate<T>(
         for (;;) {
             const now = Date.now();
             const waitUntil = Math.max(gate.pausedUntil, gate.nextAllowedAt);
+            // While the key is rate limited, time spent queued behind other
+            // calls counts too: each of them may hold the slot through its
+            // own 429 retries, so a deep queue would otherwise wait without
+            // bound. A healthy queue (spacing only) is never cut short.
+            if (gate.rateLimitStreak > 0 && now > deadline) {
+                throw new RateGateWaitExceededError(
+                    key,
+                    now - enqueuedAt,
+                    Math.max(0, waitUntil - now),
+                );
+            }
             if (waitUntil <= now) break;
             if (waitUntil > deadline) {
                 throw new RateGateWaitExceededError(
