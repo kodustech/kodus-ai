@@ -52,6 +52,10 @@ const TIMEOUTS = {
     // covers a shallow fetch of large repos (cal.com, grafana) on a healthy
     // path, and a timeout is not retried (see SandboxLeaseManager).
     CLONE_MS: 120_000,
+    // Re-syncing a reused sandbox's checkout to the new head. Kept at 5 min:
+    // a timeout here is not a fallback but a review on the stale checkout
+    // (#1313), so this path trades latency for correctness.
+    SYNC_MS: 300_000,
     // apt-get on sandboxes created without the pre-built template.
     INSTALL_MS: 300_000,
     PROXY_DAEMON_MS: 10_000,
@@ -435,7 +439,7 @@ export async function syncE2BSandboxRepo(
         platform,
         checkoutSha,
     } = params;
-    const { logger, logContext, timeoutMs = TIMEOUTS.CLONE_MS } = opts;
+    const { logger, logContext, timeoutMs = TIMEOUTS.SYNC_MS } = opts;
 
     // Same precedence as the create path (checkoutSha > PR refspec > branch
     // tip) — CLI-origin reviews set checkoutSha and leave prNumber undefined,

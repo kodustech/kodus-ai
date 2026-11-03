@@ -665,6 +665,17 @@ describe('syncE2BSandboxRepo', () => {
         );
     });
 
+    it('gives the reuse sync 5 min, not the 2-min create fetch budget', async () => {
+        // A sync that times out is swallowed and the review runs on the stale
+        // checkout (#1313), so it keeps a longer budget than the create path.
+        const run = jest
+            .fn()
+            .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+        await syncE2BSandboxRepo(makeSandbox(run), baseParams);
+
+        expect(run.mock.calls[0][1].timeoutMs).toBe(300_000);
+    });
+
     it('omits the auth header entirely for an anonymous (public repo) sync', async () => {
         const run = jest
             .fn()
@@ -1043,9 +1054,9 @@ describe('E2B review user lockdown', () => {
             expect.objectContaining({ user: 'root' }),
         );
         // Nothing else of the review runs as root.
-        expect(
-            calls.filter(([, opts]) => opts?.user === 'root'),
-        ).toHaveLength(1);
+        expect(calls.filter(([, opts]) => opts?.user === 'root')).toHaveLength(
+            1,
+        );
         expect(instance.privilegesDropped).toBe(true);
         expect((Sandbox as any).create).toHaveBeenCalledWith(
             'tpl',

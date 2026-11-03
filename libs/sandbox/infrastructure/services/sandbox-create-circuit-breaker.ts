@@ -106,6 +106,12 @@ export class SandboxCreateCircuitBreaker {
      */
     recordFailure(repoKey: string): void {
         const now = this.now();
+        this.refreshState();
+
+        // Creates that passed tryAcquire() before the breaker opened report
+        // their failures afterwards. They belong to the outage that already
+        // opened it: re-arming would stretch the OPEN window past openMs.
+        if (this.state === 'OPEN') return;
 
         if (this.state === 'HALF_OPEN') {
             this.probeInFlight = false;

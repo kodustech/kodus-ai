@@ -101,6 +101,23 @@ describe('SandboxCreateCircuitBreaker', () => {
         expect(breaker.tryAcquire()).toBe(true);
     });
 
+    it('does not stretch the OPEN window with failures from creates already in flight', () => {
+        const { breaker, advance } = makeBreaker();
+
+        breaker.recordFailure('org:a');
+        breaker.recordFailure('org:b');
+        breaker.recordFailure('org:b');
+        expect(breaker.getState()).toBe('OPEN');
+
+        // A create that passed tryAcquire() before the trip fails later
+        advance(20_000);
+        breaker.recordFailure('org:c');
+        advance(10_000);
+
+        // Still openMs after the trip, not after the late failure
+        expect(breaker.getState()).toBe('HALF_OPEN');
+    });
+
     it('reports each state change once, with what tripped it', () => {
         const { breaker, onTransition, advance } = makeBreaker();
         const states = () =>
