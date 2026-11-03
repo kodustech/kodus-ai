@@ -228,6 +228,17 @@ export const useKnowledgeSourceListing = (params: {
     };
 };
 
+/** The branch or tag a repository is pinned to: the last item's that sets
+ *  one, as a review reads it (`resolveKnowledgeRepositories`). */
+const pinnedRef = (knowledge: KnowledgeItem[], repository: string) =>
+    [...knowledge]
+        .reverse()
+        .find(
+            (item) =>
+                item.repository?.toLowerCase() === repository.toLowerCase() &&
+                item.ref,
+        )?.ref;
+
 /**
  * Where skills and docs are added from: this repository, a linked one, or
  * any other repository connected on the same integration; for another
@@ -295,12 +306,7 @@ export const KnowledgeSourceBar = ({
         !first.some((name) => name.toLowerCase() === selected)
             ? [...first, source.repository]
             : first;
-    const refOf = (repository: string) =>
-        knowledge.find(
-            (item) =>
-                item.repository?.toLowerCase() === repository.toLowerCase() &&
-                item.ref,
-        )?.ref;
+    const refOf = (repository: string) => pinnedRef(knowledge, repository);
     const open = (repository?: string) => {
         setPicking(false);
         setEditingRef(false);
@@ -579,11 +585,7 @@ export const AgentKnowledgeField = ({
           )
         : [];
     const browse = (repository: string) => {
-        const ref = knowledge.find(
-            (item) =>
-                item.repository?.toLowerCase() === repository.toLowerCase() &&
-                item.ref,
-        )?.ref;
+        const ref = pinnedRef(knowledge, repository);
         setSource({ repository, ...(ref && { ref }) });
         setAdding(true);
     };

@@ -212,6 +212,38 @@ describe("AgentKnowledgeField with another repository", () => {
         ]);
     });
 
+    it("lists a repository at the last ref pinned to it, as a review reads it", () => {
+        field([
+            {
+                path: "a.md",
+                kind: "doc",
+                repository: RULES,
+                ref: "v2",
+                linkedTo: [{ agentId: "valves" }],
+            },
+            {
+                path: "c.md",
+                kind: "doc",
+                repository: RULES,
+                ref: "v3",
+                linkedTo: [{ agentId: "valves" }],
+            },
+        ]);
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Add skill or doc" }),
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "irrigation-rules" }),
+        );
+
+        expect(mockResolve).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                source: { repository: RULES, ref: "v3" },
+            }),
+        );
+    });
+
     it("says why a repository cannot be listed", () => {
         mockResolve.mockImplementation((params) =>
             params?.source?.repository

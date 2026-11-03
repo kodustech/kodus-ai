@@ -10,7 +10,6 @@ import {
     CUSTOM_AGENT_LIMITS,
     KNOWLEDGE_MAIN_REVIEW_TARGET,
     knowledgeSourcePath,
-    parseKnowledgeSourcePath,
     type KnowledgeItem,
     type KnowledgeLinkTarget,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -431,9 +430,13 @@ export class KnowledgeResolver {
         return this.reader.refFor?.(path) ?? this.reader.ref;
     }
 
-    /** `{ ref }` for a file of another repository, nothing otherwise. */
+    /** `{ ref }` for a file of another repository, nothing otherwise. The
+     *  reader decides: `docs/payments:2024.md` parses like `owner/repo:path`
+     *  but is read from the reviewed repository. */
     private otherRef(path: string): { ref?: string } {
-        return parseKnowledgeSourcePath(path) ? { ref: this.refOf(path) } : {};
+        return this.reader.isOtherRepository?.(path)
+            ? { ref: this.refOf(path) }
+            : {};
     }
 
     private read(path: string): Promise<BaseBranchReadResult> {

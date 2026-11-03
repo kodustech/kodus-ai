@@ -29,6 +29,9 @@ export interface BaseBranchReader {
     /** Branch a given path is read on, for messages: `ref`, except for a
      *  skill or doc of another repository (`owner/repo:path`). */
     refFor?(path: string): string;
+    /** The path names a file of another, linked repository (a reviewed
+     *  repository's path can hold a colon too). */
+    isOtherRepository?(path: string): boolean;
     readFile(path: string): Promise<BaseBranchReadResult>;
     /** Regular files under a directory, recursively, as repo-relative paths. */
     listFiles(dir: string): Promise<string[]>;
@@ -431,6 +434,10 @@ export class MultiRepositoryKnowledgeReader implements BaseBranchReader {
         return (
             this.sourceOf(path)?.ref ?? this.local.refFor?.(path) ?? this.ref
         );
+    }
+
+    isOtherRepository(path: string): boolean {
+        return this.sourceOf(path) !== undefined;
     }
 
     async readFile(path: string): Promise<BaseBranchReadResult> {

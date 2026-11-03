@@ -438,6 +438,45 @@ describe('KnowledgeResolver with another repository', () => {
         );
     });
 
+    it("keeps a reviewed-repository path with a colon as this repository's file", async () => {
+        // `docs/payments:2024.md` parses like owner/repo:path, but names no
+        // linked repository: it is read here, and the prompt says nothing of
+        // another repository.
+        const reader = new MultiRepositoryKnowledgeReader(
+            new InMemoryBaseBranchReader({ 'docs/payments:2024.md': '# 2024' }),
+            [
+                {
+                    source: {
+                        fullName: RULES,
+                        id: '20',
+                        name: 'irrigation-rules',
+                        ref: 'trunk',
+                    },
+                    reader: new InMemoryBaseBranchReader({}),
+                },
+            ],
+        );
+
+        const resolved = await new KnowledgeResolver(reader).resolve({
+            items: [
+                {
+                    kind: 'doc',
+                    path: 'docs/payments:2024.md',
+                    linkedTo: [{ agentId: 'valves' }],
+                },
+            ],
+            target: { agentId: 'valves' },
+        });
+
+        expect(resolved.docs).toEqual([
+            expect.objectContaining({ path: 'docs/payments:2024.md' }),
+        ]);
+        expect(resolved.docs[0]).not.toHaveProperty('ref');
+        expect(renderKnowledgeSection(resolved)).not.toContain(
+            'owner/repo:path',
+        );
+    });
+
     it('leaves the prompt of reviewed-repository knowledge as it was', async () => {
         const resolved = await new KnowledgeResolver(
             new InMemoryBaseBranchReader({ 'docs/valves.md': '# Valves' }),
