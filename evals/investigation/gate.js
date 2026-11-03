@@ -23,7 +23,9 @@ function evaluateGate(summary, rows, model, setName, targetsFile) {
     } catch (err) {
         // Missing file → skip the gate. A malformed file must fail loudly
         // rather than silently disabling the gate.
-        if (err.code === 'MODULE_NOT_FOUND') {
+        // A floors file asked for by name (--targets) that does not resolve is
+        // a mistake, not an eval without floors.
+        if (err.code === 'MODULE_NOT_FOUND' && !targetsFile) {
             return { status: 'skipped', reason: 'targets.json missing' };
         }
         throw err;
