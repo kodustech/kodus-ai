@@ -1,5 +1,8 @@
 import * as os from 'os';
-import { parseDrainTimeoutMs } from '@libs/core/workflow/infrastructure/drain-timeout';
+import {
+    INBOX_RELEASE_TIMEOUT_MS,
+    parseDrainTimeoutMs,
+} from '@libs/core/workflow/infrastructure/drain-timeout';
 import {
     RabbitSubscribe,
     MessageHandlerErrorBehavior,
@@ -609,9 +612,12 @@ export class WorkflowJobConsumer implements BeforeApplicationShutdown {
         // "dead worker leaves locks" pattern we traced in prod: without
         // this, orphan locks sit around until the reaper cron's 2.5h
         // timeout, blocking other workers from picking up the messages.
+        // Bounded: a slow Mongo must not hold up the AMQP close that follows
         try {
-            const released = await this.inboxRepository.releaseAllByInstance(
-                this.instanceId,
+            const released = await runWithBoundedTimeout(
+                this.inboxRepository.releaseAllByInstance(this.instanceId),
+                INBOX_RELEASE_TIMEOUT_MS,
+                'inbox.releaseAllByInstance',
             );
             if (released > 0) {
                 this.logger.log({

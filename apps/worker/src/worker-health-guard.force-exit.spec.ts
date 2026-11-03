@@ -46,6 +46,25 @@ describe('WorkerHealthGuardService force-exit', () => {
         );
     });
 
+    it('derives the budget from the default drain when the variable is unset', () => {
+        jest.useFakeTimers();
+        delete process.env.API_WORKER_DRAIN_TIMEOUT_MS;
+        jest.spyOn(process, 'kill').mockImplementation(() => true);
+        const exit = jest
+            .spyOn(process, 'exit')
+            .mockImplementation((() => undefined) as never);
+        const guard = new WorkerHealthGuardService(undefined);
+        (guard as any).logger = { log: jest.fn(), error: jest.fn() };
+
+        (guard as any).exitGracefully(1);
+
+        // 25s default drain + 25s cancels and close + 10s inbox release
+        jest.advanceTimersByTime(60_000 - 1);
+        expect(exit).not.toHaveBeenCalled();
+        jest.advanceTimersByTime(1);
+        expect(exit).toHaveBeenCalledWith(1);
+    });
+
     it('starts a shutdown only once', () => {
         jest.useFakeTimers();
         const kill = jest.spyOn(process, 'kill').mockImplementation(() => true);

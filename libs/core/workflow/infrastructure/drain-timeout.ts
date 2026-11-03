@@ -11,17 +11,26 @@ export const DEFAULT_DRAIN_TIMEOUT_MS = 25_000;
 export const MAX_DRAIN_TIMEOUT_MS = 10 * 60_000;
 
 /**
+ * Bound on releasing this host's inbox locks after the drain. The worker's
+ * force-exit timer leaves this much room for it.
+ */
+export const INBOX_RELEASE_TIMEOUT_MS = 10_000;
+
+/**
  * How long a shutting-down worker waits for its running jobs
  * (API_WORKER_DRAIN_TIMEOUT_MS). The single reader of that variable: the
  * job consumer's drain and the worker's force-exit timer must agree on it,
  * or the force-exit fires before the drain it is meant to cover ends.
- * Out-of-range values fall back to the default with a warn.
+ * Malformed or out-of-range values fall back to the default with a warn.
  */
 export function parseDrainTimeoutMs(): number {
     const raw = process.env.API_WORKER_DRAIN_TIMEOUT_MS;
     if (!raw) return DEFAULT_DRAIN_TIMEOUT_MS;
 
-    const parsed = Number.parseInt(raw, 10);
+    // The whole value must be a number of milliseconds: parseInt would read
+    // "30s" or "2.4e5" as 30 or 2, a drain of almost nothing.
+    const trimmed = raw.trim();
+    const parsed = /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN;
     if (
         !Number.isFinite(parsed) ||
         parsed <= 0 ||
@@ -29,7 +38,7 @@ export function parseDrainTimeoutMs(): number {
     ) {
         createLogger('DrainTimeout').warn({
             message:
-                'API_WORKER_DRAIN_TIMEOUT_MS is out of range; using the default',
+                'API_WORKER_DRAIN_TIMEOUT_MS is not a whole number of milliseconds in range; using the default',
             context: 'DrainTimeout',
             metadata: {
                 configured: raw,

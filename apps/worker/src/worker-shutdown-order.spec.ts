@@ -2,6 +2,8 @@ import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
 import { BeforeApplicationShutdown, Injectable, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 
+import { WorkflowJobConsumer } from '@libs/core/workflow/infrastructure/workflow-job-consumer.service';
+
 import { WorkerDrainService } from './worker-drain.service';
 
 /**
@@ -24,6 +26,16 @@ class FakeJobConsumer implements BeforeApplicationShutdown {
 class FakeWorkflowModule {}
 
 describe('worker shutdown order', () => {
+    it('drains the real job consumer in beforeApplicationShutdown, the phase the fake stands in for', () => {
+        // The fake below only proves the phase order; this pins the real
+        // consumer to that phase. Moving its drain back to
+        // onApplicationShutdown would close the connection before it.
+        const proto = WorkflowJobConsumer.prototype as any;
+        expect(typeof proto.beforeApplicationShutdown).toBe('function');
+        expect(proto.onApplicationShutdown).toBeUndefined();
+        expect(proto.onModuleDestroy).toBeUndefined();
+    });
+
     it('cancels consumers, then drains jobs, then closes the connection', async () => {
         const amqpConnection = {
             consumerTags: ['tag-code-review'],
