@@ -1,5 +1,8 @@
 import { SandboxConcurrencyLimiter } from './sandbox-concurrency-limiter';
-import { parseLimits } from './sandbox-concurrency-config.service';
+import {
+    parseLimits,
+    SandboxConcurrencyConfigService,
+} from './sandbox-concurrency-config.service';
 
 describe('SandboxConcurrencyLimiter', () => {
     it('never blocks when the cap is disabled', async () => {
@@ -103,5 +106,68 @@ describe('parseLimits', () => {
             maxPerWorker: 6,
         });
         expect(parseLimits({ maxPerWorker: -1 })).toEqual({ maxPerWorker: 0 });
+    });
+
+    it('takes a value above the ceiling as a typo and falls back to the default', () => {
+        expect(parseLimits({ maxPerWorker: 1_000_000 })).toEqual({
+            maxPerWorker: 0,
+        });
+        expect(parseLimits({ maxPerWorker: 100 })).toEqual({
+            maxPerWorker: 100,
+        });
+    });
+});
+
+describe('SandboxConcurrencyConfigService', () => {
+    afterEach(() => jest.useRealTimers());
+
+    it('retries a failed read within seconds instead of caching it for the TTL', async () => {
+        jest.useFakeTimers({ now: 1_000_000 });
+        const findByKey = jest
+            .fn()
+            .mockRejectedValueOnce(new Error('connection reset'))
+            .mockResolvedValue({ configValue: { maxPerWorker: 4 } });
+        const service = new SandboxConcurrencyConfigService({
+            findByKey,
+        } as any);
+        const warn = jest.fn();
+        (service as any).logger = { warn };
+
+        await expect(service.getLimits()).resolves.toEqual({
+            maxPerWorker: 0,
+        });
+        expect(warn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({ neverRead: true }),
+            }),
+        );
+        // Within the retry window: no second read
+        await service.getLimits();
+        expect(findByKey).toHaveBeenCalledTimes(1);
+
+        jest.setSystemTime(1_000_000 + 5_000);
+        await expect(service.getLimits()).resolves.toEqual({
+            maxPerWorker: 4,
+        });
+        expect(findByKey).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the last limits it read when a later read fails', async () => {
+        jest.useFakeTimers({ now: 1_000_000 });
+        const findByKey = jest
+            .fn()
+            .mockResolvedValueOnce({ configValue: { maxPerWorker: 3 } })
+            .mockRejectedValue(new Error('connection reset'));
+        const service = new SandboxConcurrencyConfigService({
+            findByKey,
+        } as any);
+        (service as any).logger = { warn: jest.fn() };
+
+        await service.getLimits();
+        jest.setSystemTime(1_000_000 + 61_000);
+
+        await expect(service.getLimits()).resolves.toEqual({
+            maxPerWorker: 3,
+        });
     });
 });

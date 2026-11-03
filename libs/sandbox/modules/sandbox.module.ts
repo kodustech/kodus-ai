@@ -14,7 +14,10 @@ import {
 import { SandboxLeaseRepository } from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
 import { SandboxLeaseManager } from '@libs/sandbox/infrastructure/services/sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from '@libs/sandbox/infrastructure/services/sandbox-lease-reaper.service';
-import { SandboxConcurrencyConfigService } from '@libs/sandbox/infrastructure/services/sandbox-concurrency-config.service';
+import {
+    SANDBOX_CONCURRENCY_CONFIG_SERVICE_TOKEN,
+    SandboxConcurrencyConfigService,
+} from '@libs/sandbox/infrastructure/services/sandbox-concurrency-config.service';
 import { GlobalParametersModule } from '@libs/organization/modules/global-parameters.module';
 
 @Module({
@@ -55,7 +58,10 @@ import { GlobalParametersModule } from '@libs/organization/modules/global-parame
             inject: [ConfigService],
         },
         SandboxLeaseRepository,
-        SandboxConcurrencyConfigService,
+        {
+            provide: SANDBOX_CONCURRENCY_CONFIG_SERVICE_TOKEN,
+            useClass: SandboxConcurrencyConfigService,
+        },
         {
             provide: SANDBOX_LEASE_MANAGER_TOKEN,
             useClass: SandboxLeaseManager,

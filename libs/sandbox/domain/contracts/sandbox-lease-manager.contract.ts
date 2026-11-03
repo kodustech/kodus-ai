@@ -37,15 +37,20 @@ export class SandboxCircuitOpenError extends Error {
 }
 
 /**
- * Thrown by acquire() when the caller's signal aborted (the job timed out)
- * while the review was still waiting for a sandbox: a slot on this worker,
- * or room in the E2B plan. A review never runs without its sandbox because
- * of capacity; it waits, and stops waiting only when its job is gone.
+ * Thrown by acquire() when the wait for a sandbox (a slot on this worker, or
+ * room in the E2B plan) was aborted: the caller's signal fired (the job timed
+ * out), or a caller without one hit DEFAULT_CAPACITY_WAIT_MS. A review never
+ * runs without its sandbox because of capacity; it waits, and stops waiting
+ * only when its job is gone.
  */
 export class SandboxWaitAbortedError extends Error {
-    constructor(prKey: string, waitedMs: number, waitingFor: string) {
+    constructor(
+        readonly prKey: string,
+        readonly waitedMs: number,
+        readonly waitingFor: string,
+    ) {
         super(
-            `SandboxLeaseManager: stopped waiting for ${waitingFor} after ${waitedMs}ms prKey="${prKey}" (job aborted)`,
+            `SandboxLeaseManager: stopped waiting for ${waitingFor} after ${waitedMs}ms prKey="${prKey}" (wait aborted)`,
         );
         this.name = 'SandboxWaitAbortedError';
     }
@@ -54,10 +59,24 @@ export class SandboxWaitAbortedError extends Error {
 export interface SandboxAcquireOptions {
     /**
      * Aborts the wait for capacity (a worker slot, or E2B plan room). Pass the
-     * job's signal so a timed-out job does not keep its place in line.
+     * job's signal so a timed-out job does not keep its place in line. Without
+     * one the wait is bounded by DEFAULT_CAPACITY_WAIT_MS instead.
      */
     signal?: AbortSignal;
+    /**
+     * The caller already holds this worker's slot for the same work and is
+     * replacing its own sandbox (a renewal). A second slot would wait on the
+     * caller itself, so none is taken; E2B's plan limit still applies.
+     */
+    replacesOwnSandbox?: boolean;
 }
+
+/**
+ * How long a caller that passes no signal waits for capacity before
+ * SandboxWaitAbortedError. Reviews pass their job's signal and are not bound
+ * by this.
+ */
+export const DEFAULT_CAPACITY_WAIT_MS = 10 * 60_000;
 
 export interface AcquireResult {
     sandbox: SandboxInstance;

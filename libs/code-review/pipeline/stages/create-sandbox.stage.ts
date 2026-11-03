@@ -282,7 +282,20 @@ export class CreateSandboxStage extends BasePipelineStage<CodeReviewPipelineCont
                         prNumber: context?.pullRequest?.number,
                     },
                 });
-                return context;
+                // Not a clean run: whatever follows has no sandbox
+                return this.updateContext(context, (draft) => {
+                    if (!draft.errors) draft.errors = [];
+                    draft.errors.push({
+                        pipelineId: context.pipelineMetadata?.pipelineId,
+                        stage: this.stageName,
+                        error: err,
+                        severity: 'partial',
+                        metadata: {
+                            waitedMs: err.waitedMs,
+                            prNumber: context.pullRequest?.number,
+                        },
+                    });
+                });
             }
             this.logger.error({
                 message: `Failed to acquire sandbox lease for ${label} (all retries exhausted), continuing without it`,

@@ -20,7 +20,7 @@
  *   Test 5 — reaper cleans crashed-worker lease (Phase 1 criterion 3)
  */
 
-import { Sandbox } from 'e2b';
+import { RateLimitError, Sandbox } from 'e2b';
 import { SandboxLeaseManager } from './sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from './sandbox-lease-reaper.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
@@ -620,11 +620,8 @@ describe('SandboxLeaseManager', () => {
             platform: 'GITHUB' as any,
         });
         const planFull = () =>
-            Object.assign(
-                new Error(
-                    '429: You have reached the maximum number of concurrent E2B sandboxes',
-                ),
-                { name: 'RateLimitError' },
+            new RateLimitError(
+                '429: You have reached the maximum number of concurrent E2B sandboxes',
             );
 
         function cappedManager(
@@ -739,6 +736,45 @@ describe('SandboxLeaseManager', () => {
             );
             expect(capped.concurrencyLimiter.waiting).toBe(0);
             await capped.release(first.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(0);
+        });
+
+        it('bounds the wait of a caller that passes no signal, so it cannot wait forever', async () => {
+            jest.useFakeTimers();
+            const capped = cappedManager(1);
+            await capped.acquire(prKeyFor(1), 'review');
+
+            const second = capped
+                .acquire(prKeyFor(2), 'conversation')
+                .catch((e) => e);
+            await jest.advanceTimersByTimeAsync(10 * 60_000 - 1_000);
+            expect(capped.concurrencyLimiter.waiting).toBe(1);
+
+            await jest.advanceTimersByTimeAsync(61_000);
+            await expect(second).resolves.toBeInstanceOf(
+                SandboxWaitAbortedError,
+            );
+            expect(capped.concurrencyLimiter.waiting).toBe(0);
+        });
+
+        it('lets a renewal replace its own sandbox without queueing behind its own slot', async () => {
+            const capped = cappedManager(1);
+            const review = await capped.acquire(prKeyFor(1), 'review');
+
+            const renewal = await capped.acquire(
+                '7e2e97b8-aefa-422e-92d4-30b378c0332e:safeguard-renew:1:abc',
+                'safeguard-renewal',
+                undefined,
+                undefined,
+                { replacesOwnSandbox: true },
+            );
+
+            expect(renewal.leaseId).toBeDefined();
+            expect(capped.concurrencyLimiter.active).toBe(1);
+            // Releasing the renewal leaves the review's slot in place
+            await capped.release(renewal.leaseId);
+            expect(capped.concurrencyLimiter.active).toBe(1);
+            await capped.release(review.leaseId);
             expect(capped.concurrencyLimiter.active).toBe(0);
         });
 

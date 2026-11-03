@@ -4,6 +4,7 @@ import {
     assertValidPrKey,
     ISandboxLeaseManager,
     SandboxCircuitOpenError,
+    DEFAULT_CAPACITY_WAIT_MS,
     SandboxAcquireOptions,
     SandboxWaitAbortedError,
     SandboxInvalidatedError,
@@ -37,7 +38,8 @@ import {
 } from '@libs/common/utils/polling';
 import {
     DEFAULT_SANDBOX_CONCURRENCY_LIMITS,
-    SandboxConcurrencyConfigService,
+    ISandboxConcurrencyConfigService,
+    SANDBOX_CONCURRENCY_CONFIG_SERVICE_TOKEN,
 } from './sandbox-concurrency-config.service';
 import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
@@ -218,7 +220,8 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         private readonly configService: ConfigService,
         // Optional so specs that build the manager by hand stay uncapped.
         @Optional()
-        private readonly concurrencyConfig?: SandboxConcurrencyConfigService,
+        @Inject(SANDBOX_CONCURRENCY_CONFIG_SERVICE_TOKEN)
+        private readonly concurrencyConfig?: ISandboxConcurrencyConfigService,
     ) {}
 
     /**
@@ -226,8 +229,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * slot for the prKey's sandbox. With every slot taken the caller waits in
      * line for one, as long as it takes: a review never runs without its
      * sandbox for lack of capacity. Only `options.signal` (the job's) ends the
-     * wait, with SandboxWaitAbortedError. The slot is held until the last
-     * lease this worker holds on the prKey is released.
+     * wait, with SandboxWaitAbortedError; a caller without one waits at most
+     * DEFAULT_CAPACITY_WAIT_MS. The slot is held until the last lease this
+     * worker holds on the prKey is released.
      */
     async acquire(
         prKey: string,
@@ -238,21 +242,34 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     ): Promise<AcquireResult> {
         assertValidPrKey(prKey);
 
-        await this.takeSlot(prKey, consumer, options?.signal);
+        // No caller may wait forever: without the job's signal, bound it
+        const bound = options?.signal ? null : new AbortController();
+        const boundTimer = bound
+            ? setTimeout(() => bound.abort(), DEFAULT_CAPACITY_WAIT_MS)
+            : null;
+        const signal = options?.signal ?? bound!.signal;
+        const takesSlot = !options?.replacesOwnSandbox;
 
         try {
-            const result = await this.acquireLease(
-                prKey,
-                consumer,
-                leaseTtlMs,
-                cloneParams,
-                options?.signal,
-            );
-            this.leaseIdToSlotPrKey.set(result.leaseId, prKey);
-            return result;
-        } catch (err) {
-            this.dropSlot(prKey);
-            throw err;
+            if (takesSlot) await this.takeSlot(prKey, consumer, signal);
+            try {
+                const result = await this.acquireLease(
+                    prKey,
+                    consumer,
+                    leaseTtlMs,
+                    cloneParams,
+                    signal,
+                );
+                if (takesSlot) {
+                    this.leaseIdToSlotPrKey.set(result.leaseId, prKey);
+                }
+                return result;
+            } catch (err) {
+                if (takesSlot) this.dropSlot(prKey);
+                throw err;
+            }
+        } finally {
+            if (boundTimer) clearTimeout(boundTimer);
         }
     }
 

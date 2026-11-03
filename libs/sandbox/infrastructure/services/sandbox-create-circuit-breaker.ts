@@ -1,3 +1,5 @@
+import { RateLimitError } from 'e2b';
+
 import { createLogger } from '@libs/core/log/logger';
 
 /**
@@ -274,13 +276,11 @@ export function isRepositorySpecificSandboxFailure(err: unknown): boolean {
  * E2B refusing a create because the plan has no room (its concurrent-sandbox
  * limit, or a rate limit): capacity, not a failure. The caller waits and
  * tries again; it is neither retried as a failure nor counted by the breaker.
+ * Only the SDK's own error counts: a git host's "rate limit exceeded" during
+ * the clone, or another RateLimitError by name, is an ordinary failure.
  */
 export function isSandboxCapacityFailure(err: unknown): boolean {
-    if (!err || typeof err !== 'object') return false;
-    if ((err as { name?: unknown }).name === 'RateLimitError') return true;
-    return /maximum number of concurrent|rate limit(ed| exceeded)/i.test(
-        describeError(err),
-    );
+    return err instanceof RateLimitError;
 }
 
 /**
