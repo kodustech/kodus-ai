@@ -394,6 +394,70 @@ describe('reviewSettingsService', () => {
             ).resolves.toMatchObject({ key: 'linkedRepositories' });
         });
 
+        it('checks linkedRepositories at a directory the same command created', async () => {
+            const value = [{ repository: 'acme/docs' }];
+            // Before the save the directory does not exist; after it, the
+            // scopes list it with the id the API gave it.
+            configApi.getCodeReviewScopes
+                .mockResolvedValueOnce(SCOPES)
+                .mockResolvedValue(
+                    SCOPES.map((scope) =>
+                        scope.id === 'repo-1'
+                            ? {
+                                  ...scope,
+                                  directories: [
+                                      ...scope.directories,
+                                      {
+                                          id: 'dir-new',
+                                          name: 'api',
+                                          paths: ['/apps/api'],
+                                      },
+                                  ],
+                              }
+                            : scope,
+                    ),
+                );
+            const base = FORMATTED as any;
+            configApi.getFormattedCodeReviewParameter.mockResolvedValue({
+                ...base,
+                configValue: {
+                    ...base.configValue,
+                    repositories: base.configValue.repositories.map(
+                        (repo: any) =>
+                            repo.id === 'repo-1'
+                                ? {
+                                      ...repo,
+                                      directories: [
+                                          ...(repo.directories ?? []),
+                                          {
+                                              id: 'dir-new',
+                                              configs: {
+                                                  linkedRepositories: {
+                                                      value,
+                                                      level: 'directory',
+                                                  },
+                                              },
+                                          },
+                                      ],
+                                  }
+                                : repo,
+                    ),
+                },
+            } as never);
+
+            await expect(
+                reviewSettingsService.set(
+                    {
+                        repository: 'kodus-ai',
+                        directory: 'apps/api',
+                        createDirectory: true,
+                    },
+                    'linkedRepositories',
+                    JSON.stringify(value),
+                ),
+            ).resolves.toMatchObject({ key: 'linkedRepositories' });
+        });
+
         it('saves global without a repository id', async () => {
             await reviewSettingsService.set(
                 { repository: 'global' },

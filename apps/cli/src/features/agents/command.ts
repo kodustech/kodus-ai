@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import fs from 'fs/promises';
 import path from 'path';
 import {
+    agentSlug,
     agentStatusLine,
     CUSTOM_AGENT_TEMPLATES,
     customAgentsService,
@@ -236,7 +237,7 @@ function printAgent(
         `  ${agentStatusLine(agent, agent.status, windowDays, perRepository, usageUnavailable)}`,
     );
     cliInfo(
-        `  Enabled: ${agent.enabled ? 'yes' : 'no'} · @kody -v ${agent.name}`,
+        `  Enabled: ${agent.enabled ? 'yes' : 'no'} · @kody -v ${agentSlug(agent.name)}`,
     );
     if (agent.skills.length) {
         cliInfo(`  Skills: ${agent.skills.join(', ')}`);

@@ -459,7 +459,12 @@ class ReviewSettingsService {
         );
 
         if (!isCentralizedPr(result) && PLAN_GATED_KEYS.has(setting.key)) {
-            const after = await this.loadScopeConfigs(ctx, scope);
+            // A directory this command created has no id yet: look it up again.
+            const savedScope =
+                scope.level === 'directory' && !scope.directoryId
+                    ? await this.resolveScope(ctx, target)
+                    : scope;
+            const after = await this.loadScopeConfigs(ctx, savedScope);
             const stored = readLeaf(after.configs, setting.key);
             if (JSON.stringify(stored?.value) !== JSON.stringify(value)) {
                 throw new CommandError(
