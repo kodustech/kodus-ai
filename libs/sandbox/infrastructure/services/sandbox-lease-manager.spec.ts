@@ -684,6 +684,36 @@ describe('SandboxLeaseManager', () => {
             expect(capped.concurrencyLimiter.active).toBe(1);
         });
 
+        it('logs a refusal with the pool occupancy, and stays quiet when uncapped', async () => {
+            const capped = cappedManager(1, 0);
+            const warn = jest.spyOn((capped as any).logger, 'warn');
+
+            await capped.acquire(prKeyFor(1), 'review');
+            await capped.acquire(prKeyFor(2), 'review').catch(() => undefined);
+
+            expect(warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining('no sandbox slot'),
+                    metadata: expect.objectContaining({
+                        granted: false,
+                        maxPerWorker: 1,
+                        active: 1,
+                        waiting: 0,
+                    }),
+                }),
+            );
+
+            const uncapped = cappedManager(0, 0);
+            const uncappedWarn = jest.spyOn((uncapped as any).logger, 'warn');
+            const uncappedLog = jest.spyOn((uncapped as any).logger, 'log');
+            await uncapped.acquire(prKeyFor(3), 'review');
+            const slotLines = [
+                ...uncappedWarn.mock.calls,
+                ...uncappedLog.mock.calls,
+            ].filter(([p]: any[]) => /sandbox slot/.test(p?.message));
+            expect(slotLines).toEqual([]);
+        });
+
         it('frees the slot when the acquire itself fails', async () => {
             const capped = cappedManager(1, 0);
             leaseRepo.upsertAcquire.mockRejectedValueOnce(

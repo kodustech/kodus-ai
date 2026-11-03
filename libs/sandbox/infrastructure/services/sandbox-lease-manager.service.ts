@@ -28,7 +28,10 @@ import {
     SandboxCircuitTransition,
     SandboxCreateCircuitBreaker,
 } from './sandbox-create-circuit-breaker';
-import { SandboxConcurrencyLimiter } from './sandbox-concurrency-limiter';
+import {
+    SandboxConcurrencyLimiter,
+    SandboxConcurrencyLimits,
+} from './sandbox-concurrency-limiter';
 import {
     DEFAULT_SANDBOX_CONCURRENCY_LIMITS,
     SandboxConcurrencyConfigService,
@@ -69,6 +72,9 @@ const DEFAULT_LEASE_TTL_MS = 30 * 60 * 1000; // 30 minutes
  * long. Longer than the 105-min job timeout so a slow review keeps its slot.
  */
 const CONCURRENCY_SLOT_STALE_MS = 2 * 60 * 60 * 1000;
+
+// A slot granted faster than this did not really wait; not worth a log line.
+const SLOT_WAIT_LOG_THRESHOLD_MS = 1_000;
 
 // Grace window for in-flight tool calls before a detached sandbox is killed.
 const INVALIDATE_DRAIN_MS = 60_000;
@@ -172,6 +178,13 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      */
     readonly concurrencyLimiter = new SandboxConcurrencyLimiter(
         CONCURRENCY_SLOT_STALE_MS,
+        Date.now,
+        (slotId, heldMs) =>
+            this.logger.warn({
+                message: `SandboxLeaseManager: dropped a sandbox slot held ${heldMs}ms without release`,
+                context: SandboxLeaseManager.name,
+                metadata: { slotId, heldMs },
+            }),
     );
     /**
      * Slots are per sandbox, not per lease: the review, its safeguard pass
@@ -271,6 +284,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             (await this.concurrencyConfig?.getLimits()) ??
             DEFAULT_SANDBOX_CONCURRENCY_LIMITS;
 
+        const requestedAt = Date.now();
         let slot = this.prKeySlots.get(prKey);
         if (slot) {
             slot.refs++;
@@ -286,7 +300,42 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
         const granted = await slot.granted;
         if (!granted) this.dropSlot(prKey);
+        this.logSlotWait(prKey, granted, Date.now() - requestedAt, limits);
         return { granted, ...limits };
+    }
+
+    /**
+     * Logs only when the cap made a lease wait or turned it away, with the
+     * pool's occupancy, so the logs show whether maxPerWorker is too tight.
+     */
+    private logSlotWait(
+        prKey: string,
+        granted: boolean,
+        waitedMs: number,
+        limits: SandboxConcurrencyLimits,
+    ): void {
+        if (limits.maxPerWorker <= 0) return;
+        if (granted && waitedMs < SLOT_WAIT_LOG_THRESHOLD_MS) return;
+
+        const payload = {
+            message: granted
+                ? `SandboxLeaseManager: sandbox slot granted after ${waitedMs}ms prKey="${prKey}"`
+                : `SandboxLeaseManager: no sandbox slot within ${limits.waitMs}ms prKey="${prKey}"`,
+            context: SandboxLeaseManager.name,
+            metadata: {
+                prKey,
+                granted,
+                waitedMs,
+                maxPerWorker: limits.maxPerWorker,
+                active: this.concurrencyLimiter.active,
+                waiting: this.concurrencyLimiter.waiting,
+            },
+        };
+        if (granted) {
+            this.logger.log(payload);
+        } else {
+            this.logger.warn(payload);
+        }
     }
 
     /** Drop one reference to prKey's slot; the last one frees the slot. */

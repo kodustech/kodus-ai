@@ -69,6 +69,24 @@ describe('SandboxConcurrencyLimiter', () => {
         now = 1_001;
         await expect(limiter.acquire('b', limits)).resolves.toBe(true);
     });
+
+    it('reports each holder it drops as stale', async () => {
+        let now = 0;
+        const onStale = jest.fn();
+        const limiter = new SandboxConcurrencyLimiter(
+            1_000,
+            () => now,
+            onStale,
+        );
+        const limits = { maxPerWorker: 2, waitMs: 0 };
+
+        await limiter.acquire('leaked', limits);
+        now = 1_500;
+        await limiter.acquire('fresh', limits);
+
+        expect(onStale).toHaveBeenCalledTimes(1);
+        expect(onStale).toHaveBeenCalledWith('leaked', 1_500);
+    });
 });
 
 describe('parseLimits', () => {

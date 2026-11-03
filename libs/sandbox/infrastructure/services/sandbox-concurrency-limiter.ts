@@ -34,6 +34,11 @@ export class SandboxConcurrencyLimiter {
     constructor(
         private readonly staleAfterMs: number,
         private readonly now: () => number = Date.now,
+        /** Called for each holder dropped as stale: a release() that never ran. */
+        private readonly onStaleHolder?: (
+            holderId: string,
+            heldMs: number,
+        ) => void,
     ) {}
 
     get active(): number {
@@ -93,12 +98,18 @@ export class SandboxConcurrencyLimiter {
     }
 
     private dropStaleHolders(): void {
-        const cutoff = this.now() - this.staleAfterMs;
+        const now = this.now();
+        const cutoff = now - this.staleAfterMs;
         let dropped = false;
         for (const [holderId, since] of this.holders) {
             if (since < cutoff) {
                 this.holders.delete(holderId);
                 dropped = true;
+                try {
+                    this.onStaleHolder?.(holderId, now - since);
+                } catch {
+                    // A failing log sink must not block slot accounting
+                }
             }
         }
         if (dropped) this.grantWaiters();
