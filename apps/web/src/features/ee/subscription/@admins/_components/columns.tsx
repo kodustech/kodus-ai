@@ -413,11 +413,13 @@ export const columns: ColumnDef<MembersSetup>[] = [
                                         // user id alone.
                                         const userId = row.original.userId;
                                         if (!userId) {
+                                            // Retrying cannot help: there
+                                            // is no account to invite.
                                             toast({
                                                 variant: "warning",
-                                                ...invitationLinkFailure(
-                                                    undefined,
-                                                ),
+                                                title: "No account to invite",
+                                                description:
+                                                    "This member has no Kodus account yet. Invite them by email instead.",
                                             });
                                             return;
                                         }
