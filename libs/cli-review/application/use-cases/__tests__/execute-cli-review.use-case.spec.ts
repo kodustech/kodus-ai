@@ -796,7 +796,7 @@ describe('ExecuteCliReviewUseCase', () => {
             mockExecute.mockRestore();
         });
 
-        it('runs a review asked with --fast and --heavy as fast only', async () => {
+        it('runs heavy only when asked, and --fast with --heavy as fast only', async () => {
             const { useCase } = createMocks();
             const seen: any[] = [];
             const mockExecute = jest
@@ -818,6 +818,7 @@ describe('ExecuteCliReviewUseCase', () => {
                 });
 
             for (const config of [
+                {},
                 { heavy: true },
                 { fast: true, heavy: true },
             ]) {
@@ -828,13 +829,12 @@ describe('ExecuteCliReviewUseCase', () => {
                 });
             }
 
-            expect(
-                seen.map((c) => [c.heavy, c.codeReviewConfig?.reviewMode]),
-            ).toEqual([
-                [true, seen[0].codeReviewConfig?.reviewMode],
-                [false, 'fast'],
+            expect(seen.map((c) => c.heavy)).toEqual([false, true, false]);
+            expect(seen.map((c) => c.codeReviewConfig?.reviewMode === 'fast')).toEqual([
+                false,
+                false,
+                true,
             ]);
-            expect(seen[0].codeReviewConfig?.reviewMode).not.toBe('fast');
 
             mockExecute.mockRestore();
         });
