@@ -361,6 +361,28 @@ describe('BitbucketDataCenterService.getFilesByPullRequestId — per-file read f
     });
 });
 
+describe('BitbucketDataCenterService.getFilesByPullRequestId — a per-file diff cut short', () => {
+    it('keeps the hunks it sent and warns that the patch is partial', async () => {
+        const { list, logger } = makeHost({
+            changes: [{ path: 'big.ts', type: 'MODIFY' }],
+            wholeDiff: async () => ({ data: { truncated: true } }),
+            perFile: async (path) => ({
+                data: { truncated: true, diffs: [jsonDiff(path, path)] },
+            }),
+        });
+
+        const files = await list();
+
+        expect(files?.[0]?.patch).toBe(PATCH);
+        expect(logger.warn).toHaveBeenCalledWith({
+            message:
+                'Diff of big.ts in PR#7 was truncated; its patch is partial',
+            context: BitbucketDataCenterService.name,
+            metadata: { ...LOG_METADATA, filePath: 'big.ts' },
+        });
+    });
+});
+
 describe('BitbucketDataCenterService.getChangedFilesSinceLastCommit — listing failures', () => {
     const since = (get: jest.Mock) => {
         const { service, logger } = makeHost({

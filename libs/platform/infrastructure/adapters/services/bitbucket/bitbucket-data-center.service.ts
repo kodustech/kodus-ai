@@ -1456,7 +1456,20 @@ export class BitbucketDataCenterService implements Omit<
                             `${repoPath}/pull-requests/${prNumber}/diff`,
                             { params: { path, limit: 1000 } },
                         );
-                        for (const diff of data?.diffs || []) add(path, diff);
+                        const diffs = data?.diffs || [];
+                        for (const diff of diffs) add(path, diff);
+                        if (
+                            data?.truncated ||
+                            diffs.some((d) => d?.truncated)
+                        ) {
+                            // The host cut this file's diff too: keep the
+                            // hunks it sent, and say the patch is partial
+                            this.logger.warn({
+                                message: `Diff of ${path} in PR#${prNumber} was truncated; its patch is partial`,
+                                context: BitbucketDataCenterService.name,
+                                metadata: { ...logMetadata, filePath: path },
+                            });
+                        }
                     } catch (error) {
                         // A rate limit or a network failure is not an empty
                         // diff: let the job retry

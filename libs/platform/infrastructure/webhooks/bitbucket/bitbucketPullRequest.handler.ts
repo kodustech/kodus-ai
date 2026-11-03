@@ -1,3 +1,4 @@
+import { isTransientFetchError } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -361,18 +362,17 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
                                 if (baseRef !== defaultBranch) {
                                     changedFiles = undefined;
                                 } else {
-                                    changedFiles =
-                                        await this.codeManagement.getFilesByPullRequestId(
-                                            {
-                                                organizationAndTeamData:
-                                                    context.organizationAndTeamData,
-                                                repository: {
-                                                    id: repository.id,
-                                                    name: repository.name,
-                                                },
-                                                prNumber: prId,
+                                    changedFiles = await this.listMergedPrFiles(
+                                        {
+                                            organizationAndTeamData:
+                                                context.organizationAndTeamData,
+                                            repository: {
+                                                id: repository.id,
+                                                name: repository.name,
                                             },
-                                        );
+                                            prNumber: prId,
+                                        },
+                                    );
 
                                     this.enqueueAstGraphUpdateOnMergedUseCase
                                         ?.execute({
@@ -442,6 +442,33 @@ export class BitbucketPullRequestHandler implements IWebhookEventHandler {
                 error,
             });
             throw error;
+        }
+    }
+
+    /**
+     * The merged PR's files, for the Kody Rules sync and the AST-graph
+     * update. A merge webhook is answered once and never redelivered, so a
+     * network blip would lose that sync for good: read once more before
+     * giving up. A 429 is not re-read; the rate gate already waited on it.
+     */
+    private async listMergedPrFiles(
+        params: Parameters<CodeManagementService['getFilesByPullRequestId']>[0],
+    ) {
+        try {
+            return await this.codeManagement.getFilesByPullRequestId(params);
+        } catch (error) {
+            if (!isTransientFetchError(error)) throw error;
+            this.logger.warn({
+                message: `Network failure listing merged PR#${params.prNumber}; reading it once more`,
+                context: BitbucketPullRequestHandler.name,
+                error,
+                metadata: {
+                    organizationId:
+                        params.organizationAndTeamData?.organizationId,
+                    prNumber: params.prNumber,
+                },
+            });
+            return await this.codeManagement.getFilesByPullRequestId(params);
         }
     }
 
