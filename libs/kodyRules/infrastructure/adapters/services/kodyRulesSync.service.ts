@@ -754,21 +754,37 @@ export class KodyRulesSyncService {
         });
 
         if (converted.kind === 'skipped') {
-            if (converted.reason === NOT_A_RULE_TEMPLATE) {
+            const keepsRule = converted.reason === NOT_A_RULE_TEMPLATE;
+            if (keepsRule) {
+                // The kept rule follows a rename to its new file, so a later
+                // edit, @kody-ignore or deletion of that file reaches it.
+                if (
+                    previousPath &&
+                    existing?.uuid &&
+                    existing.status !== KodyRulesStatus.DELETED
+                ) {
+                    await this.moveRuleSource({
+                        organizationAndTeamData,
+                        ruleId: existing.uuid,
+                        sourcePath: filePath,
+                    });
+                }
                 await this.flagUnparsableSource({
                     organizationAndTeamData,
                     rule: existing,
                     sourcePath: filePath,
                 });
-            } else if (previousPath) {
-                // A rename whose new file imports nothing (disabled via
-                // frontmatter, for example): the old file is gone and nothing
-                // replaced its rule, so retire both paths.
+            }
+            // A rename leaves nothing behind on the old path, and the new path
+            // keeps at most the rule kept above. Otherwise (disabled via
+            // frontmatter, for example) nothing replaced the old rule.
+            if (previousPath) {
                 for (const sourcePath of [previousPath, filePath]) {
                     await this.deleteRuleBySourcePath({
                         organizationAndTeamData,
                         repositoryId: repository.id,
                         sourcePath,
+                        keepUuid: keepsRule ? existing?.uuid : undefined,
                     });
                 }
             }
@@ -1235,6 +1251,37 @@ export class KodyRulesSyncService {
             '<!-- The sections below are files referenced via @file from the content above; treat them as part of the same guidance. -->',
             ...sections,
         ].join('\n');
+    }
+
+    /**
+     * Re-points a kept rule at its file's new path. Only `sourcePath` changes:
+     * `createOrUpdate` merges the update over the stored rule, so its text,
+     * status and detector stay as they were.
+     */
+    private async moveRuleSource(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        ruleId: string;
+        sourcePath: string;
+    }): Promise<void> {
+        const { organizationAndTeamData, ruleId, sourcePath } = params;
+        try {
+            await this.kodyRulesService.createOrUpdate(
+                organizationAndTeamData,
+                { uuid: ruleId, sourcePath } as CreateKodyRuleDto,
+                this.systemUserInfo,
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to move a kept rule to its renamed file',
+                context: KodyRulesSyncService.name,
+                error,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    ruleId,
+                    sourcePath,
+                },
+            });
+        }
     }
 
     /**

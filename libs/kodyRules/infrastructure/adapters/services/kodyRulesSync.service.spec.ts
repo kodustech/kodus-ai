@@ -1799,16 +1799,49 @@ describe('KodyRulesSyncService.syncFromChangedFiles — renamed rule file', () =
         expect(live(store, NEW)).toEqual([]);
     });
 
-    it('a rename to a file that no longer parses keeps the rule and flags it', async () => {
+    it('a rename to a file that no longer parses moves the kept rule to the new path and flags it', async () => {
+        const { service, store } = makeService(
+            [
+                record('a', '2026-01-02T00:00:00Z', { rule: 'last good' }),
+                record('older', '2026-01-01T00:00:00Z'),
+                record('stale', '2026-01-03T00:00:00Z', { sourcePath: NEW }),
+            ],
+            { converted: { kind: 'skipped', reason: 'not a rule template' } },
+        );
+
+        await sync(service);
+
+        expect(live(store, OLD)).toEqual([]);
+        expect(live(store, NEW).map((r) => r.uuid)).toEqual(['a']);
+        const kept = store.find((r) => r.uuid === 'a');
+        expect(kept).toEqual(
+            expect.objectContaining({
+                status: KodyRulesStatus.ACTIVE,
+                rule: 'last good',
+                sourceFileIssue: 'not_a_rule_template',
+            }),
+        );
+    });
+
+    it('a later @kody-ignore on the new path retires a rule kept through a broken rename', async () => {
         const { service, store } = makeService(
             [record('a', '2026-01-01T00:00:00Z')],
             { converted: { kind: 'skipped', reason: 'not a rule template' } },
         );
 
         await sync(service);
+        jest.spyOn(service, 'getMergedFileContent').mockResolvedValue(
+            '<!-- @kody-ignore -->\nbody',
+        );
+        await service.syncFromChangedFiles({
+            organizationAndTeamData: ORG,
+            repository: { id: 'repo-1', name: 'repo' },
+            pullRequestNumber: 8,
+            files: [{ filename: NEW, status: 'modified' }],
+        });
 
-        expect(live(store, OLD).map((r) => r.uuid)).toEqual(['a']);
-        expect(store[0].sourceFileIssue).toBe('not_a_rule_template');
+        expect(live(store, OLD)).toEqual([]);
+        expect(live(store, NEW)).toEqual([]);
     });
 });
 
