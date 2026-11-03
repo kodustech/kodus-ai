@@ -76,7 +76,7 @@ describe('SandboxCreateCircuitBreaker', () => {
         advance(30_000);
         expect(breaker.getState()).toBe('HALF_OPEN');
         const probe = breaker.tryAcquire()!;
-        expect(probe).toEqual({ probe: true });
+        expect(probe).toMatchObject({ probe: true });
         // Second caller while the probe is in flight is rejected
         expect(breaker.tryAcquire()).toBeNull();
 
@@ -106,7 +106,7 @@ describe('SandboxCreateCircuitBreaker', () => {
         breaker.releaseProbe(probe);
 
         expect(breaker.getState()).toBe('HALF_OPEN');
-        expect(breaker.tryAcquire()).toEqual({ probe: true });
+        expect(breaker.tryAcquire()).toMatchObject({ probe: true });
     });
 
     it('never lets a create admitted before the trip free or fail the probe', () => {
@@ -116,7 +116,7 @@ describe('SandboxCreateCircuitBreaker', () => {
         fail('org-a', 'org-b', 'org-c');
         advance(30_000);
         const probe = breaker.tryAcquire()!;
-        expect(probe).toEqual({ probe: true });
+        expect(probe).toMatchObject({ probe: true });
 
         // The early create ends with a repo-specific error, then a timeout
         breaker.releaseProbe(early);
@@ -152,11 +152,33 @@ describe('SandboxCreateCircuitBreaker', () => {
         fail('org-a', 'org-b', 'org-c');
         advance(30_000);
 
-        expect(breaker.tryAcquire()).toEqual({ probe: true });
+        expect(breaker.tryAcquire()).toMatchObject({ probe: true });
         advance(119_000);
         expect(breaker.tryAcquire()).toBeNull();
         advance(1_000);
-        expect(breaker.tryAcquire()).toEqual({ probe: true });
+        expect(breaker.tryAcquire()).toMatchObject({ probe: true });
+    });
+
+    it('lets only the current probe decide once a stuck one was replaced', () => {
+        const { breaker, fail, advance } = makeBreaker();
+        fail('org-a', 'org-b', 'org-c');
+        advance(30_000);
+        const stuck = breaker.tryAcquire()!;
+        advance(120_000);
+        const live = breaker.tryAcquire()!;
+        expect(live).toMatchObject({ probe: true });
+
+        // The replaced probe settles late: it can neither free the live
+        // probe's slot nor close or re-open the breaker
+        breaker.releaseProbe(stuck);
+        expect(breaker.tryAcquire()).toBeNull();
+        breaker.recordSuccess(stuck);
+        expect(breaker.getState()).toBe('HALF_OPEN');
+        breaker.recordFailure('org-a', stuck);
+        expect(breaker.getState()).toBe('HALF_OPEN');
+
+        breaker.recordSuccess(live);
+        expect(breaker.getState()).toBe('CLOSED');
     });
 
     it('does not stretch the OPEN window with failures from creates already in flight', () => {
@@ -235,6 +257,38 @@ describe('SandboxCreateCircuitBreaker', () => {
                 }),
             }),
         );
+    });
+
+    it('falls back to a process warning when the logger is down too', () => {
+        const breaker = new SandboxCreateCircuitBreaker(
+            OPTIONS,
+            () => 0,
+            () => {
+                throw new Error('log sink down');
+            },
+        );
+        (breaker as any).logger = {
+            error: () => {
+                throw new Error('logger down');
+            },
+        };
+        const emitWarning = jest
+            .spyOn(process, 'emitWarning')
+            .mockImplementation(() => undefined);
+
+        try {
+            breaker.recordFailure('org-a', CLOSED_PERMIT);
+            breaker.recordFailure('org-b', CLOSED_PERMIT);
+            breaker.recordFailure('org-b', CLOSED_PERMIT);
+
+            expect(breaker.getState()).toBe('OPEN');
+            expect(emitWarning).toHaveBeenCalledWith(
+                'SandboxCreateCircuitBreaker: CLOSED -> OPEN transition lost (failures=3, distinctOrgs=2)',
+                { code: 'SANDBOX_CIRCUIT_TRANSITION_LOST' },
+            );
+        } finally {
+            emitWarning.mockRestore();
+        }
     });
 
     it('works without a transition callback, and logs nothing', () => {

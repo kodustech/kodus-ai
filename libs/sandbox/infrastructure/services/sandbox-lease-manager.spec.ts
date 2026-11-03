@@ -868,17 +868,13 @@ describe('SandboxLeaseManager', () => {
                 new Error('remote: Repository not found.'),
             );
 
-            for (const [i, repo] of [
-                'r1',
-                'r2',
-                'r3',
-                'r4',
-                'r5',
-                'r6',
-            ].entries()) {
+            // Enough failures from enough organizations to trip it, were
+            // they counted: only the exclusion keeps it CLOSED
+            const orgs = ['a', 'b', 'c', 'd', 'a', 'b'] as const;
+            for (const [i, org] of orgs.entries()) {
                 await manager
                     .acquire(
-                        prKeyFor(repo, 400 + i),
+                        orgPrKeyFor(org, 400 + i),
                         'review',
                         undefined,
                         cloneParamsFor(400 + i),
@@ -886,6 +882,9 @@ describe('SandboxLeaseManager', () => {
                     .catch(() => undefined);
             }
 
+            expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
+                6,
+            );
             expect(manager.createCircuit.getState()).toBe('CLOSED');
         });
     });

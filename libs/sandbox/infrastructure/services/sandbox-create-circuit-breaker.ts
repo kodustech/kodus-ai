@@ -53,6 +53,11 @@ export const DEFAULT_SANDBOX_CIRCUIT_OPTIONS: SandboxCircuitBreakerOptions = {
  */
 export interface SandboxCircuitPermit {
     probe: boolean;
+    /**
+     * Which probe this is. A probe replaced after probeTimeoutMs may still
+     * report; only the current one's report counts.
+     */
+    probeId?: number;
 }
 
 export interface SandboxCircuitTransition {
@@ -78,6 +83,7 @@ export class SandboxCreateCircuitBreaker {
     private openedAt = 0;
     private probeInFlight = false;
     private probeGrantedAt = 0;
+    private probeId = 0;
 
     constructor(
         private readonly options: SandboxCircuitBreakerOptions = DEFAULT_SANDBOX_CIRCUIT_OPTIONS,
@@ -116,7 +122,8 @@ export class SandboxCreateCircuitBreaker {
         }
         this.probeInFlight = true;
         this.probeGrantedAt = this.now();
-        return { probe: true };
+        this.probeId += 1;
+        return { probe: true, probeId: this.probeId };
     }
 
     /**
@@ -128,7 +135,7 @@ export class SandboxCreateCircuitBreaker {
     recordSuccess(permit: SandboxCircuitPermit): void {
         this.refreshState();
         if (this.state === 'OPEN') return;
-        if (this.state === 'HALF_OPEN' && !permit.probe) return;
+        if (this.state === 'HALF_OPEN' && !this.isCurrentProbe(permit)) return;
         this.probeInFlight = false;
         this.failures = [];
         this.transition('CLOSED', 0, 0);
@@ -149,9 +156,10 @@ export class SandboxCreateCircuitBreaker {
         if (this.state === 'OPEN') return;
 
         if (this.state === 'HALF_OPEN') {
-            // Only the probe's outcome decides; a late failure from a create
-            // admitted before the trip is old news.
-            if (!permit.probe) return;
+            // Only the current probe's outcome decides; a late failure from a
+            // create admitted before the trip, or from a replaced probe, is
+            // old news.
+            if (!this.isCurrentProbe(permit)) return;
             this.probeInFlight = false;
             this.open(now, 1, 1);
             return;
@@ -173,10 +181,15 @@ export class SandboxCreateCircuitBreaker {
      * A probe that ended without telling us anything about the
      * infrastructure (e.g. a repository-specific failure) must free the probe
      * slot, or the breaker would stay HALF_OPEN forever. Only the holder of
-     * the probe may free it.
+     * the current probe may free it: a replaced probe freeing the slot would
+     * let a second probe run next to the live one.
      */
     releaseProbe(permit: SandboxCircuitPermit): void {
-        if (permit.probe) this.probeInFlight = false;
+        if (this.isCurrentProbe(permit)) this.probeInFlight = false;
+    }
+
+    private isCurrentProbe(permit: SandboxCircuitPermit): boolean {
+        return permit.probe && permit.probeId === this.probeId;
     }
 
     private open(now: number, failures: number, distinctOrgs: number): void {
@@ -228,7 +241,11 @@ export class SandboxCreateCircuitBreaker {
                     },
                 });
             } catch {
-                // Nothing left to report through
+                // The logger itself is down: stderr is the last sink left
+                process.emitWarning(
+                    `SandboxCreateCircuitBreaker: ${from} -> ${to} transition lost (failures=${failures}, distinctOrgs=${distinctOrgs})`,
+                    { code: 'SANDBOX_CIRCUIT_TRANSITION_LOST' },
+                );
             }
         }
     }
