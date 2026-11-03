@@ -1010,9 +1010,7 @@ describe('SandboxLeaseManager', () => {
                 "git -c http.extraHeader=\"$GIT_AUTH_HEADER\" fetch --depth=1 'https://github.com/org/repo.git' 'refs/pull/301/head' && git checkout -f FETCH_HEAD",
             ),
             expect.objectContaining({
-                envs: expect.objectContaining({
-                    GIT_AUTH_HEADER: expect.any(String),
-                }),
+                envs: expect.objectContaining({ GIT_AUTH_HEADER: expect.any(String) }),
             }),
         );
     });

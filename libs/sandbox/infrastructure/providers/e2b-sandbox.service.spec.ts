@@ -1054,9 +1054,9 @@ describe('E2B review user lockdown', () => {
             expect.objectContaining({ user: 'root' }),
         );
         // Nothing else of the review runs as root.
-        expect(calls.filter(([, opts]) => opts?.user === 'root')).toHaveLength(
-            1,
-        );
+        expect(
+            calls.filter(([, opts]) => opts?.user === 'root'),
+        ).toHaveLength(1);
         expect(instance.privilegesDropped).toBe(true);
         expect((Sandbox as any).create).toHaveBeenCalledWith(
             'tpl',
