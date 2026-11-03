@@ -410,6 +410,73 @@ describe('doctor checks — each condition in scope, one at a time', () => {
             expect(deps.complete).not.toHaveBeenCalled();
         });
 
+        it('an invalid declared env model fails with its reason, not "no model"', async () => {
+            const env = cleanEnv();
+            env.API_LLM_PROVIDER = 'openrouter';
+            const deps = llmDeps();
+            const results = await llmCheck(deps).run(ctx({ env }));
+            expect(results[0]).toMatchObject({
+                status: 'fail',
+                check: 'llm.configured',
+                title: 'The server LLM configuration is invalid: API_LLM_PROVIDER="openrouter" is not supported. Use one of: openai, openai_compatible, anthropic, google_gemini, google_vertex.',
+            });
+            expect(deps.complete).not.toHaveBeenCalled();
+            expectActionable(results);
+        });
+
+        it('says whether the server model provider was declared or guessed', async () => {
+            const guessed = await llmCheck(llmDeps()).run(ctx());
+            expect(
+                guessed.find((r) => r.check === 'llm.env_provider')?.title,
+            ).toContain('guessed from the model name');
+
+            const env = cleanEnv();
+            env.API_LLM_PROVIDER = 'openai';
+            const declared = await llmCheck(llmDeps()).run(ctx({ env }));
+            expect(
+                declared.find((r) => r.check === 'llm.env_provider')?.title,
+            ).toContain('set in API_LLM_PROVIDER');
+        });
+
+        it('does not report the server model origin when every org runs on BYOK', async () => {
+            const byok = {
+                version: 2,
+                credentials: [{ id: 'c1', provider: 'openai', apiKey: 'x' }],
+                models: [{ id: 'm1', credentialId: 'c1', model: 'gpt-4.1' }],
+                routing: { defaultModelId: 'm1' },
+            };
+            const results = await llmCheck(llmDeps({ byok })).run(ctx());
+            expect(
+                results.find((r) => r.check === 'llm.env_provider'),
+            ).toBeUndefined();
+        });
+
+        it('warns when the generic and the legacy key disagree', async () => {
+            const env = cleanEnv();
+            env.API_LLM_PROVIDER = 'openai';
+            env.API_LLM_API_KEY = 'sk-other-key-0987654321';
+            const results = await llmCheck(llmDeps()).run(ctx({ env }));
+            expect(
+                results.find((r) => r.check === 'llm.env_conflict'),
+            ).toMatchObject({
+                status: 'warn',
+                title: 'API_LLM_API_KEY and API_OPEN_AI_API_KEY are both set to different values; API_LLM_API_KEY is used.',
+            });
+            expectActionable(results);
+        });
+
+        it('warns when the env reasoning effort is one the model cannot honor', async () => {
+            const env = cleanEnv();
+            env.API_LLM_PROVIDER = 'openai_compatible';
+            env.API_LLM_PROVIDER_MODEL = 'minimax-m2.5';
+            env.API_LLM_REASONING_EFFORT = 'none';
+            const results = await llmCheck(llmDeps()).run(ctx({ env }));
+            const tuning = results.find((r) => r.check === 'llm.env_tuning');
+            expect(tuning?.status).toBe('warn');
+            expect(tuning?.title).toMatch(/^API_LLM_REASONING_EFFORT: /);
+            expectActionable(results);
+        });
+
         it('git token cannot read', async () => {
             const results = await gitAccessCheck(
                 healthyGit({ read: 'denied' }),
