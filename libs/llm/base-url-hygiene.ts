@@ -167,3 +167,37 @@ export function describeProtocolMismatch(
         `upstream's OpenAI-compatible path instead.`
     );
 }
+
+/** The path each SDK appends to the base URL on every call. */
+const SDK_ENDPOINTS: Record<'openai' | 'anthropic', readonly string[]> = {
+    openai: ['/chat/completions', '/responses'],
+    anthropic: ['/messages'],
+};
+
+/**
+ * The base URL without the endpoint its own SDK appends, for the env path.
+ *
+ * Narrower than `repairBaseUrl`: it removes only the one suffix that protocol's
+ * SDK adds, so a `/v1` before it stays (`.../v1/messages` → `.../v1`, where the
+ * shared list would cut to the origin). A URL ending in that suffix 404s on
+ * every call, so no working config is changed; anything else comes back as is.
+ */
+export function stripSdkEndpoint(
+    rawUrl: string | undefined,
+    protocol: 'openai' | 'anthropic',
+): string | undefined {
+    if (!rawUrl) return rawUrl;
+    let parsed: URL;
+    try {
+        parsed = new URL(rawUrl);
+    } catch {
+        return rawUrl;
+    }
+    if (parsed.search || parsed.hash) return rawUrl;
+    const path = parsed.pathname.replace(/\/+$/, '');
+    const endpoint = SDK_ENDPOINTS[protocol].find((p) =>
+        path.toLowerCase().endsWith(p),
+    );
+    if (!endpoint) return rawUrl;
+    return parsed.origin + path.slice(0, -endpoint.length);
+}

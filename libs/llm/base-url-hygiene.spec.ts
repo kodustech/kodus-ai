@@ -2,6 +2,7 @@ import {
     describeBaseUrlProblem,
     describeProtocolMismatch,
     repairBaseUrl,
+    stripSdkEndpoint,
 } from './base-url-hygiene';
 
 describe('describeBaseUrlProblem', () => {
@@ -49,9 +50,9 @@ describe('repairBaseUrl — the read path, where the save guard cannot reach', (
     it('strips the endpoint the provider appends itself', () => {
         // The exact value two live slots have stored. Every review they ran hit
         // .../chat/completions/chat/completions and 404ed.
-        expect(repairBaseUrl('https://api.groq.com/openai/v1/chat/completions')).toBe(
-            'https://api.groq.com/openai/v1',
-        );
+        expect(
+            repairBaseUrl('https://api.groq.com/openai/v1/chat/completions'),
+        ).toBe('https://api.groq.com/openai/v1');
         expect(repairBaseUrl('https://x.example.com/v1/messages')).toBe(
             'https://x.example.com',
         );
@@ -65,7 +66,9 @@ describe('repairBaseUrl — the read path, where the save guard cannot reach', (
             'https://api.groq.com/openai/v1/chat/completions',
             'https://proxy.internal:8443/deep/path/v1/messages',
         ]) {
-            expect(new URL(repairBaseUrl(url)).origin).toBe(new URL(url).origin);
+            expect(new URL(repairBaseUrl(url)).origin).toBe(
+                new URL(url).origin,
+            );
         }
     });
 
@@ -90,7 +93,9 @@ describe('repairBaseUrl — the read path, where the save guard cannot reach', (
         // One rule, two answers. If these ever disagreed, the runtime would dial
         // something other than the URL the error message asked for.
         const url = 'https://api.groq.com/openai/v1/chat/completions';
-        expect(describeBaseUrlProblem(url)).toContain(`"${repairBaseUrl(url)}"`);
+        expect(describeBaseUrlProblem(url)).toContain(
+            `"${repairBaseUrl(url)}"`,
+        );
     });
 });
 
@@ -133,5 +138,39 @@ describe('describeProtocolMismatch — wrong only in combination', () => {
         // provider or a different path, and those are different requests.
         const url = 'https://api.minimax.io/anthropic';
         expect(repairBaseUrl(url)).toBe(url);
+    });
+});
+
+describe('stripSdkEndpoint', () => {
+    it.each([
+        [
+            'https://api.openai.com/v1/chat/completions',
+            'openai',
+            'https://api.openai.com/v1',
+        ],
+        [
+            'https://api.openai.com/v1/responses/',
+            'openai',
+            'https://api.openai.com/v1',
+        ],
+        [
+            'https://gw.test/anthropic/v1/messages',
+            'anthropic',
+            'https://gw.test/anthropic/v1',
+        ],
+    ] as const)('%s (%s) → %s', (raw, protocol, expected) => {
+        expect(stripSdkEndpoint(raw, protocol)).toBe(expected);
+    });
+
+    it.each([
+        ['https://api.openai.com/v1', 'openai'],
+        ['https://gw.test/v1/', 'anthropic'],
+        // The other protocol's endpoint is not this SDK's to remove.
+        ['https://gw.test/v1/messages', 'openai'],
+        ['https://gw.test/v1/chat/completions', 'anthropic'],
+        ['https://gw.test/v1/chat/completions?key=1', 'openai'],
+        ['not a url', 'openai'],
+    ] as const)('leaves %s (%s) untouched', (raw, protocol) => {
+        expect(stripSdkEndpoint(raw, protocol)).toBe(raw);
     });
 });

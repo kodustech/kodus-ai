@@ -20,11 +20,20 @@ describe('resolveDeclaredEnvProvider', () => {
         ).toEqual({ kind: 'inferred' });
     });
 
-    it.each(['API_LLM_API_KEY', 'API_LLM_BASE_URL', 'API_LLM_REASONING_EFFORT'])(
+    it.each([
+        'API_LLM_API_KEY',
+        'API_LLM_BASE_URL',
+        'API_LLM_REASONING_EFFORT',
+    ])(
         'reports %s set without API_LLM_PROVIDER instead of ignoring it',
         (name) => {
             const result = resolveDeclaredEnvProvider(
-                env({ [name]: name === 'API_LLM_BASE_URL' ? 'https://x.test/v1' : 'low' }),
+                env({
+                    [name]:
+                        name === 'API_LLM_BASE_URL'
+                            ? 'https://x.test/v1'
+                            : 'low',
+                }),
             );
             expect(result.kind).toBe('invalid');
             expect(result.kind === 'invalid' && result.reason).toContain(
@@ -75,7 +84,7 @@ describe('resolveDeclaredEnvProvider', () => {
         });
     });
 
-    it('never puts a key value in a reason or a warning', () => {
+    it('never puts a key value in a warning', () => {
         const result = resolveDeclaredEnvProvider(
             env({
                 API_LLM_PROVIDER: 'openai',
@@ -83,8 +92,58 @@ describe('resolveDeclaredEnvProvider', () => {
                 API_OPEN_AI_API_KEY: 'sk-legacy-secret',
             }),
         );
-        expect(JSON.stringify(result.kind === 'declared' && result.warnings)).not.toMatch(
-            /secret/,
+        expect(result.kind).toBe('declared');
+        if (result.kind !== 'declared') return;
+        expect(result.warnings).toHaveLength(1);
+        expect(JSON.stringify(result.warnings)).not.toMatch(/secret/);
+    });
+
+    it.each([
+        ['an unknown effort', { API_LLM_REASONING_EFFORT: 'max' }],
+        ['an unsupported provider', { API_LLM_PROVIDER: 'open_router' }],
+        [
+            'a base URL Gemini cannot take',
+            {
+                API_LLM_PROVIDER: 'google_gemini',
+                API_LLM_BASE_URL: 'https://proxy.test/v1',
+            },
+        ],
+    ])('never puts a key value in the reason for %s', (_, vars) => {
+        const result = resolveDeclaredEnvProvider(
+            env({
+                API_LLM_PROVIDER: 'openai',
+                API_LLM_API_KEY: 'sk-generic-secret',
+                API_OPEN_AI_API_KEY: 'sk-legacy-secret',
+                ...vars,
+            }),
+        );
+        expect(result.kind).toBe('invalid');
+        if (result.kind !== 'invalid') return;
+        expect(result.reason).not.toMatch(/secret/);
+    });
+
+    it('reads API_ANTHROPIC_API_KEY for anthropic before the OpenAI-named key', () => {
+        const result = resolveDeclaredEnvProvider(
+            env({
+                API_LLM_PROVIDER: 'anthropic',
+                API_ANTHROPIC_API_KEY: 'sk-ant-own',
+                API_OPEN_AI_API_KEY: 'sk-ant-legacy',
+            }),
+        );
+        expect(result.kind === 'declared' && result.config.apiKey).toBe(
+            'sk-ant-own',
+        );
+    });
+
+    it('still runs anthropic on API_OPEN_AI_API_KEY alone, as installs did before', () => {
+        const result = resolveDeclaredEnvProvider(
+            env({
+                API_LLM_PROVIDER: 'anthropic',
+                API_OPEN_AI_API_KEY: 'sk-ant-legacy',
+            }),
+        );
+        expect(result.kind === 'declared' && result.config.apiKey).toBe(
+            'sk-ant-legacy',
         );
     });
 
@@ -137,7 +196,10 @@ describe('resolveDeclaredEnvProvider', () => {
 
     it('defaults openai_compatible to the OpenAI endpoint', () => {
         const result = resolveDeclaredEnvProvider(
-            env({ API_LLM_PROVIDER: 'openai_compatible', API_LLM_API_KEY: 'k' }),
+            env({
+                API_LLM_PROVIDER: 'openai_compatible',
+                API_LLM_API_KEY: 'k',
+            }),
         );
         expect(result.kind === 'declared' && result.config.baseURL).toBe(
             'https://api.openai.com/v1',
@@ -171,8 +233,24 @@ describe('resolveDeclaredEnvProvider', () => {
                 API_LLM_REASONING_EFFORT: 'none',
             }),
         );
-        expect(result.kind === 'declared' && result.config.reasoningEffort).toBe(
-            'none',
+        expect(
+            result.kind === 'declared' && result.config.reasoningEffort,
+        ).toBe('none');
+    });
+
+    it('removes the endpoint the SDK appends from the base URL, and says so', () => {
+        const result = resolveDeclaredEnvProvider(
+            env({
+                API_LLM_PROVIDER: 'openai_compatible',
+                API_LLM_API_KEY: 'k',
+                API_LLM_BASE_URL: 'https://proxy.test/v1/chat/completions',
+            }),
         );
+        expect(result.kind).toBe('declared');
+        if (result.kind !== 'declared') return;
+        expect(result.config.baseURL).toBe('https://proxy.test/v1');
+        expect(result.warnings).toEqual([
+            'API_LLM_BASE_URL ends with the endpoint the provider SDK adds itself; https://proxy.test/v1 is used.',
+        ]);
     });
 });

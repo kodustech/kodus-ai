@@ -13,6 +13,7 @@
  * Pure: reads the env it is given, never builds a client, never returns a secret
  * to anyone but the model builder.
  */
+import { stripSdkEndpoint } from './base-url-hygiene';
 import type { ReasoningEffort } from './reasoning-options';
 
 export const DECLARABLE_ENV_PROVIDERS = [
@@ -38,11 +39,13 @@ const GENERIC_VARS = [
     'API_LLM_REASONING_EFFORT',
 ] as const;
 
-/** The key each provider read before the generic one existed. */
+/** The provider-named keys, read in order when the generic one is empty.
+ *  Anthropic keeps `API_OPEN_AI_API_KEY` after its own name: the inference path
+ *  has always read a Claude key from it. */
 const LEGACY_KEY_VARS: Record<DeclaredEnvProvider, readonly string[]> = {
     openai: ['API_OPEN_AI_API_KEY'],
     openai_compatible: ['API_OPEN_AI_API_KEY'],
-    anthropic: ['API_OPEN_AI_API_KEY'],
+    anthropic: ['API_ANTHROPIC_API_KEY', 'API_OPEN_AI_API_KEY'],
     google_gemini: ['API_GOOGLE_AI_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY'],
     google_vertex: ['API_VERTEX_AI_API_KEY'],
 };
@@ -168,17 +171,24 @@ export function resolveDeclaredEnvProvider(
         LEGACY_KEY_VARS[declared],
         warnings,
     );
-    const baseURL = BASE_URL_PROVIDERS.has(declared)
-        ? pick(env, 'API_LLM_BASE_URL', [LEGACY_BASE_URL_VAR], warnings).value
-        : undefined;
+    const rawBase = BASE_URL_PROVIDERS.has(declared)
+        ? pick(env, 'API_LLM_BASE_URL', [LEGACY_BASE_URL_VAR], warnings)
+        : {};
+    const baseURL = stripSdkEndpoint(
+        rawBase.value,
+        declared === 'anthropic' ? 'anthropic' : 'openai',
+    );
+    if (baseURL !== rawBase.value) {
+        warnings.push(
+            `${rawBase.from} ends with the endpoint the provider SDK adds itself; ${baseURL} is used.`,
+        );
+    }
     const vertexLocation = read(env, 'API_VERTEX_AI_LOCATION');
 
     const config: DeclaredEnvModel = {
         provider: declared,
         model,
-        ...(effortRaw
-            ? { reasoningEffort: effortRaw as ReasoningEffort }
-            : {}),
+        ...(effortRaw ? { reasoningEffort: effortRaw as ReasoningEffort } : {}),
     };
 
     if (key.value) {

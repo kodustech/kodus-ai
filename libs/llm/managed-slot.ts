@@ -15,6 +15,7 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import { DEFAULT_MODEL } from './byok-defaults';
 import { vertexModelFromAdc } from './model-builders';
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from './opencode-go';
+import { stripSdkEndpoint } from './base-url-hygiene';
 import { servedByOpenAi } from './providers/openai/endpoint';
 import {
     resolveDeclaredEnvProvider,
@@ -372,7 +373,11 @@ const ENV_KIND_TO_PROVIDER: Record<
  * cloud (`API_LLM_PROVIDER_MODEL` unset/auto) → the caller's own default decides.
  */
 export function envManagedReasoningDescriptor():
-    | { provider: BYOKProvider; model: string; reasoningEffort?: ReasoningEffort }
+    | {
+          provider: BYOKProvider;
+          model: string;
+          reasoningEffort?: ReasoningEffort;
+      }
     | undefined {
     const env = resolveEnvProvider();
     if (!env || env.kind === 'invalid') return undefined;
@@ -381,7 +386,9 @@ export function envManagedReasoningDescriptor():
     return {
         provider: ENV_KIND_TO_PROVIDER[env.kind],
         model,
-        ...(env.reasoningEffort ? { reasoningEffort: env.reasoningEffort } : {}),
+        ...(env.reasoningEffort
+            ? { reasoningEffort: env.reasoningEffort }
+            : {}),
     };
 }
 
@@ -471,7 +478,7 @@ export function resolveManagedSlot(
                     env.apiKey,
                     envMode,
                     {
-                        baseURL: env.baseURL,
+                        baseURL: stripSdkEndpoint(env.baseURL, 'anthropic'),
                     },
                 );
             case 'openai_native':
@@ -482,9 +489,11 @@ export function resolveManagedSlot(
                     BYOKProvider.OPENAI,
                     env.apiKey,
                     envMode,
-                    env.baseURL ? { baseURL: env.baseURL } : undefined,
+                    env.baseURL
+                        ? { baseURL: stripSdkEndpoint(env.baseURL, 'openai') }
+                        : undefined,
                 );
-            case 'openai_compat':
+            case 'openai_compat': {
                 // INLINE EXCEPTION (self-hosted OpenAI-compatible): name
                 // 'self-hosted', default baseURL api.openai.com, raw
                 // structuredOutputs opt-in — the openai_compatible provider
@@ -494,26 +503,28 @@ export function resolveManagedSlot(
                 // pointed at OpenCode Go (issue #1880) needs the same
                 // x-opencode-session header attached here — the provider
                 // module's build() never runs on this inline path.
+                const baseURL = stripSdkEndpoint(env.baseURL, 'openai')!;
                 return {
                     kind: 'inline',
                     model: createOpenAICompatible({
                         name: 'self-hosted',
                         apiKey: env.apiKey,
-                        baseURL: env.baseURL,
+                        baseURL,
                         supportsStructuredOutputs:
                             options.structuredOutputs === true,
-                        ...(isOpenCodeGoBaseUrl(env.baseURL)
+                        ...(isOpenCodeGoBaseUrl(baseURL)
                             ? {
                                   headers: {
                                       'x-opencode-session': openCodeSessionId({
                                           model: envMode,
-                                          baseURL: env.baseURL,
+                                          baseURL,
                                       }),
                                   },
                               }
                             : {}),
                     })(envMode),
                 };
+            }
             case 'vertex_adc': {
                 // INLINE EXCEPTION (keyless Vertex via ambient ADC): there is no
                 // apiKey — the google_vertex module's build() requires a decrypted

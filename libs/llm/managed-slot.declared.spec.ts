@@ -56,6 +56,60 @@ afterEach(() => {
 
 const set = (vars: Record<string, string>) => Object.assign(process.env, vars);
 
+describe('env base URL carrying the SDK endpoint', () => {
+    it('drops /chat/completions from a declared openai base URL, keeping /v1', () => {
+        set({
+            API_LLM_PROVIDER_MODEL: 'gpt-5.6-luna',
+            API_LLM_PROVIDER: 'openai',
+            API_LLM_API_KEY: 'sk-x',
+            API_LLM_BASE_URL: 'https://litellm.test/v1/chat/completions',
+        });
+        expect(resolveManagedSlot('unused', {})).toMatchObject({
+            kind: 'slot',
+            slot: { baseURL: 'https://litellm.test/v1' },
+        });
+    });
+
+    it('drops /messages from a declared anthropic base URL, keeping /v1', () => {
+        set({
+            API_LLM_PROVIDER_MODEL: 'claude-opus-5',
+            API_LLM_PROVIDER: 'anthropic',
+            API_LLM_API_KEY: 'sk-ant',
+            API_LLM_BASE_URL: 'https://gateway.test/v1/messages',
+        });
+        expect(resolveManagedSlot('unused', {})).toMatchObject({
+            kind: 'slot',
+            slot: { baseURL: 'https://gateway.test/v1' },
+        });
+    });
+
+    it('repairs the legacy API_OPENAI_FORCE_BASE_URL on the inferred compatible path too', () => {
+        set({
+            API_LLM_PROVIDER_MODEL: 'glm-5.3',
+            API_OPEN_AI_API_KEY: 'sk-x',
+            API_OPENAI_FORCE_BASE_URL:
+                'https://proxy.test/api/v1/chat/completions/',
+        });
+        const resolved = resolveManagedSlot('unused', {});
+        expect(resolved.kind).toBe('inline');
+        expect((resolved as any).model.settings.baseURL).toBe(
+            'https://proxy.test/api/v1',
+        );
+    });
+
+    it('leaves a base URL without the endpoint exactly as configured', () => {
+        set({
+            API_LLM_PROVIDER_MODEL: 'glm-5.3',
+            API_OPEN_AI_API_KEY: 'sk-x',
+            API_OPENAI_FORCE_BASE_URL: 'https://proxy.test/api/v1/',
+        });
+        const resolved = resolveManagedSlot('unused', {});
+        expect((resolved as any).model.settings.baseURL).toBe(
+            'https://proxy.test/api/v1/',
+        );
+    });
+});
+
 describe('declared env provider', () => {
     it('builds openai on the native SDK behind a proxy base URL (proxy heuristic skipped)', () => {
         set({
