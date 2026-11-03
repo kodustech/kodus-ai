@@ -19,6 +19,8 @@ import {
     type NormalizedModel,
 } from './byok-config';
 import { resolveDefaultSlot } from './resolve-model-slot';
+import { resolveTaskSlot } from './resolve-task-model';
+import { LLM_TASK, type LlmTask } from './llm-tasks';
 import { describeEnvLLMConfig, type EnvLLMProviderId } from './env-llm-config';
 // Barrel import (side-effect self-registers every provider module), so
 // REGISTRY.get(providerId).capabilities(model) resolves for all BYOKProvider ids.
@@ -158,6 +160,16 @@ export interface LLMConfigStatus {
         /** Parsed `API_LLM_TEMPERATURE_OVERRIDE`; only present when set. */
         temperatureOverride?: number;
     };
+    /**
+     * The model id each review mode routes to at org level (`codeReview` for
+     * Balanced, `codeReviewHeavy` for Heavy), and whether it is the org
+     * default because the mode has no model of its own. Absent without a BYOK
+     * config. Read-only in General settings; edited in Routing.
+     */
+    reviewModels?: {
+        balanced: { modelId?: string; inherited: boolean };
+        heavy: { modelId?: string; inherited: boolean };
+    };
 }
 
 /**
@@ -278,5 +290,18 @@ export function describeLLMConfigStatus(configValue: unknown): LLMConfigStatus {
         ? enumerateModels(configValue, envDescriptor.configured)
         : [];
 
-    return { source, models, byok, env };
+    if (!isByokConfig(configValue)) {
+        return { source, models, byok, env };
+    }
+
+    const reviewModelOf = (task: LlmTask) => ({
+        modelId: resolveTaskSlot(configValue, task).verdict?.modelId,
+        inherited: !configValue.routing?.taskOverrides?.[task],
+    });
+    const reviewModels = {
+        balanced: reviewModelOf(LLM_TASK.codeReview),
+        heavy: reviewModelOf(LLM_TASK.codeReviewHeavy),
+    };
+
+    return { source, models, byok, env, reviewModels };
 }

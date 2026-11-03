@@ -265,6 +265,30 @@ describe('describeLLMConfigStatus — effective config projection', () => {
                 baseUrl: 'https://proxy.example/v1',
             },
             env: { configured: false },
+            reviewModels: {
+                balanced: { modelId: 'model-1', inherited: true },
+                heavy: { modelId: 'model-1', inherited: true },
+            },
+        });
+    });
+
+    it('routes each review mode to its own model, the heavy one inheriting the org default when unset', () => {
+        const config = {
+            version: 2,
+            credentials: [{ id: 'cred-1', provider: 'openai', apiKey: 'enc' }],
+            models: [
+                { id: 'model-1', credentialId: 'cred-1', model: 'gpt-4o' },
+                { id: 'model-2', credentialId: 'cred-1', model: 'gpt-4o-mini' },
+            ],
+            routing: {
+                defaultModelId: 'model-1',
+                taskOverrides: { codeReview: 'model-2' },
+            },
+        };
+
+        expect(describeLLMConfigStatus(config).reviewModels).toEqual({
+            balanced: { modelId: 'model-2', inherited: false },
+            heavy: { modelId: 'model-1', inherited: true },
         });
     });
 
