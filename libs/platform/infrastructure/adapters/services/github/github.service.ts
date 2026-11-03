@@ -557,13 +557,8 @@ export class GithubService
                     organizationAndTeamData: params?.organizationAndTeamData,
                     authMode: params?.authMode,
                     host: params?.host,
-                    // An App link sends the installation id in `code`;
-                    // anything else there may be an OAuth code.
-                    installationId:
-                        params?.authMode === AuthMode.OAUTH &&
-                        isInstallationId(params?.code)
-                            ? params.code
-                            : undefined,
+                    // Never `code` itself: it may be GitHub's OAuth code.
+                    hasInstallationId: isInstallationId(params?.code),
                 },
             });
             throw new BadRequestException(err);

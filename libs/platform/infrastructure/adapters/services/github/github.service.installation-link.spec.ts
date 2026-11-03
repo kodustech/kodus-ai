@@ -325,15 +325,15 @@ describe('GitHub installation linking', () => {
         );
         expect(logged).not.toContain('gh-oauth-code-in-code');
         expect(logged).not.toContain('ghp_secret_pat');
-        // Token mode: `code` is not an installation id there.
-        expect(error.mock.calls[1][0].metadata.installationId).toBeUndefined();
+        // Only whether `code` looked like an installation id, never its value.
+        expect(error.mock.calls[2][0].metadata.hasInstallationId).toBe(false);
         expect(logged).not.toContain('gh-oauth-code');
         expect(logged).not.toContain('sealed.state');
         expect(error.mock.calls[0][0].metadata).toEqual({
             organizationAndTeamData: { organizationId: ORG, teamId: 't1' },
             authMode: 'oauth',
             host: undefined,
-            installationId: INSTALLATION,
+            hasInstallationId: true,
         });
     });
 
