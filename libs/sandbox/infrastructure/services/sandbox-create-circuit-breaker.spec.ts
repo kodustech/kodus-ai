@@ -7,9 +7,12 @@ import {
 const OPTIONS = {
     windowMs: 60_000,
     failureThreshold: 3,
-    minDistinctRepos: 2,
+    minDistinctOrgs: 2,
     openMs: 30_000,
 };
+
+/** A create admitted while CLOSED: not the probe. */
+const CLOSED_PERMIT = { probe: false };
 
 function makeBreaker() {
     let now = 1_000_000;
@@ -19,9 +22,12 @@ function makeBreaker() {
         () => now,
         onTransition,
     );
+    const fail = (...orgs: string[]) =>
+        orgs.forEach((org) => breaker.recordFailure(org, CLOSED_PERMIT));
     return {
         breaker,
         onTransition,
+        fail,
         advance: (ms: number) => {
             now += ms;
         },
@@ -29,89 +35,107 @@ function makeBreaker() {
 }
 
 describe('SandboxCreateCircuitBreaker', () => {
-    it('opens once the window holds enough failures from enough repos', () => {
-        const { breaker } = makeBreaker();
+    it('opens once the window holds enough failures from enough organizations', () => {
+        const { breaker, fail } = makeBreaker();
 
-        breaker.recordFailure('org:a');
-        breaker.recordFailure('org:a');
+        fail('org-a', 'org-a');
         expect(breaker.getState()).toBe('CLOSED');
 
-        breaker.recordFailure('org:b');
+        fail('org-b');
         expect(breaker.getState()).toBe('OPEN');
-        expect(breaker.tryAcquire()).toBe(false);
+        expect(breaker.tryAcquire()).toBeNull();
         expect(breaker.remainingOpenMs()).toBe(30_000);
     });
 
-    it('stays closed when every failure comes from one repo', () => {
-        const { breaker } = makeBreaker();
+    it('stays closed when every failure comes from one organization, whatever its repos', () => {
+        // One tenant whose git host is down fails on all of its repos: that
+        // must not turn sandboxes off for every other tenant on the worker.
+        const { breaker, fail } = makeBreaker();
 
-        for (let i = 0; i < 10; i++) breaker.recordFailure('org:huge');
+        for (let i = 0; i < 10; i++) fail('org-down');
 
         expect(breaker.getState()).toBe('CLOSED');
-        expect(breaker.tryAcquire()).toBe(true);
+        expect(breaker.tryAcquire()).toEqual({ probe: false });
     });
 
     it('forgets failures older than the window', () => {
-        const { breaker, advance } = makeBreaker();
+        const { breaker, fail, advance } = makeBreaker();
 
-        breaker.recordFailure('org:a');
-        breaker.recordFailure('org:b');
+        fail('org-a', 'org-b');
         advance(61_000);
-        breaker.recordFailure('org:c');
+        fail('org-c');
 
         expect(breaker.getState()).toBe('CLOSED');
     });
 
     it('lets a single probe through after openMs and closes on success', () => {
-        const { breaker, advance } = makeBreaker();
-        ['org:a', 'org:b', 'org:c'].forEach((r) => breaker.recordFailure(r));
+        const { breaker, fail, advance } = makeBreaker();
+        fail('org-a', 'org-b', 'org-c');
 
         advance(30_000);
         expect(breaker.getState()).toBe('HALF_OPEN');
-        expect(breaker.tryAcquire()).toBe(true);
+        expect(breaker.tryAcquire()).toEqual({ probe: true });
         // Second caller while the probe is in flight is rejected
-        expect(breaker.tryAcquire()).toBe(false);
+        expect(breaker.tryAcquire()).toBeNull();
 
         breaker.recordSuccess();
         expect(breaker.getState()).toBe('CLOSED');
-        expect(breaker.tryAcquire()).toBe(true);
+        expect(breaker.tryAcquire()).toEqual({ probe: false });
     });
 
     it('re-opens when the probe fails', () => {
-        const { breaker, advance } = makeBreaker();
-        ['org:a', 'org:b', 'org:c'].forEach((r) => breaker.recordFailure(r));
+        const { breaker, fail, advance } = makeBreaker();
+        fail('org-a', 'org-b', 'org-c');
         advance(30_000);
 
-        expect(breaker.tryAcquire()).toBe(true);
-        breaker.recordFailure('org:a');
+        const probe = breaker.tryAcquire()!;
+        breaker.recordFailure('org-a', probe);
 
         expect(breaker.getState()).toBe('OPEN');
         expect(breaker.remainingOpenMs()).toBe(30_000);
     });
 
     it('frees the probe slot when the probe ends with a repo-specific failure', () => {
-        const { breaker, advance } = makeBreaker();
-        ['org:a', 'org:b', 'org:c'].forEach((r) => breaker.recordFailure(r));
+        const { breaker, fail, advance } = makeBreaker();
+        fail('org-a', 'org-b', 'org-c');
         advance(30_000);
 
-        expect(breaker.tryAcquire()).toBe(true);
-        breaker.releaseProbe();
+        const probe = breaker.tryAcquire()!;
+        breaker.releaseProbe(probe);
 
         expect(breaker.getState()).toBe('HALF_OPEN');
-        expect(breaker.tryAcquire()).toBe(true);
+        expect(breaker.tryAcquire()).toEqual({ probe: true });
+    });
+
+    it('never lets a create admitted before the trip free or fail the probe', () => {
+        const { breaker, fail, advance } = makeBreaker();
+        // Admitted while CLOSED, still running when the breaker trips
+        const early = breaker.tryAcquire()!;
+        fail('org-a', 'org-b', 'org-c');
+        advance(30_000);
+        const probe = breaker.tryAcquire()!;
+        expect(probe).toEqual({ probe: true });
+
+        // The early create ends with a repo-specific error, then a timeout
+        breaker.releaseProbe(early);
+        breaker.recordFailure('org-x', early);
+
+        // Still one probe in flight, and the probe alone decides
+        expect(breaker.tryAcquire()).toBeNull();
+        expect(breaker.getState()).toBe('HALF_OPEN');
+        breaker.recordFailure('org-a', probe);
+        expect(breaker.getState()).toBe('OPEN');
     });
 
     it('does not stretch the OPEN window with failures from creates already in flight', () => {
-        const { breaker, advance } = makeBreaker();
+        const { breaker, fail, advance } = makeBreaker();
 
-        breaker.recordFailure('org:a');
-        breaker.recordFailure('org:b');
-        breaker.recordFailure('org:b');
+        fail('org-a', 'org-b', 'org-b');
         expect(breaker.getState()).toBe('OPEN');
 
         // A create that passed tryAcquire() before the trip fails later
         advance(20_000);
-        breaker.recordFailure('org:c');
+        fail('org-c');
         advance(10_000);
 
         // Still openMs after the trip, not after the late failure
@@ -119,28 +143,25 @@ describe('SandboxCreateCircuitBreaker', () => {
     });
 
     it('reports each state change once, with what tripped it', () => {
-        const { breaker, onTransition, advance } = makeBreaker();
+        const { breaker, onTransition, fail, advance } = makeBreaker();
         const states = () =>
             onTransition.mock.calls.map(([t]) => `${t.from}->${t.to}`);
 
         breaker.recordSuccess();
         expect(onTransition).not.toHaveBeenCalled();
 
-        breaker.recordFailure('org:a');
-        breaker.recordFailure('org:b');
-        breaker.recordFailure('org:b');
+        fail('org-a', 'org-b', 'org-b');
         expect(onTransition).toHaveBeenLastCalledWith({
             from: 'CLOSED',
             to: 'OPEN',
             failures: 3,
-            distinctRepos: 2,
+            distinctOrgs: 2,
             openMs: 30_000,
         });
 
         advance(30_000);
-        breaker.tryAcquire();
-        breaker.getState();
-        breaker.recordFailure('org:c');
+        const probe = breaker.tryAcquire()!;
+        breaker.recordFailure('org-c', probe);
         advance(30_000);
         breaker.tryAcquire();
         breaker.recordSuccess();
@@ -163,9 +184,11 @@ describe('SandboxCreateCircuitBreaker', () => {
             },
         );
 
-        breaker.recordFailure('org:a');
-        breaker.recordFailure('org:b');
-        expect(() => breaker.recordFailure('org:b')).not.toThrow();
+        breaker.recordFailure('org-a', CLOSED_PERMIT);
+        breaker.recordFailure('org-b', CLOSED_PERMIT);
+        expect(() =>
+            breaker.recordFailure('org-b', CLOSED_PERMIT),
+        ).not.toThrow();
         expect(breaker.getState()).toBe('OPEN');
     });
 });

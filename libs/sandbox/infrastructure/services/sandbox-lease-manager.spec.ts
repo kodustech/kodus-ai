@@ -602,6 +602,9 @@ describe('SandboxLeaseManager', () => {
         });
         const prKeyFor = (repo: string, pr: number) =>
             `7e2e97b8-aefa-422e-92d4-30b378c0332e:${repo}:${pr}`;
+        // A distinct organization (tenant) per letter
+        const orgPrKeyFor = (org: 'a' | 'b' | 'c' | 'd', pr: number) =>
+            `7e2e97b8-aefa-422e-92d4-30b378c0332${org}:repo:${pr}`;
 
         beforeEach(() => {
             leaseRepo.upsertAcquire.mockImplementation(
@@ -662,18 +665,18 @@ describe('SandboxLeaseManager', () => {
             );
         });
 
-        it('opens the circuit after infra failures on 3+ repos and then skips the provider', async () => {
+        it('opens the circuit after infra failures from 3+ organizations and then skips the provider', async () => {
             sandboxProvider.createSandboxWithRepo.mockRejectedValue(
                 timeoutError(),
             );
             const warn = jest.spyOn((manager as any).logger, 'warn');
 
-            // 5 timeouts across 3 distinct repos open the breaker
-            const repos = ['repo-a', 'repo-b', 'repo-c', 'repo-a', 'repo-b'];
-            for (const [i, repo] of repos.entries()) {
+            // 5 timeouts across 3 distinct organizations open the breaker
+            const orgs = ['a', 'b', 'c', 'a', 'b'] as const;
+            for (const [i, org] of orgs.entries()) {
                 await manager
                     .acquire(
-                        prKeyFor(repo, 100 + i),
+                        orgPrKeyFor(org, 100 + i),
                         'review',
                         undefined,
                         cloneParamsFor(100 + i),
@@ -691,14 +694,14 @@ describe('SandboxLeaseManager', () => {
                     ),
                     metadata: expect.objectContaining({
                         failures: 5,
-                        distinctRepos: 3,
+                        distinctOrgs: 3,
                     }),
                 }),
             );
 
             const err = await manager
                 .acquire(
-                    prKeyFor('repo-d', 200),
+                    orgPrKeyFor('d', 200),
                     'review',
                     undefined,
                     cloneParamsFor(200),
@@ -711,7 +714,7 @@ describe('SandboxLeaseManager', () => {
                 5,
             );
             expect(leaseRepo.delete).toHaveBeenCalledWith(
-                prKeyFor('repo-d', 200),
+                orgPrKeyFor('d', 200),
             );
         });
 
@@ -735,6 +738,27 @@ describe('SandboxLeaseManager', () => {
             expect(sandboxProvider.createSandboxWithRepo).toHaveBeenCalledTimes(
                 8,
             );
+        });
+
+        it("keeps the circuit closed when one organization's repos all time out", async () => {
+            // Its git host is down: every repo of that tenant times out, which
+            // says nothing about the sandbox infrastructure for the others.
+            sandboxProvider.createSandboxWithRepo.mockRejectedValue(
+                timeoutError(),
+            );
+
+            for (const [i, repo] of ['r1', 'r2', 'r3', 'r4', 'r5'].entries()) {
+                await manager
+                    .acquire(
+                        prKeyFor(repo, 500 + i),
+                        'review',
+                        undefined,
+                        cloneParamsFor(500 + i),
+                    )
+                    .catch(() => undefined);
+            }
+
+            expect(manager.createCircuit.getState()).toBe('CLOSED');
         });
 
         it('does not count repository-specific failures toward the circuit', async () => {

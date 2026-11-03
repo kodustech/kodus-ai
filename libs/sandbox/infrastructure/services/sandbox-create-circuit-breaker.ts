@@ -9,9 +9,10 @@
  *
  * - CLOSED: requests flow; infrastructure failures are recorded in a sliding
  *   window. The breaker opens when the window holds at least
- *   `failureThreshold` failures coming from at least `minDistinctRepos`
- *   repositories. The distinct-repo floor keeps one huge repository that
- *   always times out from turning sandboxes off for everyone else.
+ *   `failureThreshold` failures coming from at least `minDistinctOrgs`
+ *   organizations. The floor is on organizations, not repositories: one
+ *   tenant whose git host is down (or whose huge repos always time out)
+ *   must not turn sandboxes off for every other tenant on the worker.
  * - OPEN: every request is rejected until `openMs` has elapsed.
  * - HALF_OPEN: exactly one probe request is let through. Success closes the
  *   breaker; failure re-opens it for another `openMs`.
@@ -26,31 +27,40 @@ export type SandboxCircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 export interface SandboxCircuitBreakerOptions {
     windowMs: number;
     failureThreshold: number;
-    minDistinctRepos: number;
+    minDistinctOrgs: number;
     openMs: number;
 }
 
 export const DEFAULT_SANDBOX_CIRCUIT_OPTIONS: SandboxCircuitBreakerOptions = {
     windowMs: 5 * 60_000,
     failureThreshold: 5,
-    minDistinctRepos: 3,
+    minDistinctOrgs: 3,
     openMs: 2 * 60_000,
 };
+
+/**
+ * What tryAcquire() granted. Only the attempt holding the HALF_OPEN probe
+ * may report on it; a create admitted earlier, while CLOSED, reports late
+ * and must not free or fail someone else's probe.
+ */
+export interface SandboxCircuitPermit {
+    probe: boolean;
+}
 
 export interface SandboxCircuitTransition {
     from: SandboxCircuitState;
     to: SandboxCircuitState;
     /** Failures in the window when the breaker opened from CLOSED. */
     failures: number;
-    /** Distinct repositories behind those failures. */
-    distinctRepos: number;
+    /** Distinct organizations behind those failures. */
+    distinctOrgs: number;
     /** How long the breaker stays OPEN (only meaningful when `to` is OPEN). */
     openMs: number;
 }
 
 interface FailureRecord {
     at: number;
-    repoKey: string;
+    orgKey: string;
 }
 
 export class SandboxCreateCircuitBreaker {
@@ -80,19 +90,20 @@ export class SandboxCreateCircuitBreaker {
     }
 
     /**
-     * Whether a create attempt may run now. In HALF_OPEN the first caller
-     * becomes the probe and every other caller is rejected until the probe
-     * reports back.
+     * A permit when a create attempt may run now, null otherwise. In
+     * HALF_OPEN the first caller becomes the probe and every other caller is
+     * rejected until the probe reports back.
      */
-    tryAcquire(): boolean {
+    tryAcquire(): SandboxCircuitPermit | null {
         this.refreshState();
-        if (this.state === 'CLOSED') return true;
-        if (this.state === 'OPEN') return false;
-        if (this.probeInFlight) return false;
+        if (this.state === 'CLOSED') return { probe: false };
+        if (this.state === 'OPEN') return null;
+        if (this.probeInFlight) return null;
         this.probeInFlight = true;
-        return true;
+        return { probe: true };
     }
 
+    /** Any successful create is proof the infrastructure works again. */
     recordSuccess(): void {
         this.probeInFlight = false;
         this.failures = [];
@@ -104,7 +115,7 @@ export class SandboxCreateCircuitBreaker {
      * credentials, deleted branch) must not be recorded: they say nothing
      * about the health of the sandbox infrastructure.
      */
-    recordFailure(repoKey: string): void {
+    recordFailure(orgKey: string, permit: SandboxCircuitPermit): void {
         const now = this.now();
         this.refreshState();
 
@@ -114,36 +125,40 @@ export class SandboxCreateCircuitBreaker {
         if (this.state === 'OPEN') return;
 
         if (this.state === 'HALF_OPEN') {
+            // Only the probe's outcome decides; a late failure from a create
+            // admitted before the trip is old news.
+            if (!permit.probe) return;
             this.probeInFlight = false;
             this.open(now, 1, 1);
             return;
         }
 
-        this.failures.push({ at: now, repoKey });
+        this.failures.push({ at: now, orgKey });
         this.pruneWindow(now);
 
-        const distinctRepos = new Set(this.failures.map((f) => f.repoKey)).size;
+        const distinctOrgs = new Set(this.failures.map((f) => f.orgKey)).size;
         if (
             this.failures.length >= this.options.failureThreshold &&
-            distinctRepos >= this.options.minDistinctRepos
+            distinctOrgs >= this.options.minDistinctOrgs
         ) {
-            this.open(now, this.failures.length, distinctRepos);
+            this.open(now, this.failures.length, distinctOrgs);
         }
     }
 
     /**
      * A probe that ended without telling us anything about the
      * infrastructure (e.g. a repository-specific failure) must free the probe
-     * slot, or the breaker would stay HALF_OPEN forever.
+     * slot, or the breaker would stay HALF_OPEN forever. Only the holder of
+     * the probe may free it.
      */
-    releaseProbe(): void {
-        this.probeInFlight = false;
+    releaseProbe(permit: SandboxCircuitPermit): void {
+        if (permit.probe) this.probeInFlight = false;
     }
 
-    private open(now: number, failures: number, distinctRepos: number): void {
+    private open(now: number, failures: number, distinctOrgs: number): void {
         this.openedAt = now;
         this.failures = [];
-        this.transition('OPEN', failures, distinctRepos);
+        this.transition('OPEN', failures, distinctOrgs);
     }
 
     private refreshState(): void {
@@ -159,7 +174,7 @@ export class SandboxCreateCircuitBreaker {
     private transition(
         to: SandboxCircuitState,
         failures: number,
-        distinctRepos: number,
+        distinctOrgs: number,
     ): void {
         const from = this.state;
         this.state = to;
@@ -169,11 +184,12 @@ export class SandboxCreateCircuitBreaker {
                 from,
                 to,
                 failures,
-                distinctRepos,
+                distinctOrgs,
                 openMs: this.options.openMs,
             });
         } catch {
-            // A failing log sink must not break sandbox creation
+            // The callback is the owner's logger: a failure there cannot be
+            // logged through it, and the state change already happened.
         }
     }
 

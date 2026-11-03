@@ -747,11 +747,14 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         prKey: string,
         cloneParams: CreateSandboxParams,
     ): Promise<SandboxInstance> {
-        const repoKey = prKey.split(':').slice(0, 2).join(':');
+        // The breaker counts organizations: one tenant's failures (its git host
+        // down, its huge repos) must not open it for every other tenant.
+        const orgKey = prKey.split(':')[0];
         let lastErr: unknown;
 
         for (let attempt = 0; attempt < CREATE_MAX_ATTEMPTS; attempt++) {
-            if (!this.createCircuit.tryAcquire()) {
+            const permit = this.createCircuit.tryAcquire();
+            if (!permit) {
                 const retryInMs = this.createCircuit.remainingOpenMs();
                 this.logger.warn({
                     message: `SandboxLeaseManager: sandbox creation circuit open, skipping create prKey="${prKey}"`,
@@ -774,9 +777,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 const repositorySpecific =
                     isRepositorySpecificSandboxFailure(err);
                 if (repositorySpecific) {
-                    this.createCircuit.releaseProbe();
+                    this.createCircuit.releaseProbe(permit);
                 } else {
-                    this.createCircuit.recordFailure(repoKey);
+                    this.createCircuit.recordFailure(orgKey, permit);
                 }
 
                 const retryable =
