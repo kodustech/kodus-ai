@@ -4,6 +4,7 @@ import { PlatformType } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ORGANIZATION_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { Test, TestingModule } from '@nestjs/testing';
 
 describe('Azure Branch Normalization', () => {
@@ -44,6 +45,10 @@ describe('Azure Branch Normalization', () => {
                 {
                     provide: CodeManagementService,
                     useValue: mockCodeManagementService,
+                },
+                {
+                    provide: PermissionValidationService,
+                    useValue: { gateKodusCreditsForSlot: jest.fn() },
                 },
             ],
         }).compile();

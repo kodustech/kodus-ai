@@ -81,6 +81,14 @@ describe('ValidateConfigStage — v2 routing', () => {
                     useValue: mockOrganizationParametersService,
                 },
                 {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        gateKodusCreditsForSlot: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
                     provide: CodeManagementService,
                     useValue: mockCodeManagementService,
                 },
@@ -258,6 +266,14 @@ describe('ValidateConfigStage — base branch scope', () => {
                     useValue: { findByKey: jest.fn() },
                 },
                 {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        gateKodusCreditsForSlot: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
                     provide: CodeManagementService,
                     useValue: { createSingleIssueComment: jest.fn() },
                 },
@@ -391,6 +407,14 @@ describe('ValidateConfigStage — @kody -v naming no agent', () => {
                 {
                     provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
                     useValue: { findByKey: jest.fn().mockResolvedValue(null) },
+                },
+                {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        gateKodusCreditsForSlot: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
                 },
                 {
                     provide: CodeManagementService,
@@ -543,6 +567,14 @@ describe('ValidateConfigStage — custom agents plan gate', () => {
                     useValue: { findByKey: jest.fn().mockResolvedValue(null) },
                 },
                 {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        gateKodusCreditsForSlot: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
                     provide: CodeManagementService,
                     useValue: { createSingleIssueComment },
                 },
@@ -627,7 +659,7 @@ describe('ValidateConfigStage — custom agents plan gate', () => {
     });
 });
 
-describe('ValidateConfigStage — Kodus credits on the Heavy model', () => {
+describe('ValidateConfigStage — Kodus credits on the routed model', () => {
     let stage: ValidateConfigStage;
     let createIssueComment: jest.Mock;
     let gateKodusCreditsForSlot: jest.Mock;
@@ -763,6 +795,21 @@ describe('ValidateConfigStage — Kodus credits on the Heavy model', () => {
         expect(result.heavy).toBe(true);
         expect(result.statusInfo?.status).not.toBe('skipped');
         expect(result.codeReviewConfig.byokConfig?.provider).toBe('kodus');
+    });
+
+    it('checks the credits when a repository override routes a Balanced review to Kodus', async () => {
+        await setup({ defaultModelId: 'm-A' });
+        const context = buildContext('balanced');
+        (context.codeReviewConfig as any).byokModelId = 'm-K';
+
+        const result = await stage.execute(context);
+
+        expect(gateKodusCreditsForSlot).toHaveBeenCalledWith(
+            expect.objectContaining({ provider: 'kodus' }),
+            { organizationId: 'org-1', teamId: 'team-1' },
+            'ValidateConfigStage',
+        );
+        expect(result.statusInfo?.status).toBe('skipped');
     });
 
     it.each([

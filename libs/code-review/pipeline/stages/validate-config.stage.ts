@@ -70,8 +70,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         @Optional()
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService?: ILicenseService,
-        @Optional()
-        private readonly permissionValidationService?: PermissionValidationService,
+        private readonly permissionValidationService: PermissionValidationService,
     ) {
         super();
     }
@@ -194,12 +193,12 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             }
 
             if (
-                heavy &&
-                (await this.heavyKodusCreditsExhausted(
+                await this.routedKodusCreditsExhausted(
                     context,
                     byokConfig?.configValue,
                     routed.resolvedModelSlot,
-                ))
+                    heavy,
+                )
             ) {
                 return this.updateContext(context, (draft) => {
                     draft.statusInfo = {
@@ -282,30 +281,33 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
     }
 
     /**
-     * The prerequisites gated the credits of the `codeReview` model only. When
-     * a heavy review runs on a model routed by Kodus and the Balanced one is
-     * not, nothing checked the balance yet; when both are, it already was.
-     * Posts the same comment the prerequisites post.
+     * The prerequisites gated the credits of the organization's `codeReview`
+     * model, before the review mode and the repository's model override were
+     * known. When the model this review runs on (the Heavy one, or a
+     * repository override) is routed by Kodus and that one is not, nothing
+     * checked the balance yet; when both are, it already was. Posts the same
+     * comment the prerequisites post.
      */
-    private async heavyKodusCreditsExhausted(
+    private async routedKodusCreditsExhausted(
         context: CodeReviewPipelineContext,
         storedConfig: unknown,
-        heavySlot: CodeReviewConfig['resolvedModelSlot'],
+        routedSlot: CodeReviewConfig['resolvedModelSlot'],
+        heavy: boolean,
     ): Promise<boolean> {
-        if (!isPlatformFundedProvider(heavySlot?.provider)) {
+        if (!isPlatformFundedProvider(routedSlot?.provider)) {
             return false;
         }
-        const balancedSlot = routeCodeReviewModel(
+        const gatedSlot = routeCodeReviewModel(
             storedConfig,
-            context.codeReviewConfig,
+            {},
             false,
         ).resolvedModelSlot;
-        if (isPlatformFundedProvider(balancedSlot?.provider)) {
+        if (isPlatformFundedProvider(gatedSlot?.provider)) {
             return false;
         }
         const gate =
-            await this.permissionValidationService?.gateKodusCreditsForSlot(
-                heavySlot,
+            await this.permissionValidationService.gateKodusCreditsForSlot(
+                routedSlot,
                 context.organizationAndTeamData,
                 this.stageName,
             );
@@ -315,13 +317,14 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
 
         this.logger.warn({
             message:
-                'Kodus credits exhausted for the Heavy model — heavy review skipped',
+                'Kodus credits exhausted for the model this review runs on — review skipped',
             context: this.stageName,
             metadata: {
                 organizationAndTeamData: context.organizationAndTeamData,
                 prNumber: context.pullRequest?.number,
                 repositoryId: context.repository?.id,
-                model: heavySlot?.model,
+                heavy,
+                model: routedSlot?.model,
             },
         });
         if (context.pipelineMetadata?.showStatusFeedback !== false) {
