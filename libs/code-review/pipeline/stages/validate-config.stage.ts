@@ -69,12 +69,13 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private organizationParametersService: IOrganizationParametersService,
         private codeManagementService: CodeManagementService,
+        private readonly permissionValidationService: PermissionValidationService,
         // Optional so specs that do not care about the plan still compile;
-        // without it no custom agent runs (fail-closed for the paid feature).
+        // without it no custom agent and no heavy review runs (fail-closed
+        // for the paid features).
         @Optional()
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService?: ILicenseService,
-        private readonly permissionValidationService: PermissionValidationService,
     ) {
         super();
     }
