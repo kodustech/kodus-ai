@@ -666,7 +666,7 @@ describe('ValidateConfigStage — Kodus credits on the routed model', () => {
 
     const kodusModel =
         'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731';
-    // m-A: the org's own OpenAI key; m-K: routed by Kodus.
+    // m-A, m-B: the org's own OpenAI key; m-K: routed by Kodus.
     const config = (routing: any) => ({
         version: 2,
         credentials: [
@@ -675,6 +675,7 @@ describe('ValidateConfigStage — Kodus credits on the routed model', () => {
         ],
         models: [
             { id: 'm-A', credentialId: 'c-oa', model: 'gpt-4o' },
+            { id: 'm-B', credentialId: 'c-oa', model: 'gpt-5-mini' },
             { id: 'm-K', credentialId: 'c-kd', model: kodusModel },
         ],
         routing,
@@ -810,6 +811,18 @@ describe('ValidateConfigStage — Kodus credits on the routed model', () => {
             'ValidateConfigStage',
         );
         expect(result.statusInfo?.status).toBe('skipped');
+    });
+
+    it('does not read the credits when a repository override routes to the org key', async () => {
+        await setup({ defaultModelId: 'm-A' });
+        const context = buildContext('balanced');
+        (context.codeReviewConfig as any).byokModelId = 'm-B';
+
+        const result = await stage.execute(context);
+
+        expect(gateKodusCreditsForSlot).not.toHaveBeenCalled();
+        expect(result.statusInfo?.status).not.toBe('skipped');
+        expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-5-mini');
     });
 
     it.each([
