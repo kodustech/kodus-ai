@@ -202,6 +202,24 @@ describe('connection probe covers every registered provider', () => {
             expect(result.message).toContain('https://llm-proxy.example.com/v1');
         });
 
+        it('still suggests /v1 when the 404 says a route does not exist', async () => {
+            const err: any = new Error('Not Found');
+            err.name = 'AI_APICallError';
+            err.statusCode = 404;
+            err.responseBody = JSON.stringify({
+                error: { message: 'Route /responses does not exist.' },
+            });
+            generateText.mockRejectedValue(err);
+            const result = await useCase().execute({
+                provider: 'openai',
+                apiKey: 'sk-test',
+                baseURL: 'https://llm-proxy.example.com',
+                model: 'gpt-5.4-mini',
+            });
+
+            expect(result.message).toContain('https://llm-proxy.example.com/v1');
+        });
+
         it('suggests /v1 on an OpenAI-compatible endpoint too', async () => {
             notFound();
             const result = await useCase().execute({

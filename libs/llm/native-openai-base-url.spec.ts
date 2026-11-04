@@ -131,6 +131,10 @@ describe('native OpenAI credential with a custom base URL', () => {
     it.each([
         'https://acme.openai.azure.com/openai/v1',
         'https://acme.cognitiveservices.azure.com/openai/v1',
+        'https://acme.openai.azure.us/openai/v1',
+        'https://acme.openai.azure.cn/openai/v1',
+        'https://acme.services.ai.azure.com/openai/v1',
+        'https://acme.azure-api.net/openai/v1',
     ])('leaves an Azure OpenAI host (%s) as it is today', async (azure) => {
         await LLM.run({
             ...base,

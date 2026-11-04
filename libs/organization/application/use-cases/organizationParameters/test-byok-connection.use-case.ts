@@ -4,7 +4,6 @@ import {
     suggestApiVersion,
 } from '@libs/llm/base-url-hygiene';
 import { BYOKProvider } from '@libs/llm/model-providers';
-import { saysModelNotFound } from '@libs/llm/error-classifier';
 import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
 import { REGISTRY } from '@libs/llm/providers';
 import { probeSlotCall } from '@libs/llm/probe-slot-call';
@@ -117,6 +116,17 @@ function isPrivateOrReservedIp(ip: string): boolean {
     if (/^f[cd][0-9a-f]{2}:/i.test(lower)) return true; // fc00::/7 ULA
     if (/^fe[89ab][0-9a-f]:/i.test(lower)) return true; // fe80::/10 link-local
     return false;
+}
+
+/** A 404 whose message says the requested MODEL is missing (OpenAI's
+ *  `model_not_found`, "The model `x` does not exist"), as opposed to a route
+ *  that does not exist, which is what a missing `/v1` produces. */
+function namesMissingModel(providerMessage: string | undefined): boolean {
+    const said = providerMessage ?? '';
+    return (
+        /model_not_found|no such model|unknown model/i.test(said) ||
+        /\bmodel\b[^.]{0,80}\b(does not exist|not found)/i.test(said)
+    );
 }
 
 /**
@@ -520,7 +530,7 @@ export class TestByokConnectionUseCase {
             (byokProvider === BYOKProvider.OPENAI ||
                 byokProvider === BYOKProvider.OPENAI_COMPATIBLE) &&
             effectiveBaseURL &&
-            !saysModelNotFound((result.providerMessage ?? '').toLowerCase())
+            !namesMissingModel(result.providerMessage)
                 ? suggestApiVersion(effectiveBaseURL)
                 : undefined;
         return versioned

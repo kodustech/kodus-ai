@@ -36,15 +36,17 @@ export function isOpenAiHost(baseURL: string | undefined): boolean {
     }
 }
 
-/** A base URL on an Azure OpenAI resource (`<name>.openai.azure.com`, or the
- *  `cognitiveservices.azure.com` form of the same resource). */
+/** A base URL on Azure: an Azure OpenAI or Foundry resource in any Azure
+ *  cloud (`.com`, `.us`, `.cn`), or an API Management front door, which is how
+ *  Azure OpenAI is commonly fronted. */
 export function isAzureOpenAiHost(baseURL: string | undefined): boolean {
     if (!baseURL) return false;
     try {
         const host = new URL(baseURL).hostname.toLowerCase();
         return (
-            host.endsWith('.openai.azure.com') ||
-            host.endsWith('.cognitiveservices.azure.com')
+            /\.(openai|cognitiveservices)\.azure\.(com|us|cn)$/.test(host) ||
+            host.endsWith('.services.ai.azure.com') ||
+            host.endsWith('.azure-api.net')
         );
     } catch {
         return false;

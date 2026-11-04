@@ -55,20 +55,6 @@ export interface ClassifiedErrorInfo {
 
 const CLASSIFICATION_KEY = Symbol('reviewErrorClassification');
 
-/** A provider message (lowercased) that names the requested model as missing
- *  or unserved, as opposed to a wrong endpoint. */
-export function saysModelNotFound(lower: string): boolean {
-    return (
-        lower.includes('model_not_found') ||
-        lower.includes('model not found') ||
-        lower.includes('no such model') ||
-        lower.includes('does not exist') ||
-        // An OpenAI-compatible gateway that does not serve this model over the
-        // chat-completions protocol it was called with.
-        lower.includes('does not support this protocol')
-    );
-}
-
 /**
  * Attach classification metadata to an Error so downstream catch blocks
  * (e.g. a pipeline stage iterating `result.failures`) can read it without
@@ -462,7 +448,15 @@ function matchByMessage(lower: string): LlmErrorCategory {
     if (looksLikeModelAccessDenied(lower)) {
         return LlmErrorCategory.MODEL_ACCESS_DENIED;
     }
-    if (saysModelNotFound(lower)) {
+    if (
+        lower.includes('model_not_found') ||
+        lower.includes('model not found') ||
+        lower.includes('no such model') ||
+        lower.includes('does not exist') ||
+        // An OpenAI-compatible gateway that does not serve this model over the
+        // chat-completions protocol it was called with.
+        lower.includes('does not support this protocol')
+    ) {
         return LlmErrorCategory.MODEL_NOT_FOUND;
     }
     if (
