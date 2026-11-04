@@ -68,7 +68,7 @@ Quando as revisões descartam apontamentos porque citam um arquivo que o agente 
 - O agente cita o guia como `owner/repo:caminho`, e o comentário traz o link do arquivo.
 - Quando o repositório de regras é privado e o revisado é público, o comentário cita o arquivo sem copiar o trecho.
 
-Quando as instruções de um agente citam um repositório linkado do qual ele não segue nada, a página do agente avisa e oferece **Browse its rules**.
+Quando as instruções de um agente citam um repositório linkado do qual ele não segue nada, a página do agente avisa e oferece **Browse its rules**. Quando citam um arquivo de regra (`.md`, `.mdc`, `.mdx`, `.txt`) que o agente não segue, a página oferece **Follow it** para esse arquivo, no repositório onde as instruções o colocam. Um doc seguido vai inteiro para o prompt do agente: ele deixa de depender de decidir ler o arquivo, e os findings podem citá-lo.
 
 <Warning>
   Um arquivo marcado como **Also a Kody Rules source** já alimenta as Kody Rules. Vinculá-lo também a um agente pode fazer a mesma regra comentar duas vezes.
