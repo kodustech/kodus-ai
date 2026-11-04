@@ -617,6 +617,19 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — heavy review mode', () =>
         expect(configs.summary).toEqual({ generatePRSummary: false });
     });
 
+    it('a save that leaves heavy out keeps the stored heavy', async () => {
+        const configs = await buildUseCase(
+            { reviewMode: 'heavy' },
+            { license: FREE },
+        ).save(
+            { reviewMode: 'heavy', summary: { generatePRSummary: false } },
+            { source: 'web' },
+        );
+
+        expect(configs.reviewMode).toBe('heavy');
+        expect(configs.summary).toEqual({ generatePRSummary: false });
+    });
+
     it('on free, saves Balanced', async () => {
         const configs = await buildUseCase(
             { reviewMode: 'heavy' },

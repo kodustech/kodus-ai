@@ -936,6 +936,21 @@ describe('ExecuteCliReviewUseCase', () => {
                 ),
             ]);
             expect(notAsked.notices).toBeUndefined();
+            expect(
+                licenseService.validateOrganizationLicense,
+            ).toHaveBeenCalledWith(orgAndTeam);
+
+            // A license read that fails runs Balanced too, with the notice.
+            licenseService.validateOrganizationLicense.mockRejectedValue(
+                new Error('billing down'),
+            );
+            const unreadable = await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello', config: { heavy: true } } as any,
+                isTrialMode: false,
+            });
+            expect(seen[2].heavy).toBe(false);
+            expect(unreadable.notices).toHaveLength(1);
 
             mockExecute.mockRestore();
         });

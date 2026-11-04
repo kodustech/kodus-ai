@@ -13,9 +13,8 @@ export const isHeavyModePlan = (
     license: OrganizationLicense | null | undefined,
 ): boolean => {
     if (!license?.valid) return false;
-    const plan = (
-        ("planType" in license ? license.planType : undefined) ?? ""
-    ).toLowerCase();
+    const rawPlan = "planType" in license ? license.planType : undefined;
+    const plan = typeof rawPlan === "string" ? rawPlan.toLowerCase() : "";
     const paid = isPlan(plan, "teams") || isPlan(plan, "enterprise");
 
     switch (license.subscriptionStatus) {

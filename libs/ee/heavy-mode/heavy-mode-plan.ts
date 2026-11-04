@@ -11,9 +11,11 @@ import {
 
 const logger = createLogger('HeavyModePlan');
 
-/** Why a review asked for heavy ran Balanced, said to the team. */
+/** Why a review asked for heavy ran Balanced, said to the team. The license
+ *  services answer a failed read as an invalid license, so the text holds for
+ *  a plan without heavy and for a plan that could not be confirmed. */
 export const HEAVY_MODE_PLAN_REQUIRED =
-    'Heavy mode is available on the Teams and Enterprise plans, so this review ran in Balanced mode.';
+    'Heavy mode is available on the Teams and Enterprise plans, and Kody could not confirm this organization is on one, so this review ran in Balanced mode.';
 
 const isPlan = (plan: string, name: 'teams' | 'enterprise') =>
     plan === name || plan.startsWith(`${name}_`);
@@ -30,7 +32,10 @@ export function isHeavyModeTierAllowed(
     license: OrganizationLicenseValidationResult | null | undefined,
 ): boolean {
     if (!license?.valid) return false;
-    const plan = (license.planType ?? '').toLowerCase();
+    const plan =
+        typeof license.planType === 'string'
+            ? license.planType.toLowerCase()
+            : '';
     const paid = isPlan(plan, 'teams') || isPlan(plan, 'enterprise');
 
     switch (license.subscriptionStatus) {
@@ -66,8 +71,8 @@ export async function isHeavyModePlanAllowed(
             context: logContext,
             error,
             metadata: {
-                organizationId: organizationAndTeamData?.organizationId,
-                teamId: organizationAndTeamData?.teamId,
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
             },
         });
         return false;
