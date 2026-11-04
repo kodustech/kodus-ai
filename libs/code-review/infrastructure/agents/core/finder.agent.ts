@@ -1802,8 +1802,25 @@ async function runHeavyLensPasses(
                 params.recoverProse,
                 { ...params.telemetryMetadata, modelId: params.modelId },
             );
-            const suggestions = (extracted.suggestions ?? [])
-                .filter(Boolean)
+            const returned = (extracted.suggestions ?? []).filter(Boolean);
+            if (
+                pass.maxFindings !== undefined &&
+                returned.length > pass.maxFindings
+            ) {
+                finderLogger.warn({
+                    message: `Heavy lens ${pass.label} returned ${returned.length} findings; kept its first ${pass.maxFindings}`,
+                    context: 'finder',
+                    metadata: {
+                        organizationId: params.telemetryMetadata?.organizationId,
+                        teamId: params.telemetryMetadata?.teamId,
+                        pullRequestId: params.telemetryMetadata?.pullRequestId,
+                        lens: pass.label,
+                        returned: returned.length,
+                        kept: pass.maxFindings,
+                    },
+                });
+            }
+            const suggestions = returned
                 .slice(0, pass.maxFindings)
                 .map((s) => ({
                     ...s,
