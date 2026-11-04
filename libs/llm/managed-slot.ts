@@ -734,9 +734,10 @@ export function getModelName(
     // so the telemetry name always matches the model actually used.
     const env = resolveEnvProvider();
     if (env) {
+        // An invalid config can come from `auto` with no model set.
         return env.kind === 'invalid'
-            ? `${process.env.API_LLM_PROVIDER_MODEL}`
-            : `${env.name}:${process.env.API_LLM_PROVIDER_MODEL}`;
+            ? (process.env.API_LLM_PROVIDER_MODEL ?? 'auto').trim()
+            : `${env.name}:${env.model ?? process.env.API_LLM_PROVIDER_MODEL}`;
     }
 
     return defaultModelOverride || DEFAULT_MODEL.model;
