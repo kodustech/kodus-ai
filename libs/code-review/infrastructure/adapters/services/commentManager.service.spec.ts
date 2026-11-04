@@ -392,6 +392,33 @@ describe('CommentManagerService.generateSummaryPR', () => {
             expect(getClassification(thrown)).toBeDefined();
         });
 
+        it('classifies a frozen model error through a wrapper that keeps it as the cause', async () => {
+            codeManagementService.getPullRequestByNumber.mockResolvedValue({
+                body: '',
+            });
+            const frozen = Object.freeze(
+                Object.assign(new Error('Unauthorized'), {
+                    name: 'AI_APICallError',
+                    statusCode: 401,
+                }),
+            );
+            (tracedGenerateText as jest.Mock).mockRejectedValue(frozen);
+
+            const thrown = await service
+                .generateSummaryPR(
+                    stubPR,
+                    stubRepository,
+                    [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                )
+                .catch((e) => e);
+
+            expect(getClassification(thrown)?.category).toBe('AUTH_INVALID');
+            expect(thrown.cause).toBe(frozen);
+        });
+
         it('leaves a failed read of the PR unclassified and never calls the model', async () => {
             (tracedGenerateText as jest.Mock).mockClear();
             const readError = Object.assign(

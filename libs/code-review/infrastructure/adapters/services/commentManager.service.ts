@@ -932,10 +932,19 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     // provider indistinguishable from a config decision — the
                     // caller recorded no pipeline error and the review was
                     // auto-approved as if the code were clean (#1568).
-                    throw attachClassification(
-                        error instanceof Error
+                    // A frozen error cannot carry the classification, and the
+                    // stage reads only an attached one: wrap it.
+                    const carrier =
+                        error instanceof Error && Object.isExtensible(error)
                             ? error
-                            : new Error(String(error)),
+                            : new Error(
+                                  error instanceof Error
+                                      ? error.message
+                                      : String(error),
+                                  { cause: error },
+                              );
+                    throw attachClassification(
+                        carrier,
                         classifyLLMError(
                             error,
                             byokConfigValue?.provider as string | undefined,

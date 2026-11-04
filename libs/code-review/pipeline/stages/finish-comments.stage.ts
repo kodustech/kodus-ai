@@ -334,8 +334,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         organizationAndTeamData,
                         prNumber: pullRequest.number,
                         repository: {
-                            id: repository?.id,
-                            name: repository?.name,
+                            id: repository.id,
+                            name: repository.name,
                         },
                         summaryStep,
                     },
