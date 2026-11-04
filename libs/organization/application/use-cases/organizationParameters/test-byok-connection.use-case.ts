@@ -510,12 +510,16 @@ export class TestByokConnectionUseCase {
         }
 
         const result = await this.probeViaRuntime(input, effectiveBaseURL);
-        // Native OpenAI dials `<base URL>/responses` verbatim, so a gateway URL
-        // typed without its version 404s on every call (#2150).
+        // Both OpenAI-protocol transports dial `<base URL>/responses` or
+        // `/chat/completions` verbatim, so a URL typed without its version 404s
+        // on every call (#2150). Not when the provider named the model as the
+        // cause: then the URL was reached, and blaming it would hide the reason.
         const versioned =
             result.code === 'not_found' &&
-            byokProvider === BYOKProvider.OPENAI &&
-            effectiveBaseURL
+            (byokProvider === BYOKProvider.OPENAI ||
+                byokProvider === BYOKProvider.OPENAI_COMPATIBLE) &&
+            effectiveBaseURL &&
+            !/\bmodel/i.test(result.providerMessage ?? '')
                 ? suggestApiVersion(effectiveBaseURL)
                 : undefined;
         return versioned

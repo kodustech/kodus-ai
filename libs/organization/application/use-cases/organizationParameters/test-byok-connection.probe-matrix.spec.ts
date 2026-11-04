@@ -161,6 +161,41 @@ describe('connection probe covers every registered provider', () => {
             expect(result.message).not.toContain('/v1');
         });
 
+        it('says nothing when the provider names the model as the cause', async () => {
+            const err: any = new Error('model_not_found');
+            err.name = 'AI_APICallError';
+            err.statusCode = 404;
+            err.responseBody = JSON.stringify({
+                error: {
+                    message:
+                        'The model `team-review` does not exist or you do not have access to it.',
+                    code: 'model_not_found',
+                },
+            });
+            generateText.mockRejectedValue(err);
+            const result = await useCase().execute({
+                provider: 'openai',
+                apiKey: 'sk-test',
+                baseURL: 'https://llm-proxy.example.com',
+                model: 'team-review',
+            });
+
+            expect(result.code).toBe('not_found');
+            expect(result.message).not.toContain('/v1');
+        });
+
+        it('suggests /v1 on an OpenAI-compatible endpoint too', async () => {
+            notFound();
+            const result = await useCase().execute({
+                provider: 'openai_compatible',
+                apiKey: 'sk-test',
+                baseURL: 'https://llm-proxy.example.com',
+                model: 'some-model',
+            });
+
+            expect(result.message).toContain('https://llm-proxy.example.com/v1');
+        });
+
         it('says nothing on a direct key, which has no base URL', async () => {
             notFound();
             const result = await useCase().execute({
