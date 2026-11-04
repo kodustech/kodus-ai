@@ -335,6 +335,76 @@ describe('LLMAnalysisService — secondary analysis methods', () => {
             expect(seen.size).toBe(40);
         });
 
+        it('sizes the batches against the smaller window of the primary and fallback slots', async () => {
+            const bigPatch = (name: string) =>
+                `File: ${name}\n${'+ const x = 1;\n'.repeat(1500)}`;
+            const codePatch = ['a.ts', 'b.ts', 'c.ts']
+                .map(bigPatch)
+                .join('\n\n');
+            const sugg = [
+                { id: 'a', relevantFile: 'a.ts' },
+                { id: 'b', relevantFile: 'b.ts' },
+                { id: 'c', relevantFile: 'c.ts' },
+            ] as any[];
+            runSpy.mockResolvedValue({ codeSuggestions: [] });
+            const service = buildService();
+            jest.spyOn(
+                (service as any).llmResponseProcessor,
+                'processResponse',
+            ).mockReturnValue({ codeSuggestions: [] });
+
+            await service.validateImplementedSuggestions(
+                org,
+                77,
+                {
+                    ...byokConfig,
+                    maxInputTokens: 200000,
+                    fallback: { ...byokConfig, maxInputTokens: 12000 },
+                },
+                codePatch,
+                sugg,
+            );
+
+            expect(runSpy.mock.calls.length).toBeGreaterThan(1);
+            for (const [arg] of runSpy.mock.calls) {
+                expect(estimateTokens(arg.user)).toBeLessThanOrEqual(12000);
+            }
+        });
+
+        it('logs the suggestions skipped because their own text fills the window', async () => {
+            const codePatch = `File: a.ts\n${'+ const x = 1;\n'.repeat(20)}`;
+            const sugg = [
+                {
+                    id: 'huge',
+                    relevantFile: 'a.ts',
+                    suggestionContent: 'lorem ipsum '.repeat(20000),
+                },
+            ] as any[];
+            runSpy.mockResolvedValue({ codeSuggestions: [] });
+            const service = buildService();
+            const warn = jest.spyOn((service as any).logger, 'warn');
+
+            const out = await service.validateImplementedSuggestions(
+                org,
+                77,
+                { ...byokConfig, maxInputTokens: 12000 },
+                codePatch,
+                sugg,
+            );
+
+            expect(runSpy).not.toHaveBeenCalled();
+            expect(out).toEqual([]);
+            const messages = warn.mock.calls.map((c: any) => c[0]);
+            expect(
+                messages.some((m: any) => m.metadata?.ids?.includes('huge')),
+            ).toBe(true);
+            expect(
+                messages.some((m: any) =>
+                    /No patch section matches/.test(m.message),
+                ),
+            ).toBe(false);
+        });
+
         it('makes no request when no suggestion has a patch section', async () => {
             const codePatch = `File: a.ts\n${'+ const x = 1;\n'.repeat(20000)}`;
             const sugg = [{ id: 'z', relevantFile: 'binary.png' }] as any[];

@@ -213,15 +213,21 @@ export class LLMAnalysisService implements IAIAnalysisService {
             // suggestion; the structured result is re-serialized and fed through
             // LLMResponseProcessor exactly as the STRING/JSON path did, preserving
             // the downstream mapping.
+            const skippedIds: Array<string | undefined> = [];
             const batches = this.splitValidationBatches(
                 byokConfig,
                 codePatch,
                 codeSuggestions,
+                { organizationAndTeamData, prNumber },
+                skippedIds,
             );
-            // No patch section matches a suggestion: nothing to verify against.
+            // Nothing to verify against: no patch section matches a suggestion
+            // (or the ones that match were each too large to send, logged above).
             if (!batches.length) {
                 this.logger.warn({
-                    message: `No patch section matches the suggestions of PR#${prNumber}: skipping the implemented check`,
+                    message: skippedIds.length
+                        ? `No suggestion of PR#${prNumber} fits the model's context window: skipping the implemented check`
+                        : `No patch section matches the suggestions of PR#${prNumber}: skipping the implemented check`,
                     context: LLMAnalysisService.name,
                     metadata: { organizationAndTeamData, prNumber },
                 });
@@ -330,6 +336,8 @@ export class LLMAnalysisService implements IAIAnalysisService {
         byokConfig: NormalizedModel | undefined,
         codePatch: string,
         codeSuggestions: Partial<CodeSuggestion>[],
+        logContext: Record<string, unknown> = {},
+        skippedIds: Array<string | undefined> = [],
     ): Array<{
         codePatch: string;
         codeSuggestions: Partial<CodeSuggestion>[];
@@ -337,11 +345,18 @@ export class LLMAnalysisService implements IAIAnalysisService {
         const whole = { codePatch, codeSuggestions };
         if (!byokConfig) return [whole];
 
-        const budget = Math.floor(
+        // LLM.run re-sends the same request on the slot's fallback model when
+        // the primary fails, so every batch must fit the smaller of the two.
+        const windowOf = (slot: { maxInputTokens?: number; model?: string }) =>
             resolveContextWindow({
-                byokMaxInputTokens: byokConfig.maxInputTokens,
-                modelName: byokConfig.model,
-            }) * 0.9,
+                byokMaxInputTokens: slot.maxInputTokens,
+                modelName: slot.model,
+            });
+        const budget = Math.floor(
+            Math.min(
+                windowOf(byokConfig),
+                byokConfig.fallback ? windowOf(byokConfig.fallback) : Infinity,
+            ) * 0.9,
         );
         // The prompt's fixed part (instructions + suggestions) depends on the
         // suggestions a request carries, so it is measured per batch.
@@ -421,7 +436,16 @@ export class LLMAnalysisService implements IAIAnalysisService {
                 // Room left for patch text next to this group's suggestions.
                 const own = budget - fixedFor(groupSuggestions);
                 // Suggestions that alone fill the slot cannot be verified.
-                if (own <= 0) continue;
+                if (own <= 0) {
+                    const ids = groupSuggestions.map((x) => x.id);
+                    skippedIds.push(...ids);
+                    this.logger.warn({
+                        message: `Skipping the implemented check of ${ids.length} suggestion(s) on ${filename}: their own text fills the model's context window`,
+                        context: LLMAnalysisService.name,
+                        metadata: { ...logContext, file: filename, ids },
+                    });
+                    continue;
+                }
                 let tokens = cost(section);
                 // A single patch over the budget is cut, measuring as it goes:
                 // no fixed chars-per-token ratio holds for dense diffs.
