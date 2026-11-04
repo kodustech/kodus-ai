@@ -72,6 +72,17 @@ describe('openAiModelListing — native OpenAI keeps chat models only', () => {
         );
     });
 
+    it('lists where reviews are sent: the base URL as typed, no /v1 added', () => {
+        // The runtime calls `<baseURL>/responses` verbatim, so a list from a
+        // repaired URL would vouch for an endpoint the reviews never reach.
+        expect(
+            (native as any).url({
+                apiKey: 'k',
+                baseURL: 'https://llm.mycorp.dev/',
+            }),
+        ).toBe('https://llm.mycorp.dev/models');
+    });
+
     it('drops a bare legacy id and keeps one that only contains the word', () => {
         expect(ids(['babbage', 'davinci'])).toEqual([]);
         expect(ids(['gpt-imagery-7'])).toEqual(['gpt-imagery-7']);

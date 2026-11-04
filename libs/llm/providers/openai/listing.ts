@@ -30,8 +30,10 @@ const nativeListing: ModelListing = {
     // Bound the live /models call so a hung request rejects (→ the UI's manual
     // fallback) instead of leaving the connect form stuck on "Loading models…".
     timeoutMs: 15_000,
+    // Verbatim, like the runtime (`<baseURL>/responses`): the list has to come
+    // from the endpoint the reviews will call.
     url: ({ baseURL }) =>
-        openAiCompatibleModelsUrl(baseURL || OPENAI_API_BASE_URL),
+        `${(baseURL || OPENAI_API_BASE_URL).replace(/\/+$/, '')}/models`,
     headers: ({ apiKey }) => bearerHeaders(apiKey),
     parse: (body) =>
         parseOpenAiIds(body)

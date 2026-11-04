@@ -309,7 +309,12 @@ export class GetModelsByProviderUseCase {
                         message: `Live model listing for ${provider} failed; served curated fallback`,
                         context: GetModelsByProviderUseCase.name,
                         error: error as Error,
-                        metadata: { provider, host: targetOrigin },
+                        metadata: {
+                            organizationId:
+                                organizationAndTeamData?.organizationId,
+                            provider,
+                            host: targetOrigin,
+                        },
                     });
                     return fb;
                 }
@@ -319,6 +324,7 @@ export class GetModelsByProviderUseCase {
                 context: GetModelsByProviderUseCase.name,
                 error: error as Error,
                 metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
                     provider,
                     host: targetOrigin,
                     userEndpoint: targetsUserEndpoint,
