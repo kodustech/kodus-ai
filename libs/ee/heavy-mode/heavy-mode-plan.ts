@@ -3,11 +3,11 @@
  */
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { createLogger } from '@libs/core/log/logger';
-import {
-    type ILicenseService,
-    type OrganizationLicenseValidationResult,
-    SubscriptionStatus,
+import type {
+    ILicenseService,
+    OrganizationLicenseValidationResult,
 } from '@libs/ee/license/interfaces/license.interface';
+import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
 
 const logger = createLogger('HeavyModePlan');
 
@@ -17,34 +17,19 @@ const logger = createLogger('HeavyModePlan');
 export const HEAVY_MODE_PLAN_REQUIRED =
     'Heavy mode is available on the Teams and Enterprise plans, and Kody could not confirm this organization is on one, so this review ran in Balanced mode.';
 
-const isPlan = (plan: string, name: 'teams' | 'enterprise') =>
-    plan === name || plan.startsWith(`${name}_`);
-
 /**
  * Heavy mode runs on Teams and Enterprise, in the cloud and self-hosted with a
  * Kodus license key, and on a trial. Free (`free_byok`), self-hosted without a
  * key, and a plan that is not active (expired, canceled, payment failed) run
- * Balanced.
- *
- * Unlike `isTeamsOrEnterpriseTierAllowed`, a self-hosted Teams key runs it.
+ * Balanced. The shared Teams/Enterprise policy, with a Teams key also allowed
+ * self-hosted.
  */
 export function isHeavyModeTierAllowed(
     license: OrganizationLicenseValidationResult | null | undefined,
 ): boolean {
-    if (!license?.valid) return false;
-    const rawPlan = license.planType;
-    const plan = typeof rawPlan === 'string' ? rawPlan.toLowerCase() : '';
-    const paid = isPlan(plan, 'teams') || isPlan(plan, 'enterprise');
-
-    switch (license.subscriptionStatus) {
-        case SubscriptionStatus.ACTIVE:
-        case SubscriptionStatus.LICENSED_SELF_HOSTED:
-            return paid;
-        case SubscriptionStatus.TRIAL:
-            return true;
-        default:
-            return false;
-    }
+    return isTeamsOrEnterpriseTierAllowed(license, {
+        selfHostedTiers: ['teams', 'enterprise'],
+    });
 }
 
 /**

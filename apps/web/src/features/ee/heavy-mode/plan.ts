@@ -1,7 +1,5 @@
+import { isTeamsOrEnterprisePlan } from "src/features/ee/byok/_utils";
 import type { OrganizationLicense } from "src/features/ee/subscription/_services/billing/types";
-
-const isPlan = (plan: string, name: "teams" | "enterprise") =>
-    plan === name || plan.startsWith(`${name}_`);
 
 /**
  * Mirror of `isHeavyModeTierAllowed` in `libs/ee/heavy-mode/heavy-mode-plan.ts`
@@ -11,22 +9,10 @@ const isPlan = (plan: string, name: "teams" | "enterprise") =>
  */
 export const isHeavyModePlan = (
     license: OrganizationLicense | null | undefined,
-): boolean => {
-    if (!license?.valid) return false;
-    const rawPlan = "planType" in license ? license.planType : undefined;
-    const plan = typeof rawPlan === "string" ? rawPlan.toLowerCase() : "";
-    const paid = isPlan(plan, "teams") || isPlan(plan, "enterprise");
-
-    switch (license.subscriptionStatus) {
-        case "active":
-        case "licensed-self-hosted":
-            return paid;
-        case "trial":
-            return true;
-        default:
-            return false;
-    }
-};
+): boolean =>
+    isTeamsOrEnterprisePlan(license, {
+        selfHostedTiers: ["teams", "enterprise"],
+    });
 
 /** Shown where heavy cannot be picked on the current plan. */
 export const HEAVY_MODE_PLAN_TAG = "Teams/Enterprise";

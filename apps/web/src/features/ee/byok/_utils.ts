@@ -159,19 +159,26 @@ export const isEnterprisePlan = (license: OrganizationLicense): boolean => {
  * context) and cockpit analytics.
  */
 export const isTeamsOrEnterprisePlan = (
-    license: OrganizationLicense,
+    license: OrganizationLicense | null | undefined,
+    options: { selfHostedTiers?: readonly ("teams" | "enterprise")[] } = {},
 ): boolean => {
-    if (!license.valid) return false;
-    const plan = license.planType ?? "";
-    const isTeams = plan.startsWith("teams_");
-    const isEnterprise =
-        plan.startsWith("enterprise_") || plan === "enterprise";
+    if (!license?.valid) return false;
+    const rawPlan = "planType" in license ? license.planType : undefined;
+    const plan = typeof rawPlan === "string" ? rawPlan.toLowerCase() : "";
+    const isTier = (tier: "teams" | "enterprise") =>
+        plan === tier || plan.startsWith(`${tier}_`);
+    const isTeams = isTier("teams");
+    const isEnterprise = isTier("enterprise");
+    const selfHostedTiers = options.selfHostedTiers ?? ["enterprise"];
 
     switch (license.subscriptionStatus) {
         case "active":
             return isTeams || isEnterprise;
         case "licensed-self-hosted":
-            return isEnterprise;
+            return (
+                (isTeams && selfHostedTiers.includes("teams")) ||
+                (isEnterprise && selfHostedTiers.includes("enterprise"))
+            );
         case "trial":
             return true;
         default:
