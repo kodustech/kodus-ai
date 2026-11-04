@@ -2,7 +2,7 @@
  * Base-URL hygiene — catch the endpoint path pasted into the BASE url.
  *
  * A provider SDK builds its request as `baseURL + <its own path>`
- * (`/chat/completions` for the OpenAI protocol, `/v1/messages` for Anthropic).
+ * (`/chat/completions` for the OpenAI protocol, `/messages` for Anthropic).
  * When a user copies the full endpoint out of a provider's cURL example into the
  * "Base URL" field, the path is appended a SECOND time and every call 404s:
  *
@@ -36,14 +36,17 @@
  */
 
 /** Endpoint paths a provider SDK appends to the base URL itself. */
+//
+// Only the endpoint, never a `/v1` before it: every SDK here appends its path to
+// a base that ends in the version (`.../v1` + `/messages`), and the
+// Anthropic-compatible build normalizes the version itself, so keeping it is
+// right for all of them. Cutting it sent `.../v1/messages` to the origin, where
+// the native Anthropic SDK then called `/messages` and 404'd.
 const APPENDED_ENDPOINT_PATHS = [
     '/chat/completions',
-    '/v1/messages',
     '/messages',
-    '/v1/responses',
     '/responses',
     '/completions',
-    '/v1/chat/completions',
 ];
 
 /**

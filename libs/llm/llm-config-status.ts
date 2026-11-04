@@ -157,6 +157,13 @@ export interface LLMConfigStatus {
         vertexLocation?: string;
         /** Parsed `API_LLM_TEMPERATURE_OVERRIDE`; only present when set. */
         temperatureOverride?: number;
+        /** Stated through `API_LLM_PROVIDER`, or guessed from the model name. */
+        providerSource?: 'declared' | 'inferred';
+        /** Why a declared env config cannot run; only when it cannot. */
+        invalidReason?: string;
+        /** Generic and legacy env vars that disagree. */
+        warnings?: string[];
+        reasoningEffort?: string;
     };
 }
 
@@ -261,8 +268,18 @@ export function describeLLMConfigStatus(configValue: unknown): LLMConfigStatus {
               // call to N" instead of leaving admins guessing why hard-coded
               // prompt temperatures are ignored.
               temperatureOverride: envDescriptor.temperatureOverride,
+              providerSource: envDescriptor.providerSource ?? ('inferred' as const),
+              warnings: envDescriptor.warnings,
+              reasoningEffort: envDescriptor.reasoningEffort,
           }
-        : { configured: false };
+        : envDescriptor.invalidReason
+          ? {
+                configured: false,
+                model: envDescriptor.model,
+                providerSource: envDescriptor.providerSource,
+                invalidReason: envDescriptor.invalidReason,
+            }
+          : { configured: false };
 
     const source: LLMConfigSource = byok.configured
         ? 'byok'

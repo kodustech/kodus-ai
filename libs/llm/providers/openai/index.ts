@@ -412,6 +412,30 @@ export const openaiModule: ProviderModule = {
             ? '{\n  "thinking": { "type": "enabled" }\n}'
             : '{\n  "reasoningEffort": "high",\n  "serviceTier": "flex"\n}',
     modelListing: openAiModelListing,
+    selfHostedEnv: (id) => {
+        if (id === 'openai') {
+            return {
+                apiKeyVars: ['API_OPEN_AI_API_KEY'],
+                baseURL: {
+                    legacyVar: 'API_OPENAI_FORCE_BASE_URL',
+                    default: 'https://api.openai.com/v1',
+                    nativeHost: 'api.openai.com',
+                },
+            };
+        }
+        if (id === 'openai_compatible') {
+            // No default: a forgotten base URL would send a third-party key to
+            // api.openai.com.
+            return {
+                apiKeyVars: ['API_OPEN_AI_API_KEY'],
+                baseURL: {
+                    legacyVar: 'API_OPENAI_FORCE_BASE_URL',
+                    required: true,
+                },
+            };
+        }
+        return null;
+    },
 };
 
 registerProvider(openaiModule);

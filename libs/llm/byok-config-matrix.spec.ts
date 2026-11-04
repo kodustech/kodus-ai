@@ -87,6 +87,26 @@ const CASES = [
         },
     },
     {
+        id: 'anthropic — a stored base URL ending in /v1/messages keeps its /v1',
+        why: 'The SDK appends /messages to a base that ends in /v1; repairing to the origin dialed /messages and 404ed on every call',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-sonnet-4-6',
+            baseURL: 'https://proxy.test/v1/messages',
+        },
+        wire: { url: 'https://proxy.test/v1/messages' },
+    },
+    {
+        id: 'openai_compatible — a stored base URL ending in /v1/responses keeps its /v1',
+        why: 'Repairing to the origin dialed /chat/completions without the version and 404ed',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-flash',
+            baseURL: 'https://proxy.test/v1/responses',
+        },
+        wire: { url: 'https://proxy.test/v1/chat/completions' },
+    },
+    {
         id: 'deepseek — no temperature while thinking',
         why: '"Thinking mode does not support the temperature, top_p, presence_penalty, or frequency_penalty parameters" — forwarding it made the UI value a lie',
         doc: 'api-docs.deepseek.com/guides/thinking_mode',

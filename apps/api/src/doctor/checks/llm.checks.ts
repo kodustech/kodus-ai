@@ -1,9 +1,14 @@
 import { describeEnvLLMConfig } from '@libs/llm/env-llm-config';
+import {
+    isEndpointSuffixWarning,
+    isForeignHostWarning,
+} from '@libs/llm/env-declared-provider';
 import { LLM_TASK } from '@libs/llm/llm-tasks';
 import { LLM } from '@libs/llm/llm';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import { redactSecrets } from '@libs/llm/review-error-diagnostics';
+import { validateModelTuning } from '@libs/llm/validate-model-tuning';
 import type { BYOKConfig, NormalizedModel } from '@libs/llm/byok-config';
 
 import {
@@ -60,6 +65,79 @@ function errorText(error: any): string {
 }
 
 /**
+ * How the server model was set up: whether its provider was stated or guessed,
+ * which env vars disagree, and whether its reasoning effort is one the model
+ * can honor. Reported once for the install, only when some review runs on it.
+ */
+function envModelResults(
+    descriptor: ReturnType<typeof describeEnvLLMConfig>,
+): DoctorResult[] {
+    const results: DoctorResult[] = [];
+    const label = [descriptor.providerId, descriptor.model]
+        .filter(Boolean)
+        .join(' / ');
+
+    results.push(
+        descriptor.providerSource === 'declared'
+            ? {
+                  check: 'llm.env_provider',
+                  status: 'ok',
+                  title: `The server model (${label}) uses the provider set in API_LLM_PROVIDER.`,
+              }
+            : {
+                  check: 'llm.env_provider',
+                  status: 'ok',
+                  title: `The server model (${label}) uses a provider guessed from the model name and the keys and base URL set.`,
+                  fix: 'Set API_LLM_PROVIDER to state the provider instead of letting Kodus guess it.',
+              },
+    );
+
+    for (const warning of descriptor.warnings ?? []) {
+        results.push(
+            isEndpointSuffixWarning(warning)
+                ? {
+                      check: 'llm.env_base_url',
+                      status: 'warn',
+                      title: warning,
+                      impact: 'As written, the URL would fail on every call; Kodus calls the corrected one instead.',
+                      fix: 'Remove the endpoint path from that variable so it ends at the API root (usually /v1).',
+                  }
+                : isForeignHostWarning(warning)
+                  ? {
+                        check: 'llm.env_base_url',
+                        status: 'warn',
+                        title: warning,
+                        impact: 'A proxy that only speaks the OpenAI-compatible protocol fails on every call.',
+                        fix: 'For a proxy, set API_LLM_PROVIDER=openai_compatible; otherwise remove API_OPENAI_FORCE_BASE_URL.',
+                    }
+                  : {
+                        check: 'llm.env_conflict',
+                        status: 'warn',
+                        title: warning,
+                        impact: 'One of the two values is ignored, and it may be the one you meant.',
+                        fix: 'Keep only the API_LLM_* variable, or give both the same value.',
+                    },
+        );
+    }
+
+    for (const issue of validateModelTuning({
+        provider: descriptor.providerId,
+        model: descriptor.model,
+        reasoningEffort: descriptor.reasoningEffort,
+    })) {
+        results.push({
+            check: 'llm.env_tuning',
+            status: 'warn',
+            title: `API_LLM_REASONING_EFFORT: ${issue.message}`,
+            impact: 'The configured reasoning effort is not what the model runs with.',
+            fix: 'Change or clear API_LLM_REASONING_EFFORT.',
+        });
+    }
+
+    return results;
+}
+
+/**
  * Which model each org's reviews actually run on, a real completion on it,
  * and whether it is big enough. Mirrors the review path: BYOK routes via
  * resolveTaskSlot (codeReview task); no slot means the env/managed model.
@@ -77,6 +155,7 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
             const reported = new Set<DoctorResult>();
             /** Orgs whose reviews run on the server model, not their own. */
             const envOrgs: string[] = [];
+            let usesEnvModel = false;
             const now = deps.now ?? Date.now;
             const deadline = now() + LLM_BUDGET_MS;
 
@@ -121,15 +200,29 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                 }
 
                 if (!slot && !envModel) {
-                    results.push({
-                        check: 'llm.configured',
-                        status: 'fail',
-                        scope,
-                        title: 'No language model is configured.',
-                        impact: 'Reviews cannot run.',
-                        fix: 'Set API_LLM_PROVIDER_MODEL and its key (for example API_OPEN_AI_API_KEY) in the server env, or configure a model in the BYOK page (user menu > BYOK).',
-                    });
+                    results.push(
+                        envDescriptor.invalidReason
+                            ? {
+                                  check: 'llm.configured',
+                                  status: 'fail',
+                                  scope,
+                                  title: `The server LLM configuration is invalid: ${envDescriptor.invalidReason}`,
+                                  impact: 'Reviews cannot run.',
+                                  fix: 'Fix the API_LLM_* variables in the server env, or configure a model in the BYOK page (user menu > BYOK).',
+                              }
+                            : {
+                                  check: 'llm.configured',
+                                  status: 'fail',
+                                  scope,
+                                  title: 'No language model is configured.',
+                                  impact: 'Reviews cannot run.',
+                                  fix: 'Set API_LLM_PROVIDER, API_LLM_PROVIDER_MODEL and API_LLM_API_KEY in the server env, or configure a model in the BYOK page (user menu > BYOK).',
+                              },
+                    );
                     continue;
+                }
+                if (!slot) {
+                    usesEnvModel = true;
                 }
 
                 const label = modelLabel(slot, envModel);
@@ -169,7 +262,7 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
                             impact: 'Reviews fail when they call the model.',
                             fix: slot
                                 ? `Check the API key, model name and base URL in the BYOK page (user menu > BYOK). Provider said: ${errorText(error)}`
-                                : `Check API_LLM_PROVIDER_MODEL, its API key and API_OPENAI_FORCE_BASE_URL. Provider said: ${errorText(error)}`,
+                                : `Check API_LLM_PROVIDER, API_LLM_PROVIDER_MODEL, API_LLM_API_KEY and API_LLM_BASE_URL. Provider said: ${errorText(error)}`,
                         });
                     }
                 }
@@ -211,6 +304,10 @@ export function llmCheck(deps: LlmDeps): DoctorCheck {
             const envFailure = tested.get('env');
             if (envFailure && envOrgs.length) {
                 envFailure.scope = envOrgs.join(', ');
+            }
+
+            if (usesEnvModel) {
+                results.push(...envModelResults(envDescriptor));
             }
 
             return results;

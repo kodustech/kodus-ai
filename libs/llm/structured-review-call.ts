@@ -53,7 +53,10 @@ import {
     type ByokModelOptions,
 } from '@libs/llm/byok-to-vercel';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
-import { resolveEnvProvider } from '@libs/llm/managed-slot';
+import {
+    declaredEnvModel,
+    resolveEnvProvider,
+} from '@libs/llm/managed-slot';
 import { agentModelIdentity } from '@libs/llm/model-identity';
 import {
     tracedGenerateText,
@@ -235,15 +238,18 @@ function askProviderModule<T>(
 /**
  * Resolve the structured-call plan for a slot — a pure lookup over the provider's
  * `capabilities().structuredOutput` + `reasoningTraits()`. No slot (managed/env
- * default) → 'as-is' (the Fireworks default is a response_format model). All the
+ * default) → 'as-is' (the Fireworks default is a response_format model), unless
+ * the env model's provider is declared. All the
  * per-model knowledge lives in the provider module; this is the single read.
  */
 function resolveStructuredPlan(
     slot: NormalizedModel | undefined,
     organizationId?: string,
 ): StructuredCallPlan {
+    // A declared env model is planned like the BYOK slot of the same provider:
+    // an always-thinking Kimi refuses the forced tool_choice an 'as-is' plan sends.
     return askProviderModule(
-        slot,
+        slot ?? (declaredEnvModel() as NormalizedModel | undefined),
         'as-is',
         (mod, s) =>
             planStructuredCall(

@@ -246,6 +246,13 @@ export type LLMConfigStatus = {
             | 'google_vertex';
         baseUrl?: string;
         vertexLocation?: string;
+        /** `declared`: set in API_LLM_PROVIDER; `inferred`: guessed from the model name. */
+        providerSource?: 'declared' | 'inferred';
+        reasoningEffort?: string;
+        /** Env vars that disagree, named without their values. */
+        warnings?: string[];
+        /** Set when the env declares a model that cannot run (configured is false). */
+        invalidReason?: string;
     };
 };
 

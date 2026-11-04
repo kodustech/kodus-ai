@@ -284,6 +284,7 @@ describe('describeLLMConfigStatus — effective config projection', () => {
             providerId: 'openai_compatible',
             baseUrl: 'https://api.openai.com/v1',
             temperatureOverride: 0.3,
+            providerSource: 'inferred',
         });
     });
 

@@ -347,6 +347,32 @@ describe('getModelName — resolved slot vs env default', () => {
         }
     });
 
+    it('names a declared env model by its trimmed id, and an invalid one without undefined', () => {
+        const declared = {
+            API_LLM_PROVIDER_MODEL: 'gpt-x ',
+            API_LLM_PROVIDER: 'openai',
+            API_LLM_API_KEY: 'sk-x',
+        };
+        const saved = Object.fromEntries(
+            Object.keys(declared).map((k) => [k, process.env[k]]),
+        );
+        try {
+            Object.assign(process.env, declared);
+            expect(getModelName(undefined)).toBe('openai:gpt-x');
+
+            delete process.env.API_LLM_PROVIDER_MODEL;
+            expect(getModelName(undefined)).toBe('auto');
+
+            process.env.API_LLM_PROVIDER_MODEL = '   ';
+            expect(getModelName(undefined)).toBe('auto');
+        } finally {
+            for (const [k, v] of Object.entries(saved)) {
+                if (v === undefined) delete process.env[k];
+                else process.env[k] = v;
+            }
+        }
+    });
+
     it('undefined slot + defaultModelOverride → the overridden name', () => {
         expect(getModelName(undefined, 'gemini-2.5-flash')).toBe(
             'gemini-2.5-flash',
