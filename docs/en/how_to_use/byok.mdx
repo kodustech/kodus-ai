@@ -55,7 +55,7 @@ BYOK is **provider-first**: you connect a provider once, add the models you want
     - If Kodus can list the provider's models, you get a dropdown.
     - Otherwise (custom endpoints, self-hosted, or when platform keys aren't configured), type the exact model ID.
 
-    Custom endpoints (OpenAI-compatible / Anthropic-compatible) also ask for a **Base URL** first.
+    Custom endpoints (OpenAI-compatible / Anthropic-compatible) also ask for a **Base URL** first. Providers that can sit behind your own proxy or gateway (OpenAI, for example) show an optional **Base URL**; leave it empty to call the provider directly.
   </Step>
 
   <Step title="Tune advanced settings (optional)">
@@ -175,6 +175,13 @@ Moonshot and Z.ai each offer a subscription plan on a **different endpoint** tha
     1. Visit [OpenAI API Keys](https://platform.openai.com/api-keys)
     2. Create a new key for Kodus
     3. Add billing information
+
+    **Through your own proxy or gateway:** if your OpenAI traffic goes through a proxy that speaks OpenAI's API (an AI gateway, a key pool), set its address in the optional **Base URL** and use the key the proxy expects. Reviews then run exactly as on a direct OpenAI key: the Responses API, strict structured output, and your reasoning level.
+
+    - Include the API version, as in `https://your-proxy.example.com/v1`. Kodus calls `<Base URL>/responses`, and lists models from `<Base URL>/models`.
+    - The proxy must serve the **Responses API** (`/v1/responses`). If it only serves chat completions, connect it as **OpenAI-compatible** instead.
+    - The URL must use `https://` and resolve to a public address, because Kodus sends your key there.
+    - Requests go out with `store: false`, so neither the proxy nor OpenAI is asked to keep them.
   </Tab>
 
   <Tab title="Google Gemini">
