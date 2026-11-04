@@ -773,7 +773,9 @@ export abstract class BaseCodeReviewAgentProvider {
                     // built field-by-field, so without this line the lenses never run.
                     heavy: this.runsHeavyLenses() && input.heavy,
                     // A chunked review runs the lenses per batch: tell them so.
-                    ...(input.batchIndex &&
+                    ...(this.runsHeavyLenses() &&
+                        input.heavy &&
+                        input.batchIndex &&
                         (input.batchTotal ?? 0) > 1 && {
                             lensBatch: {
                                 index: input.batchIndex,
