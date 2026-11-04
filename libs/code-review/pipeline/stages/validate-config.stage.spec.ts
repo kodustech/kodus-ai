@@ -6,6 +6,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { CUSTOM_AGENTS_PLAN_REQUIRED } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import { AutomationMessage } from '@libs/automation/domain/automation/enum/automation-status';
 import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
 
 describe('ValidateConfigStage — v2 routing', () => {
@@ -587,5 +588,106 @@ describe('ValidateConfigStage — custom agents plan gate', () => {
 
         expect(validateOrganizationLicense).not.toHaveBeenCalled();
         expect(createSingleIssueComment).not.toHaveBeenCalled();
+    });
+});
+
+describe('ValidateConfigStage — manual cadence with a review already running', () => {
+    let stage: ValidateConfigStage;
+    let executions: Array<{ uuid: string; status: string }>;
+
+    const matches = (value: string, filter: any) => {
+        if (filter === undefined) return true;
+        if (Array.isArray(filter)) return filter.includes(value);
+        return value === filter;
+    };
+    const filterRows = (filter: any, excludeUuid?: string) =>
+        executions.filter(
+            (e) =>
+                matches(e.status, filter.status) &&
+                matches(e.uuid, filter.uuid) &&
+                e.uuid !== excludeUuid,
+        );
+
+    const buildContext = (cadence: string): CodeReviewPipelineContext =>
+        ({
+            origin: 'System',
+            platformType: 'github',
+            teamAutomationId: 'team-automation-id',
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'repo-1', name: 'repo' },
+            pullRequest: {
+                number: 7,
+                title: 'feat: ledger',
+                isDraft: false,
+                base: { ref: 'main' },
+                head: { ref: 'feature' },
+            },
+            pipelineMetadata: { lastExecution: { uuid: 'current' } },
+            codeReviewConfig: {
+                automatedReviewActive: true,
+                ignoredTitleKeywords: [],
+                baseBranches: [],
+                runOnDraft: true,
+                reviewCadence: { type: cadence },
+            },
+        }) as unknown as CodeReviewPipelineContext;
+
+    beforeEach(async () => {
+        executions = [{ uuid: 'current', status: 'in_progress' }];
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                ValidateConfigStage,
+                {
+                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+                    useValue: {
+                        findLatestExecutionByFilters: jest.fn(
+                            async (filter, excludeUuid) =>
+                                filterRows(filter, excludeUuid)[0] ?? null,
+                        ),
+                    },
+                },
+                {
+                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+                    useValue: { findByKey: jest.fn().mockResolvedValue(null) },
+                },
+                {
+                    provide: CodeManagementService,
+                    useValue: { createSingleIssueComment: jest.fn() },
+                },
+            ],
+        }).compile();
+        stage = module.get<ValidateConfigStage>(ValidateConfigStage);
+    });
+
+    it('runs the first review of the PR', async () => {
+        const result = await stage['evaluateReviewCadence'](
+            buildContext('manual'),
+        );
+
+        expect(result.shouldProcess).toBe(true);
+    });
+
+    it('skips a push while an earlier review of the PR is still running', async () => {
+        executions.push({ uuid: 'first', status: 'in_progress' });
+
+        const result = await stage['evaluateReviewCadence'](
+            buildContext('manual'),
+        );
+
+        expect(result.shouldProcess).toBe(false);
+        expect(result.reason).toBe(AutomationMessage.MANUAL_REQUIRED_TO_START);
+    });
+
+    it('skips a push after a review that ended in partial error', async () => {
+        executions.push({ uuid: 'first', status: 'partial_error' });
+
+        const result = await stage['evaluateReviewCadence'](
+            buildContext('manual'),
+        );
+
+        expect(result.shouldProcess).toBe(false);
     });
 });

@@ -67,6 +67,20 @@ describe('AutomationExecutionRepository.findLatestExecutionByFilters', () => {
         );
     });
 
+    it('leaves out the excluded execution', async () => {
+        const { repository, queryBuilder } = makeRepository();
+
+        await repository.findLatestExecutionByFilters(
+            { status: 'in_progress' },
+            'execution-current',
+        );
+
+        expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+            'automation_execution.uuid <> :excludeUuid',
+            { excludeUuid: 'execution-current' },
+        );
+    });
+
     it('returns the most recent match as an entity', async () => {
         const { repository, queryBuilder } = makeRepository();
         queryBuilder.getOne.mockResolvedValueOnce({

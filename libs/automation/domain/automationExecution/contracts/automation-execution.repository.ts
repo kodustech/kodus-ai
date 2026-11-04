@@ -78,6 +78,7 @@ export interface IAutomationExecutionRepository {
     }>;
     findLatestExecutionByFilters(
         filters?: Partial<any>,
+        excludeUuid?: string,
     ): Promise<AutomationExecutionEntity | null>;
     findStaleInProgress(
         cutoffDate: Date,

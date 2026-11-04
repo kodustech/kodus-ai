@@ -834,6 +834,7 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
 
     async findLatestExecutionByFilters(
         filters?: Partial<any>,
+        excludeUuid?: string,
     ): Promise<AutomationExecutionEntity | null> {
         try {
             const queryBuilder =
@@ -857,6 +858,13 @@ export class AutomationExecutionRepository implements IAutomationExecutionReposi
                         { [key]: value },
                     );
                 });
+
+                if (excludeUuid) {
+                    queryBuilder.andWhere(
+                        'automation_execution.uuid <> :excludeUuid',
+                        { excludeUuid },
+                    );
+                }
 
                 result = await queryBuilder
                     .orderBy('automation_execution.createdAt', 'DESC')

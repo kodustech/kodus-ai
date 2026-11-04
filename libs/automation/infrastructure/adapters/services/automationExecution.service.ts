@@ -56,9 +56,11 @@ export class AutomationExecutionService implements IAutomationExecutionService {
 
     findLatestExecutionByFilters(
         filters?: Partial<any>,
+        excludeUuid?: string,
     ): Promise<AutomationExecutionEntity | null> {
         return this.automationExecutionRepository.findLatestExecutionByFilters(
             filters,
+            excludeUuid,
         );
     }
 
