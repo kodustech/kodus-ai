@@ -201,9 +201,10 @@ export function focusBlockFor(lens: HeavyLens): string {
     );
 }
 
-/** The lenses a review runs: those whose category the team has on. */
+/** The lenses a review runs: those whose category the team has on. No
+ *  labels given → all; an empty list → none. */
 export function heavyLensesFor(allowedLabels?: readonly string[]): HeavyLens[] {
-    if (!allowedLabels?.length) return HEAVY_LENSES;
+    if (!allowedLabels) return HEAVY_LENSES;
     return HEAVY_LENSES.filter((l) => allowedLabels.includes(l.label));
 }
 

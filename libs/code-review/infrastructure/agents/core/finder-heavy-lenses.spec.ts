@@ -150,9 +150,9 @@ describe('runFinderWithVerify in heavy mode', () => {
                             modelId: 'mock',
                             tools,
                             labels: ['security'],
-                            coverageLedger: ledger(),
                             maxSteps: 3,
                         }),
+                        maxFindings: 1,
                     },
                 ],
             },
@@ -174,13 +174,46 @@ describe('runFinderWithVerify in heavy mode', () => {
             ['a.ts', 'bug', undefined],
             ['b.ts', 'security', 'lens-data-exposure'],
         ]);
-        expect(r.droppedByVerify.map((d) => d.finding.relevantFile)).toEqual([
-            'c.ts',
-        ]);
+        // The lens's second finding is past its cap: it never reaches verify.
+        expect(r.droppedByVerify).toEqual([]);
         expect(r.passStats.map((p) => [p.label, p.added])).toEqual([
             ['generalist-base', 1],
-            ['lens-data-exposure', 2],
+            ['lens-data-exposure', 1],
         ]);
+    });
+
+    it('gives a lens no completion gate, which the generalist keeps', () => {
+        const tools = new InMemoryToolRegistry([]);
+        const names = (coverageLedger?: ProgressLedger) =>
+            buildFinderAgentSpec({
+                systemPrompt: 'x',
+                modelId: 'mock',
+                tools,
+                coverageLedger,
+            }).policies.map((p) => p.name);
+        expect(names(ledger())).toContain('completion-gate');
+        expect(names()).not.toContain('completion-gate');
+    });
+
+    it('stops the lenses when the generalist fails', async () => {
+        let lensSignal: AbortSignal | undefined;
+        const runner = {
+            run: (spec: any, _input: any, c: ToolContext) => {
+                if (spec.systemPrompt === HEAVY_LENS_SYSTEM_PROMPT) {
+                    lensSignal = c.signal;
+                    // A lens still running when the generalist fails.
+                    return new Promise((_r, reject) =>
+                        c.signal?.addEventListener('abort', () =>
+                            reject(new Error('aborted')),
+                        ),
+                    );
+                }
+                return Promise.reject(new Error('generalist down'));
+            },
+        } as unknown as AiSdkAgentRunner;
+
+        await expect(run(runner)).rejects.toThrow('generalist down');
+        expect(lensSignal?.aborted).toBe(true);
     });
 
     it('goes on without a lens that fails', async () => {

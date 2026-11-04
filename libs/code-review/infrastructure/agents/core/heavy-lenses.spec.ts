@@ -38,6 +38,8 @@ describe('heavy lenses (M3)', () => {
         ]);
         expect(heavyLensesFor(['performance'])).toEqual([]);
         expect(heavyLensesFor(undefined)).toHaveLength(9);
+        // Every category off: no lens, not all of them.
+        expect(heavyLensesFor([])).toEqual([]);
     });
 
     it('put the diff first and cap the lens at its findings ceiling', () => {

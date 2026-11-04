@@ -65,6 +65,7 @@ import {
 // Domain helper relocated out of the legacy file (Zod validation of findings).
 import { sanitizeFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import { LLM } from '@libs/llm/llm';
+import { AGENT_TIMEOUT_MS, timeoutSignal } from '@libs/llm/llm-call';
 import { extractJsonFromText } from '@libs/llm/structured-output-repair';
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -243,7 +244,9 @@ export interface BuildFinderSpecParams {
     tools: ToolRegistry;
     /** The labels the agent may report; the done-tool offers only these. */
     labels?: readonly string[];
-    coverageLedger: ProgressLedger;
+    /** Diff coverage the agent must reach before it may finalize. Absent → no
+     *  completion gate (a heavy lens, whose one class is not the whole diff). */
+    coverageLedger?: ProgressLedger;
     compressor?: Compressor;
     maxSteps?: number;
     /** Provider options (reasoning/thinking config) forwarded to the model. */
@@ -298,9 +301,13 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         ...(params.compressor
             ? [new CompressionPolicy(params.compressor)]
             : []),
-        new CompletionGatePolicy(params.coverageLedger, {
-            doneToolName: FINDER_DONE_TOOL,
-        }),
+        ...(params.coverageLedger
+            ? [
+                  new CompletionGatePolicy(params.coverageLedger, {
+                      doneToolName: FINDER_DONE_TOOL,
+                  }),
+              ]
+            : []),
         // Ports the legacy "force-text": in the last steps, restrict to the done
         // tool so the agent finalizes instead of running out of steps with
         // nothing submitted (which would lose all findings).
@@ -797,6 +804,8 @@ export interface HeavyLensPass {
     findingLabel: FinderLabel;
     prompt: string;
     spec: AgentSpec;
+    /** Findings kept from the lens, strongest first as its prompt asks. */
+    maxFindings?: number;
 }
 
 export interface ConventionCheckParams {
@@ -912,22 +921,39 @@ export async function runFinderWithVerify(
     const baseT0 = Date.now();
     // The lenses read nothing from the generalist, so they start with it and
     // run while it and its synthesis rescue do.
+    const lensStop = new AbortController();
     const lenses = params.lensPasses?.length
-        ? runHeavyLensPasses(params.lensPasses, params, ctx)
+        ? runHeavyLensPasses(params.lensPasses, params, {
+              ...ctx,
+              // A caller signal replaces the loop's own timeout
+              // (agent-loop-call), so the timeout comes along.
+              signal: AbortSignal.any([
+                  lensStop.signal,
+                  ctx.signal ?? timeoutSignal(AGENT_TIMEOUT_MS),
+              ]),
+          })
         : null;
-    const finderState = await params.runner.run(
-        params.finderSpec,
-        {
-            ...input,
-            ...toAiSdkTelemetryArgs(
-                buildLangfuseTelemetry(
-                    params.agentName ?? 'finder',
-                    params.telemetryMetadata,
+    // A generalist that fails fails the review: stop the lenses rather than
+    // let them spend tokens on it.
+    const stopLenses = (error: unknown): never => {
+        lensStop.abort(error);
+        throw error;
+    };
+    const finderState = await params.runner
+        .run(
+            params.finderSpec,
+            {
+                ...input,
+                ...toAiSdkTelemetryArgs(
+                    buildLangfuseTelemetry(
+                        params.agentName ?? 'finder',
+                        params.telemetryMetadata,
+                    ),
                 ),
-            ),
-        },
-        ctx,
-    );
+            },
+            ctx,
+        )
+        .catch(stopLenses);
     // Main finder findings — with prose-recovery applied (the same wrapper the
     // recall passes use, so an omission in any pass is caught consistently).
     const baseMs = Date.now() - baseT0;
@@ -969,7 +995,7 @@ export async function runFinderWithVerify(
             laneScoped: !!params.laneFocus,
         },
         ctx,
-    );
+    ).catch(stopLenses);
     const lensResult = lenses ? await lenses : null;
     const reasoning = recall.findings.reasoning;
     const suggestions = lensResult
@@ -1778,6 +1804,7 @@ async function runHeavyLensPasses(
             );
             const suggestions = (extracted.suggestions ?? [])
                 .filter(Boolean)
+                .slice(0, pass.maxFindings)
                 .map((s) => ({
                     ...s,
                     label: pass.findingLabel,

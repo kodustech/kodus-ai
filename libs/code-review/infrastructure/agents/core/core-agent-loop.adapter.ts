@@ -48,6 +48,7 @@ import {
 } from '@libs/code-review/infrastructure/agents/core/review-finding';
 import { inspectFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import {
+    HEAVY_LENS_MAX_FINDINGS,
     HEAVY_LENS_MAX_STEPS,
     HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT,
     HEAVY_LENS_SYSTEM_PROMPT,
@@ -344,9 +345,10 @@ export async function runAgentLoopViaCore(
         ? withClaudeOneProblem(input.userPrompt)
         : input.userPrompt;
 
-    // Heavy mode: the M3 lenses of the categories the team has on. Each gets
-    // its own ledger, since the completion gate mutates it per tool call and
-    // the lenses run at the same time.
+    // Heavy mode: the M3 lenses of the categories the team has on. No
+    // completion gate: a lens's assignment is one class of defect, not the
+    // diff's coverage, and with 3 steps the gate's pending-file notes and
+    // vetoed submits only cost it steps.
     const lensDiff = input.heavy
         ? heavyLensDiff(input.changedFiles, input.fileTiers)
         : '';
@@ -354,6 +356,7 @@ export async function runAgentLoopViaCore(
         ? heavyLensesFor(input.allowedLabels).map((lens) => ({
               label: `lens-${lens.id}`,
               findingLabel: lens.label,
+              maxFindings: HEAVY_LENS_MAX_FINDINGS,
               prompt: buildHeavyLensPrompt(
                   lens,
                   lensDiff,
@@ -371,10 +374,6 @@ export async function runAgentLoopViaCore(
                   agentName: input.agentName,
                   tools,
                   labels: [lens.label],
-                  coverageLedger: new DiffCoverageLedger({
-                      changedFiles: input.changedFiles,
-                      fileTiers: input.fileTiers,
-                  }),
                   compressor: contextWindowTokens
                       ? new ContextWindowCompressor(contextWindowTokens, {
                             overheadTokens,
