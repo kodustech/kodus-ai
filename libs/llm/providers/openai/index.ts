@@ -393,6 +393,7 @@ export const openaiModule: ProviderModule = {
             required: false,
             scope: 'top',
             placeholder: 'https://api.openai.com/v1',
+            offeredInForm: true,
         },
     ],
     providerOptionsNamespace: (id) =>

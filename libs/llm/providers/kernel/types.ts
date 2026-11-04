@@ -195,6 +195,10 @@ export interface FieldDescriptor {
     /** Whether the field lives at the top level of the config or under the
      *  provider-specific `settings` object. */
     scope?: 'top' | 'settings';
+    /** An optional field the connect form shows. Only set on an optional
+     *  `baseURL` whose provider honors it end to end: the model build, the
+     *  model listing and the connection probe all use the custom endpoint. */
+    offeredInForm?: boolean;
 }
 
 /**

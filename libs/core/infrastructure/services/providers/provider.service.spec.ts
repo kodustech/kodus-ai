@@ -74,6 +74,20 @@ describe('ProviderService — registry-driven', () => {
                 expect(b.acceptsBaseUrl).toBe(false);
             });
 
+            it.each([
+                'anthropic',
+                'google_gemini',
+                'open_router',
+                'novita',
+                'moonshot',
+                'zai',
+            ])(
+                '%s: optional base URL not offered (its model list ignores it)',
+                (id) => {
+                    expect(byId(id).acceptsBaseUrl).toBe(false);
+                },
+            );
+
             it('openai_compatible: required, so also accepted', () => {
                 expect(byId('openai_compatible').acceptsBaseUrl).toBe(true);
             });

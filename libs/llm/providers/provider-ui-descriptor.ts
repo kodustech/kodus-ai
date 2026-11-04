@@ -16,7 +16,7 @@ export interface ProviderUiDescriptor {
      *  defaulted for them. */
     requiresBaseUrl: boolean;
     /** The connect form offers a base URL: required (above), or optional
-     *  because the module declares a `baseURL` field over a default endpoint
+     *  because the module offers its `baseURL` field over a default endpoint
      *  (the org's own proxy or gateway). */
     acceptsBaseUrl: boolean;
     /** The provider's models can be enumerated (dropdown) vs. typed by hand. */
@@ -78,8 +78,10 @@ export function describeProviderId(
 ): ProviderUiDescriptor {
     const listing = module.modelListing?.(id) ?? null;
     const custom = isCustomEndpoint(id);
-    const declaresField = (key: string): boolean =>
-        (module.uiFields ?? []).some((f) => f.key === key);
+    const offersField = (key: string): boolean =>
+        (module.uiFields ?? []).some(
+            (f) => f.key === key && f.offeredInForm === true,
+        );
     const requiresField = (key: string): boolean =>
         (module.uiFields ?? []).some(
             (f) => f.key === key && f.required === true,
@@ -98,7 +100,7 @@ export function describeProviderId(
         label: labelForId(module, id),
         requiresApiKey,
         requiresBaseUrl,
-        acceptsBaseUrl: requiresBaseUrl || declaresField('baseURL'),
+        acceptsBaseUrl: requiresBaseUrl || offersField('baseURL'),
         // Custom endpoints can't be pre-listed (endpoint unknown until entered).
         // A brand with a `manual` listing and no live `/models` call (e.g. Z.ai/GLM
         // over the Anthropic protocol) is NOT auto-listable — the user types the
