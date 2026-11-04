@@ -64,6 +64,18 @@ import { CodeReviewPipelineContext } from '../context/code-review-pipeline.conte
 
 const SKIPPED_NO_LICENSE_RATE_LIMIT_TTL_SECONDS = 24 * 60 * 60; // 24h
 
+// Also posted by ValidateConfigStage when a heavy review's model is the one
+// routed by Kodus.
+export const KODUS_CREDITS_EXHAUSTED_COMMENT =
+    '## Your Kodus credits are used up 💳\n\n' +
+    'This repository reviews with a model routed by Kodus, and your ' +
+    "organization's prepaid credit balance is at zero.\n\n" +
+    '**[Top up credits](https://app.kodus.io/byok#kodus)** ' +
+    'and re-run the review (or push a new commit) — or ' +
+    '[connect your own AI key](https://app.kodus.io/byok) to review ' +
+    'on your provider account instead.\n\n' +
+    '<!-- kody-codereview -->';
+
 type NoActiveSubscriptionType =
     | 'user'
     | 'general'
@@ -1019,16 +1031,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
     }
 
     private async creditsExhaustedMessage(): Promise<string> {
-        return (
-            '## Your Kodus credits are used up 💳\n\n' +
-            'This repository reviews with a model routed by Kodus, and your ' +
-            "organization's prepaid credit balance is at zero.\n\n" +
-            '**[Top up credits](https://app.kodus.io/byok#kodus)** ' +
-            'and re-run the review (or push a new commit) — or ' +
-            '[connect your own AI key](https://app.kodus.io/byok) to review ' +
-            'on your provider account instead.\n\n' +
-            '<!-- kody-codereview -->'
-        );
+        return KODUS_CREDITS_EXHAUSTED_COMMENT;
     }
 
     private async licenseUnavailableMessage(): Promise<string> {

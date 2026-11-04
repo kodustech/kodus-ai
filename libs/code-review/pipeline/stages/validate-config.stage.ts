@@ -47,6 +47,9 @@ import {
     ILicenseService,
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
+import { KODUS_CREDITS_EXHAUSTED_COMMENT } from './validate-prerequisites.stage';
 
 @Injectable()
 export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -67,6 +70,8 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         @Optional()
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService?: ILicenseService,
+        @Optional()
+        private readonly permissionValidationService?: PermissionValidationService,
     ) {
         super();
     }
@@ -188,6 +193,28 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 });
             }
 
+            if (
+                heavy &&
+                (await this.heavyKodusCreditsExhausted(
+                    context,
+                    byokConfig?.configValue,
+                    routed.resolvedModelSlot,
+                ))
+            ) {
+                return this.updateContext(context, (draft) => {
+                    draft.statusInfo = {
+                        status: AutomationStatus.SKIPPED,
+                        message: StageMessageHelper.skippedWithReason(
+                            PipelineReasons.PREREQUISITES.CREDITS_EXHAUSTED,
+                        ),
+                    };
+                    if (!draft.pipelineMetadata) {
+                        draft.pipelineMetadata = {};
+                    }
+                    draft.pipelineMetadata.notificationHandled = true;
+                });
+            }
+
             context = this.updateContext(context, (draft) => {
                 draft.heavy = heavy;
                 // Materialize the routed model into the resolved slot the pipeline
@@ -252,6 +279,60 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 };
             });
         }
+    }
+
+    /**
+     * The prerequisites gated the credits of the `codeReview` model only. When
+     * a heavy review runs on a model routed by Kodus and the Balanced one is
+     * not, nothing checked the balance yet; when both are, it already was.
+     * Posts the same comment the prerequisites post.
+     */
+    private async heavyKodusCreditsExhausted(
+        context: CodeReviewPipelineContext,
+        storedConfig: unknown,
+        heavySlot: CodeReviewConfig['resolvedModelSlot'],
+    ): Promise<boolean> {
+        if (!isPlatformFundedProvider(heavySlot?.provider)) {
+            return false;
+        }
+        const balancedSlot = routeCodeReviewModel(
+            storedConfig,
+            context.codeReviewConfig,
+            false,
+        ).resolvedModelSlot;
+        if (isPlatformFundedProvider(balancedSlot?.provider)) {
+            return false;
+        }
+        const gate =
+            await this.permissionValidationService?.gateKodusCreditsForSlot(
+                heavySlot,
+                context.organizationAndTeamData,
+                this.stageName,
+            );
+        if (!gate) {
+            return false;
+        }
+
+        this.logger.warn({
+            message:
+                'Kodus credits exhausted for the Heavy model — heavy review skipped',
+            context: this.stageName,
+            metadata: {
+                organizationAndTeamData: context.organizationAndTeamData,
+                prNumber: context.pullRequest?.number,
+                repositoryId: context.repository?.id,
+                model: heavySlot?.model,
+            },
+        });
+        if (context.pipelineMetadata?.showStatusFeedback !== false) {
+            await this.codeManagementService.createIssueComment({
+                organizationAndTeamData: context.organizationAndTeamData,
+                repository: context.repository,
+                prNumber: context.pullRequest?.number,
+                body: KODUS_CREDITS_EXHAUSTED_COMMENT,
+            });
+        }
+        return true;
     }
 
     private async evaluateReviewCadence(

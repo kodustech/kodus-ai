@@ -7,6 +7,8 @@ import { CodeReviewPipelineContext } from '../context/code-review-pipeline.conte
 import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { CUSTOM_AGENTS_PLAN_REQUIRED } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
 import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { KODUS_CREDITS_EXHAUSTED_COMMENT } from './validate-prerequisites.stage';
 
 describe('ValidateConfigStage — v2 routing', () => {
     let stage: ValidateConfigStage;
@@ -622,5 +624,170 @@ describe('ValidateConfigStage — custom agents plan gate', () => {
 
         expect(validateOrganizationLicense).not.toHaveBeenCalled();
         expect(createSingleIssueComment).not.toHaveBeenCalled();
+    });
+});
+
+describe('ValidateConfigStage — Kodus credits on the Heavy model', () => {
+    let stage: ValidateConfigStage;
+    let createIssueComment: jest.Mock;
+    let gateKodusCreditsForSlot: jest.Mock;
+
+    const kodusModel =
+        'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731';
+    // m-A: the org's own OpenAI key; m-K: routed by Kodus.
+    const config = (routing: any) => ({
+        version: 2,
+        credentials: [
+            { id: 'c-oa', provider: 'openai', apiKey: 'enc-oa' },
+            { id: 'c-kd', provider: 'kodus' },
+        ],
+        models: [
+            { id: 'm-A', credentialId: 'c-oa', model: 'gpt-4o' },
+            { id: 'm-K', credentialId: 'c-kd', model: kodusModel },
+        ],
+        routing,
+    });
+
+    const buildContext = (
+        reviewMode: 'balanced' | 'heavy',
+        showStatusFeedback = true,
+    ): CodeReviewPipelineContext =>
+        ({
+            origin: 'command',
+            platformType: 'github',
+            teamAutomationId: 'team-automation-id',
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'repo-1', name: 'repo' },
+            pullRequest: {
+                number: 3,
+                title: 'feat: something',
+                isDraft: false,
+                base: { ref: 'main' },
+                head: { ref: 'feature' },
+            },
+            pipelineMetadata: { showStatusFeedback },
+            codeReviewConfig: {
+                automatedReviewActive: true,
+                ignoredTitleKeywords: [],
+                baseBranches: [],
+                runOnDraft: true,
+                reviewMode,
+            },
+        }) as unknown as CodeReviewPipelineContext;
+
+    const setup = async (routing: any) => {
+        createIssueComment = jest.fn().mockResolvedValue({});
+        gateKodusCreditsForSlot = jest.fn().mockResolvedValue({
+            allowed: false,
+            errorType: 'CREDITS_EXHAUSTED',
+        });
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                ValidateConfigStage,
+                {
+                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+                    useValue: {
+                        findLatestExecutionByFilters: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
+                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+                    useValue: {
+                        findByKey: jest
+                            .fn()
+                            .mockResolvedValue({ configValue: config(routing) }),
+                    },
+                },
+                {
+                    provide: CodeManagementService,
+                    useValue: { createIssueComment },
+                },
+                {
+                    provide: PermissionValidationService,
+                    useValue: { gateKodusCreditsForSlot },
+                },
+            ],
+        }).compile();
+        stage = module.get<ValidateConfigStage>(ValidateConfigStage);
+    };
+
+    it('skips a heavy review on a Kodus model the Balanced model did not gate, with the credits comment', async () => {
+        await setup({
+            defaultModelId: 'm-A',
+            taskOverrides: { codeReviewHeavy: 'm-K' },
+        });
+
+        const result = await stage.execute(buildContext('heavy'));
+
+        expect(gateKodusCreditsForSlot).toHaveBeenCalledWith(
+            expect.objectContaining({ provider: 'kodus', model: kodusModel }),
+            { organizationId: 'org-1', teamId: 'team-1' },
+            'ValidateConfigStage',
+        );
+        expect(result.statusInfo?.status).toBe('skipped');
+        expect(result.pipelineMetadata?.notificationHandled).toBe(true);
+        expect(createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prNumber: 3,
+                body: KODUS_CREDITS_EXHAUSTED_COMMENT,
+            }),
+        );
+    });
+
+    it('posts no comment when status feedback is off', async () => {
+        await setup({
+            defaultModelId: 'm-A',
+            taskOverrides: { codeReviewHeavy: 'm-K' },
+        });
+
+        const result = await stage.execute(buildContext('heavy', false));
+
+        expect(result.statusInfo?.status).toBe('skipped');
+        expect(createIssueComment).not.toHaveBeenCalled();
+    });
+
+    it('reviews when the Kodus credits cover the heavy review', async () => {
+        await setup({
+            defaultModelId: 'm-A',
+            taskOverrides: { codeReviewHeavy: 'm-K' },
+        });
+        gateKodusCreditsForSlot.mockResolvedValue(null);
+
+        const result = await stage.execute(buildContext('heavy'));
+
+        expect(result.heavy).toBe(true);
+        expect(result.statusInfo?.status).not.toBe('skipped');
+        expect(result.codeReviewConfig.byokConfig?.provider).toBe('kodus');
+    });
+
+    it.each([
+        [
+            'a Balanced review',
+            'balanced',
+            { defaultModelId: 'm-A', taskOverrides: { codeReviewHeavy: 'm-K' } },
+        ],
+        [
+            'a heavy review on the org key',
+            'heavy',
+            { defaultModelId: 'm-K', taskOverrides: { codeReviewHeavy: 'm-A' } },
+        ],
+        // The prerequisites already gated the Balanced model's Kodus credits.
+        [
+            'a heavy review when both models are Kodus',
+            'heavy',
+            { defaultModelId: 'm-K' },
+        ],
+    ])('does not read the credits again for %s', async (_, mode, routing) => {
+        await setup(routing);
+
+        const result = await stage.execute(buildContext(mode as any));
+
+        expect(gateKodusCreditsForSlot).not.toHaveBeenCalled();
+        expect(result.statusInfo?.status).not.toBe('skipped');
     });
 });
