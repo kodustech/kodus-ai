@@ -40,6 +40,9 @@ export interface ReviewResult {
     issues: ReviewIssue[];
     filesAnalyzed: number;
     duration: number;
+    /** What the review did differently from what was asked (e.g. a `--heavy`
+     *  the plan runs Balanced), for callers that read no spinner. */
+    notices?: string[];
 }
 
 export interface ApiFileSuggestion {
@@ -146,9 +149,6 @@ export interface FileContent {
 }
 
 export interface TrialReviewResult extends ReviewResult {
-    /** What the trial review did differently from what was asked (e.g. a
-     *  `--heavy` it ran without), for callers that read no spinner. */
-    notices?: string[];
     trialInfo?: {
         reviewsUsed: number;
         reviewsLimit: number;

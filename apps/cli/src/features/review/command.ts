@@ -262,6 +262,9 @@ async function reviewAction(
                         chalk.green(`Review complete!${modeLabel}`),
                     );
                 }
+                for (const notice of result.notices ?? []) {
+                    warnNotice(notice, spinner, ctx, globalOpts);
+                }
             } catch (error) {
                 // If the configured credentials are invalid (revoked team key,
                 // expired session) fall back to trial mode so a single broken
@@ -590,9 +593,25 @@ function warnHeavyInTrial(
     globalOpts: GlobalOptions,
 ): void {
     const notice = formatHeavyTrialNotice(heavy);
-    // An agent reads the notice in the result (withHeavyTrialNotice); a spinner
-    // line would corrupt its JSON.
-    if (!notice || ctx.isAgent) {
+    if (!notice) {
+        return;
+    }
+    warnNotice(notice, spinner, ctx, globalOpts);
+    // The trial review goes on under the spinner.
+    if (!ctx.isAgent && !globalOpts.quiet) {
+        spinner.start();
+    }
+}
+
+function warnNotice(
+    notice: string,
+    spinner: Ora,
+    ctx: ReturnType<typeof createCommandContext>,
+    globalOpts: GlobalOptions,
+): void {
+    // An agent reads the notice in the result; a spinner line would corrupt
+    // its JSON.
+    if (ctx.isAgent) {
         return;
     }
     // --quiet keeps stdout clean, so the notice goes to stderr.
@@ -601,7 +620,6 @@ function warnHeavyInTrial(
         return;
     }
     spinner.warn(chalk.yellow(notice));
-    spinner.start();
 }
 
 async function runTrialFallback({
