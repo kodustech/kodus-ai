@@ -4,6 +4,7 @@ import {
     suggestApiVersion,
 } from '@libs/llm/base-url-hygiene';
 import { BYOKProvider } from '@libs/llm/model-providers';
+import { saysModelNotFound } from '@libs/llm/error-classifier';
 import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
 import { REGISTRY } from '@libs/llm/providers';
 import { probeSlotCall } from '@libs/llm/probe-slot-call';
@@ -512,14 +513,14 @@ export class TestByokConnectionUseCase {
         const result = await this.probeViaRuntime(input, effectiveBaseURL);
         // Both OpenAI-protocol transports dial `<base URL>/responses` or
         // `/chat/completions` verbatim, so a URL typed without its version 404s
-        // on every call (#2150). Not when the provider named the model as the
-        // cause: then the URL was reached, and blaming it would hide the reason.
+        // on every call (#2150). Not when the provider says the model is missing:
+        // then the URL was reached, and blaming it would hide the reason.
         const versioned =
             result.code === 'not_found' &&
             (byokProvider === BYOKProvider.OPENAI ||
                 byokProvider === BYOKProvider.OPENAI_COMPATIBLE) &&
             effectiveBaseURL &&
-            !/\bmodel/i.test(result.providerMessage ?? '')
+            !saysModelNotFound((result.providerMessage ?? '').toLowerCase())
                 ? suggestApiVersion(effectiveBaseURL)
                 : undefined;
         return versioned
