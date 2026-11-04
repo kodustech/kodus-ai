@@ -176,6 +176,35 @@ export const CUSTOM_AGENT_TRY_RUN_STORE_TOKEN = Symbol.for(
     'CustomAgentTryRunStore',
 );
 
+/**
+ * How one custom agent run on a pull request ended, kept so the agent's page
+ * can say it is failing and why. Status and reason only: never a finding,
+ * a prompt or a provider message (those can carry code or key fragments).
+ */
+export type CustomAgentRunRecord = {
+    organizationId: string;
+    repositoryId: string;
+    prNumber: number;
+    agentId: string;
+    status: 'ran' | 'failed' | 'incomplete';
+    /** A failed run's error category (`MODEL_NOT_FOUND (HTTP 404)`), or an
+     *  incomplete run's stop reason (`max-steps`). */
+    reason?: string;
+    at: Date;
+};
+
+export const CUSTOM_AGENT_RUN_LOG_TOKEN = Symbol.for('CustomAgentRunLog');
+
+export interface ICustomAgentRunLog {
+    record(runs: CustomAgentRunRecord[]): Promise<void>;
+    /** Runs of a repository since a date, newest first. */
+    listSince(params: {
+        organizationId: string;
+        repositoryId: string;
+        since: Date;
+    }): Promise<CustomAgentRunRecord[]>;
+}
+
 export interface ICustomAgentTryRunStore {
     create(run: Omit<CustomAgentTryRun, 'id'>): Promise<string>;
     finish(id: string, result: CustomAgentTryTrace): Promise<void>;

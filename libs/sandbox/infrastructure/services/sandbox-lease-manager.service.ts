@@ -3,6 +3,10 @@ import {
     AcquireResult,
     assertValidPrKey,
     ISandboxLeaseManager,
+    SandboxCircuitOpenError,
+    DEFAULT_CAPACITY_WAIT_MS,
+    SandboxAcquireOptions,
+    SandboxWaitAbortedError,
     SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import {
@@ -13,13 +17,30 @@ import {
     SANDBOX_PROVIDER_TOKEN,
     toBranchName,
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Sandbox } from 'e2b';
 import { randomUUID } from 'crypto';
 
-import { calculateBackoffInterval } from '@libs/common/utils/polling';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
+import {
+    DEFAULT_SANDBOX_CIRCUIT_OPTIONS,
+    isRepositorySpecificSandboxFailure,
+    isSandboxCapacityFailure,
+    isTimeoutSandboxFailure,
+    SandboxCircuitTransition,
+    SandboxCreateCircuitBreaker,
+} from './sandbox-create-circuit-breaker';
+import { SandboxConcurrencyLimiter } from './sandbox-concurrency-limiter';
+import {
+    BackoffOptions,
+    calculateBackoffInterval,
+} from '@libs/common/utils/polling';
+import {
+    DEFAULT_SANDBOX_CONCURRENCY_LIMITS,
+    ISandboxConcurrencyConfigService,
+    SANDBOX_CONCURRENCY_CONFIG_SERVICE_TOKEN,
+} from './sandbox-concurrency-config.service';
 import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
 import {
@@ -51,6 +72,25 @@ const IDLE_TIMEOUT_MS = 300_000; // 5 minutes — default for conversation flow
  */
 const DEFAULT_LEASE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
+/**
+ * A concurrency slot whose lease was never released is dropped after this
+ * long. Longer than the 105-min job timeout so a slow review keeps its slot.
+ */
+const CONCURRENCY_SLOT_STALE_MS = 2 * 60 * 60 * 1000;
+
+// A slot granted faster than this did not really wait; not worth a log line.
+const SLOT_WAIT_LOG_THRESHOLD_MS = 1_000;
+
+/**
+ * Cadence for a review waiting on capacity (a worker slot, or room in the
+ * E2B plan): 5s, doubling to at most a minute, with jitter. Each tick
+ * re-reads the cap (raising it frees the line at once) and logs the wait.
+ */
+const CAPACITY_WAIT_BACKOFF: BackoffOptions = {
+    baseInterval: 5_000,
+    maxInterval: 60_000,
+};
+
 // Grace window for in-flight tool calls before a detached sandbox is killed.
 const INVALIDATE_DRAIN_MS = 60_000;
 
@@ -66,25 +106,22 @@ const POLL_INTERVAL_MS = 500;
 const MAX_POLL_WAIT_MS = 30_000; // 30 seconds
 
 /**
- * Sandbox creation retry budget. Three attempts total (initial + 2 retries).
- * Backoff intervals are computed by the project's exponential-backoff lib
- * (`@libs/common/utils/polling`) so this stays consistent with how other
- * services pace retries. Configured to land at exactly 60s → 120s with no
- * jitter (deterministic, easy to reason about under quota outages).
+ * Sandbox creation retry budget: the initial attempt plus ONE retry, 10s
+ * apart. The old budget (3 attempts, 60s/120s backoffs, 5-min clone timeout)
+ * could hold a review for ~18 minutes on a degraded proxy before it fell
+ * back to self-contained mode.
+ *
+ * No retry at all for failures a retry cannot fix:
+ * - repository-specific git errors (bad credentials, missing ref);
+ * - timeouts, which already spent the whole clone budget on a slow network
+ *   path and would spend it again.
  *
  * The provider call is the only thing wrapped — other lease operations
  * (Mongo upsert/update) are atomic and fast, so a retry there would mask
  * real errors instead of fixing them.
- *
- * Total worst-case overhead from backoffs alone: 60 + 120 = 180s.
  */
-const CREATE_MAX_ATTEMPTS = 3;
-const CREATE_BACKOFF_OPTIONS = {
-    baseInterval: 60_000, // 1 min
-    maxInterval: 120_000, // 2 min cap (so attempt-1 → 120s, not 240s)
-    multiplier: 2,
-    jitterFactor: 0,
-} as const;
+const CREATE_MAX_ATTEMPTS = 2;
+const CREATE_RETRY_DELAY_MS = 10_000;
 
 /**
  * Thrown when polling for a CREATING sandbox exceeds MAX_POLL_WAIT_MS.
@@ -139,12 +176,214 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      */
     private readonly leaseIdToPrKey = new Map<string, string>();
 
+    /**
+     * Fails sandbox creation fast while the infrastructure is degraded —
+     * see SandboxCreateCircuitBreaker. Per process, like leaseIdToPrKey.
+     */
+    readonly createCircuit = new SandboxCreateCircuitBreaker(
+        DEFAULT_SANDBOX_CIRCUIT_OPTIONS,
+        Date.now,
+        (transition) => this.logCircuitTransition(transition),
+    );
+
+    /**
+     * Per-process cap on sandboxes held at once, so the fleet stays inside the
+     * E2B plan's concurrent-sandbox limit. Tuned through the
+     * `sandbox_concurrency` global parameter; uncapped when it is absent.
+     */
+    readonly concurrencyLimiter = new SandboxConcurrencyLimiter(
+        CONCURRENCY_SLOT_STALE_MS,
+        Date.now,
+        (slotId, heldMs) => {
+            // The limiter no longer counts this slot: forget it, so the next
+            // acquire on its prKey takes a new one instead of joining it
+            for (const [prKey, slot] of this.prKeySlots) {
+                if (slot.slotId === slotId) this.prKeySlots.delete(prKey);
+            }
+            this.logger.warn({
+                message: `SandboxLeaseManager: dropped a sandbox slot held ${heldMs}ms without release`,
+                context: SandboxLeaseManager.name,
+                metadata: { slotId, heldMs },
+            });
+        },
+    );
+    /**
+     * Slots are per sandbox, not per lease: the review, its safeguard pass
+     * and a @kody reply on the same PR share one E2B sandbox, so they share
+     * one slot. `granted` is shared so concurrent acquires on the same prKey
+     * wait on one slot instead of taking two.
+     */
+    private readonly prKeySlots = new Map<string, WorkerSlot>();
+    /** The slot each lease holds, kept even after the slot was dropped. */
+    private readonly leaseIdToSlot = new Map<
+        string,
+        { prKey: string; slot: WorkerSlot }
+    >();
+
     constructor(
         @Inject(SANDBOX_PROVIDER_TOKEN)
         private readonly sandboxProvider: ISandboxProvider,
         private readonly leaseRepo: SandboxLeaseRepository,
         private readonly configService: ConfigService,
+        // Optional so specs that build the manager by hand stay uncapped.
+        @Optional()
+        @Inject(SANDBOX_CONCURRENCY_CONFIG_SERVICE_TOKEN)
+        private readonly concurrencyConfig?: ISandboxConcurrencyConfigService,
     ) {}
+
+    /**
+     * Acquire a lease (see acquireLease) once this worker has a concurrency
+     * slot for the prKey's sandbox. With every slot taken the caller waits in
+     * line for one, as long as it takes: a review never runs without its
+     * sandbox for lack of capacity. Only `options.signal` (the job's) ends the
+     * wait, with SandboxWaitAbortedError; a caller without one waits at most
+     * DEFAULT_CAPACITY_WAIT_MS. The slot is held until the last lease this
+     * worker holds on the prKey is released.
+     */
+    async acquire(
+        prKey: string,
+        consumer: string,
+        leaseTtlMs = DEFAULT_LEASE_TTL_MS,
+        cloneParams?: CreateSandboxParams,
+        options?: SandboxAcquireOptions,
+    ): Promise<AcquireResult> {
+        assertValidPrKey(prKey);
+
+        // No caller may wait forever: without the job's signal, bound it
+        const bound = options?.signal ? null : new AbortController();
+        const boundTimer = bound
+            ? setTimeout(() => bound.abort(), DEFAULT_CAPACITY_WAIT_MS)
+            : null;
+        const signal = options?.signal ?? bound!.signal;
+        const takesSlot = !options?.replacesOwnSandbox;
+
+        try {
+            const slot = takesSlot
+                ? await this.takeSlot(prKey, consumer, signal)
+                : null;
+            try {
+                const result = await this.acquireLease(
+                    prKey,
+                    consumer,
+                    leaseTtlMs,
+                    cloneParams,
+                    signal,
+                );
+                if (slot)
+                    this.leaseIdToSlot.set(result.leaseId, { prKey, slot });
+                return result;
+            } catch (err) {
+                if (slot) this.dropSlot(prKey, slot);
+                throw err;
+            }
+        } finally {
+            if (boundTimer) clearTimeout(boundTimer);
+        }
+    }
+
+    /**
+     * Join this worker's slot for prKey, or queue for a new one. Waits with
+     * backoff ticks: each re-reads the cap from the global parameter and logs
+     * the line's state, until the slot is granted or the signal aborts.
+     */
+    private async takeSlot(
+        prKey: string,
+        consumer: string,
+        signal?: AbortSignal,
+    ): Promise<WorkerSlot> {
+        let limits =
+            (await this.concurrencyConfig?.getLimits()) ??
+            DEFAULT_SANDBOX_CONCURRENCY_LIMITS;
+
+        let slot = this.prKeySlots.get(prKey);
+        if (slot) {
+            slot.refs++;
+        } else {
+            const slotId = randomUUID();
+            slot = {
+                slotId,
+                refs: 1,
+                granted: this.concurrencyLimiter.acquire(
+                    slotId,
+                    limits.maxPerWorker,
+                ),
+            };
+            this.prKeySlots.set(prKey, slot);
+        }
+
+        const startedAt = Date.now();
+        for (let attempt = 0; ; attempt++) {
+            const outcome = await waitFor(
+                slot.granted,
+                calculateBackoffInterval(attempt, CAPACITY_WAIT_BACKOFF),
+                signal,
+            );
+            const waitedMs = Date.now() - startedAt;
+
+            if (outcome === 'granted') {
+                if (waitedMs >= SLOT_WAIT_LOG_THRESHOLD_MS) {
+                    this.logger.log({
+                        message: `SandboxLeaseManager: sandbox slot granted after ${waitedMs}ms prKey="${prKey}" consumer="${consumer}"`,
+                        context: SandboxLeaseManager.name,
+                        metadata: {
+                            prKey,
+                            consumer,
+                            waitedMs,
+                            maxPerWorker: limits.maxPerWorker,
+                            active: this.concurrencyLimiter.active,
+                            waiting: this.concurrencyLimiter.waiting,
+                        },
+                    });
+                }
+                return slot;
+            }
+
+            if (outcome === 'aborted' || outcome === 'withdrawn') {
+                this.dropSlot(prKey, slot);
+                this.logger.warn({
+                    message: `SandboxLeaseManager: stopped waiting for a sandbox slot after ${waitedMs}ms prKey="${prKey}" consumer="${consumer}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey, consumer, waitedMs, outcome },
+                });
+                throw new SandboxWaitAbortedError(
+                    prKey,
+                    waitedMs,
+                    'a sandbox slot on this worker',
+                );
+            }
+
+            // Still in line: apply a cap raised in the meantime, then report
+            limits =
+                (await this.concurrencyConfig?.getLimits()) ??
+                DEFAULT_SANDBOX_CONCURRENCY_LIMITS;
+            this.concurrencyLimiter.setLimit(limits.maxPerWorker);
+            this.logger.warn({
+                message: `SandboxLeaseManager: waiting for a sandbox slot (${waitedMs}ms so far) prKey="${prKey}" consumer="${consumer}"`,
+                context: SandboxLeaseManager.name,
+                metadata: {
+                    prKey,
+                    consumer,
+                    waitedMs,
+                    attempt: attempt + 1,
+                    maxPerWorker: limits.maxPerWorker,
+                    active: this.concurrencyLimiter.active,
+                    waiting: this.concurrencyLimiter.waiting,
+                },
+            });
+        }
+    }
+
+    /**
+     * Drop one reference to a slot; the last one frees it. The slot is passed
+     * in, not looked up: one the limiter dropped as stale was replaced for its
+     * prKey, and a late release must not decrement the replacement.
+     */
+    private dropSlot(prKey: string, slot: WorkerSlot): void {
+        slot.refs--;
+        if (slot.refs > 0) return;
+        if (this.prKeySlots.get(prKey) === slot) this.prKeySlots.delete(prKey);
+        this.concurrencyLimiter.release(slot.slotId);
+    }
 
     /**
      * Acquire a lease for the given prKey, creating or reusing the sandbox.
@@ -162,11 +401,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      *                    In this plan acquire() calls createSandboxWithRepo only if the
      *                    provider is available; when absent the NULL_SANDBOX_INSTANCE is used.
      */
-    async acquire(
+    private async acquireLease(
         prKey: string,
         consumer: string,
         leaseTtlMs = DEFAULT_LEASE_TTL_MS,
         cloneParams?: CreateSandboxParams,
+        signal?: AbortSignal,
     ): Promise<AcquireResult> {
         // SECURITY: validate prKey shape BEFORE any Mongo / E2B side-effect.
         // A malformed key (missing UUID, extra ":" segments, etc.) MUST NOT
@@ -208,7 +448,13 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 if (!check) break; // Doc deleted — cleanup complete
             }
             // Retry acquire from scratch
-            return this.acquire(prKey, consumer, leaseTtlMs, cloneParams);
+            return this.acquireLease(
+                prKey,
+                consumer,
+                leaseTtlMs,
+                cloneParams,
+                signal,
+            );
         }
 
         if (doc.cleanupStatus === SANDBOX_LEASE_CLEANUP_STATUS.FAILED) {
@@ -258,6 +504,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 leaseId,
                 consumer,
                 cloneParams,
+                signal,
             );
         }
 
@@ -282,7 +529,13 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     context: SandboxLeaseManager.name,
                     metadata: { prKey, consumer },
                 });
-                return this.acquire(prKey, consumer, leaseTtlMs, cloneParams);
+                return this.acquireLease(
+                    prKey,
+                    consumer,
+                    leaseTtlMs,
+                    cloneParams,
+                    signal,
+                );
             }
             throw err;
         }
@@ -309,6 +562,14 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * 5min default because the user is interactive.
      */
     async release(leaseId: string, opts?: { idleMs?: number }): Promise<void> {
+        // Free the worker slot first: whatever happens to the lease doc
+        // below, this process no longer holds the sandbox.
+        const held = this.leaseIdToSlot.get(leaseId);
+        if (held) {
+            this.leaseIdToSlot.delete(leaseId);
+            this.dropSlot(held.prKey, held.slot);
+        }
+
         const prKey = this.leaseIdToPrKey.get(leaseId);
         if (!prKey) {
             this.logger.warn({
@@ -591,6 +852,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         leaseId: string,
         consumer: string,
         cloneParams?: CreateSandboxParams,
+        signal?: AbortSignal,
     ): Promise<AcquireResult> {
         this.logger.log({
             message: `SandboxLeaseManager: creator path — creating sandbox prKey="${prKey}" consumer="${consumer}"`,
@@ -605,7 +867,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
         try {
             if (this.sandboxProvider.isAvailable() && cloneParams) {
-                sandbox = await this.createWithRetry(cloneParams);
+                sandbox = await this.createWithRetry(
+                    prKey,
+                    cloneParams,
+                    signal,
+                );
             } else {
                 // No provider configured or no clone params supplied — use null sandbox
                 sandbox = this.buildNullSandboxWithRelease(prKey, leaseId);
@@ -724,40 +990,141 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     }
 
     /**
-     * Create a sandbox with retry + backoff. CREATE_MAX_ATTEMPTS attempts
-     * total; intervals come from the shared polling lib so cadence matches
-     * other services. Only the provider call is wrapped — Mongo lease ops
-     * are atomic and a retry there would hide real bugs (e.g. schema drift,
-     * validation).
+     * Create a sandbox through the circuit breaker, with one retry for
+     * transient failures (see CREATE_MAX_ATTEMPTS). Only the provider call is
+     * wrapped — Mongo lease ops are atomic and a retry there would hide real
+     * bugs (e.g. schema drift, validation).
+     *
+     * E2B refusing for lack of room in the plan (its concurrent-sandbox
+     * limit) is not a failure: the create waits with backoff and tries again
+     * until there is room, without spending an attempt or counting toward the
+     * breaker. Only `signal` (the job's) ends that wait.
      */
     private async createWithRetry(
+        prKey: string,
         cloneParams: CreateSandboxParams,
+        signal?: AbortSignal,
     ): Promise<SandboxInstance> {
+        // The breaker counts organizations: one tenant's failures (its git host
+        // down, its huge repos) must not open it for every other tenant.
+        const orgKey = prKey.split(':')[0];
+        const startedAt = Date.now();
+        let capacityWaits = 0;
         let lastErr: unknown;
 
-        for (let attempt = 0; attempt < CREATE_MAX_ATTEMPTS; attempt++) {
-            try {
-                return await this.sandboxProvider.createSandboxWithRepo(
-                    cloneParams,
+        for (let attempt = 0; attempt < CREATE_MAX_ATTEMPTS;) {
+            const permit = this.createCircuit.tryAcquire();
+            if (
+                !permit &&
+                capacityWaits > 0 &&
+                this.createCircuit.getState() === 'HALF_OPEN'
+            ) {
+                // Waiting for E2B room, this create gave its probe up and
+                // another took it. That is not an outage verdict: keep
+                // waiting until the probe decides (CLOSED lets this create
+                // through, OPEN ends it below).
+                const delayMs = calculateBackoffInterval(
+                    capacityWaits++,
+                    CAPACITY_WAIT_BACKOFF,
                 );
+                if ((await waitFor(null, delayMs, signal)) === 'aborted') {
+                    throw new SandboxWaitAbortedError(
+                        prKey,
+                        Date.now() - startedAt,
+                        'room in the E2B plan',
+                    );
+                }
+                continue;
+            }
+            if (!permit) {
+                const retryInMs = this.createCircuit.remainingOpenMs();
+                this.logger.warn({
+                    message: `SandboxLeaseManager: sandbox creation circuit open, skipping create prKey="${prKey}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey, retryInMs, attempt: attempt + 1 },
+                });
+                throw new SandboxCircuitOpenError(prKey, retryInMs);
+            }
+
+            try {
+                const sandbox =
+                    await this.sandboxProvider.createSandboxWithRepo(
+                        cloneParams,
+                    );
+                this.createCircuit.recordSuccess(permit);
+                return sandbox;
             } catch (err) {
                 lastErr = err;
-                if (attempt === CREATE_MAX_ATTEMPTS - 1) break;
 
-                const waitMs = calculateBackoffInterval(
-                    attempt,
-                    CREATE_BACKOFF_OPTIONS,
-                );
+                if (isSandboxCapacityFailure(err)) {
+                    this.createCircuit.releaseProbe(permit);
+                    const delayMs = calculateBackoffInterval(
+                        capacityWaits++,
+                        CAPACITY_WAIT_BACKOFF,
+                    );
+                    this.logger.warn({
+                        message: `SandboxLeaseManager: E2B plan has no room for another sandbox; retrying in ${delayMs}ms prKey="${prKey}"`,
+                        context: SandboxLeaseManager.name,
+                        error: err,
+                        metadata: {
+                            prKey,
+                            delayMs,
+                            capacityWaits,
+                            waitedMs: Date.now() - startedAt,
+                        },
+                    });
+                    if ((await waitFor(null, delayMs, signal)) === 'aborted') {
+                        throw new SandboxWaitAbortedError(
+                            prKey,
+                            Date.now() - startedAt,
+                            'room in the E2B plan',
+                        );
+                    }
+                    continue;
+                }
+
+                const repositorySpecific =
+                    isRepositorySpecificSandboxFailure(err);
+                if (repositorySpecific) {
+                    this.createCircuit.releaseProbe(permit);
+                } else {
+                    this.createCircuit.recordFailure(orgKey, permit);
+                }
+
+                attempt++;
+                const retryable =
+                    !repositorySpecific && !isTimeoutSandboxFailure(err);
+                if (!retryable || attempt >= CREATE_MAX_ATTEMPTS) break;
+
                 this.logger.warn({
-                    message: `SandboxLeaseManager: provider.createSandboxWithRepo failed (attempt ${attempt + 1}/${CREATE_MAX_ATTEMPTS}); retrying in ${waitMs}ms`,
+                    message: `SandboxLeaseManager: provider.createSandboxWithRepo failed (attempt ${attempt}/${CREATE_MAX_ATTEMPTS}); retrying in ${CREATE_RETRY_DELAY_MS}ms`,
                     context: SandboxLeaseManager.name,
                     error: err,
+                    metadata: { prKey },
                 });
-                await sleep(waitMs);
+                await sleep(CREATE_RETRY_DELAY_MS);
             }
         }
 
         throw lastErr;
+    }
+
+    /**
+     * One line per breaker state change. OPEN is a warn: from then on this
+     * worker reviews without a sandbox until a probe succeeds. Search the
+     * logs for "sandbox creation circuit" to see how often it trips.
+     */
+    private logCircuitTransition(transition: SandboxCircuitTransition): void {
+        const payload = {
+            message: `SandboxLeaseManager: sandbox creation circuit ${transition.from} -> ${transition.to}`,
+            context: SandboxLeaseManager.name,
+            metadata: { ...transition },
+        };
+        if (transition.to === 'OPEN') {
+            this.logger.warn(payload);
+        } else {
+            this.logger.log(payload);
+        }
     }
 
     private async handleJoinerPath(
@@ -1033,4 +1400,40 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** One worker slot, shared by every lease this process holds on a prKey. */
+interface WorkerSlot {
+    slotId: string;
+    refs: number;
+    granted: Promise<boolean>;
+}
+
+type CapacityWaitOutcome = 'granted' | 'withdrawn' | 'tick' | 'aborted';
+
+/**
+ * Waits for whichever comes first: `granted` settling (when given), `ms`
+ * elapsing, or `signal` aborting.
+ */
+function waitFor(
+    granted: Promise<boolean> | null,
+    ms: number,
+    signal?: AbortSignal,
+): Promise<CapacityWaitOutcome> {
+    return new Promise((resolve) => {
+        if (signal?.aborted) {
+            resolve('aborted');
+            return;
+        }
+        const onAbort = () => done('aborted');
+        const timer = setTimeout(() => done('tick'), ms);
+        signal?.addEventListener('abort', onAbort, { once: true });
+        granted?.then((ok) => done(ok ? 'granted' : 'withdrawn'));
+
+        function done(outcome: CapacityWaitOutcome) {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', onAbort);
+            resolve(outcome);
+        }
+    });
 }

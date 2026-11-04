@@ -866,6 +866,21 @@ describe('CustomAgentKnowledgeReaderService', () => {
         ]);
     });
 
+    it('fails when the docs cannot be listed, so a failed listing is not an empty repository', async () => {
+        const cm = codeManagement({});
+        cm.getRepositoryAllFiles.mockRejectedValue(
+            new Error('429 rate limited'),
+        );
+        const reader = new CustomAgentKnowledgeReaderService(
+            cm as any,
+            { detect: jest.fn(async () => []) } as any,
+        );
+
+        await expect(
+            reader.discover({ organizationAndTeamData: org, repository }),
+        ).rejects.toThrow('429 rate limited');
+    });
+
     it('carries why a detected skill is not valid', async () => {
         const detect = jest.fn(async () => [
             {

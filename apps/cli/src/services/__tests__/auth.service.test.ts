@@ -339,6 +339,54 @@ describe('AuthService', () => {
         });
     });
 
+    describe('getUserToken', () => {
+        it('uses the stored login even with KODUS_TEAM_KEY exported', async () => {
+            // A team key exported for hooks must not hide `kodus auth login`
+            // from the commands that only run as a user.
+            process.env.KODUS_TEAM_KEY = 'kodus_hooks_key';
+            mockLoadCredentials.mockResolvedValue(makeCredentials());
+
+            await expect(authService.getUserToken()).resolves.toBe(
+                'access-token',
+            );
+            // The dual-credential path still sees the team key first.
+            await expect(authService.getValidToken()).resolves.toBe(
+                'kodus_hooks_key',
+            );
+        });
+
+        it('prefers a user token in KODUS_TOKEN', async () => {
+            process.env.KODUS_TOKEN = 'eyJ.ci.token';
+            mockLoadCredentials.mockResolvedValue(makeCredentials());
+
+            await expect(authService.getUserToken()).resolves.toBe(
+                'eyJ.ci.token',
+            );
+        });
+
+        it('is null with only a team key, stored or exported', async () => {
+            process.env.KODUS_TOKEN = 'kodus_in_token_var';
+            mockLoadCredentials.mockResolvedValue(null);
+            mockLoadConfig.mockResolvedValue({
+                teamKey: 'kodus_stored',
+            } as never);
+
+            await expect(authService.getUserToken()).resolves.toBeNull();
+        });
+
+        it('is null when the refresh fails and only a team key is left', async () => {
+            mockLoadCredentials.mockResolvedValue(
+                makeCredentials({ expiresAt: Date.now() - 1000 }),
+            );
+            mockApi.auth.refresh.mockRejectedValue(new Error('expired'));
+            mockLoadConfig.mockResolvedValue({
+                teamKey: 'kodus_stored',
+            } as never);
+
+            await expect(authService.getUserToken()).resolves.toBeNull();
+        });
+    });
+
     describe('getCredentials', () => {
         it('caches credentials after first load', async () => {
             const creds = makeCredentials();

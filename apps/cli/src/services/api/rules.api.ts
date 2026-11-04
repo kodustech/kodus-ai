@@ -1,8 +1,11 @@
 import type {
+    ChangeKodyRulesStatusRequest,
     KodyRuleMutationResult,
     CreateKodyRuleRequest,
     KodyRule,
+    KodyRulesStatusResult,
     UpdateKodyRuleRequest,
+    UserKodyRulePayload,
     ViewKodyRulesRequest,
 } from '../../types/rules.js';
 import { requestWithRetry } from './api-core.js';
@@ -68,5 +71,55 @@ export class RealRulesApi implements IRulesApi {
         return this.requester<KodyRule[]>(endpoint, {
             headers: this.buildAuthHeaders(accessToken),
         });
+    }
+
+    // Logged-in user: the endpoints the web app uses
+    // (apps/web/src/lib/services/kodyRules/fetch.ts), so the web RBAC applies.
+
+    async findRulesAsUser(
+        accessToken: string,
+        query: ViewKodyRulesRequest = {},
+    ): Promise<KodyRule[]> {
+        const params = new URLSearchParams();
+        if (query.ruleId) {
+            params.set('key', 'uuid');
+            params.set('value', query.ruleId);
+        } else if (query.repositoryId) {
+            params.set('repositoryId', query.repositoryId);
+        }
+        const queryString = params.toString();
+        const endpoint = `/kody-rules/find-rules-in-organization-by-filter${queryString ? `?${queryString}` : ''}`;
+
+        return this.requester<KodyRule[]>(endpoint, {
+            headers: this.buildAuthHeaders(accessToken),
+        });
+    }
+
+    async saveRuleAsUser(
+        accessToken: string,
+        payload: UserKodyRulePayload,
+    ): Promise<KodyRuleMutationResult> {
+        return this.requester<KodyRuleMutationResult>(
+            '/kody-rules/create-or-update',
+            {
+                method: 'POST',
+                headers: this.buildAuthHeaders(accessToken),
+                body: JSON.stringify(payload),
+            },
+        );
+    }
+
+    async changeStatusAsUser(
+        accessToken: string,
+        payload: ChangeKodyRulesStatusRequest,
+    ): Promise<KodyRulesStatusResult> {
+        return this.requester<KodyRulesStatusResult>(
+            '/kody-rules/change-status-kody-rules',
+            {
+                method: 'POST',
+                headers: this.buildAuthHeaders(accessToken),
+                body: JSON.stringify(payload),
+            },
+        );
     }
 }

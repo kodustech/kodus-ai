@@ -33,6 +33,7 @@ vi.mock('../../../utils/config.js', () => ({
 }));
 
 import { RealApi, _resetConfigCache } from '../api.real.js';
+import { request } from '../api-core.js';
 
 describe('RealApi request headers', () => {
     let fetchMock: ReturnType<typeof vi.fn>;
@@ -628,6 +629,58 @@ describe('RealApi config repository methods', () => {
                 statusCode: 403,
                 message:
                     'Access denied for Kodus API endpoint (/cli/config/repositories/available).',
+            } satisfies Partial<ApiError>),
+        );
+    });
+
+    it('treats an empty 2xx as success only for an endpoint declared that way', async () => {
+        fetchMock.mockResolvedValue(new Response(null, { status: 201 }));
+
+        await expect(
+            request('/pull-request-messages', {
+                method: 'POST',
+                allowEmptyResponse: true,
+            }),
+        ).resolves.toBeUndefined();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps an empty 2xx an error where the endpoint returns data', async () => {
+        fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+
+        await expect(
+            request('/kody-rules/find-rules-in-organization-by-filter'),
+        ).rejects.toMatchObject({ name: 'ApiError' });
+    });
+
+    it('keeps every validation message of a 400', async () => {
+        fetchMock.mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    statusCode: 400,
+                    error: 'Bad Request',
+                    message: [
+                        'name must be shorter than or equal to 60 characters',
+                        'property foo should not exist',
+                    ],
+                }),
+                {
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json' },
+                },
+            ),
+        );
+
+        const api = new RealApi();
+
+        await expect(
+            api.config.getAvailableRepositories('kodus_team_key'),
+        ).rejects.toEqual(
+            expect.objectContaining({
+                name: 'ApiError',
+                statusCode: 400,
+                message:
+                    'name must be shorter than or equal to 60 characters; property foo should not exist',
             } satisfies Partial<ApiError>),
         );
     });

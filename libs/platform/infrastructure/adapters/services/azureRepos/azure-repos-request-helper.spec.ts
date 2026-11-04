@@ -89,15 +89,15 @@ describe('AzureReposRequestHelper.mapAzureStatusToFileChangeStatus', () => {
         //   - edit is the catch-all for "changed but still here".
 
         it('"add, edit" → "added" (was wrongly "changed" pre-fix)', () => {
-            expect(
-                helper.mapAzureStatusToFileChangeStatus('add, edit'),
-            ).toBe('added');
+            expect(helper.mapAzureStatusToFileChangeStatus('add, edit')).toBe(
+                'added',
+            );
         });
 
         it('"edit, add" → "added" (token order must not matter)', () => {
-            expect(
-                helper.mapAzureStatusToFileChangeStatus('edit, add'),
-            ).toBe('added');
+            expect(helper.mapAzureStatusToFileChangeStatus('edit, add')).toBe(
+                'added',
+            );
         });
 
         it('"edit, rename" → "renamed"', () => {
@@ -114,9 +114,7 @@ describe('AzureReposRequestHelper.mapAzureStatusToFileChangeStatus', () => {
 
         it('"delete, sourceRename" → "removed" (delete dominates)', () => {
             expect(
-                helper.mapAzureStatusToFileChangeStatus(
-                    'delete, sourceRename',
-                ),
+                helper.mapAzureStatusToFileChangeStatus('delete, sourceRename'),
             ).toBe('removed');
         });
 
@@ -124,9 +122,9 @@ describe('AzureReposRequestHelper.mapAzureStatusToFileChangeStatus', () => {
             expect(
                 helper.mapAzureStatusToFileChangeStatus(' Add ,  Edit '),
             ).toBe('added');
-            expect(
-                helper.mapAzureStatusToFileChangeStatus('EDIT,RENAME'),
-            ).toBe('renamed');
+            expect(helper.mapAzureStatusToFileChangeStatus('EDIT,RENAME')).toBe(
+                'renamed',
+            );
         });
 
         it('still returns "changed" when no recognized verb is present', () => {
@@ -225,5 +223,186 @@ describe('AzureReposRequestHelper.getFileContent — 404 wrapper preserves statu
         // as 404 and silently swallowed downstream.
         expect(thrown).toBeDefined();
         expect(thrown.status).not.toBe(404);
+    });
+});
+
+describe('AzureReposRequestHelper.getDiff — pages until allChangesIncluded', () => {
+    let helper: AzureReposRequestHelper;
+    let axiosInstance: { get: jest.Mock };
+
+    const params = {
+        orgName: 'org',
+        token: 'enc-token',
+        projectId: 'proj',
+        repositoryId: 'repo',
+        baseCommit: 'base-sha',
+        targetCommitId: 'head-sha',
+    };
+
+    const blob = (path: string) => ({
+        changeType: 'add',
+        item: { path, gitObjectType: 'blob' },
+    });
+
+    beforeEach(() => {
+        helper = new AzureReposRequestHelper();
+        axiosInstance = { get: jest.fn() };
+        jest.spyOn(helper as any, 'azureRequest').mockResolvedValue(
+            axiosInstance,
+        );
+    });
+
+    it('reads every page and reports the diff as complete', async () => {
+        // Azure leaves `allChangesIncluded` out of a page that was cut off.
+        axiosInstance.get
+            .mockResolvedValueOnce({
+                data: { changes: [blob('/a.ts'), blob('/b.ts')] },
+            })
+            .mockResolvedValueOnce({
+                data: { changes: [blob('/z.ts')], allChangesIncluded: true },
+            });
+
+        const result = await helper.getDiff(params);
+
+        expect(result.allChangesIncluded).toBe(true);
+        expect(result.changes.map((c) => c.item?.path)).toEqual([
+            '/a.ts',
+            '/b.ts',
+            '/z.ts',
+        ]);
+        const urls = axiosInstance.get.mock.calls.map(([url]) => url);
+        expect(urls[0]).toContain('$skip=0');
+        expect(urls[1]).toContain('$skip=2');
+        expect(urls.every((url) => url.includes('$top='))).toBe(true);
+    });
+
+    it('reports the diff as incomplete when a page comes back empty without the flag', async () => {
+        axiosInstance.get
+            .mockResolvedValueOnce({ data: { changes: [blob('/a.ts')] } })
+            .mockResolvedValueOnce({ data: { changes: [] } });
+
+        const result = await helper.getDiff(params);
+
+        expect(result.allChangesIncluded).toBe(false);
+        expect(result.changes).toHaveLength(1);
+    });
+
+    it('reports the diff as incomplete when a page has no changes list', async () => {
+        axiosInstance.get.mockResolvedValueOnce({
+            data: { allChangesIncluded: true },
+        });
+
+        const result = await helper.getDiff(params);
+
+        expect(result.allChangesIncluded).toBe(false);
+    });
+
+    it('stops at the page cap and reports the diff as incomplete', async () => {
+        axiosInstance.get.mockResolvedValue({
+            data: { changes: [blob('/a.ts')] },
+        });
+
+        const result = await helper.getDiff(params);
+
+        expect(result.allChangesIncluded).toBe(false);
+        expect(axiosInstance.get.mock.calls.length).toBeLessThanOrEqual(50);
+    });
+});
+
+describe('AzureReposRequestHelper.getRepositoryContentFile — branch or tag', () => {
+    let helper: AzureReposRequestHelper;
+    let axiosInstance: { get: jest.Mock };
+    const params = {
+        orgName: 'org',
+        token: 't',
+        projectId: 'p',
+        repositoryId: 'r',
+        filePath: 'rules/valves.md',
+    };
+    const versionNotFound = () =>
+        Object.assign(new Error('404'), {
+            response: {
+                status: 404,
+                data: {
+                    message:
+                        'TF401175: The version descriptor <Branch: v3> could not be resolved',
+                },
+            },
+        });
+
+    beforeEach(() => {
+        helper = new AzureReposRequestHelper();
+        axiosInstance = { get: jest.fn() };
+        jest.spyOn(helper as any, 'azureRequest').mockResolvedValue(
+            axiosInstance,
+        );
+    });
+
+    it('reads a branch as a branch', async () => {
+        axiosInstance.get.mockResolvedValue({ data: { content: 'x' } });
+
+        await expect(
+            helper.getRepositoryContentFile({ ...params, branch: 'main' }),
+        ).resolves.toEqual({ content: 'x' });
+        expect(axiosInstance.get.mock.calls[0][0]).toContain(
+            'versionDescriptor.version=main&versionDescriptor.versionType=branch',
+        );
+    });
+
+    it('reads a pinned tag as a tag when no branch has that name', async () => {
+        axiosInstance.get
+            .mockRejectedValueOnce(versionNotFound())
+            .mockResolvedValueOnce({ data: { content: 'tagged' } });
+
+        await expect(
+            helper.getRepositoryContentFile({ ...params, branch: 'v3' }),
+        ).resolves.toEqual({ content: 'tagged' });
+        expect(axiosInstance.get.mock.calls[1][0]).toContain(
+            'versionDescriptor.version=v3&versionDescriptor.versionType=tag',
+        );
+    });
+
+    it('does not retry the default branch as a tag', async () => {
+        axiosInstance.get.mockRejectedValueOnce(versionNotFound());
+
+        await expect(
+            helper.getRepositoryContentFile(params),
+        ).rejects.toBeDefined();
+        expect(axiosInstance.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads refs/tags/ directly as a tag, and rethrows other errors', async () => {
+        axiosInstance.get.mockResolvedValueOnce({ data: { content: 't' } });
+        await helper.getRepositoryContentFile({
+            ...params,
+            branch: 'refs/tags/v3',
+        });
+        expect(axiosInstance.get).toHaveBeenCalledTimes(1);
+        expect(axiosInstance.get.mock.calls[0][0]).toContain(
+            'versionDescriptor.version=v3&versionDescriptor.versionType=tag',
+        );
+
+        axiosInstance.get.mockRejectedValueOnce(
+            Object.assign(new Error('500'), { response: { status: 500 } }),
+        );
+        await expect(
+            helper.getRepositoryContentFile({ ...params, branch: 'main' }),
+        ).rejects.toThrow('500');
+    });
+
+    it('does not retry a file that is missing on an existing branch', async () => {
+        axiosInstance.get.mockRejectedValueOnce(
+            Object.assign(new Error('404'), {
+                response: {
+                    status: 404,
+                    data: { message: 'TF401174: The item could not be found' },
+                },
+            }),
+        );
+
+        await expect(
+            helper.getRepositoryContentFile({ ...params, branch: 'main' }),
+        ).rejects.toThrow('404');
+        expect(axiosInstance.get).toHaveBeenCalledTimes(1);
     });
 });

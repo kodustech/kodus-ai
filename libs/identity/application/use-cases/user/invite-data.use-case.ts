@@ -11,6 +11,11 @@ import {
     PROFILE_SERVICE_TOKEN,
 } from '@libs/identity/domain/profile/contracts/profile.service.contract';
 
+import {
+    isInvitedEmail,
+    openInvitation,
+} from '@libs/identity/domain/user/invitation-token';
+
 @Injectable()
 export class InviteDataUserUseCase implements IUseCase {
     constructor(
@@ -21,13 +26,16 @@ export class InviteDataUserUseCase implements IUseCase {
         private readonly profileService: IProfileService,
     ) {}
 
-    public async execute(uuid: string): Promise<Partial<IUser>> {
-        if (!uuid) {
+    public async execute(token: string): Promise<Partial<IUser>> {
+        // The link carries a sealed invitation, not the user id: the id is
+        // exposed elsewhere and would let anyone open the invitation.
+        const invitation = openInvitation(token);
+        if (!invitation) {
             return {};
         }
 
         const user = await this.usersService.findOne({
-            uuid,
+            uuid: invitation.userId,
             status: STATUS.PENDING,
         });
 
@@ -36,7 +44,10 @@ export class InviteDataUserUseCase implements IUseCase {
         // still confirming its email is PENDING too, but already has one.
         if (
             !user ||
-            (await this.profileService.findOne({ user: { uuid } }))
+            !isInvitedEmail(invitation, user.email) ||
+            (await this.profileService.findOne({
+                user: { uuid: invitation.userId },
+            }))
         ) {
             return {};
         }

@@ -121,6 +121,8 @@ export interface CodeReviewPipelineContext extends PipelineContext {
         noteId?: any;
         threadId?: any;
         lastAnalyzedCommit?: any;
+        /** Base branch the last review read the PR against. */
+        reviewedBaseBranch?: string;
     };
     /** The status note of the latest finished run, partial or failed ones
      *  included, which the next run edits (#1721). `lastExecution` is the

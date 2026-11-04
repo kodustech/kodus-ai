@@ -302,6 +302,7 @@ function AgentContent() {
                                 (entry) => entry.agentId === agent.id,
                             )}
                             windowDays={status.data?.windowDays ?? 30}
+                            runsUnavailable={status.data?.runsUnavailable}
                             isLoading={status.isLoading && !isGlobal}
                             report={resolve.data}
                             isGlobal={isGlobal}
@@ -335,6 +336,8 @@ function AgentContent() {
                                     agent={agent}
                                     knowledge={knowledge}
                                     report={resolve.data}
+                                    reportFailed={resolve.isError}
+                                    readKnowledge={reviewKnowledge}
                                     canEdit={canEdit}
                                     canEditFiles={canEditAgent}
                                     onChange={patch}
@@ -343,6 +346,14 @@ function AgentContent() {
                                         repositoryId,
                                         directoryId,
                                     )}
+                                    teamId={teamId}
+                                    repositoryId={repositoryId}
+                                    unfollowedCitations={
+                                        status.data?.agents.find(
+                                            (entry) =>
+                                                entry.agentId === agent.id,
+                                        )?.unfollowedCitations
+                                    }
                                 />
                                 <ToolsCard
                                     agent={agent}

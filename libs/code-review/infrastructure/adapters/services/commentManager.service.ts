@@ -450,13 +450,6 @@ export class CommentManagerService implements ICommentManagerService {
 
         while (retryCount < maxRetries) {
             try {
-                const updatedPR =
-                    await this.codeManagementService.getPullRequestByNumber({
-                        organizationAndTeamData,
-                        repository,
-                        prNumber: pullRequest?.number,
-                    });
-
                 this.logger.log({
                     message: `GenerateSummaryPR: Start PR#${pullRequest?.number}. After get PR data`,
                     context: CommentManagerService.name,
@@ -465,7 +458,7 @@ export class CommentManagerService implements ICommentManagerService {
                         pullRequestNumber: pullRequest?.number,
                         repositoryId: repository?.id,
                         summaryConfig,
-                        prDescription: updatedPR?.body,
+                        prDescription: pullRequest?.body,
                     },
                 });
                 let promptBase = `Based on the code changes (patches) provided below, generate a precise description for this pull request.
@@ -475,7 +468,7 @@ export class CommentManagerService implements ICommentManagerService {
 
                 if (
                     !isCommitRun &&
-                    updatedPR?.body &&
+                    pullRequest?.body &&
                     summaryConfig?.behaviourForExistingDescription ===
                         BehaviourForExistingDescription.COMPLEMENT
                 ) {
@@ -485,7 +478,7 @@ export class CommentManagerService implements ICommentManagerService {
                     - Provide technical context that complements the current description
 
                     **Existing Description**:
-                    ${updatedPR.body}`;
+                    ${pullRequest.body}`;
                 }
 
                 // The review's own findings, so custom instructions can act on
@@ -760,7 +753,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                         summaryConfig?.behaviourForNewCommits ??
                         BehaviourForNewCommits.NONE;
 
-                    const existingBody = updatedPR?.body || '';
+                    const existingBody = pullRequest?.body || '';
                     const match = existingBody.match(blockRegex);
 
                     this.logger.log({
@@ -771,7 +764,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                             pullRequestNumber: pullRequest?.number,
                             repositoryId: repository?.id,
                             summaryConfig,
-                            body: updatedPR?.body,
+                            body: pullRequest?.body,
                         },
                     });
 
@@ -827,7 +820,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                         // task from (`AB#12`, a tracker link, `T1234`) is one
                         // the summary keeps.
                         const taskReferences = extractTaskReferenceLines(
-                            updatedPR?.body ?? '',
+                            pullRequest?.body ?? '',
                             (line) =>
                                 extractTaskReferences(
                                     { body: line },
@@ -842,7 +835,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
 
                     // Apply CONCATENATE behavior if necessary
                     if (
-                        updatedPR?.body &&
+                        pullRequest?.body &&
                         summaryConfig?.behaviourForExistingDescription ===
                             BehaviourForExistingDescription.CONCATENATE
                     ) {
@@ -856,7 +849,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                             /\n*---\n*<!-- kody-pr-summary:start -->[\s\S]*?<!-- kody-pr-summary:end -->/g;
                         const previousBlockStandalone =
                             /<!-- kody-pr-summary:start -->[\s\S]*?<!-- kody-pr-summary:end -->/g;
-                        const cleanedBody = updatedPR.body
+                        const cleanedBody = pullRequest.body
                             .replace(previousBlockWithSeparator, '')
                             .replace(previousBlockStandalone, '')
                             .trimEnd();
@@ -870,7 +863,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                                 pullRequestNumber: pullRequest?.number,
                                 repositoryId: repository?.id,
                                 summaryConfig,
-                                body: updatedPR?.body,
+                                body: pullRequest?.body,
                                 cleanedBody,
                             },
                         });
@@ -889,7 +882,7 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                         pullRequestNumber: pullRequest?.number,
                         repositoryId: repository?.id,
                         summaryConfig,
-                        body: updatedPR?.body,
+                        body: pullRequest?.body,
                         finalDescription,
                     },
                 });
@@ -930,10 +923,19 @@ You must always respond in ${languageResultPrompt}.${findingsBlock}`;
                     // provider indistinguishable from a config decision — the
                     // caller recorded no pipeline error and the review was
                     // auto-approved as if the code were clean (#1568).
-                    throw attachClassification(
-                        error instanceof Error
+                    // A frozen error cannot carry the classification, and the
+                    // stage reads only an attached one: wrap it.
+                    const carrier =
+                        error instanceof Error && Object.isExtensible(error)
                             ? error
-                            : new Error(String(error)),
+                            : new Error(
+                                  error instanceof Error
+                                      ? error.message
+                                      : String(error),
+                                  { cause: error },
+                              );
+                    throw attachClassification(
+                        carrier,
                         classifyLLMError(
                             error,
                             byokConfigValue?.provider as string | undefined,

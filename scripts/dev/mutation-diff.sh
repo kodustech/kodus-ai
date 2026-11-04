@@ -35,6 +35,10 @@ while IFS= read -r file; do
     [[ "$file" == apps/* || "$file" == libs/* ]] || continue
     # apps/cli runs its own vitest suite; the root jest Stryker drives can't.
     [[ "$file" == apps/cli/* ]] && continue
+    # apps/web specs need apps/web's own dependencies, which this job does not
+    # install, and pick their environment in a docblock (@jest-environment),
+    # which reports no per-test coverage to Stryker: the dry run fails.
+    [[ "$file" == apps/web/* ]] && continue
     [[ "$file" == *.ts ]] || continue
     [[ "$file" =~ \.(spec|test|integration)\.ts$ ]] && continue
     [[ "$file" == *.d.ts ]] && continue

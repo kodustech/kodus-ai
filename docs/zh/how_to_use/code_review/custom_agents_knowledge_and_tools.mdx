@@ -8,7 +8,7 @@ tag: 'beta'
 
 ## Skills & docs
 
-Skills 和 docs 是已经存在于您代码库中的指南。Kodus 不会复制它们：每次审查都从**拉取请求的目标分支**读取，因此在该分支上的修改无需回到设置即可生效，而拉取请求也无法修改评判它的规则。
+Skills 和 docs 是已经存在于您代码库中的指南。Kodus 不会复制它们：每次审查都从**拉取请求的目标分支**读取，因此在该分支上的修改无需回到设置即可生效，而拉取请求也无法修改评判它的规则。指南也可以来自另一个代码库，例如共享的规则代码库（参见下方的**来自另一个仓库**）。
 
 | | Skill | Doc |
 | --- | --- | --- |
@@ -54,6 +54,22 @@ See references/reconciliation.md for the nightly job.
 
 在全局级别，Skills & docs 页面只接受手动输入的路径。每个代码库会单独读取，请打开某个代码库的设置，查看每个路径在其中是否存在。
 
+### 被丢弃发现引用的文件
+
+当审查因为发现引用了智能体未遵循的文件（"is not a guide linked to this review"）而将其丢弃时，智能体的 **Skills & docs** 会在 **Cited by dropped findings** 下显示该文件及被丢弃的数量。**Follow** 会从本仓库或文件所在的仓库关联它。只会显示存在的文件。
+
+### 来自另一个仓库
+
+团队常把规则放在一个仓库里，再应用到多个仓库。在代理页面添加 skill 或 doc 时在 **From** 中选择它：已关联的仓库排在前面，**Other repository…** 列出所有已连接到 Kodus 的仓库（在 Git settings 中选择的仓库）。如果规则仓库不在列表中，请先在那里连接它。
+
+- 另一个仓库的指南从该仓库的**默认分支**读取，或从你通过 **Use a branch or tag instead** 设置的分支或标签读取。每个仓库一个分支或标签。拉取请求永远不会改变它。
+- 它仅供自定义代理使用。主审查读取被审查仓库的指南及其面向编码代理的指令，不读取另一个仓库的指南，因此 Skills & docs 页面不会为它提供 **Main review**。
+- 它与被审查仓库的指南一样在每次审查时加载，无需沙箱，即使变更没有涉及另一个仓库也会使用。
+- 代理以 `owner/repo:path` 的形式引用它，评论会附上文件链接。
+- 当规则仓库是私有的而被审查的仓库是公开的，评论只写出文件名，不引用原文。
+
+当代理的指令提到一个已关联的仓库，却没有关注其中任何内容时，代理页面会提示并提供 **Browse its rules**。
+
 <Warning>
   标记为 **Also a Kody Rules source** 的文件已经在为 Kody Rules 提供规则。再把它关联到智能体，可能会导致同一条规则评论两次。
 </Warning>
@@ -78,6 +94,8 @@ See references/reconciliation.md for the nightly job.
 **Rule** (`docs/ledger.md`):
 > A reversal is a new entry, never an UPDATE of the original.
 ```
+
+另一个仓库的规则以 `owner/repo:path` 的形式引用，并附上读取所在分支上的文件链接。
 
 ## Plugins (MCP)
 

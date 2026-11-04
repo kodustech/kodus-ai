@@ -48,6 +48,9 @@ interface BuildPackResult {
     sanitizedOverrides?: CodeReviewConfig['v2PromptOverrides'];
     augmentations?: ContextAugmentationsMap;
     pack?: ContextPack;
+    /** The context reference id named no stored reference (deleted or
+     *  stale), as opposed to a reference that names no file. */
+    referenceMissing?: boolean;
 }
 
 const DEFAULT_LAYER_INPUT: LayerInputContext = {
@@ -104,12 +107,12 @@ export class CodeReviewContextPackService {
         if (!reference) {
             return {
                 sanitizedOverrides: this.sanitizeOverrides(processedOverrides),
+                referenceMissing: true,
             };
         }
 
         const requirements = reference.requirements ?? [];
-        const knowledgeDependencies =
-            this.buildDependencyGroups(requirements);
+        const knowledgeDependencies = this.buildDependencyGroups(requirements);
         const hasPackContent =
             Boolean(processedOverrides) ||
             knowledgeDependencies.length > 0 ||
@@ -250,18 +253,15 @@ export class CodeReviewContextPackService {
                 }
 
                 const filePath = dependency.metadata?.filePath as
-                    | string
-                    | undefined;
+                    string | undefined;
                 if (!filePath) {
                     continue;
                 }
 
                 const repositoryName = dependency.metadata?.repositoryName as
-                    | string
-                    | undefined;
+                    string | undefined;
                 const repositoryId = dependency.metadata?.repositoryId as
-                    | string
-                    | undefined;
+                    string | undefined;
 
                 const knowledgeKey = `${repositoryName ?? repositoryId ?? 'default'}::${filePath}`;
                 if (knowledgeDedupe.has(knowledgeKey)) {
@@ -331,8 +331,7 @@ export class CodeReviewContextPackService {
 
         for (const dependency of dependencies) {
             const filePath = dependency.metadata?.filePath as
-                | string
-                | undefined;
+                string | undefined;
             if (!filePath) {
                 continue;
             }
@@ -347,11 +346,9 @@ export class CodeReviewContextPackService {
             const repositoryName = rawRepositoryName?.trim();
             const repositoryId = rawRepositoryId?.trim();
             const description = dependency.metadata?.description as
-                | string
-                | undefined;
+                string | undefined;
             const lineRange = dependency.metadata?.lineRange as
-                | { start: number; end: number }
-                | undefined;
+                { start: number; end: number } | undefined;
 
             const uniqueKey = `${repositoryName ?? repositoryId ?? 'default'}::${filePath}::${lineRange?.start ?? 'all'}-${lineRange?.end ?? 'all'}`;
             if (dedupe.has(uniqueKey)) {

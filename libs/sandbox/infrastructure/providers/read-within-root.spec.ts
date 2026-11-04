@@ -3,7 +3,11 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { readWithinRootCommand } from './read-within-root';
+import {
+    isLineNumber,
+    readWithinRootCommand,
+    sedLineRange,
+} from './read-within-root';
 
 /**
  * The E2B read runs this command in the sandbox's shell. Here it runs in a
@@ -66,6 +70,13 @@ describe('readWithinRootCommand', () => {
         expect(read("it's.ts").out).toBe('quoted\n');
     });
 
+    it('reads from the first line when only the end of the range is given', () => {
+        expect(read('src/a.ts', 0, 2)).toEqual({
+            out: 'one\ntwo\n',
+            failed: false,
+        });
+    });
+
     it('refuses a symlink to a file outside the checkout', () => {
         const res = read('notes.txt');
         expect(res.failed).toBe(true);
@@ -77,10 +88,75 @@ describe('readWithinRootCommand', () => {
         expect(read('inside-link.ts').failed).toBe(true);
     });
 
+    // A root that is itself a symlink would move the boundary to wherever it
+    // points: the root must already be its own real path.
+    it('refuses a root that is a symlink', () => {
+        const linkedRoot = path.join(base, 'linked-root');
+        fs.symlinkSync(base, linkedRoot);
+        let out = '';
+        let failed = false;
+        try {
+            out = execFileSync(
+                'sh',
+                [
+                    '-c',
+                    readWithinRootCommand(
+                        path.join(linkedRoot, 'outside.txt'),
+                        linkedRoot,
+                        0,
+                        0,
+                    ),
+                ],
+                { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+            );
+        } catch (err: any) {
+            out = `${err.stdout}${err.stderr}`;
+            failed = true;
+        } finally {
+            fs.unlinkSync(linkedRoot);
+        }
+        expect(failed).toBe(true);
+        expect(out).toContain('Not a real directory');
+        expect(out).not.toContain('OUTSIDE_VALUE');
+    });
+
     it('refuses a path that leaves the checkout through a symlinked folder', () => {
         const res = read('up/outside.txt');
         expect(res.failed).toBe(true);
         expect(res.out).toContain('Path escapes repo boundary');
         expect(res.out).not.toContain('OUTSIDE_VALUE');
+    });
+});
+
+describe('sedLineRange', () => {
+    it('starts at line 1 when the range starts at 0, which GNU sed rejects', () => {
+        expect(sedLineRange(0, 5)).toBe('1,5p');
+        expect(sedLineRange(1, 5)).toBe('1,5p');
+        expect(sedLineRange(7, 9)).toBe('7,9p');
+    });
+
+    it('refuses anything that is not a line number', () => {
+        for (const [start, end] of [
+            [-1, 5],
+            [1.5, 5],
+            [1, Number.NaN],
+            ['1w /tmp/x', 5],
+            [1, '5e id'],
+        ] as unknown as [number, number][]) {
+            expect(() => sedLineRange(start, end)).toThrow(
+                /Invalid line range/,
+            );
+        }
+    });
+});
+
+describe('isLineNumber', () => {
+    it('accepts 0 and positive integers only', () => {
+        expect(isLineNumber(0)).toBe(true);
+        expect(isLineNumber(12)).toBe(true);
+        expect(isLineNumber(-1)).toBe(false);
+        expect(isLineNumber(2.5)).toBe(false);
+        expect(isLineNumber('3')).toBe(false);
+        expect(isLineNumber(Number.MAX_SAFE_INTEGER + 1)).toBe(false);
     });
 });

@@ -52,6 +52,7 @@ export interface ICommentManagerService {
     ): Promise<string>;
 
     generateSummaryPR(
+        /** Read from the code host just before the call: its `body` is the description the summary keeps or replaces. */
         pullRequest: any,
         repository: { name: string; id: string },
         changedFiles: Partial<FileChange>[],

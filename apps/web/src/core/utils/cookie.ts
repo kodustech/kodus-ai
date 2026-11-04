@@ -16,6 +16,7 @@ export type CookieName = LiteralUnion<
     | "selectedTeam"
     | "onboarding-selected-pr-for-code-review"
     | "trial-finished-modal-closed"
+    | "github-installation-return-to"
 >;
 
 export const ClientSideCookieHelpers = (
