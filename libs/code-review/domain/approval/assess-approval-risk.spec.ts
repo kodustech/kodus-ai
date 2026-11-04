@@ -24,6 +24,90 @@ const input = {
 
 afterEach(() => jest.clearAllMocks());
 
+it.each(['low', 'medium', 'high'])(
+    'bounds a long %s rationale without invalidating its judgment',
+    async (level) => {
+        (LLM.run as jest.Mock).mockImplementationOnce(async ({ schema }) =>
+            schema.parse({ level, reason: 'x'.repeat(10_000) }),
+        );
+        const result = await assessApprovalRisk(input);
+        expect(result.level).toBe(level);
+        expect(result.reason).toHaveLength(2_000);
+        expect(result.reason.endsWith('...')).toBe(true);
+        expect(LLM.run).toHaveBeenCalledTimes(1);
+    },
+);
+
+it.each([
+    {
+        name: 'AI_NoObjectGeneratedError',
+        message: 'response did not match schema',
+        category: 'UNKNOWN',
+        status: undefined,
+    },
+    {
+        name: 'Error',
+        message: 'Rate limit exceeded',
+        category: 'RATE_LIMIT',
+        status: 429,
+    },
+    {
+        name: 'Error',
+        message: 'Insufficient quota',
+        category: 'QUOTA_EXCEEDED',
+        status: 402,
+    },
+])(
+    'retains safe failure diagnostics for $name/$category',
+    async ({ name, message, category, status }) => {
+        const error = Object.assign(new Error(message), {
+            name,
+            statusCode: status,
+        });
+        (LLM.run as jest.Mock).mockRejectedValueOnce(error);
+        const result = await assessApprovalRisk(input);
+        expect(result).toMatchObject({
+            level: 'unknown',
+            failure: { errorName: name, category },
+        });
+        expect(result.failure).not.toHaveProperty('rawMessage');
+        expect(result.failure).not.toHaveProperty('message');
+    },
+);
+
+it.each([507, 510, 563, 691])(
+    'preserves a valid %i-character reason through the production schema',
+    async (length) => {
+        const reason = 'A consequential change requires review. '.padEnd(
+            length,
+            'x',
+        );
+        (LLM.run as jest.Mock).mockImplementationOnce(async ({ schema }) =>
+            schema.parse({ level: 'high', reason }),
+        );
+        expect(await assessApprovalRisk(input)).toMatchObject({
+            level: 'high',
+            reason,
+            reviewedHeadSha: input.headSha,
+        });
+        expect(LLM.run).toHaveBeenCalledTimes(1);
+    },
+);
+
+it.each([
+    { level: 'safe', reason: 'A sufficiently long explanation.' },
+    { level: 'low' },
+    { level: 'low', reason: '        ' },
+])('keeps invalid output unknown: %j', async (output) => {
+    (LLM.run as jest.Mock).mockImplementationOnce(async ({ schema }) =>
+        schema.parse(output),
+    );
+    expect(await assessApprovalRisk(input)).toMatchObject({
+        level: 'unknown',
+        reviewedHeadSha: input.headSha,
+    });
+});
+
 it('uses the production model slot and includes area evidence and coverage', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
         level: 'medium',

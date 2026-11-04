@@ -81,6 +81,7 @@ export class RefreshCodeAreaRiskMapCron {
                 teamId: string;
                 id: string;
                 name: string;
+                usesRiskApproval: boolean;
             }> = [];
             for (const team of teams ?? []) {
                 const organizationId = team.organization?.uuid;
@@ -111,22 +112,43 @@ export class RefreshCodeAreaRiskMapCron {
                     if (!repo.id || !repo.name || repo.isSelected === false) {
                         continue;
                     }
+                    // Saved scope inheritance is enough to prioritize without
+                    // fetching configuration files from every repository.
+                    const inherited = {
+                        ...config.configValue.configs,
+                        ...repo.configs,
+                    };
+                    const scopes = [
+                        inherited,
+                        ...(repo.directories ?? []).map((directory) => ({
+                            ...inherited,
+                            ...directory.configs,
+                        })),
+                    ];
                     repositories.push({
                         organizationId,
                         teamId: team.uuid,
                         id: repo.id,
                         name: repo.name,
+                        usesRiskApproval: scopes.some(
+                            (scope) =>
+                                scope.pullRequestApprovalActive === true &&
+                                scope.approvalRiskActive === true,
+                        ),
                     });
                 }
             }
             if (!repositories.length) return;
 
-            // Unfinished scans first, then never scanned, then complete ones
+            // Risk approval users first. Within each group: unfinished scans,
+            // then never scanned, then complete ones
             // stalest first: a fixed rotation left first scans incomplete for
             // weeks while finished repositories were refreshed, and a scan the
             // last run's budget cut short must not wait behind every repository
             // never scanned. A status that could not be read goes last instead
-            // of passing as never scanned.
+            // of passing as never scanned. Risk approval users may exhaust all
+            // 40 batches; other repositories use only remaining capacity, even
+            // when they have never been scanned.
             const limit = pLimit(STATUS_READ_CONCURRENCY);
             const statuses = await Promise.all(
                 repositories.map((repo) =>
@@ -169,6 +191,8 @@ export class RefreshCodeAreaRiskMapCron {
                 .map((repo, index) => ({ repo, read: statuses[index] }))
                 .sort(
                     (a, b) =>
+                        Number(b.repo.usesRiskApproval) -
+                            Number(a.repo.usesRiskApproval) ||
                         rank(a.read) - rank(b.read) ||
                         age(a.read).localeCompare(age(b.read)) ||
                         `${a.repo.organizationId}:${a.repo.id}`.localeCompare(

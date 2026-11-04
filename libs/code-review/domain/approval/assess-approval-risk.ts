@@ -4,15 +4,21 @@ import type { FileChange } from '@libs/core/infrastructure/config/types/general/
 import type { CodeAreaRiskMap } from '@libs/platformData/domain/code-area-risk/build-area-risk-map';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { LLM } from '@libs/llm/llm';
+import {
+    classifyLLMError,
+    getClassification,
+} from '@libs/llm/error-classifier';
 import { createLogger } from '@libs/core/log/logger';
 import type { ApprovalRiskAssessment } from './approval-decision';
 
 export const approvalRiskOutputSchema = z.object({
     level: z.enum(['low', 'medium', 'high']),
-    reason: z.string().min(8).max(500),
+    // Length alone must not discard a valid risk judgment.
+    reason: z.string().min(8),
 });
 
 const MAX_DIFF_CHARS = 50_000;
+const MAX_REASON_CHARS = 2_000;
 const MAX_AREA_FILES = 100;
 const logger = createLogger('AssessApprovalRisk');
 const SOURCE_FILE = /\.(?:ts|tsx|js|jsx|py|go|java|cs|rs)$/i;
@@ -164,11 +170,17 @@ export async function assessApprovalRisk(input: {
         }
         return {
             level: result.level,
-            reason: result.reason.trim(),
+            // Bound persisted/published text after validation, preserving the judgment.
+            reason:
+                result.reason.trim().length > MAX_REASON_CHARS
+                    ? `${result.reason.trim().slice(0, MAX_REASON_CHARS - 3)}...`
+                    : result.reason.trim(),
             reviewedHeadSha: input.headSha,
             areaMapVersion: input.areaMap?.version,
         };
     } catch (error) {
+        const classification =
+            getClassification(error) ?? classifyLLMError(error);
         logger.warn({
             message: 'Approval risk assessment failed',
             context: 'approval-risk',
@@ -181,6 +193,11 @@ export async function assessApprovalRisk(input: {
         });
         return {
             level: 'unknown',
+            failure: {
+                category: classification.category,
+                errorName: error instanceof Error ? error.name : 'UnknownError',
+                httpStatus: classification.httpStatus,
+            },
             reason: 'Kody could not assess risk for this PR.',
             reviewedHeadSha: input.headSha,
             areaMapVersion: input.areaMap?.version,
