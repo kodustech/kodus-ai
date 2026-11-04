@@ -53,7 +53,7 @@ import {
 } from '@libs/ee/license/interfaces/license.interface';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
-import { KODUS_CREDITS_EXHAUSTED_COMMENT } from './validate-prerequisites.stage';
+import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
 @Injectable()
 export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineContext> {

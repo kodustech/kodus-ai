@@ -8,7 +8,7 @@ import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/ag
 import { CUSTOM_AGENTS_PLAN_REQUIRED } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
 import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { KODUS_CREDITS_EXHAUSTED_COMMENT } from './validate-prerequisites.stage';
+import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
 describe('ValidateConfigStage — v2 routing', () => {
     let stage: ValidateConfigStage;
