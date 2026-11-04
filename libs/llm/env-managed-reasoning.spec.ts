@@ -34,6 +34,7 @@ const ENV_KEYS = [
     'API_LLM_API_KEY',
     'API_LLM_BASE_URL',
     'API_LLM_REASONING_EFFORT',
+    'API_ANTHROPIC_API_KEY',
 ] as const;
 
 const snapshot: Record<string, string | undefined> = {};
@@ -109,6 +110,7 @@ describe('resolveModelConfig — env reasoning reaches the funnel (uniform with 
     it('API_LLM_REASONING_EFFORT wins over the family default, as a BYOK slot effort does (#1687)', () => {
         envAnthropicOpus5();
         process.env.API_LLM_PROVIDER = 'anthropic';
+        process.env.API_ANTHROPIC_API_KEY = 'sk-ant-test';
         process.env.API_LLM_REASONING_EFFORT = 'high';
         const envInv = resolveModelConfig(undefined, { runName: 'review' });
         const byokInv = resolveModelConfig(
