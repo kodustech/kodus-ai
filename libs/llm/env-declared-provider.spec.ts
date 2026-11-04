@@ -106,6 +106,21 @@ describe('resolveDeclaredEnvProvider', () => {
         });
     });
 
+    it('never sends API_ANTHROPIC_API_KEY to an anthropic_compatible endpoint', () => {
+        expect(
+            resolveDeclaredEnvProvider(
+                env({
+                    API_LLM_PROVIDER: 'anthropic_compatible',
+                    API_ANTHROPIC_API_KEY: 'sk-ant-real',
+                    API_LLM_BASE_URL: 'https://api.moonshot.ai/anthropic',
+                }),
+            ),
+        ).toEqual({
+            kind: 'invalid',
+            reason: 'API_LLM_PROVIDER=anthropic_compatible has no API key. Set API_LLM_API_KEY.',
+        });
+    });
+
     it('rejects anthropic_compatible without a base URL: it has no endpoint of its own', () => {
         expect(
             resolveDeclaredEnvProvider(

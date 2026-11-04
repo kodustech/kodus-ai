@@ -382,8 +382,10 @@ export const anthropicModule: ProviderModule = {
             };
         }
         if (id === 'anthropic_compatible') {
+            // No fallback: API_ANTHROPIC_API_KEY holds a real Anthropic key,
+            // and this endpoint is a third party.
             return {
-                apiKeyVars: ['API_ANTHROPIC_API_KEY'],
+                apiKeyVars: [],
                 baseURL: { required: true },
             };
         }
