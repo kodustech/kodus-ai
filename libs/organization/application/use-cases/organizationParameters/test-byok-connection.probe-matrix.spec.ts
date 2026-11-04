@@ -161,6 +161,29 @@ describe('connection probe covers every registered provider', () => {
             expect(result.message).not.toContain('/v1');
         });
 
+        it.each([['team-review'], ['gpt-5.4-mini'], ['qwen2.5-72b']])(
+            'says nothing when the provider says model %s is missing',
+            async (model) => {
+                const err: any = new Error('Not Found');
+                err.name = 'AI_APICallError';
+                err.statusCode = 404;
+                err.responseBody = JSON.stringify({
+                    error: {
+                        message: `The model \`${model}\` does not exist or you do not have access to it.`,
+                    },
+                });
+                generateText.mockRejectedValue(err);
+                const result = await useCase().execute({
+                    provider: 'openai',
+                    apiKey: 'sk-test',
+                    baseURL: 'https://llm-proxy.example.com',
+                    model,
+                });
+
+                expect(result.message).not.toContain('/v1');
+            },
+        );
+
         it('says nothing when the provider names the model as the cause', async () => {
             const err: any = new Error('model_not_found');
             err.name = 'AI_APICallError';

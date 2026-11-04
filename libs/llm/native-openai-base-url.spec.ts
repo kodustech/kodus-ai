@@ -134,7 +134,6 @@ describe('native OpenAI credential with a custom base URL', () => {
         'https://acme.openai.azure.us/openai/v1',
         'https://acme.openai.azure.cn/openai/v1',
         'https://acme.services.ai.azure.com/openai/v1',
-        'https://acme.azure-api.net/openai/v1',
     ])('leaves an Azure OpenAI host (%s) as it is today', async (azure) => {
         await LLM.run({
             ...base,
@@ -145,6 +144,19 @@ describe('native OpenAI credential with a custom base URL', () => {
         expect(up.calls[0].url).toBe(`${azure}/responses`);
         expect(up.calls[0].body.store).toBeUndefined();
         expect(up.calls[0].body.include).toBeUndefined();
+    });
+
+    // An API Management front door can sit before any OpenAI-protocol backend,
+    // so its domain says nothing about Azure OpenAI behind it.
+    it('treats an API Management front door like any other gateway', async () => {
+        const apim = 'https://acme.azure-api.net/openai/v1';
+        await LLM.run({
+            ...base,
+            byokConfig: { ...proxiedSlot(apim), apiKey: 'k' },
+            user: 'ping',
+        } as any).catch(() => undefined);
+
+        expect(up.calls[0].body.store).toBe(false);
     });
 
     it('without a base URL still calls api.openai.com', async () => {

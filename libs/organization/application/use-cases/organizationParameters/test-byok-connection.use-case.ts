@@ -125,7 +125,7 @@ function namesMissingModel(providerMessage: string | undefined): boolean {
     const said = providerMessage ?? '';
     return (
         /model_not_found|no such model|unknown model/i.test(said) ||
-        /\bmodel\b[^.]{0,80}\b(does not exist|not found)/i.test(said)
+        /\bmodel\b(?:[^.]|\.\w){0,80}\b(does not exist|not found)/i.test(said)
     );
 }
 
