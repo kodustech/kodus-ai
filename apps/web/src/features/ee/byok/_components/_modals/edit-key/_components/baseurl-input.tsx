@@ -11,7 +11,10 @@ export const ByokBaseURLInput = () => {
 
     const provider = form.watch("provider");
     const foundProvider = providers.find((p) => p.id === provider);
-    if (!foundProvider?.requiresBaseUrl) return null;
+    // An API that predates `acceptsBaseUrl` still sends `requiresBaseUrl`.
+    if (!(foundProvider?.acceptsBaseUrl ?? foundProvider?.requiresBaseUrl))
+        return null;
+    const optional = !foundProvider.requiresBaseUrl;
 
     return (
         <Controller
@@ -20,7 +23,7 @@ export const ByokBaseURLInput = () => {
             render={({ field, fieldState }) => (
                 <FormControl.Root>
                     <FormControl.Label htmlFor={field.name}>
-                        Base URL
+                        {optional ? "Base URL (optional)" : "Base URL"}
                     </FormControl.Label>
 
                     <FormControl.Input>
@@ -30,10 +33,28 @@ export const ByokBaseURLInput = () => {
                             type="url"
                             value={field.value ?? ""}
                             error={fieldState.error}
-                            onChange={field.onChange}
-                            placeholder="https://your-endpoint.example.com/v1"
+                            // Cleared on an optional field means the provider's
+                            // own endpoint, which is stored as no base URL.
+                            onChange={(e) =>
+                                field.onChange(
+                                    optional && !e.target.value.trim()
+                                        ? null
+                                        : e.target.value,
+                                )
+                            }
+                            placeholder={
+                                optional
+                                    ? "https://your-proxy.example.com/v1"
+                                    : "https://your-endpoint.example.com/v1"
+                            }
                         />
                     </FormControl.Input>
+
+                    {optional && (
+                        <FormControl.Helper>
+                            {`Your own proxy or gateway for ${foundProvider.name}'s API. Leave empty to call ${foundProvider.name} directly. For another vendor's server, pick the Compatible provider instead.`}
+                        </FormControl.Helper>
+                    )}
 
                     <FormControl.Error>
                         {fieldState.error?.message}
