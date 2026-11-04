@@ -149,11 +149,11 @@ const { fitPRDescription } = require('../../libs/code-review/utils/fit-pr-descri
 const REPOSITORY = { name: 'sample', id: 'repo-id' };
 
 // ── The real CommentManagerService. On the summary path it reads only the code
-//    host (PR body in, description out) and the org's permission service; the
-//    other injected services are not reached there, so none is supplied. The
-//    code host is the eval's: it returns the case's PR body and records what
-//    the GitHub adapter would post (github.service.ts runs fitPRDescription on
-//    it first). ──────────────────────────────────────────────────────────────
+//    host (description out) and the org's permission service; the other
+//    injected services are not reached there, so none is supplied. The code
+//    host is the eval's, shared with the stage, which reads the PR body from
+//    it: it returns the case's PR body and records what the GitHub adapter
+//    would post (github.service.ts runs fitPRDescription on it first). ───────
 function buildService(existingBody, postedRef, storedConfig) {
     const codeManagementService = {
         getPullRequestByNumber: async () => ({ body: existingBody }),
@@ -195,7 +195,7 @@ function buildService(existingBody, postedRef, storedConfig) {
         generated.description = await realGenerate(...a);
         return generated.description;
     };
-    return service;
+    return { service, codeManagementService };
 }
 let generated = { calls: 0, description: null, isCommitRun: null };
 
@@ -252,7 +252,11 @@ async function runCase(c) {
 
     const posted = { calls: 0, body: null };
     generated = { calls: 0, description: null, isCommitRun: null };
-    const service = buildService(c.existingBody || '', posted, storedConfigOf(c));
+    const { service, codeManagementService } = buildService(
+        c.existingBody || '',
+        posted,
+        storedConfigOf(c),
+    );
     lastPromptSeen = null;
     lastModelError = null;
     modelCalls = [];
@@ -263,7 +267,12 @@ async function runCase(c) {
     const pullRequestManagerService = {
         getChangedFilesMetadata: async () => c.changedFiles,
     };
-    const stage = new UpdateCommentsAndGenerateSummaryStage(service, pullRequestManagerService, undefined);
+    const stage = new UpdateCommentsAndGenerateSummaryStage(
+        service,
+        pullRequestManagerService,
+        undefined,
+        codeManagementService,
+    );
     const after = await stage.executeStage(
         frozenContext({
             lastExecution: isCommitRun ? { id: 'previous-review' } : undefined,
