@@ -451,3 +451,29 @@ describe('requestedReviewModeOf', () => {
         ).toBe('the auth flow');
     });
 });
+
+describe('review flags inside prose', () => {
+    it.each([
+        '@kody review check the --force-push path',
+        '@kody review the --forced flag',
+    ])('does not read %s as --force', (text) => {
+        expect(isForceReviewCommand(text)).toBe(false);
+    });
+
+    it('does not read --heavy-handed or --balanced-tree as a mode', () => {
+        expect(
+            requestedReviewModeOf('@kody review the --heavy-handed retry'),
+        ).toBeUndefined();
+        expect(
+            requestedReviewModeOf('@kody review the --balanced-tree insert'),
+        ).toBeUndefined();
+    });
+
+    it('still reads the flags in any order, and keeps the prose ones in the directive', () => {
+        const text = '@kody review check the --force-push path --heavy --force';
+
+        expect(isForceReviewCommand(text)).toBe(true);
+        expect(requestedReviewModeOf(text)).toBe('heavy');
+        expect(parseReviewDirective(text)).toBe('check the --force-push path');
+    });
+});
