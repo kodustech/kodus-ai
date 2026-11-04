@@ -128,10 +128,12 @@ la flag.
   balanced. Sin un modelo Heavy definido, una revisión heavy usa el predeterminado de la
   organización. Un modelo definido para un repositorio o directorio en **Code review → General**
   ejecuta ambos modos.
-- **Cuesta más llamadas al modelo, no mucho más tiempo.** Los especialistas se ejecutan al mismo
-  tiempo que la revisión principal, así que la revisión tarda más o menos lo mismo, pero usa
-  bastantes más tokens. Con tu propia clave de modelo (BYOK) eso va a la factura de tu proveedor,
-  y un proveedor con un límite de concurrencia bajo puede encolar las llamadas.
+- **Cuesta más y tarda más.** En nuestra evaluación con 30 pull requests, frente a Balanced con el
+  mismo modelo, una revisión heavy tardó hasta cerca del doble y costó cerca de 2,5 veces más en
+  modelo por pull request. Encontró cerca de un problema real más cada dos pull requests y publicó
+  cerca de un comentario más por pull request que no era un problema real. Con tu propia clave de
+  modelo (BYOK) el costo adicional va a la factura de tu proveedor, y un proveedor con un límite de
+  concurrencia bajo puede encolar las llamadas.
 - **Sin acceso al repositorio** (sin sandbox), los especialistas leen solo el diff, como hace la
   revisión principal en ese caso.
 - La lista de pull requests muestra una insignia **Heavy** en los PRs cuya última revisión se
