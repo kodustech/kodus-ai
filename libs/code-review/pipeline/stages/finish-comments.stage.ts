@@ -15,6 +15,7 @@ import {
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import {
+    extractHttpStatus,
     getClassification,
     llmErrorLogLevel,
 } from '@libs/llm/error-classifier';
@@ -30,6 +31,12 @@ import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pip
 import { formatLinkedReposSummaryLine } from '@libs/ee/linked-repositories';
 import { PostTracePrCommentUseCase } from '@libs/cli-review/application/use-cases/post-trace-pr-comment.use-case';
 import { resolveBusinessLogicSettings } from '@libs/agents/business-validation/settings';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { retryWithBackoff } from '@libs/common/utils/polling';
+import {
+    is429Error,
+    isTransientFetchError,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
 
 /**
  * `metadata.reason` tag on the `PipelineError` pushed below when
@@ -43,14 +50,24 @@ import { resolveBusinessLogicSettings } from '@libs/agents/business-validation/s
  */
 export const SUMMARY_GENERATION_FAILED_REASON = 'summary_generation_failed';
 
-/** The steps of the PR summary: read the changes, ask the model, write it to the PR. */
+/** The steps of the PR summary: read the PR and its changes, ask the model, write it to the PR. */
 type SummaryStep = 'collect' | 'generate' | 'publish';
 
 const SUMMARY_STEP_FAILURE: Record<SummaryStep, string> = {
-    collect: 'Failed to collect the changes for the summary',
+    collect: 'Failed to read the pull request for the summary',
     generate: 'Failed to generate summary',
     publish: 'Failed to publish summary to the pull request',
 };
+
+/** A 429, a 5xx or a dropped connection: the same read may succeed a moment later. */
+function isTransientCodeHostError(error: unknown): boolean {
+    const status = extractHttpStatus(error);
+    return (
+        is429Error(error) ||
+        (status !== undefined && status >= 500) ||
+        isTransientFetchError(error)
+    );
+}
 
 @Injectable()
 export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -68,6 +85,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
         private readonly pullRequestManagerService: IPullRequestManagerService,
         private readonly postTracePrCommentUseCase: PostTracePrCommentUseCase,
+        private readonly codeManagementService: CodeManagementService,
     ) {
         super();
     }
@@ -287,11 +305,27 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     }));
                 }
 
+                // The description may have changed since the webhook, and the
+                // summary keeps or replaces it. Read here, not inside the model
+                // call, so a code-host failure is reported as one.
+                const currentPR = await retryWithBackoff(
+                    () =>
+                        this.codeManagementService.getPullRequestByNumber({
+                            organizationAndTeamData,
+                            repository,
+                            prNumber: pullRequest.number,
+                        }),
+                    {
+                        maxAttempts: 3,
+                        shouldRetry: isTransientCodeHostError,
+                    },
+                );
+
                 summaryStep = 'generate';
 
                 const summaryPR =
                     await this.commentManagerService.generateSummaryPR(
-                        pullRequest,
+                        { ...pullRequest, body: currentPR?.body },
                         repository,
                         changedFiles,
                         organizationAndTeamData,

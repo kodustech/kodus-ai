@@ -51,6 +51,9 @@ describe('#1844 flow: summary generation failure -> auto-approve decision', () =
                         reason: 'no-decisions',
                     }),
                 } as any, // postTracePrCommentUseCase
+                {
+                    getPullRequestByNumber: jest.fn().mockResolvedValue({}),
+                } as any,
             ),
         };
     };

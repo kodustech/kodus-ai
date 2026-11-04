@@ -407,6 +407,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         title: 'Test PR',
         head: { ref: 'feature-branch', repo: { fullName: 'org/repo' } },
         base: { ref: 'main' },
+        body: 'Existing PR description',
     };
 
     const defaultSummaryConfig = {
@@ -450,11 +451,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         // so every summary call is intercepted (no live model call).
         setLlmObservability(mockObservabilityService as any);
 
-        mockCodeManagementService = {
-            getPullRequestByNumber: jest.fn().mockResolvedValue({
-                body: 'Existing PR description',
-            }),
-        };
+        mockCodeManagementService = {};
 
         mockPermissionValidationService = {
             validateBasicLicense: jest
