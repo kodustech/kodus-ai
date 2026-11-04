@@ -62,22 +62,21 @@ export const KODY_MENTION_NON_REVIEW_PATTERN =
     /^\s*@kody\b(?!\s+(start-review|review)(?=\s|$))/i;
 
 /**
- * Force re-review flag. Customers append `--force` (or `force`) to bypass
- * the "no new commits / already reviewed" guard so they can re-run a review
- * after fixing whatever made the previous run fail (e.g. topping up BYOK
- * credits). Telemetry distinguishes it from the regular command via the
- * `command-force` origin set by each provider's webhook handler.
+ * Force re-review flag. Customers add `--force` to bypass the "no new
+ * commits / already reviewed" guard so they can re-run a review after fixing
+ * whatever made the previous run fail (e.g. topping up BYOK credits). Like
+ * `--heavy`, it can sit anywhere on the command's first line. Telemetry
+ * distinguishes it from the regular command via the `command-force` origin
+ * set by each provider's webhook handler.
  */
 export const KODY_FORCE_REVIEW_COMMAND_PATTERN =
-    /^\s*@kody\s+(start-review|review)\s+--?force\b/i;
+    /^\s*@kody\s+(?:start-review|review)\b[ \t]+(?:[^\n]*\s)?--?force\b/i;
 
 /**
  * Heavy-mode flag. Customers append `--heavy` to a review command to run the
  * M3 lenses next to the generalist — higher recall, at the cost of more model
  * calls — whatever review mode is set in settings. Can be combined with a focus
- * directive. To force it too, `--force` goes first (`@kody review --force
- * --heavy`): KODY_FORCE_REVIEW_COMMAND_PATTERN only reads it right after the
- * command word.
+ * directive and with `--force`, in any order.
  *
  * A dash is required (like `--force`): a bare `heavy` is treated as directive
  * text, not the flag, to avoid mis-firing on focus phrases (e.g.
@@ -115,7 +114,7 @@ function buildForceReviewCommandPattern(
 ): RegExp {
     const name = escapeRegex(botUsername || DEFAULT_BOT_USERNAME);
     return new RegExp(
-        `^\\s*@${name}\\s+(start-review|review)\\s+--?force\\b`,
+        `^\\s*@${name}\\s+(?:start-review|review)\\b[ \\t]+(?:[^\\n]*\\s)?--?force\\b`,
         'i',
     );
 }

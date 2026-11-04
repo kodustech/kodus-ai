@@ -105,12 +105,9 @@ Either flag can sit anywhere on the command line — before or after your focus 
 stripped from the directive either way, so `@kody review focus on the retry logic --heavy`
 focuses on "the retry logic".
 
-<Warning>
-  **To combine a flag with `--force`, put `--force` first.** `--force` is only recognized
-  immediately after the command word, so `@kody review --force --heavy` runs a forced heavy
-  review, while `@kody review --heavy --force` runs a heavy review that is **not** forced. The
-  same goes for `--balanced`.
-</Warning>
+Flags combine in any order: `@kody review --heavy --force` runs a forced heavy review. On a pull
+request Kody already reviewed, a flag asking for a different mode than the last review used
+reviews the whole pull request, not only the commits since then.
 
 A dash is required: a bare `heavy` or `balanced` is read as directive text, so `@kody review heavy
 checkout path` focuses on "heavy checkout path" rather than enabling the flag.

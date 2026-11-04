@@ -104,12 +104,9 @@ kodus review --balanced
 ディレクティブからは取り除かれるため、`@kody review リトライ処理に注目 --heavy` は
 「リトライ処理に注目」にフォーカスします。
 
-<Warning>
-  **フラグを `--force` と併用するときは `--force` を先に置いてください。** `--force` はコマンド直後に
-  ある場合のみ認識されます。そのため `@kody review --force --heavy` は強制の heavy レビューに
-  なりますが、`@kody review --heavy --force` は強制**されない** heavy レビューになります。
-  `--balanced` も同様です。
-</Warning>
+フラグは任意の順序で組み合わせられます。`@kody review --heavy --force` は強制の heavy レビューに
+なります。Kody がすでにレビューしたプルリクエストで、前回のレビューと異なるモードを指定すると、
+それ以降のコミットだけでなくプルリクエスト全体をレビューします。
 
 ダッシュは必須です。ダッシュなしの `heavy` や `balanced` はディレクティブのテキストとして読まれるため、
 `@kody review heavy チェックアウト経路` はフラグを有効にせず「heavy チェックアウト経路」に

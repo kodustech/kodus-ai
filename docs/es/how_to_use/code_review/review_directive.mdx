@@ -106,12 +106,9 @@ Cualquiera de las dos flags puede ir en cualquier posición de la línea — ant
 elimina de la directiva en ambos casos, así que `@kody review enfócate en la lógica de retry
 --heavy` se enfoca en "enfócate en la lógica de retry".
 
-<Warning>
-  **Para combinar una flag con `--force`, pon `--force` primero.** `--force` solo se reconoce
-  inmediatamente después del comando, así que `@kody review --force --heavy` ejecuta una revisión
-  heavy forzada, mientras que `@kody review --heavy --force` ejecuta una revisión heavy que
-  **no** está forzada. Lo mismo vale para `--balanced`.
-</Warning>
+Las flags se combinan en cualquier orden: `@kody review --heavy --force` ejecuta una revisión
+heavy forzada. En un pull request que Kody ya revisó, pedir el modo distinto al de la última revisión
+revisa el pull request completo, no solo los commits desde entonces.
 
 El guion es obligatorio: un `heavy` o `balanced` suelto se lee como texto de directiva, así que
 `@kody review heavy flujo de checkout` se enfoca en "heavy flujo de checkout" en vez de activar

@@ -101,11 +101,8 @@ balanced 审查。如果命令同时带有两者，以 `--heavy` 为准。
 两个标志都可以放在命令行的任意位置 —— 焦点文本之前或之后 —— 无论哪种方式都会从指令中移除，所以
 `@kody review 关注重试逻辑 --heavy` 会聚焦于"关注重试逻辑"。
 
-<Warning>
-  **将标志与 `--force` 组合时，请把 `--force` 放在前面。** `--force` 只有紧跟在命令词之后才会被识别，
-  所以 `@kody review --force --heavy` 会执行强制的 heavy 审查，而 `@kody review --heavy --force`
-  执行的是**未**强制的 heavy 审查。`--balanced` 同理。
-</Warning>
+标志可以任意顺序组合：`@kody review --heavy --force` 会执行强制的 heavy 审查。在 Kody 已审查过的
+拉取请求上，指定与上次审查不同的模式时，会审查整个拉取请求，而不仅是此后的提交。
 
 必须带短横线：单独的 `heavy` 或 `balanced` 会被当作指令文本，所以 `@kody review heavy 结账流程` 会聚焦于
 "heavy 结账流程"，而不是启用该标志。

@@ -85,6 +85,20 @@ describe('isForceReviewCommand', () => {
         expect(isForceReviewCommand('@KODY REVIEW --FORCE')).toBe(true);
     });
 
+    it('matches --force anywhere on the first line, after other flags or focus text', () => {
+        expect(isForceReviewCommand('@kody review --heavy --force')).toBe(true);
+        expect(
+            isForceReviewCommand('@kody review the auth logic --force'),
+        ).toBe(true);
+        expect(
+            isForceReviewCommand('@mybot review --balanced --force', 'mybot'),
+        ).toBe(true);
+        expect(isForceReviewCommand('@kody review the forced retries')).toBe(
+            false,
+        );
+        expect(isForceReviewCommand('@kody review\n--force')).toBe(false);
+    });
+
     it('rejects plain review commands, "force" mid-word and empty input', () => {
         expect(isForceReviewCommand('@kody review')).toBe(false);
         expect(isForceReviewCommand('@kody start-review')).toBe(false);
@@ -400,7 +414,9 @@ describe('isHeavyReviewCommand', () => {
 describe('requestedReviewModeOf', () => {
     it('reads --heavy and --balanced in any position of a review command', () => {
         expect(requestedReviewModeOf('@kody review --heavy')).toBe('heavy');
-        expect(requestedReviewModeOf('@kody review --balanced')).toBe('balanced');
+        expect(requestedReviewModeOf('@kody review --balanced')).toBe(
+            'balanced',
+        );
         expect(requestedReviewModeOf('@kody review auth --balanced')).toBe(
             'balanced',
         );
@@ -426,10 +442,12 @@ describe('requestedReviewModeOf', () => {
 
     it('leaves --balanced out of the review directive', () => {
         expect(
-            parseReviewDirective('@kody review --force --balanced the auth flow'),
+            parseReviewDirective(
+                '@kody review --force --balanced the auth flow',
+            ),
         ).toBe('the auth flow');
-        expect(parseReviewDirective('@kody review the auth flow --balanced')).toBe(
-            'the auth flow',
-        );
+        expect(
+            parseReviewDirective('@kody review the auth flow --balanced'),
+        ).toBe('the auth flow');
     });
 });
