@@ -15,6 +15,10 @@ export interface ProviderUiDescriptor {
     /** The user must supply a base URL (a custom endpoint), so it can't be
      *  defaulted for them. */
     requiresBaseUrl: boolean;
+    /** The connect form offers a base URL: required (above), or optional
+     *  because the module declares a `baseURL` field over a default endpoint
+     *  (the org's own proxy or gateway). */
+    acceptsBaseUrl: boolean;
     /** The provider's models can be enumerated (dropdown) vs. typed by hand. */
     autoListModels: boolean;
     /** The provider enumerates its models through a LIVE `/models` HTTP call
@@ -74,23 +78,27 @@ export function describeProviderId(
 ): ProviderUiDescriptor {
     const listing = module.modelListing?.(id) ?? null;
     const custom = isCustomEndpoint(id);
+    const declaresField = (key: string): boolean =>
+        (module.uiFields ?? []).some((f) => f.key === key);
     const requiresField = (key: string): boolean =>
         (module.uiFields ?? []).some(
             (f) => f.key === key && f.required === true,
         );
     const requiresApiKey = requiresField('apiKey');
+    // Custom endpoints ALWAYS need the user's base URL; native providers only
+    // when their listing requires one with no default to fall back on, OR when
+    // the module declares a required `baseURL` field (e.g. Azure's per-resource
+    // endpoint — not derivable from the listing, so the module states it).
+    const requiresBaseUrl =
+        custom ||
+        listingRequiresUserBaseUrl(listing) ||
+        requiresField('baseURL');
     return {
         id,
         label: labelForId(module, id),
         requiresApiKey,
-        // Custom endpoints ALWAYS need the user's base URL; native providers only
-        // when their listing requires one with no default to fall back on, OR when
-        // the module declares a required `baseURL` field (e.g. Azure's per-resource
-        // endpoint — not derivable from the listing, so the module states it).
-        requiresBaseUrl:
-            custom ||
-            listingRequiresUserBaseUrl(listing) ||
-            requiresField('baseURL'),
+        requiresBaseUrl,
+        acceptsBaseUrl: requiresBaseUrl || declaresField('baseURL'),
         // Custom endpoints can't be pre-listed (endpoint unknown until entered).
         // A brand with a `manual` listing and no live `/models` call (e.g. Z.ai/GLM
         // over the Anthropic protocol) is NOT auto-listable — the user types the

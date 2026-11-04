@@ -61,6 +61,24 @@ describe('ProviderService — registry-driven', () => {
             expect(b.autoListModels).toBe(true);
         });
 
+        describe('acceptsBaseUrl — the optional endpoint field', () => {
+            it('OpenAI: native id takes an optional base URL (a proxy or gateway)', () => {
+                const o = byId('openai');
+                expect(o.requiresBaseUrl).toBe(false);
+                expect(o.acceptsBaseUrl).toBe(true);
+            });
+
+            it('Bedrock: no base URL field, so none is offered', () => {
+                const b = byId('amazon_bedrock');
+                expect(b.requiresBaseUrl).toBe(false);
+                expect(b.acceptsBaseUrl).toBe(false);
+            });
+
+            it('openai_compatible: required, so also accepted', () => {
+                expect(byId('openai_compatible').acceptsBaseUrl).toBe(true);
+            });
+        });
+
         describe('listsModelsLive — the live `/models` (candidate-key) flag', () => {
             it('OpenAI: native http listing with a default URL → lists live', () => {
                 const o = byId('openai');

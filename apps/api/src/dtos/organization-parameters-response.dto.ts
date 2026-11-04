@@ -37,6 +37,12 @@ export class OrganizationProviderDto {
     @ApiProperty()
     requiresBaseUrl: boolean;
 
+    @ApiProperty({
+        description:
+            'The connect form offers a base URL, required or optional (a proxy or gateway).',
+    })
+    acceptsBaseUrl: boolean;
+
     @ApiProperty()
     autoListModels: boolean;
 }
