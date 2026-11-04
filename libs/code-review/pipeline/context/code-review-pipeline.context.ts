@@ -1,3 +1,4 @@
+import type { RequestedReviewMode } from '@libs/code-review/domain/review-mode';
 import { readAttemptedSlot } from '@libs/llm/model-failover';
 import type {
     ContextEvidence,
@@ -86,6 +87,18 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      * as a high-priority focus block. Empty/undefined = a normal review.
      */
     reviewDirective?: string;
+
+    /** The mode the review command asked for (`@kody review --heavy` /
+     *  `--balanced`), over the review mode set in settings. */
+    requestedReviewMode?: RequestedReviewMode;
+
+    /**
+     * Whether this review runs heavy: the requested mode, else the review mode
+     * in settings (ValidateConfigStage). The M3 lenses run next to the
+     * generalist on the `codeReviewHeavy` model, at the cost of up to nine
+     * short lens runs.
+     */
+    heavy?: boolean;
 
     codeReviewConfig?: CodeReviewConfig;
     automaticReviewStatus?: AutomaticReviewStatus;

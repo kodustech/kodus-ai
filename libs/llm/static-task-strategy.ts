@@ -71,6 +71,7 @@ const TOOL_CALLING_REQUIREMENT: CapabilityRequirement = {
 
 const TASK_CAPABILITY_REQUIREMENTS: Record<LlmTask, CapabilityRequirement> = {
     codeReview: STRUCTURED_OUTPUT_REQUIREMENT,
+    codeReviewHeavy: STRUCTURED_OUTPUT_REQUIREMENT,
     // Kody-Rules review + rule generation drive structured output (findings /
     // rule objects) via generateObject, like the main review.
     kodyRulesReview: STRUCTURED_OUTPUT_REQUIREMENT,

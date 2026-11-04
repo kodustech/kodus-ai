@@ -46,6 +46,7 @@ version: 2.0
 
 # general
 automatedReviewActive: true
+reviewMode: balanced # balanced | heavy
 showStatusFeedback: true
 kodusConfigFileOverridesWebPreferences: false
 reviewCadence:
@@ -165,6 +166,23 @@ em commits subsequentes:
     Execute revisões de acompanhamento apenas quando você comentar `@kody start-review`.
   </Tab>
 </Tabs>
+
+### Modo de Revisão
+
+Quão a fundo o Kody revisa os pull requests (`reviewMode`):
+
+- **Balanced** (padrão): a revisão padrão.
+- **Heavy**: nove revisores especialistas rodam junto com o principal, para maior recall ao custo de
+  mais chamadas de modelo. Veja [Heavy mode](/pt-BR/how_to_use/code_review/review_directive#heavy-mode).
+
+O modo vale para toda revisão: as automáticas, `@kody review` e `kodus review`. Uma única revisão
+pode pedir o outro modo com `--heavy` ou `--balanced`. Como as outras configurações desta página,
+pode ser definido globalmente, por repositório ou por diretório.
+
+Abaixo das duas opções, **Review models** mostra o modelo em que cada modo roda, só para leitura.
+Eles vêm de **AI providers → Routing** (siga **View organization routing** para alterá-los), a menos
+que o repositório ou diretório defina seu próprio modelo, que então roda os dois modos. Com um único
+modelo conectado, a seção só avisa isso; sem modelos próprios (gerenciado pela Kodus), ela fica oculta.
 
 ### Fluxo do PR
 

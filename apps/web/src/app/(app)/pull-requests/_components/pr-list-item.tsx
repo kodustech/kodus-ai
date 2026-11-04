@@ -701,7 +701,8 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                 </NextLink>
 
                 {/* The approval notice is separate from review execution status.
-                    Keep it visible even if the PR has since been merged. */}
+                    Keep it visible even if the PR has since been merged.
+                    "Heavy" (review ran in heavy mode) shows in either case. */}
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                     {latest.approvalReasonDeliveryFailure && (
                         <Tooltip>
@@ -736,6 +737,11 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                             latest.automationExecution?.status || "pending",
                             latest.automationExecution?.errorMessage,
                         )
+                    )}
+                    {latest.heavy && (
+                        <Badge variant="helper" title="Reviewed in heavy mode">
+                            Heavy
+                        </Badge>
                     )}
                 </div>
             </div>

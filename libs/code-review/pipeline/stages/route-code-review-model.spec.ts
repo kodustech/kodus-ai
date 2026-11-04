@@ -32,4 +32,31 @@ describe('routeCodeReviewModel', () => {
         expect(r.resolvedModelSlot).toBeUndefined();
         expect(r.blocked).toBe(true);
     });
+
+    it('routes a heavy review to the Heavy model and a balanced one to the Balanced model', () => {
+        const routed = config({
+            models: [
+                { id: 'm1', credentialId: 'c1', model: 'gpt-x' },
+                { id: 'm2', credentialId: 'c1', model: 'gpt-y' },
+                { id: 'm3', credentialId: 'c1', model: 'gpt-z' },
+            ],
+            routing: {
+                defaultModelId: 'm1',
+                taskOverrides: { codeReview: 'm2', codeReviewHeavy: 'm3' },
+            },
+        });
+        expect(routeCodeReviewModel(routed, {}).resolvedModelSlot?.model).toBe('gpt-y');
+        expect(routeCodeReviewModel(routed, {}, true).resolvedModelSlot?.model).toBe('gpt-z');
+    });
+
+    it('runs a heavy review with no Heavy model on the org default, not the Balanced one', () => {
+        const routed = config({ routing: { defaultModelId: 'm1', taskOverrides: { codeReview: 'm2' } } });
+        expect(routeCodeReviewModel(routed, {}, true).resolvedModelSlot?.model).toBe('gpt-x');
+    });
+
+    it("lets the repository's model run both modes", () => {
+        const routed = config({ routing: { defaultModelId: 'm1', taskOverrides: { codeReviewHeavy: 'm1' } } });
+        expect(routeCodeReviewModel(routed, { byokModelId: 'm2' }, true).resolvedModelSlot?.model).toBe('gpt-y');
+        expect(routeCodeReviewModel(routed, { byokModelId: 'm2' }).resolvedModelSlot?.model).toBe('gpt-y');
+    });
 });

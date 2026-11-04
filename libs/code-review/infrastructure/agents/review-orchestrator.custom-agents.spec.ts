@@ -79,7 +79,7 @@ const files = [
 function inputFor(over: Record<string, unknown> = {}) {
     return {
         reviewOptions: { bug: true, security: true, performance: true },
-        reviewMode: 'normal',
+        reviewMode: 'balanced',
         prNumber: 7,
         changedFiles: files,
         kodyRules: [{ uuid: 'r1' }],

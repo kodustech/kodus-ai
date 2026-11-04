@@ -168,6 +168,7 @@ export function deriveArea(
  */
 export const ROUTING_TASKS: ReadonlySet<string> = new Set([
     'codeReview',
+    'codeReviewHeavy',
     'kodyRulesReview',
     'ruleGeneration',
     'businessValidation',

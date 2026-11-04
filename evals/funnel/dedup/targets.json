@@ -9,7 +9,8 @@
         "gpt-6-sol: calibrated 2026-10-17 from 2 local runs on a725253d6: 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93.",
         "claude-sonnet-5-5: calibrated 2026-10-17 from 2 local runs on a725253d6: 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93.",
         "kimi-k2.7-code@openrouter: calibrated 2026-10-17 from 2 local runs on a725253d6 and 8971e8fb3: 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93.",
-        "deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93."
+        "deepseek-v4-flash@fireworks: calibrated 2026-10-17 from 2 local runs on 641fb1999 (BYOK route): 32/32 and 32/32, mean 1. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 32, rounded down: 0.93.",
+        "heavy-controlled (snapshot/deepseek-v4-flash@fireworks-heavy.json, a heavy review of the controlled PRs: the lenses' findings reach this step too), deepseek-v4-flash@fireworks: calibrated 2026-11-02 from 2 local runs on 6f80f8aa9: 32/33 and 32/33, mean 0.97. floor = min(mean - 2 binomial SE, (n - 2) / n) over n = 33, rounded down: 0.91. On demand (--snapshot=deepseek-v4-flash@fireworks-heavy); runs: kodustech/kodus-eval-runs, runs/2026-11-02_heavy-funnel."
     ],
     "sets": {
         "controlled": {
@@ -29,6 +30,14 @@
                 "kimi-k2.7-code@openrouter": {
                     "floor": 0.93,
                     "observed": 1
+                }
+            }
+        },
+        "heavy-controlled": {
+            "models": {
+                "deepseek-v4-flash@fireworks": {
+                    "floor": 0.91,
+                    "observed": 0.97
                 }
             }
         }

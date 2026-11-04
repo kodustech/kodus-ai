@@ -27,6 +27,7 @@ export interface CodeReviewRepositoryConfigValue {
     name: string;
     configs?: {
         automatedReviewActive?: boolean;
+        reviewMode?: 'balanced' | 'heavy';
         pullRequestApprovalActive?: boolean;
         isRequestChangesActive?: boolean;
         ignorePaths?: string[];

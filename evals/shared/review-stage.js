@@ -214,7 +214,8 @@ function observeFinderPasses() {
                     if (prop !== 'run') return Reflect.get(target, prop, receiver);
                     return async (spec, runInput, runCtx) => {
                         const fid = runInput?.telemetry?.functionId;
-                        const label = fid === agentName ? 'generalist' : fid === `${agentName}-synthesis-rescue` ? 'synthesis-rescue' : null;
+                        // Heavy mode's lenses run as `${agentName}-lens-<id>`.
+                        const label = fid === agentName ? 'generalist' : fid === `${agentName}-synthesis-rescue` ? 'synthesis-rescue' : fid?.startsWith(`${agentName}-lens-`) ? fid.slice(agentName.length + 1) : null;
                         // Any other run (the verifier's) is counted by the step around it.
                         if (!label) return target.run(spec, runInput, runCtx);
                         const startedAt = Date.now();
@@ -248,7 +249,11 @@ function observeFinderPasses() {
             // Every candidate the verify judged, with the pass it came from: a
             // generalist finding the rescue repeated word for word was merged into
             // the generalist's (production's merge key).
-            const fromGeneralist = new Set(run.passes.filter((p) => p.label === 'generalist').flatMap((p) => (p.recovered || p.findings).map(findingKey)));
+            // The first pass that produced a key names its origin, generalist first.
+            const originOf = new Map();
+            for (const p of [...run.passes].sort((a, b) => (b.label === 'generalist') - (a.label === 'generalist'))) {
+                for (const key of (p.recovered || p.findings).map(findingKey)) if (!originOf.has(key)) originOf.set(key, p.label);
+            }
             const first = run.verify.find((p) => p.pass === 'verify');
             run.candidates = (first?.candidates || []).map((key, index) => {
                 const v = first;
@@ -258,7 +263,7 @@ function observeFinderPasses() {
                 const gateDrop = gateIndex >= 0 ? gate.dropped.find((d) => d.index === gateIndex) : null;
                 return {
                     index,
-                    origin: fromGeneralist.has(key) ? 'generalist' : 'synthesis-rescue',
+                    origin: originOf.get(key) || 'synthesis-rescue',
                     verify: v.skipped ? 'not-run' : dropped ? 'dropped' : gateDrop ? 'dropped-by-evidence-gate' : 'kept',
                     rationale: dropped?.rationale ?? gateDrop?.rationale ?? null,
                 };
@@ -668,6 +673,8 @@ async function prepareReview({ pr, team = {}, route, permissionService, previous
                 base: { ref: pr.baseRef || 'main', repo: { fullName: repository.fullName } },
             },
             codeReviewConfig,
+            // `@kody review --heavy`: the generalist plus the M3 lenses.
+            ...(pr.heavy ? { heavy: true } : {}),
             // ValidateNewCommitsStage on a first review: every commit of the PR.
             prAllCommits: pr.commits || [],
             prCommits: pr.commits || [],

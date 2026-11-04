@@ -8,6 +8,11 @@ export const TASK_META: Record<string, { label: string; description: string }> =
         description:
             "The defect-finding review agents plus suggestion refinement and cross-file context — the model you set for Code Review.",
     },
+    codeReviewHeavy: {
+        label: TASK_LABELS.codeReviewHeavy,
+        description:
+            "Heavy reviews: the main reviewer plus nine specialists — the model set for Heavy, or the organization default when unset.",
+    },
     kodyRulesReview: {
         label: "Kody Rules Review",
         description:

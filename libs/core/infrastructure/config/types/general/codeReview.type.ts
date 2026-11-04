@@ -863,9 +863,20 @@ export type BusinessLogicConfig = {
     requireTask?: boolean;
 };
 
+/**
+ * How deep a review goes. `balanced` (the default) runs the generalist;
+ * `heavy` adds the M3 lenses and routes the `codeReviewHeavy` model. Both are
+ * set in General settings. `fast` is only set by the CLI's `--fast`, and
+ * `deep` by nothing today (#2367).
+ */
+export type ReviewMode = 'fast' | 'balanced' | 'heavy' | 'deep';
+
+/** The review modes a team can pick in settings or in kodus-config.yml. */
+export const SELECTABLE_REVIEW_MODES = ['balanced', 'heavy'] as const;
+
 export type CodeReviewConfig = {
     ignorePaths: string[];
-    reviewMode?: 'fast' | 'normal' | 'deep';
+    reviewMode?: ReviewMode;
     reviewOptions: ReviewOptions;
 
     /** How the PR is checked against the task it references (Business Logic). */

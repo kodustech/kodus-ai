@@ -28,6 +28,7 @@ const KNOWN_FLAGS = new Set([
     'gate',
     'no-judge',
     'team-config',
+    'targets',
 ]);
 
 function parseArgs(argv) {
@@ -48,6 +49,7 @@ function parseArgs(argv) {
         noJudge: process.env.RECALL_NO_JUDGE === '1',
         gate: process.env.RECALL_GATE === '1',
         teamConfig: '',
+        targets: '',
     };
 
     for (let i = 2; i < argv.length; i += 1) {
@@ -103,6 +105,9 @@ function parseArgs(argv) {
             out.gate = true;
         } else if (key === 'team-config') {
             out.teamConfig = value || '';
+            if (consumesNext) i += 1;
+        } else if (key === 'targets') {
+            out.targets = value || '';
             if (consumesNext) i += 1;
         }
     }
@@ -205,8 +210,10 @@ function runMetaOf(args) {
         },
         // Production's tools over the repository at the PR's head.
         executionMode: 'live',
-        // heavy = passadas de resample ativadas. Eixo de regime: não comparar
-        // entrada heavy com entrada normal sem rotular.
+        // RECALL_SANDBOX=none: no sandbox, so no tools (self-contained).
+        sandbox: process.env.RECALL_SANDBOX === 'none' ? 'none' : 'alive',
+        // heavy = generalist plus the M3 lenses. A regime axis: never compare a
+        // heavy entry with a normal one unlabelled.
         heavy: process.env.RECALL_HEAVY === '1',
         // RECALL_REASONING_EFFORT reaches the finder as the BYOK model's
         // reasoningEffort (agent-provider.js resolveRoute), which production
@@ -612,6 +619,9 @@ async function main() {
         // Which coding-agent instructions the cases carried (recall-tests.js);
         // null = none, the nightly default.
         repoInstructions: process.env.RECALL_REPO_INSTRUCTIONS || null,
+        // The floors file the run was gated with (--targets), null for the
+        // default: confirm-gate.js re-gates against the same one.
+        targets: args.targets || null,
         metrics: {
             recall_mean: avg(rows.map((row) => row.metadata?.recall)),
             precision_mean: avg(rows.map((row) => row.metadata?.precision)),
@@ -625,7 +635,7 @@ async function main() {
 
     const setName = args.all ? 'all' : args.cases ? 'custom' : args.set;
     const gate = args.gate
-        ? evaluateGate(summary, rows, args.model, setName)
+        ? evaluateGate(summary, rows, args.model, setName, args.targets || undefined)
         : { status: 'off' };
     summary.gate = gate;
 

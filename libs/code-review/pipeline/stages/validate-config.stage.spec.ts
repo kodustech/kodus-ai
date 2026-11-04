@@ -7,12 +7,26 @@ import { CodeReviewPipelineContext } from '../context/code-review-pipeline.conte
 import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import { CUSTOM_AGENTS_PLAN_REQUIRED } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
 import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { KODUS_CREDITS_EXHAUSTED_COMMENT } from '@libs/core/infrastructure/pipeline/constants/pipeline-comments.const';
 
 describe('ValidateConfigStage — v2 routing', () => {
     let stage: ValidateConfigStage;
     let mockAutomationExecutionService: any;
     let mockOrganizationParametersService: any;
     let mockCodeManagementService: any;
+    let validateOrganizationLicense: jest.Mock;
+
+    const TEAMS = {
+        valid: true,
+        subscriptionStatus: 'active',
+        planType: 'teams_byok_monthly',
+    };
+    const FREE_BYOK = {
+        valid: true,
+        subscriptionStatus: 'active',
+        planType: 'free_byok',
+    };
 
     const buildContext = (
         byokModel: string | undefined,
@@ -66,10 +80,15 @@ describe('ValidateConfigStage — v2 routing', () => {
         mockCodeManagementService = {
             createSingleIssueComment: jest.fn(),
         };
+        validateOrganizationLicense = jest.fn().mockResolvedValue(TEAMS);
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ValidateConfigStage,
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: { validateOrganizationLicense },
+                },
                 {
                     provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
                     useValue: mockAutomationExecutionService,
@@ -77,6 +96,14 @@ describe('ValidateConfigStage — v2 routing', () => {
                 {
                     provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
                     useValue: mockOrganizationParametersService,
+                },
+                {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        gateKodusCreditsForSlot: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
                 },
                 {
                     provide: CodeManagementService,
@@ -98,14 +125,112 @@ describe('ValidateConfigStage — v2 routing', () => {
 
         const result = await stage.execute(buildContext(undefined));
 
-        expect(result.codeReviewConfig.byokConfig?.model).toBe(
-            'gpt-5-mini',
-        );
-        expect(result.codeReviewConfig.byokConfig?.provider).toBe(
-            'openai',
-        );
+        expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-5-mini');
+        expect(result.codeReviewConfig.byokConfig?.provider).toBe('openai');
         // Slot carries ciphertext verbatim — the resolver never decrypts.
         expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
+    });
+
+    it('runs heavy on the Heavy model when the repository is set to Heavy, unless --balanced asks otherwise', async () => {
+        mockOrganizationParametersService.findByKey.mockResolvedValue({
+            configValue: v2({
+                taskOverrides: { codeReviewHeavy: 'm-B' },
+                defaultModelId: 'm-A',
+            }),
+        });
+        const setToHeavy = (requestedReviewMode?: 'balanced' | 'heavy') => {
+            const context = buildContext(undefined);
+            (context.codeReviewConfig as any).reviewMode = 'heavy';
+            return { ...context, requestedReviewMode };
+        };
+
+        const heavy = await stage.execute(setToHeavy());
+        expect(heavy.heavy).toBe(true);
+        expect(heavy.codeReviewConfig.byokConfig?.model).toBe('gpt-5-mini');
+
+        const balanced = await stage.execute(setToHeavy('balanced'));
+        expect(balanced.heavy).toBe(false);
+        expect(balanced.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
+    });
+
+    it('runs heavy when --heavy asks for it on a Balanced repository', async () => {
+        mockOrganizationParametersService.findByKey.mockResolvedValue({
+            configValue: v2({ defaultModelId: 'm-A' }),
+        });
+
+        const result = await stage.execute({
+            ...buildContext(undefined),
+            requestedReviewMode: 'heavy',
+        });
+
+        expect(result.heavy).toBe(true);
+    });
+
+    describe('heavy mode on a plan that is not Teams or Enterprise', () => {
+        beforeEach(() => {
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: v2({
+                    taskOverrides: { codeReviewHeavy: 'm-B' },
+                    defaultModelId: 'm-A',
+                }),
+            });
+        });
+
+        it('runs Balanced on the Balanced model when --heavy asks, and says why on the PR', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+
+            const result = await stage.execute({
+                ...buildContext(undefined),
+                requestedReviewMode: 'heavy',
+            });
+
+            expect(result.heavy).toBe(false);
+            expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
+            expect(result.statusInfo?.status).not.toBe('skipped');
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    prNumber: 1,
+                    body: expect.stringContaining(
+                        'Heavy mode is available on the Teams and Enterprise plans',
+                    ),
+                }),
+            );
+        });
+
+        it('runs Balanced without a comment when the settings ask for heavy', async () => {
+            validateOrganizationLicense.mockResolvedValue(FREE_BYOK);
+            const context = buildContext(undefined);
+            (context.codeReviewConfig as any).reviewMode = 'heavy';
+
+            const result = await stage.execute(context);
+
+            expect(result.heavy).toBe(false);
+            expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
+            expect(
+                mockCodeManagementService.createSingleIssueComment,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('runs Balanced when the plan cannot be read', async () => {
+            validateOrganizationLicense.mockRejectedValue(
+                new Error('billing down'),
+            );
+
+            const result = await stage.execute({
+                ...buildContext(undefined),
+                requestedReviewMode: 'heavy',
+            });
+
+            expect(result.heavy).toBe(false);
+        });
+
+        it('does not read the plan for a Balanced review', async () => {
+            await stage.execute(buildContext(undefined));
+
+            expect(validateOrganizationLicense).not.toHaveBeenCalled();
+        });
     });
 
     it('does not crash when there is no BYOK config', async () => {
@@ -125,9 +250,7 @@ describe('ValidateConfigStage — v2 routing', () => {
         // id 'm-B' (→ gpt-5-mini) wins over the NAME 'gpt-4o'.
         const result = await stage.execute(buildContext('gpt-4o', 'm-B'));
 
-        expect(result.codeReviewConfig.byokConfig?.model).toBe(
-            'gpt-5-mini',
-        );
+        expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-5-mini');
         expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
@@ -140,9 +263,7 @@ describe('ValidateConfigStage — v2 routing', () => {
         // chosen slot (default m-A, openai credential).
         const result = await stage.execute(buildContext('gpt-5-mini'));
 
-        expect(result.codeReviewConfig.byokConfig?.model).toBe(
-            'gpt-5-mini',
-        );
+        expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-5-mini');
         expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
@@ -178,7 +299,13 @@ describe('ValidateConfigStage — v2 routing', () => {
             configValue: v2(
                 { defaultModelId: 'm-X' },
                 [{ id: 'm-X', credentialId: 'c-x', model: 'some-model' }],
-                [{ id: 'c-x', provider: 'not_a_real_provider', apiKey: 'enc-x' }],
+                [
+                    {
+                        id: 'c-x',
+                        provider: 'not_a_real_provider',
+                        apiKey: 'enc-x',
+                    },
+                ],
             ),
         });
 
@@ -221,6 +348,14 @@ describe('ValidateConfigStage — base branch scope', () => {
                     useValue: { findByKey: jest.fn() },
                 },
                 {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        gateKodusCreditsForSlot: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
                     provide: CodeManagementService,
                     useValue: { createSingleIssueComment: jest.fn() },
                 },
@@ -232,7 +367,9 @@ describe('ValidateConfigStage — base branch scope', () => {
 
     describe('missing config (undefined / not an array)', () => {
         it('does not block when baseBranches is undefined', () => {
-            expect(validate(undefined, 'main', 'develop').canProceed).toBe(true);
+            expect(validate(undefined, 'main', 'develop').canProceed).toBe(
+                true,
+            );
         });
 
         it('does not block when baseBranches is corrupt', () => {
@@ -354,6 +491,14 @@ describe('ValidateConfigStage — @kody -v naming no agent', () => {
                 {
                     provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
                     useValue: { findByKey: jest.fn().mockResolvedValue(null) },
+                },
+                {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        gateKodusCreditsForSlot: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
                 },
                 {
                     provide: CodeManagementService,
@@ -506,6 +651,14 @@ describe('ValidateConfigStage — custom agents plan gate', () => {
                     useValue: { findByKey: jest.fn().mockResolvedValue(null) },
                 },
                 {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        gateKodusCreditsForSlot: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
                     provide: CodeManagementService,
                     useValue: { createSingleIssueComment },
                 },
@@ -587,5 +740,218 @@ describe('ValidateConfigStage — custom agents plan gate', () => {
 
         expect(validateOrganizationLicense).not.toHaveBeenCalled();
         expect(createSingleIssueComment).not.toHaveBeenCalled();
+    });
+});
+
+describe('ValidateConfigStage — Kodus credits on the routed model', () => {
+    let stage: ValidateConfigStage;
+    let createIssueComment: jest.Mock;
+    let gateKodusCreditsForSlot: jest.Mock;
+
+    const kodusModel =
+        'fireworks/accounts/fireworks/models/deepseek-v4-flash-0731';
+    // m-A, m-B: the org's own OpenAI key; m-K: routed by Kodus.
+    const config = (routing: any) => ({
+        version: 2,
+        credentials: [
+            { id: 'c-oa', provider: 'openai', apiKey: 'enc-oa' },
+            { id: 'c-kd', provider: 'kodus' },
+        ],
+        models: [
+            { id: 'm-A', credentialId: 'c-oa', model: 'gpt-4o' },
+            { id: 'm-B', credentialId: 'c-oa', model: 'gpt-5-mini' },
+            { id: 'm-K', credentialId: 'c-kd', model: kodusModel },
+        ],
+        routing,
+    });
+
+    const buildContext = (
+        reviewMode: 'balanced' | 'heavy',
+        showStatusFeedback = true,
+    ): CodeReviewPipelineContext =>
+        ({
+            origin: 'command',
+            platformType: 'github',
+            teamAutomationId: 'team-automation-id',
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            repository: { id: 'repo-1', name: 'repo' },
+            pullRequest: {
+                number: 3,
+                title: 'feat: something',
+                isDraft: false,
+                base: { ref: 'main' },
+                head: { ref: 'feature' },
+            },
+            pipelineMetadata: { showStatusFeedback },
+            codeReviewConfig: {
+                automatedReviewActive: true,
+                ignoredTitleKeywords: [],
+                baseBranches: [],
+                runOnDraft: true,
+                reviewMode,
+            },
+        }) as unknown as CodeReviewPipelineContext;
+
+    const setup = async (routing: any) => {
+        createIssueComment = jest.fn().mockResolvedValue({});
+        gateKodusCreditsForSlot = jest.fn().mockResolvedValue({
+            allowed: false,
+            errorType: 'CREDITS_EXHAUSTED',
+        });
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                ValidateConfigStage,
+                {
+                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+                    useValue: {
+                        findLatestExecutionByFilters: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
+                {
+                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+                    useValue: {
+                        findByKey: jest
+                            .fn()
+                            .mockResolvedValue({
+                                configValue: config(routing),
+                            }),
+                    },
+                },
+                {
+                    provide: CodeManagementService,
+                    useValue: { createIssueComment },
+                },
+                {
+                    provide: PermissionValidationService,
+                    useValue: { gateKodusCreditsForSlot },
+                },
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: {
+                        validateOrganizationLicense: jest
+                            .fn()
+                            .mockResolvedValue({
+                                valid: true,
+                                subscriptionStatus: 'active',
+                                planType: 'teams_byok_monthly',
+                            }),
+                    },
+                },
+            ],
+        }).compile();
+        stage = module.get<ValidateConfigStage>(ValidateConfigStage);
+    };
+
+    it('skips a heavy review on a Kodus model the Balanced model did not gate, with the credits comment', async () => {
+        await setup({
+            defaultModelId: 'm-A',
+            taskOverrides: { codeReviewHeavy: 'm-K' },
+        });
+
+        const result = await stage.execute(buildContext('heavy'));
+
+        expect(gateKodusCreditsForSlot).toHaveBeenCalledWith(
+            expect.objectContaining({ provider: 'kodus', model: kodusModel }),
+            { organizationId: 'org-1', teamId: 'team-1' },
+            'ValidateConfigStage',
+        );
+        expect(result.statusInfo?.status).toBe('skipped');
+        expect(result.pipelineMetadata?.notificationHandled).toBe(true);
+        expect(createIssueComment).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prNumber: 3,
+                body: KODUS_CREDITS_EXHAUSTED_COMMENT,
+            }),
+        );
+    });
+
+    it('posts no comment when status feedback is off', async () => {
+        await setup({
+            defaultModelId: 'm-A',
+            taskOverrides: { codeReviewHeavy: 'm-K' },
+        });
+
+        const result = await stage.execute(buildContext('heavy', false));
+
+        expect(result.statusInfo?.status).toBe('skipped');
+        expect(createIssueComment).not.toHaveBeenCalled();
+    });
+
+    it('reviews when the Kodus credits cover the heavy review', async () => {
+        await setup({
+            defaultModelId: 'm-A',
+            taskOverrides: { codeReviewHeavy: 'm-K' },
+        });
+        gateKodusCreditsForSlot.mockResolvedValue(null);
+
+        const result = await stage.execute(buildContext('heavy'));
+
+        expect(result.heavy).toBe(true);
+        expect(result.statusInfo?.status).not.toBe('skipped');
+        expect(result.codeReviewConfig.byokConfig?.provider).toBe('kodus');
+    });
+
+    it('checks the credits when a repository override routes a Balanced review to Kodus', async () => {
+        await setup({ defaultModelId: 'm-A' });
+        const context = buildContext('balanced');
+        (context.codeReviewConfig as any).byokModelId = 'm-K';
+
+        const result = await stage.execute(context);
+
+        expect(gateKodusCreditsForSlot).toHaveBeenCalledWith(
+            expect.objectContaining({ provider: 'kodus' }),
+            { organizationId: 'org-1', teamId: 'team-1' },
+            'ValidateConfigStage',
+        );
+        expect(result.statusInfo?.status).toBe('skipped');
+    });
+
+    it('does not read the credits when a repository override routes to the org key', async () => {
+        await setup({ defaultModelId: 'm-A' });
+        const context = buildContext('balanced');
+        (context.codeReviewConfig as any).byokModelId = 'm-B';
+
+        const result = await stage.execute(context);
+
+        expect(gateKodusCreditsForSlot).not.toHaveBeenCalled();
+        expect(result.statusInfo?.status).not.toBe('skipped');
+        expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-5-mini');
+    });
+
+    it.each([
+        [
+            'a Balanced review',
+            'balanced',
+            {
+                defaultModelId: 'm-A',
+                taskOverrides: { codeReviewHeavy: 'm-K' },
+            },
+        ],
+        [
+            'a heavy review on the org key',
+            'heavy',
+            {
+                defaultModelId: 'm-K',
+                taskOverrides: { codeReviewHeavy: 'm-A' },
+            },
+        ],
+        // The prerequisites already gated the Balanced model's Kodus credits.
+        [
+            'a heavy review when both models are Kodus',
+            'heavy',
+            { defaultModelId: 'm-K' },
+        ],
+    ])('does not read the credits again for %s', async (_, mode, routing) => {
+        await setup(routing);
+
+        const result = await stage.execute(buildContext(mode as any));
+
+        expect(gateKodusCreditsForSlot).not.toHaveBeenCalled();
+        expect(result.statusInfo?.status).not.toBe('skipped');
     });
 });

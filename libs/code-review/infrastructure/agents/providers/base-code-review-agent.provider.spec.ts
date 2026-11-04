@@ -566,6 +566,50 @@ describe('request assembly + byokConfig threading', () => {
         expect(loopParams.maxSteps).toBe(33);
     });
 
+    it('forwards heavy only to an agent that runs the lenses', async () => {
+        class LensAgent extends TestReviewAgent {
+            protected runsHeavyLenses(): boolean {
+                return true;
+            }
+        }
+        await new LensAgent({} as any, {} as any).execute(
+            makeInput({ heavy: true }),
+        );
+        await newAgent().execute(makeInput({ heavy: true }));
+        expect(runLoopMock.mock.calls[0][0].heavy).toBe(true);
+        // Kody Rules, custom agents and the rest never run them.
+        expect(runLoopMock.mock.calls[1][0].heavy).toBe(false);
+    });
+
+    class LensAgent extends TestReviewAgent {
+        protected runsHeavyLenses(): boolean {
+            return true;
+        }
+    }
+    const lensAgent = () => new LensAgent({} as any, {} as any);
+
+    it('forwards the batch of a chunked review, and none for a single run', async () => {
+        await lensAgent().execute(
+            makeInput({ heavy: true, batchIndex: 2, batchTotal: 3 }),
+        );
+        await lensAgent().execute(
+            makeInput({ heavy: true, batchIndex: 1, batchTotal: 1 }),
+        );
+        expect(runLoopMock.mock.calls[0][0].lensBatch).toEqual({
+            index: 2,
+            total: 3,
+        });
+        expect(runLoopMock.mock.calls[1][0].lensBatch).toBeUndefined();
+    });
+
+    it('forwards no batch for a chunked review that is not heavy', async () => {
+        await lensAgent().execute(
+            makeInput({ heavy: false, batchIndex: 2, batchTotal: 3 }),
+        );
+        expect(runLoopMock.mock.calls[0][0].heavy).toBe(false);
+        expect(runLoopMock.mock.calls[0][0].lensBatch).toBeUndefined();
+    });
+
     it('forwards previousDecisions onto loopParams explicitly (issue #1313)', async () => {
         const previousDecisions = [
             {

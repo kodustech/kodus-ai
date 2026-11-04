@@ -590,3 +590,70 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
         });
     });
 });
+
+describe('UpdateOrCreateCodeReviewParameterUseCase — heavy review mode', () => {
+    const FREE = {
+        valid: true,
+        subscriptionStatus: 'active',
+        planType: 'free_byok',
+    };
+
+    it.each(['web', 'cli', 'sync'])(
+        'saves heavy on Teams from a %s save',
+        async (source) => {
+            const configs = await buildUseCase().save(
+                { reviewMode: 'heavy' },
+                { source },
+            );
+
+            expect(configs.reviewMode).toBe('heavy');
+        },
+    );
+
+    it.each(['web', 'cli'])(
+        'on free, refuses a %s save asking for heavy, saying why',
+        async (source) => {
+            await expect(
+                buildUseCase({}, { license: FREE }).save(
+                    { reviewMode: 'heavy' },
+                    { source },
+                ),
+            ).rejects.toThrow(
+                'Heavy mode is available on the Teams and Enterprise plans',
+            );
+        },
+    );
+
+    it('on free, a kodus-config.yml sync leaves heavy out and keeps the stored mode and the other settings', async () => {
+        const configs = await buildUseCase(
+            { reviewMode: 'balanced' },
+            { license: FREE },
+        ).save(
+            { reviewMode: 'heavy', summary: { generatePRSummary: false } },
+            { source: 'sync' },
+        );
+
+        // Balanced is the default, so it is stored as no override.
+        expect(configs.reviewMode).toBeUndefined();
+        expect(configs.summary).toEqual({ generatePRSummary: false });
+    });
+
+    it('a sync replaces the stored config, so on free a stored heavy becomes Balanced', async () => {
+        const configs = await buildUseCase(
+            { reviewMode: 'heavy' },
+            { license: FREE },
+        ).save({ reviewMode: 'heavy' }, { source: 'sync' });
+
+        expect(configs.reviewMode).toBeUndefined();
+    });
+
+    it('on free, saves Balanced', async () => {
+        const configs = await buildUseCase(
+            { reviewMode: 'heavy' },
+            { license: FREE },
+        ).save({ reviewMode: 'balanced' }, { source: 'web' });
+
+        // Balanced is the default, so the save stores it as no override.
+        expect(configs.reviewMode ?? 'balanced').toBe('balanced');
+    });
+});

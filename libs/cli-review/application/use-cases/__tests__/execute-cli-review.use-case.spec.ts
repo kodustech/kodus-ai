@@ -76,6 +76,14 @@ function createMocks() {
 
     // Default: what the stored global and repository levels say, i.e. no
     // directory override and no kodus-config.yml.
+    const licenseService = {
+        validateOrganizationLicense: jest.fn().mockResolvedValue({
+            valid: true,
+            subscriptionStatus: 'active',
+            planType: 'teams_byok_monthly',
+        }),
+    };
+
     const codeBaseConfigService = {
         getMergedCodeReviewConfigs: jest
             .fn()
@@ -95,10 +103,12 @@ function createMocks() {
         kodyRulesValidationService as any,
         pipelineObserver as any,
         codeBaseConfigService as any,
+        licenseService as any,
     );
 
     return {
         useCase,
+        licenseService,
         codeManagementService,
         codeBaseConfigService,
         converter,
@@ -591,9 +601,24 @@ describe('ExecuteCliReviewUseCase', () => {
         });
 
         it.each([
-            ['the repository opted in', {}, { repoInstructionsEnabled: true }, true],
-            ['the repository opted out under a global on', { repoInstructionsEnabled: true }, { repoInstructionsEnabled: false }, false],
-            ['only the global level opted in', { repoInstructionsEnabled: true }, {}, true],
+            [
+                'the repository opted in',
+                {},
+                { repoInstructionsEnabled: true },
+                true,
+            ],
+            [
+                'the repository opted out under a global on',
+                { repoInstructionsEnabled: true },
+                { repoInstructionsEnabled: false },
+                false,
+            ],
+            [
+                'only the global level opted in',
+                { repoInstructionsEnabled: true },
+                {},
+                true,
+            ],
         ])(
             'resolves coding-agent instructions like PR reviews, with no directory or kodus-config.yml override: %s',
             async (_label, globalConfigs, repoConfigs, expected) => {
@@ -737,7 +762,10 @@ describe('ExecuteCliReviewUseCase', () => {
                 memoryRules: [],
             });
 
-            await (useCase as any).loadUserConfigWithRules(orgAndTeam, undefined);
+            await (useCase as any).loadUserConfigWithRules(
+                orgAndTeam,
+                undefined,
+            );
 
             expect(
                 kodyRulesService.syncRulesWithPlanLimit,
@@ -792,6 +820,192 @@ describe('ExecuteCliReviewUseCase', () => {
                 kodyRulesService.findByOrganizationId,
             ).not.toHaveBeenCalled();
             expect(result.issues).toHaveLength(0);
+
+            mockExecute.mockRestore();
+        });
+
+        it('runs heavy only when asked, and --fast with --heavy as fast only', async () => {
+            const { useCase } = createMocks();
+            jest.spyOn(
+                useCase as any,
+                'loadUserConfigWithRules',
+            ).mockResolvedValue({
+                config: (useCase as any).getDefaultConfig(),
+                repositoryId: 'global',
+                repositoryName: null,
+            });
+            const seen: any[] = [];
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: any) => {
+                    seen.push(context);
+                    return {
+                        cliResponse: {
+                            summary: 'No issues',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 100,
+                        },
+                    };
+                });
+
+            for (const config of [
+                {},
+                { heavy: true },
+                { fast: true, heavy: true },
+            ]) {
+                await useCase.execute({
+                    organizationAndTeamData: orgAndTeam,
+                    input: { diff: '+ hello', config } as any,
+                    isTrialMode: false,
+                });
+            }
+            // A trial review never runs heavy, whatever the request asks.
+            await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello', config: { heavy: true } } as any,
+                isTrialMode: true,
+            });
+
+            expect(seen.map((c) => c.heavy)).toEqual([
+                false,
+                true,
+                false,
+                false,
+            ]);
+            expect(
+                seen.map((c) => c.codeReviewConfig?.reviewMode === 'fast'),
+            ).toEqual([false, false, true, false]);
+
+            mockExecute.mockRestore();
+        });
+
+        it('runs Balanced and says why when the plan does not run heavy', async () => {
+            const { useCase, licenseService } = createMocks();
+            jest.spyOn(
+                useCase as any,
+                'loadUserConfigWithRules',
+            ).mockResolvedValue({
+                config: (useCase as any).getDefaultConfig(),
+                repositoryId: 'global',
+                repositoryName: null,
+            });
+            const seen: any[] = [];
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: any) => {
+                    seen.push(context);
+                    return {
+                        cliResponse: {
+                            summary: 'No issues',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 100,
+                        },
+                    };
+                });
+            licenseService.validateOrganizationLicense.mockResolvedValue({
+                valid: true,
+                subscriptionStatus: 'active',
+                planType: 'free_byok',
+            });
+
+            const asked = await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello', config: { heavy: true } } as any,
+                isTrialMode: false,
+            });
+            const notAsked = await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello', config: {} } as any,
+                isTrialMode: false,
+            });
+
+            expect(seen.map((c) => c.heavy)).toEqual([false, false]);
+            expect(asked.notices).toEqual([
+                expect.stringContaining(
+                    'Heavy mode is available on the Teams and Enterprise plans',
+                ),
+            ]);
+            expect(notAsked.notices).toBeUndefined();
+            expect(
+                licenseService.validateOrganizationLicense,
+            ).toHaveBeenCalledWith(orgAndTeam);
+
+            // A license read that fails runs Balanced too, with the notice.
+            licenseService.validateOrganizationLicense.mockRejectedValue(
+                new Error('billing down'),
+            );
+            const unreadable = await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello', config: { heavy: true } } as any,
+                isTrialMode: false,
+            });
+            expect(seen[2].heavy).toBe(false);
+            expect(unreadable.notices).toHaveLength(1);
+
+            mockExecute.mockRestore();
+        });
+
+        it('follows the review mode in settings unless --heavy or --balanced asks otherwise', async () => {
+            const { useCase } = createMocks();
+            jest.spyOn(
+                useCase as any,
+                'loadUserConfigWithRules',
+            ).mockResolvedValue({
+                config: {
+                    ...(useCase as any).getDefaultConfig(),
+                    reviewMode: 'heavy',
+                },
+                repositoryId: 'global',
+                repositoryName: null,
+            });
+            const seen: any[] = [];
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: any) => {
+                    seen.push(context);
+                    return {
+                        cliResponse: {
+                            summary: 'No issues',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 100,
+                        },
+                    };
+                });
+
+            for (const config of [
+                {},
+                { balanced: true },
+                { balanced: true, heavy: true },
+                { fast: true },
+            ]) {
+                await useCase.execute({
+                    organizationAndTeamData: orgAndTeam,
+                    input: { diff: '+ hello', config } as any,
+                    isTrialMode: false,
+                });
+            }
+
+            expect(seen.map((c) => c.heavy)).toEqual([
+                true,
+                false,
+                true,
+                false,
+            ]);
 
             mockExecute.mockRestore();
         });
@@ -900,7 +1114,9 @@ describe('ExecuteCliReviewUseCase', () => {
                 },
             });
 
-            expect(captured.reviewDirective).toBe('the auth /ReviewFocus logic');
+            expect(captured.reviewDirective).toBe(
+                'the auth /ReviewFocus logic',
+            );
             mockExecute.mockRestore();
         });
 

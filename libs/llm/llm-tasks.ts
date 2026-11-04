@@ -20,6 +20,10 @@
  */
 export const LLM_TASK = {
     codeReview: 'codeReview',
+    /** A heavy review (the generalist plus the M3 lenses), set in General
+     *  settings or asked with `--heavy`. `codeReview` stays the Balanced review.
+     *  Inherits the org default when unset, like every other task. */
+    codeReviewHeavy: 'codeReviewHeavy',
     /** The Kody-Rules review agent (categoryLabel 'kody_rules') — enforcing the
      *  org's authored rules on a PR. A distinct workload from the defect-finding
      *  agents (bug/perf/security/generalist) that stay under `codeReview`, so it

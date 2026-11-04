@@ -7,6 +7,7 @@ import {
     isKodyMentionNonReview,
     isReviewCommand,
     parseReviewDirective,
+    requestedReviewModeOf,
     parseCustomAgentCommand
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
@@ -645,6 +646,7 @@ export class ForgejoPullRequestHandler implements IWebhookEventHandler {
                                 : 'command',
                             triggerCommentId: comment?.id,
                             reviewDirective: parseReviewDirective(comment.body),
+                            requestedReviewMode: requestedReviewModeOf(comment.body),
                             onlyCustomAgent: customAgentSlug,
                             pull_request:
                                 pullRequestData ||

@@ -55,7 +55,7 @@ const PR = {
     prTitle: 'Apply a discount to the cart total',
     prBody: 'total() takes the discount the checkout page shows, in percent.',
     repositoryFullName: 'eval/funnel-controls',
-    reviewMode: 'normal',
+    reviewMode: 'balanced',
     repoBase: { 'src/cart.ts': BASE_CART },
     repoFiles: { 'src/cart.ts': HEAD_CART },
 };

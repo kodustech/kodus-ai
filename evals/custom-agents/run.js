@@ -103,7 +103,7 @@ function caseVars(c) {
         prTitle: c.prTitle,
         prBody: c.prBody,
         repositoryFullName: 'eval/custom-agents',
-        reviewMode: 'normal',
+        reviewMode: 'balanced',
         repoBase,
         repoFiles,
     };

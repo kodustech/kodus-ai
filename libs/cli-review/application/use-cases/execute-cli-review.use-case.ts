@@ -1,3 +1,12 @@
+import { isHeavyReview } from '@libs/code-review/domain/review-mode';
+import {
+    HEAVY_MODE_PLAN_REQUIRED,
+    isHeavyModePlanAllowed,
+} from '@libs/ee/heavy-mode/heavy-mode-plan';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
 import { Injectable, Inject } from '@nestjs/common';
 import { IdGenerator } from '@libs/core/utils/id-generator';
 import { createLogger } from '@libs/core/log/logger';
@@ -114,6 +123,8 @@ export class ExecuteCliReviewUseCase implements IUseCase {
         private readonly pipelineObserver: CodeReviewPipelineObserver,
         @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
         private readonly codeBaseConfigService: ICodeBaseConfigService,
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService: ILicenseService,
     ) {}
 
     async execute(params: ExecuteCliReviewInput): Promise<CliReviewResponse> {
@@ -207,6 +218,43 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 ? { ...codeReviewConfig, reviewMode: 'fast' as const }
                 : codeReviewConfig;
 
+            // Heavy mode: the M3 lenses run next to the generalist. The flag
+            // asked for, else the review mode in settings; a --fast review
+            // runs fast only. A trial review never runs heavy, and heavy runs
+            // on Teams and Enterprise only: elsewhere the review runs Balanced
+            // and says why.
+            const heavyAsked =
+                !isTrialMode &&
+                isHeavyReview(
+                    input.config?.heavy
+                        ? 'heavy'
+                        : input.config?.balanced
+                          ? 'balanced'
+                          : undefined,
+                    effectiveConfig?.reviewMode,
+                );
+            const heavy =
+                heavyAsked &&
+                (await isHeavyModePlanAllowed(
+                    this.licenseService,
+                    organizationAndTeamData,
+                    ExecuteCliReviewUseCase.name,
+                ));
+            const notices =
+                heavyAsked && !heavy ? [HEAVY_MODE_PLAN_REQUIRED] : undefined;
+            if (notices) {
+                this.logger.log({
+                    message:
+                        'Heavy mode asked on a plan that is not Teams/Enterprise — the CLI review runs Balanced',
+                    context: ExecuteCliReviewUseCase.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        teamId: organizationAndTeamData.teamId,
+                        correlationId,
+                    },
+                });
+            }
+
             const resolvedPlatform = await this.resolveCliPlatform(
                 organizationAndTeamData,
                 gitContext,
@@ -227,6 +275,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 // CLI equivalent of `@kody review focus on X` — same sanitize +
                 // cap as the PR-comment path. Steers the finder when set.
                 reviewDirective: normalizeReviewDirective(input.config?.focus),
+                heavy,
                 validSuggestions: [],
                 discardedSuggestions: [],
                 preparedFileContexts: [],
@@ -308,7 +357,6 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                           },
                       }
                     : undefined,
-
             };
 
             // 5. Execute pipeline
@@ -362,7 +410,15 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 },
             });
 
-            return result.cliResponse;
+            return notices
+                ? {
+                      ...result.cliResponse,
+                      notices: [
+                          ...(result.cliResponse.notices ?? []),
+                          ...notices,
+                      ],
+                  }
+                : result.cliResponse;
         } catch (error) {
             // Update execution as failed
             if (execution) {
@@ -596,7 +652,8 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 config: {
                     ...normalizedConfig,
                     languageResultPrompt:
-                        typeof (normalizedConfig as any).languageResultPrompt === 'string'
+                        typeof (normalizedConfig as any)
+                            .languageResultPrompt === 'string'
                             ? (normalizedConfig as any).languageResultPrompt
                             : 'en-US',
                     kodyRules: standardRules,

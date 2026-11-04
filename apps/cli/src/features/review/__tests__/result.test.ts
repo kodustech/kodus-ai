@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
     formatFailOnExitMessage,
+    formatHeavyTrialNotice,
     formatTrialCompletionMessage,
+    withHeavyTrialNotice,
     isHunkPlatformSupported,
     shouldFailReview,
     shouldUseHunkViewer,
@@ -148,5 +150,20 @@ describe('review result helpers', () => {
         expect(formatTrialCompletionMessage(rateLimitResult)).toBe(
             'Review complete! (Trial: 2/5 reviews today)',
         );
+    });
+
+    it('tells a trial review asked with --heavy that it runs without heavy mode', () => {
+        expect(formatHeavyTrialNotice(true)).toContain('kodus auth login');
+        expect(formatHeavyTrialNotice(false)).toBeNull();
+        expect(formatHeavyTrialNotice(undefined)).toBeNull();
+    });
+
+    it('carries the heavy notice in a trial result for callers that read no spinner', () => {
+        const trial = { summary: '', issues: [], filesAnalyzed: 1, duration: 1 } as unknown as TrialReviewResult;
+
+        expect(withHeavyTrialNotice(trial, true).notices).toEqual([
+            expect.stringContaining('kodus auth login'),
+        ]);
+        expect(withHeavyTrialNotice(trial, false)).toBe(trial);
     });
 });

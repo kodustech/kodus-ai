@@ -254,6 +254,12 @@ export type LLMConfigStatus = {
         /** Set when the env declares a model that cannot run (configured is false). */
         invalidReason?: string;
     };
+    /** The model id each review mode routes to at org level; `inherited` when
+     *  it is the org default. Absent without a BYOK config. */
+    reviewModels?: {
+        balanced: { modelId?: string; inherited: boolean };
+        heavy: { modelId?: string; inherited: boolean };
+    };
 };
 
 export const getLLMConfigStatus = async (): Promise<LLMConfigStatus> => {

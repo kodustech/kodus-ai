@@ -65,6 +65,7 @@ import {
 // Domain helper relocated out of the legacy file (Zod validation of findings).
 import { sanitizeFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import { LLM } from '@libs/llm/llm';
+import { AGENT_TIMEOUT_MS, timeoutSignal } from '@libs/llm/llm-call';
 import { extractJsonFromText } from '@libs/llm/structured-output-repair';
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -84,7 +85,7 @@ import { TITLE_PROMPT_SPEC } from '@libs/common/utils/codeManagement/suggestion-
 
 export const FINDER_DONE_TOOL = 'submitResult' as const;
 
-const finderLogger = createLogger('finder');
+export const finderLogger = createLogger('finder');
 
 /** A single finding as produced by the finder (matches the legacy
  *  FindingsOutput.suggestions item shape). */
@@ -243,7 +244,9 @@ export interface BuildFinderSpecParams {
     tools: ToolRegistry;
     /** The labels the agent may report; the done-tool offers only these. */
     labels?: readonly string[];
-    coverageLedger: ProgressLedger;
+    /** Diff coverage the agent must reach before it may finalize. Absent → no
+     *  completion gate (a heavy lens, whose one class is not the whole diff). */
+    coverageLedger?: ProgressLedger;
     compressor?: Compressor;
     maxSteps?: number;
     /** Provider options (reasoning/thinking config) forwarded to the model. */
@@ -298,9 +301,13 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         ...(params.compressor
             ? [new CompressionPolicy(params.compressor)]
             : []),
-        new CompletionGatePolicy(params.coverageLedger, {
-            doneToolName: FINDER_DONE_TOOL,
-        }),
+        ...(params.coverageLedger
+            ? [
+                  new CompletionGatePolicy(params.coverageLedger, {
+                      doneToolName: FINDER_DONE_TOOL,
+                  }),
+              ]
+            : []),
         // Ports the legacy "force-text": in the last steps, restrict to the done
         // tool so the agent finalizes instead of running out of steps with
         // nothing submitted (which would lose all findings).
@@ -532,7 +539,9 @@ const RECOVERY_SCHEMA = LEAN_RECOVERY;
  *  recovery leaves out would post missing. */
 const FULL_RECOVERY_SCHEMA = FULL_RECOVERY;
 
-const withRevisionId = (schema: typeof RECOVERY_SCHEMA | typeof FULL_RECOVERY_SCHEMA) =>
+const withRevisionId = (
+    schema: typeof RECOVERY_SCHEMA | typeof FULL_RECOVERY_SCHEMA,
+) =>
     z.object({
         suggestions: z.array(
             schema.shape.suggestions.element.extend({
@@ -582,18 +591,27 @@ export async function extractFindingsWithRecovery(
 
 export function recoverLeniently(err: unknown): FinderSuggestion[] {
     try {
-        const e = err as { text?: string; value?: unknown; cause?: { value?: unknown } };
+        const e = err as {
+            text?: string;
+            value?: unknown;
+            cause?: { value?: unknown };
+        };
         const raw =
-            e?.value ?? e?.cause?.value ?? (e?.text ? JSON.parse(extractJsonFromText(e.text) ?? e.text) : undefined);
+            e?.value ??
+            e?.cause?.value ??
+            (e?.text
+                ? JSON.parse(extractJsonFromText(e.text) ?? e.text)
+                : undefined);
         const list = (raw as { suggestions?: unknown })?.suggestions;
         if (!Array.isArray(list)) return [];
-        return list
-            .filter(
-                (s): s is Record<string, unknown> =>
-                    !!s &&
-                    typeof (s as Record<string, unknown>).relevantFile === 'string' &&
-                    typeof (s as Record<string, unknown>).suggestionContent === 'string',
-            ) as unknown as FinderSuggestion[];
+        return list.filter(
+            (s): s is Record<string, unknown> =>
+                !!s &&
+                typeof (s as Record<string, unknown>).relevantFile ===
+                    'string' &&
+                typeof (s as Record<string, unknown>).suggestionContent ===
+                    'string',
+        ) as unknown as FinderSuggestion[];
     } catch {
         // Best-effort: recovery must never break the review.
         return [];
@@ -784,7 +802,32 @@ export interface RunFinderWithVerifyParams {
      *  synthesis rescue asks only for missed findings within it. Absent →
      *  both run exactly as before. */
     laneFocus?: string;
+    /** Heavy mode: the M3 lenses (libs/ee/heavy-mode), started together with
+     *  the generalist. Their findings join the generalist's before verify.
+     *  Absent → light mode. */
+    heavyLenses?: HeavyLensRun;
 }
+
+/** What heavy mode's lenses found, to merge into the generalist's. */
+export interface HeavyLensRunResult {
+    suggestions: FinderSuggestion[];
+    usage: VerifyUsage;
+    passStats: RecallPassStat[];
+    investigatedFiles: Set<string>;
+}
+
+/** Runs heavy mode's lenses on the finder's runner. */
+export type HeavyLensRun = (
+    params: Pick<
+        RunFinderWithVerifyParams,
+        | 'runner'
+        | 'agentName'
+        | 'telemetryMetadata'
+        | 'recoverProse'
+        | 'modelId'
+    >,
+    ctx: ToolContext,
+) => Promise<HeavyLensRunResult>;
 
 export interface ConventionCheckParams {
     /** Reads a guide as it is on the PR's target branch. */
@@ -855,7 +898,7 @@ export interface FinderWithVerifyResult {
     passStats: RecallPassStat[];
 }
 
-const ZERO_VERIFY_USAGE: VerifyUsage = {
+export const ZERO_VERIFY_USAGE: VerifyUsage = {
     inputTokens: 0,
     outputTokens: 0,
     reasoningTokens: 0,
@@ -897,65 +940,101 @@ export async function runFinderWithVerify(
     ctx: ToolContext,
 ): Promise<FinderWithVerifyResult> {
     const baseT0 = Date.now();
-    const finderState = await params.runner.run(
-        params.finderSpec,
-        {
-            ...input,
-            ...toAiSdkTelemetryArgs(
-                buildLangfuseTelemetry(
-                    params.agentName ?? 'finder',
-                    params.telemetryMetadata,
+    // The lenses read nothing from the generalist, so they start with it and
+    // run while it and its synthesis rescue do.
+    const lensStop = new AbortController();
+    const lenses = params.heavyLenses
+        ? params.heavyLenses(params, {
+              ...ctx,
+              // A caller signal replaces the loop's own timeout
+              // (agent-loop-call), so the timeout comes along.
+              signal: AbortSignal.any([
+                  lensStop.signal,
+                  ctx.signal ?? timeoutSignal(AGENT_TIMEOUT_MS),
+              ]),
+          })
+        : null;
+    // A generalist that fails fails the review: stop the lenses rather than
+    // let them spend tokens on it. Everything up to the lenses' await sits in
+    // one block, so a throw anywhere in it stops them.
+    const stopLenses = (error: unknown): never => {
+        lensStop.abort(error);
+        throw error;
+    };
+    const { finderState, baseStat, recall } = await (async () => {
+        const finderState = await params.runner.run(
+            params.finderSpec,
+            {
+                ...input,
+                ...toAiSdkTelemetryArgs(
+                    buildLangfuseTelemetry(
+                        params.agentName ?? 'finder',
+                        params.telemetryMetadata,
+                    ),
                 ),
-            ),
-        },
-        ctx,
-    );
-    // Main finder findings — with prose-recovery applied (the same wrapper the
-    // recall passes use, so an omission in any pass is caught consistently).
-    const baseMs = Date.now() - baseT0;
-    const base = await extractFindingsWithRecovery(
-        finderState,
-        params.recoverProse,
-        { ...params.telemetryMetadata, modelId: params.modelId },
-    );
-    // The generalist as a pass, measured like the others: without it its cost
-    // and time only showed up summed into the review total (#1821).
-    const baseStat = passStatOf(finderState, {
-        label: 'generalist-base',
-        added: base.suggestions?.length ?? 0,
-        ms: baseMs,
-        startMs: 0,
-        startEpochMs: baseT0,
-    });
-
-    // RECALL PASS: synthesis rescue — one extra finder run that re-thinks from
-    // the evidence already gathered and surfaces concrete MISSED bugs BEFORE
-    // verify filters, dedup-merged into the candidate set. (Soft coverage: the
-    // coverage-recovery + 2nd/3rd-chance passes were removed to match the
-    // validated depth-first engine — main pass only, no coverage-forced re-runs.)
-    const recall = await runRecallPasses(
-        base,
-        {
-            runner: params.runner,
-            finderSpec: params.finderSpec,
+            },
+            ctx,
+        );
+        // Main finder findings — with prose-recovery applied (the same wrapper the
+        // recall passes use, so an omission in any pass is caught consistently).
+        const baseMs = Date.now() - baseT0;
+        const base = await extractFindingsWithRecovery(
             finderState,
-            userPrompt: input.prompt,
-            skipHeavyPasses: params.skipHeavyPasses,
-            skipSynthesisRescue: params.skipSynthesisRescue,
-            telemetryMetadata: params.telemetryMetadata,
-            modelId: params.modelId,
-            agentName: params.agentName,
-            recoverProse: params.recoverProse,
-            conventionGuides: params.conventionCheck?.guideFiles,
-            teamSystemTools: params.teamSystemTools,
-            laneScoped: !!params.laneFocus,
-        },
-        ctx,
-    );
+            params.recoverProse,
+            { ...params.telemetryMetadata, modelId: params.modelId },
+        );
+        // The generalist as a pass, measured like the others: without it its cost
+        // and time only showed up summed into the review total (#1821).
+        const baseStat = passStatOf(finderState, {
+            label: 'generalist-base',
+            added: base.suggestions?.length ?? 0,
+            ms: baseMs,
+            startMs: 0,
+            startEpochMs: baseT0,
+        });
+
+        // RECALL PASS: synthesis rescue — one extra finder run that re-thinks from
+        // the evidence already gathered and surfaces concrete MISSED bugs BEFORE
+        // verify filters, dedup-merged into the candidate set. (Soft coverage: the
+        // coverage-recovery + 2nd/3rd-chance passes were removed to match the
+        // validated depth-first engine — main pass only, no coverage-forced re-runs.)
+        const recall = await runRecallPasses(
+            base,
+            {
+                runner: params.runner,
+                finderSpec: params.finderSpec,
+                finderState,
+                userPrompt: input.prompt,
+                skipHeavyPasses: params.skipHeavyPasses,
+                skipSynthesisRescue: params.skipSynthesisRescue,
+                telemetryMetadata: params.telemetryMetadata,
+                modelId: params.modelId,
+                agentName: params.agentName,
+                recoverProse: params.recoverProse,
+                conventionGuides: params.conventionCheck?.guideFiles,
+                teamSystemTools: params.teamSystemTools,
+                laneScoped: !!params.laneFocus,
+            },
+            ctx,
+        );
+        return { finderState, baseStat, recall };
+    })().catch(stopLenses);
+    const lensResult = lenses ? await lenses : null;
     const reasoning = recall.findings.reasoning;
-    const suggestions = recall.findings.suggestions;
-    const recallUsage = recall.usage;
-    const passStats = [baseStat, ...recall.passStats];
+    const suggestions = lensResult
+        ? mergeSuggestions(recall.findings, {
+              reasoning: '',
+              suggestions: lensResult.suggestions,
+          }).suggestions
+        : recall.findings.suggestions;
+    const recallUsage = lensResult
+        ? sumVerifyUsage(recall.usage, lensResult.usage)
+        : recall.usage;
+    const passStats = [
+        baseStat,
+        ...recall.passStats,
+        ...(lensResult?.passStats ?? []),
+    ];
 
     if (suggestions.length === 0) {
         return {
@@ -1004,6 +1083,7 @@ export async function runFinderWithVerify(
     const investigated = new Set([
         ...strongFilesFromRun(finderState),
         ...(recall.investigatedFiles ?? []),
+        ...(lensResult?.investigatedFiles ?? []),
     ]);
     const hv2 = await verifyFindings(
         {
@@ -1488,7 +1568,7 @@ export function fileWasInvestigated(
     return false;
 }
 
-function sumVerifyUsage(a: VerifyUsage, b: VerifyUsage): VerifyUsage {
+export function sumVerifyUsage(a: VerifyUsage, b: VerifyUsage): VerifyUsage {
     return {
         inputTokens: a.inputTokens + b.inputTokens,
         outputTokens: a.outputTokens + b.outputTokens,
@@ -1576,7 +1656,7 @@ export interface RecallPassStat {
 
 /** One pass's stats from its run: steps (what maxSteps bounds; a step can
  *  fire several tool calls), tool calls, whole-file reads and tokens. */
-function passStatOf(
+export function passStatOf(
     state: RunState,
     pass: Pick<
         RecallPassStat,
@@ -1743,7 +1823,7 @@ function collectToolCalls(
     );
 }
 
-function usageOf(u: TokenUsage | undefined): VerifyUsage {
+export function usageOf(u: TokenUsage | undefined): VerifyUsage {
     return {
         inputTokens: u?.inputTokens ?? 0,
         outputTokens: u?.outputTokens ?? 0,

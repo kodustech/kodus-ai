@@ -63,6 +63,81 @@ Use uma diretiva para dizer *"olhe aqui com mais afinco"* — não *"olhe só aq
   </Tab>
 </Tabs>
 
+## Heavy mode
+
+Uma diretiva de foco diz ao Kody *onde* olhar com mais atenção. O `--heavy` diz para olhar de
+forma *mais ampla*: junto com a revisão de sempre, nove revisores especialistas leem o diff
+inteiro, cada um atrás de um único tipo de defeito:
+
+- código que diz uma coisa e faz outra (nomes, medições, resultados)
+- texto que chega a uma pessoa — mensagens, comentários, traduções — em desacordo com o código
+- estado inválido, invariantes quebradas e condições de corrida
+- suposições de limite, índice e ordem
+- segredos e identidade: comparações, normalização, valores de fallback
+- um contrato alterado que um chamador não acompanhou
+- testes que continuariam passando se o comportamento que cobrem quebrasse
+- dados vazando em respostas, logs e mensagens de erro
+- dois arquivos alterados que não concordam entre si
+
+Todo achado de especialista passa pela mesma verificação dos achados da revisão principal antes
+de qualquer coisa ser publicada, e depois pela deduplicação e severidade de sempre — então um
+palpite que não se sustenta é descartado como qualquer outro.
+
+### Heavy por padrão, ou para uma revisão
+
+A configuração **Review mode** em [Code review → General](/pt-BR/how_to_use/code_review/configs/general#modo-de-revisão)
+escolhe como toda revisão de um repositório roda: **Balanced** (o padrão, só a revisão principal) ou
+**Heavy**. Ela vale para as revisões automáticas, para o `@kody review` e para o `kodus review`. Uma
+flag em um comando a sobrescreve naquela revisão:
+
+```text
+@kody review --heavy
+@kody review --heavy focus on the payment reconciliation logic
+@kody review --balanced
+kodus review --heavy
+kodus review --balanced
+```
+
+O `--heavy` roda uma revisão heavy em um repositório configurado como Balanced; o `--balanced` roda
+uma revisão balanced em um repositório configurado como Heavy. Se um comando trouxer as duas, vence
+o `--heavy`.
+
+Qualquer uma das flags pode ficar em qualquer posição da linha — antes ou depois do texto de foco — e é
+removido da diretiva de qualquer jeito, então `@kody review foca na lógica de retry --heavy`
+foca em "foca na lógica de retry".
+
+As flags se combinam em qualquer ordem: `@kody review --heavy --force` roda uma revisão heavy
+forçada. Num pull request que a Kody já revisou, pedir o modo diferente do da última revisão revisa
+o pull request inteiro, não só os commits desde então.
+
+O traço é obrigatório: um `heavy` ou `balanced` solto é lido como texto de diretiva, então
+`@kody review heavy fluxo de checkout` foca em "heavy fluxo de checkout" em vez de ligar a flag.
+
+### O que esperar
+
+- **Disponível para todos**, na Cloud e no self-hosted. Sem pedido de acesso. Na CLI, exige um time logado (`kodus auth login`): uma revisão em modo trial roda sem ele e avisa.
+- **Suas categorias continuam valendo.** Os especialistas de uma categoria desligada não rodam:
+  sete são de Bug e dois de Security. Kody Rules e agentes customizados rodam como sempre.
+- **Roda no modelo Heavy.** Em **AI providers → Routing → Code Review**, o **Model for Heavy**
+  escolhe o modelo das revisões heavy e o **Model for Balanced** o das revisões balanced. Sem um
+  modelo Heavy definido, uma revisão heavy usa o padrão da organização. Um modelo definido para um
+  repositório ou diretório em **Code review → General** roda os dois modos.
+- **Custa mais e demora mais.** Na nossa avaliação com 30 pull requests, comparada ao Balanced no
+  mesmo modelo, a revisão heavy levou até cerca do dobro do tempo e cerca de 2,5 vezes o custo de
+  modelo por pull request. Ela encontrou cerca de um problema real a mais a cada dois pull requests
+  e publicou cerca de um comentário a mais por pull request que não era um problema real. Com a sua
+  própria chave de modelo (BYOK), o custo extra entra na conta do seu provedor, e um provedor com
+  limite de concorrência baixo pode enfileirar as chamadas.
+- **Sem acesso ao repositório** (sem sandbox), os especialistas leem só o diff, como a revisão
+  principal faz nesse caso.
+- A lista de pull requests mostra um selo **Heavy** nos PRs cuja última revisão rodou em heavy
+  mode.
+
+<Tip>
+  Defina Heavy como Review mode dos repositórios em que deixar algo passar sai caro — um serviço
+  de pagamentos, um módulo de auth — ou peça com `--heavy` em uma única mudança arriscada.
+</Tip>
+
 ## Escrevendo uma Boa Diretiva
 
 - **Seja específico sobre a área, não sobre o veredito.** "foque em concorrência no consumidor da fila" funciona melhor que "encontre bugs".

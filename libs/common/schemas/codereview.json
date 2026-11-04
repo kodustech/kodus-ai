@@ -234,6 +234,12 @@
             "default": true,
             "description": "Indicates whether automated review processes are currently active. A value of true means that automated reviews are enabled, while false means they are disabled."
         },
+        "reviewMode": {
+            "type": "string",
+            "enum": ["balanced", "heavy"],
+            "default": "balanced",
+            "description": "How deep a pull request review goes. balanced runs the main reviewer; heavy adds nine specialist reviewers for higher recall, at the cost of more model calls. A review command can ask for the other mode with --heavy or --balanced."
+        },
         "showStatusFeedback": {
             "type": "boolean",
             "default": true,

@@ -39,6 +39,7 @@ import {
     firstDuplicate,
     LimitationType,
     ReviewCadenceType,
+    SELECTABLE_REVIEW_MODES,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { cliInstallProblem } from '@libs/core/infrastructure/config/types/general/cli-install';
 import {
@@ -861,6 +862,10 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsBoolean()
     automatedReviewActive?: boolean;
+
+    @IsOptional()
+    @IsIn(SELECTABLE_REVIEW_MODES)
+    reviewMode?: (typeof SELECTABLE_REVIEW_MODES)[number];
 
     @IsOptional()
     @IsBoolean()
