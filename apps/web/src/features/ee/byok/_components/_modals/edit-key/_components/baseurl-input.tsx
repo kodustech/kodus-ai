@@ -52,7 +52,9 @@ export const ByokBaseURLInput = () => {
 
                     {optional && (
                         <FormControl.Helper>
-                            {`Your own proxy or gateway for ${foundProvider.name}'s API. Leave empty to call ${foundProvider.name} directly. For another vendor's server, pick the Compatible provider instead.`}
+                            {`Your own gateway for ${foundProvider.name}'s API, including its version (…/v1). Leave empty to call ${foundProvider.name} directly. For another vendor's server, pick the Compatible provider instead.`}
+                            {provider === "openai" &&
+                                " For Azure OpenAI, pick the Azure OpenAI provider."}
                         </FormControl.Helper>
                     )}
 
