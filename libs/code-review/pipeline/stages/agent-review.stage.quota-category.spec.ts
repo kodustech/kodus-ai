@@ -3,6 +3,7 @@ import { AgentReviewStage } from './agent-review.stage';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { LLM } from '@libs/llm/llm';
 import { hasManagedModelKey } from '@libs/llm/managed-slot';
+import { environment } from '@libs/ee/configs/environment';
 
 jest.mock(
     '@libs/code-review/infrastructure/agents/engine/classify-severity',
@@ -12,6 +13,9 @@ jest.mock(
     '@libs/code-review/infrastructure/agents/engine/format-suggestion-content',
     () => ({ formatSuggestionContent: jest.fn().mockResolvedValue(new Map()) }),
 );
+jest.mock('@libs/ee/configs/environment', () => ({
+    environment: { API_CLOUD_MODE: true },
+}));
 jest.mock('@libs/llm/managed-slot', () => {
     const actual = jest.requireActual('@libs/llm/managed-slot');
     return { ...actual, hasManagedModelKey: jest.fn(() => false) };
@@ -142,10 +146,22 @@ describe('AgentReviewStage — LLM error category on recorded failures (#2191)',
         expect(error?.metadata?.errorCategory).toBe('UNKNOWN');
     });
 
+    afterEach(() => {
+        environment.API_CLOUD_MODE = true;
+    });
+
     it.each([
-        ['the org brought its own key', { credentialId: 'cred-1' }, true],
-        ['the Kodus-managed key served the run', {}, false],
-    ])('records whether %s', async (_label, slot, orgOwnedKey) => {
+        ['the org brought its own key', true, { credentialId: 'cred-1' }, true],
+        ['the Kodus-managed key served the run', true, {}, false],
+        [
+            'a platform-funded kodus credential served the run',
+            true,
+            { provider: 'kodus', credentialId: 'cred-2' },
+            false,
+        ],
+        ['a self-hosted install used its env key', false, {}, true],
+    ])('records whether %s', async (_label, cloud, slot, orgOwnedKey) => {
+        environment.API_CLOUD_MODE = cloud;
         const { stage } = makeStage({
             suggestions: [],
             agentResults: [],
