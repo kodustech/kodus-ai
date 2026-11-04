@@ -19,7 +19,8 @@ import {
     buildFinderAgentSpec,
     runFinderWithVerify,
 } from '@libs/code-review/infrastructure/agents/core/finder.agent';
-import { HEAVY_LENS_SYSTEM_PROMPT } from '@libs/code-review/infrastructure/agents/core/heavy-lenses';
+import { runHeavyLensPasses } from './heavy-lens-passes';
+import { HEAVY_LENS_SYSTEM_PROMPT } from './heavy-lenses';
 
 const generalistFindings = {
     reasoning: 'generalist',
@@ -140,21 +141,26 @@ describe('runFinderWithVerify in heavy mode', () => {
                 modelId: 'mock',
                 tools,
                 skipSynthesisRescue: true,
-                lensPasses: [
-                    {
-                        label: 'lens-data-exposure',
-                        findingLabel: 'security',
-                        prompt: 'look for data exposure',
-                        spec: buildFinderAgentSpec({
-                            systemPrompt: HEAVY_LENS_SYSTEM_PROMPT,
-                            modelId: 'mock',
-                            tools,
-                            labels: ['security'],
-                            maxSteps: 3,
-                        }),
-                        maxFindings: 1,
-                    },
-                ],
+                heavyLenses: (params, lensCtx) =>
+                    runHeavyLensPasses(
+                        [
+                            {
+                                label: 'lens-data-exposure',
+                                findingLabel: 'security',
+                                prompt: 'look for data exposure',
+                                spec: buildFinderAgentSpec({
+                                    systemPrompt: HEAVY_LENS_SYSTEM_PROMPT,
+                                    modelId: 'mock',
+                                    tools,
+                                    labels: ['security'],
+                                    maxSteps: 3,
+                                }),
+                                maxFindings: 1,
+                            },
+                        ],
+                        params,
+                        lensCtx,
+                    ),
             },
             { prompt: 'review' },
             ctx,

@@ -209,8 +209,8 @@ const STAGES = [
                 kind: 'unit',
                 name: 'The lenses, their prompt, and the finder running them next to the generalist',
                 specs: [
-                    'libs/code-review/infrastructure/agents/core/heavy-lenses.spec.ts',
-                    'libs/code-review/infrastructure/agents/core/finder-heavy-lenses.spec.ts',
+                    'libs/ee/heavy-mode/heavy-lenses.spec.ts',
+                    'libs/ee/heavy-mode/heavy-lens-passes.spec.ts',
                     'libs/code-review/infrastructure/agents/core/core-agent-loop.adapter.spec.ts',
                     'libs/code-review/infrastructure/agents/providers/base-code-review-agent.provider.spec.ts',
                     'libs/common/utils/codeManagement/codeCommentMarkers.spec.ts',

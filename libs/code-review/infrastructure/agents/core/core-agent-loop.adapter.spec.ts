@@ -28,7 +28,7 @@ import {
     HEAVY_LENSES,
     HEAVY_LENS_SELF_CONTAINED_SYSTEM_PROMPT,
     HEAVY_LENS_SYSTEM_PROMPT,
-} from '@libs/code-review/infrastructure/agents/core/heavy-lenses';
+} from '@libs/ee/heavy-mode/heavy-lenses';
 
 const mockResolve = resolveModelConfig as jest.Mock;
 
