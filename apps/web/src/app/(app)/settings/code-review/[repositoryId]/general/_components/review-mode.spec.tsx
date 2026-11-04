@@ -11,6 +11,8 @@ import {
 import type { ScopedCodeReviewConfig } from "src/app/(app)/settings/_components/code-review-config-scope";
 
 import { FormattedConfigLevel, type CodeReviewFormType } from "../../../_types";
+import { SubscriptionProvider } from "src/features/ee/subscription/_providers/subscription-context";
+
 import { ReviewMode } from "./review-mode";
 
 jest.mock("next/navigation", () => ({
@@ -46,31 +48,61 @@ const scopedConfig = (partial: Record<string, unknown> = {}) =>
         ...partial,
     }) as unknown as ScopedCodeReviewConfig;
 
+const TEAMS = {
+    valid: true,
+    subscriptionStatus: "active",
+    planType: "teams_byok",
+    numberOfLicenses: 5,
+} as const;
+const FREE = { ...TEAMS, planType: "free_byok" } as const;
+
 const Harness = ({
     llmConfigStatus,
     config = scopedConfig(),
+    license = TEAMS,
 }: {
     llmConfigStatus: LLMConfigStatus | null;
     config?: ScopedCodeReviewConfig;
+    license?: typeof TEAMS | typeof FREE;
 }) => {
     const methods = useForm<CodeReviewFormType>({
         defaultValues: {} as CodeReviewFormType,
     });
     return (
-        <TooltipProvider>
-            <FormProvider {...methods}>
-                <ScopedCodeReviewConfigProvider config={config}>
-                    <CodeReviewModelDataProvider
-                        value={{ llmConfigStatus, byokModels: [] }}>
-                        <ReviewMode />
-                    </CodeReviewModelDataProvider>
-                </ScopedCodeReviewConfigProvider>
-            </FormProvider>
-        </TooltipProvider>
+        <SubscriptionProvider
+            license={license as any}
+            usersWithAssignedLicense={[]}>
+            <TooltipProvider>
+                <FormProvider {...methods}>
+                    <ScopedCodeReviewConfigProvider config={config}>
+                        <CodeReviewModelDataProvider
+                            value={{ llmConfigStatus, byokModels: [] }}>
+                            <ReviewMode />
+                        </CodeReviewModelDataProvider>
+                    </ScopedCodeReviewConfigProvider>
+                </FormProvider>
+            </TooltipProvider>
+        </SubscriptionProvider>
     );
 };
 
 describe("ReviewMode", () => {
+    it("locks Heavy with the plan tag on free, and keeps Balanced pickable", () => {
+        render(<Harness llmConfigStatus={status()} license={FREE} />);
+
+        const [balanced, heavy] = screen.getAllByRole("radio");
+        expect(heavy).toBeDisabled();
+        expect(balanced).not.toBeDisabled();
+        expect(screen.getByText("Teams/Enterprise")).toBeInTheDocument();
+    });
+
+    it("lets Teams pick Heavy, with no plan tag", () => {
+        render(<Harness llmConfigStatus={status()} />);
+
+        expect(screen.getAllByRole("radio")[1]).not.toBeDisabled();
+        expect(screen.queryByText("Teams/Enterprise")).not.toBeInTheDocument();
+    });
+
     it("shows each mode's model read-only, with the routing link, and follows the picked mode", () => {
         render(<Harness llmConfigStatus={status()} />);
 

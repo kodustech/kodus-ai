@@ -6,6 +6,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import type { BYOKConfig } from "../../_types";
 import { ModelCombobox, type PoolModel } from "../routing/task-override-grid";
+import { SubscriptionProvider } from "src/features/ee/subscription/_providers/subscription-context";
 import { RoutingTab } from "./routing-tab";
 
 jest.mock("next/navigation", () => ({
@@ -195,19 +196,44 @@ describe("ModelCombobox — per-agent picker", () => {
 });
 
 describe("RoutingTab — Code Review card", () => {
-    it("routes Balanced through codeReview and Heavy through its own row, Heavy inheriting the default when unset", () => {
+    const renderCard = (planType: "teams_byok" | "free_byok") =>
         render(
-            <TooltipProvider>
-                <RoutingTab
-                    config={openRouterConfig(MODELS, {
-                        defaultModelId: "m-1",
-                        taskOverrides: { codeReview: "m-3" },
-                    })}
-                    llmConfigStatus={null}
-                    onGoToProviders={jest.fn()}
-                />
-            </TooltipProvider>,
+            <SubscriptionProvider
+                license={
+                    {
+                        valid: true,
+                        subscriptionStatus: "active",
+                        planType,
+                        numberOfLicenses: 5,
+                    } as any
+                }
+                usersWithAssignedLicense={[]}>
+                <TooltipProvider>
+                    <RoutingTab
+                        config={openRouterConfig(MODELS, {
+                            defaultModelId: "m-1",
+                            taskOverrides: { codeReview: "m-3" },
+                        })}
+                        llmConfigStatus={null}
+                        onGoToProviders={jest.fn()}
+                    />
+                </TooltipProvider>
+            </SubscriptionProvider>,
         );
+
+    it("locks the Heavy row with the plan tag on free", () => {
+        renderCard("free_byok");
+
+        const heavy = screen.getByText("Model for Heavy").parentElement!;
+        expect(heavy).toHaveTextContent("Teams/Enterprise");
+        expect(heavy).toHaveTextContent(
+            "Heavy mode is on the Teams and Enterprise plans.",
+        );
+        expect(heavy).not.toHaveTextContent(/Use default/);
+    });
+
+    it("routes Balanced through codeReview and Heavy through its own row, Heavy inheriting the default when unset", () => {
+        renderCard("teams_byok");
 
         const balanced = screen.getByText("Model for Balanced").parentElement!;
         const heavy = screen.getByText("Model for Heavy").parentElement!;

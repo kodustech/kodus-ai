@@ -12,6 +12,11 @@ import {
 } from "src/app/(app)/settings/_components/context";
 import { OverrideIndicatorForm } from "src/app/(app)/settings/code-review/_components/override";
 import { formatModelLabel } from "src/features/ee/byok/_data/model-label";
+import {
+    HEAVY_MODE_PLAN_TAG,
+    isHeavyModePlan,
+} from "src/features/ee/heavy-mode/plan";
+import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
 import type { CodeReviewFormType } from "../../../_types";
 
@@ -42,6 +47,8 @@ const ROUTING_HREF = "/byok?tab=routing";
 export const ReviewMode = () => {
     const form = useFormContext<CodeReviewFormType>();
     const config = useCodeReviewConfig();
+    // Heavy runs on Teams and Enterprise only; elsewhere it shows, disabled.
+    const heavyAllowed = isHeavyModePlan(useSubscriptionContext().license);
 
     return (
         <Controller
@@ -69,27 +76,44 @@ export const ReviewMode = () => {
                         onValueChange={field.onChange}
                         disabled={field.disabled}
                         className="grid gap-2 sm:grid-cols-2">
-                        {MODES.map((mode) => (
-                            <Label
-                                key={mode.value}
-                                className="bg-card-lv2 has-[[data-state=checked]]:border-primary-light flex cursor-pointer items-start gap-3 rounded-xl border border-transparent px-4 py-3">
-                                <RadioGroup.Item
-                                    value={mode.value}
-                                    className="mt-0.5"
-                                />
-                                <span className="flex flex-col">
-                                    <span className="text-text-primary text-sm font-medium">
-                                        {mode.title}
+                        {MODES.map((mode) => {
+                            const locked =
+                                mode.value === "heavy" && !heavyAllowed;
+                            return (
+                                <Label
+                                    key={mode.value}
+                                    aria-disabled={locked || undefined}
+                                    className={
+                                        locked
+                                            ? "bg-card-lv2 flex cursor-not-allowed items-start gap-3 rounded-xl border border-transparent px-4 py-3 opacity-60"
+                                            : "bg-card-lv2 has-[[data-state=checked]]:border-primary-light flex cursor-pointer items-start gap-3 rounded-xl border border-transparent px-4 py-3"
+                                    }>
+                                    <RadioGroup.Item
+                                        value={mode.value}
+                                        disabled={locked}
+                                        className="mt-0.5"
+                                    />
+                                    <span className="flex flex-col">
+                                        <span className="text-text-primary flex items-center gap-2 text-sm font-medium">
+                                            {mode.title}
+                                            {locked && (
+                                                <Badge>
+                                                    {HEAVY_MODE_PLAN_TAG}
+                                                </Badge>
+                                            )}
+                                        </span>
+                                        <span className="text-text-secondary text-xs">
+                                            {mode.description}
+                                        </span>
                                     </span>
-                                    <span className="text-text-secondary text-xs">
-                                        {mode.description}
-                                    </span>
-                                </span>
-                            </Label>
-                        ))}
+                                </Label>
+                            );
+                        })}
                     </RadioGroup.Root>
 
-                    <ReviewModels selected={(field.value as Mode) ?? "balanced"} />
+                    <ReviewModels
+                        selected={(field.value as Mode) ?? "balanced"}
+                    />
                 </div>
             )}
         />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
     Command,
@@ -31,6 +32,7 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
+import { HEAVY_MODE_PLAN_TAG } from "src/features/ee/heavy-mode/plan";
 
 import type { LlmTask } from "../../_types";
 import { modelLabelFor, TASK_DESCRIPTIONS } from "../../_utils";
@@ -397,11 +399,16 @@ const IconTile = ({ Icon }: { Icon: LucideIcon }) => (
  * provider avatar + value. Kody Rules groups its Review + Generation sub-rows in
  * one card. Backend is untouched — each control still writes taskOverrides[task].
  */
-export const TaskOverrideGrid = (props: {
+export const TaskOverrideGrid = ({
+    heavyPlanAllowed = true,
+    ...props
+}: {
     models: PoolModel[];
     defaultModelId?: string;
     taskOverrides: Partial<Record<LlmTask, string>>;
     onChange: (task: LlmTask, modelId: string | undefined) => void;
+    /** Heavy runs on Teams and Enterprise only; elsewhere its row is locked. */
+    heavyPlanAllowed?: boolean;
 }) => {
     return (
         <div className="flex flex-col gap-3">
@@ -435,10 +442,22 @@ export const TaskOverrideGrid = (props: {
                                     : `task:${row.task}`
                             }
                             className="border-card-lv3/50 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-                            <span className="text-text-primary text-sm">
+                            <span className="text-text-primary flex items-center gap-2 text-sm">
                                 {row.label}
+                                {row.task === "codeReviewHeavy" &&
+                                    !heavyPlanAllowed && (
+                                        <Badge>{HEAVY_MODE_PLAN_TAG}</Badge>
+                                    )}
                             </span>
-                            <TaskModelControl task={row.task} {...props} />
+                            {row.task === "codeReviewHeavy" &&
+                            !heavyPlanAllowed ? (
+                                <span className="text-text-tertiary text-xs">
+                                    Heavy mode is on the Teams and Enterprise
+                                    plans.
+                                </span>
+                            ) : (
+                                <TaskModelControl task={row.task} {...props} />
+                            )}
                         </div>
                     ))}
                 </div>
