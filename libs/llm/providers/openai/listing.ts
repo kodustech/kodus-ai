@@ -1,4 +1,5 @@
 import type { ModelListing } from '../kernel/types';
+import { OPENAI_API_BASE_URL } from './endpoint';
 import {
     bearerHeaders,
     catalogWithReasoning,
@@ -18,8 +19,6 @@ const NON_CHAT_OPENAI_MODEL =
 export function isOpenAiChatModelId(id: string): boolean {
     return !NON_CHAT_OPENAI_MODEL.test(id);
 }
-
-const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
 
 /** Native OpenAI: OpenAI's API, or the credential's own OpenAI-protocol proxy
  *  when it carries a base URL. Bearer, reasoning derived from the cap table. */

@@ -23,6 +23,9 @@
  */
 import { isOpenAiReasonerId } from '../kernel/model-family';
 
+/** OpenAI's own API, the native provider's default base URL. */
+export const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
+
 /** A base URL on OpenAI's own API host. */
 export function isOpenAiHost(baseURL: string | undefined): boolean {
     if (!baseURL) return false;

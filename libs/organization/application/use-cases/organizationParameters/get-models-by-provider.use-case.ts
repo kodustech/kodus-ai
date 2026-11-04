@@ -297,6 +297,15 @@ export class GetModelsByProviderUseCase {
             // credential, so surface the failure (→ the UI's "type the model id"
             // fallback) rather than masking a bad key behind the curated list.
             // Only the keyless/saved path degrades to the curated catalog.
+            const failure = {
+                organizationId: organizationAndTeamData?.organizationId,
+                provider,
+                host: targetOrigin,
+                userEndpoint: targetsUserEndpoint,
+                status: axios.isAxiosError(error)
+                    ? error.response?.status
+                    : undefined,
+            };
             if (!hasCandidateCredential) {
                 const fb = listingFallback();
                 if (fb) {
@@ -309,12 +318,7 @@ export class GetModelsByProviderUseCase {
                         message: `Live model listing for ${provider} failed; served curated fallback`,
                         context: GetModelsByProviderUseCase.name,
                         error: error as Error,
-                        metadata: {
-                            organizationId:
-                                organizationAndTeamData?.organizationId,
-                            provider,
-                            host: targetOrigin,
-                        },
+                        metadata: failure,
                     });
                     return fb;
                 }
@@ -323,15 +327,7 @@ export class GetModelsByProviderUseCase {
                 message: `Live model listing for ${provider} failed`,
                 context: GetModelsByProviderUseCase.name,
                 error: error as Error,
-                metadata: {
-                    organizationId: organizationAndTeamData?.organizationId,
-                    provider,
-                    host: targetOrigin,
-                    userEndpoint: targetsUserEndpoint,
-                    status: axios.isAxiosError(error)
-                        ? error.response?.status
-                        : undefined,
-                },
+                metadata: failure,
             });
             throw new BadRequestException(
                 `Error fetching ${provider} models: ${(error as Error).message}`,

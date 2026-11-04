@@ -22,6 +22,7 @@ import {
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
 import { registerProvider } from '../kernel/registry';
 import { isOpenAiReasoner, openaiReasoningConfig } from './reasoning';
+import { OPENAI_API_BASE_URL } from './endpoint';
 import { notStoredByOpenAi } from './not-stored';
 import { openAiModelListing } from './listing';
 import type {
@@ -392,7 +393,7 @@ export const openaiModule: ProviderModule = {
             type: 'url',
             required: false,
             scope: 'top',
-            placeholder: 'https://api.openai.com/v1',
+            placeholder: OPENAI_API_BASE_URL,
             offeredInForm: true,
         },
     ],
