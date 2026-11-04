@@ -867,7 +867,7 @@ export class CheckIfPRCanBeApprovedCronProvider {
                 repositoryId: repository?.id,
             });
         // Read partial executions so a failed rerun cannot expose an older
-        // successful judgment. Partial reviews remain ineligible for approval.
+        // successful judgment. Partial reviews cannot issue a new approval.
         if (
             lastExecution?.status === AutomationStatus.PARTIAL_ERROR &&
             !policyActive
@@ -954,6 +954,41 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     return false;
                 }
                 if (lastExecution.status === AutomationStatus.PARTIAL_ERROR) {
+                    // The approval can succeed before publishing its explanation
+                    // fails. Repair that comment only after verifying the host;
+                    // a saved decision alone must never replay a partial review.
+                    if (reviewedDecision?.kind === 'approve') {
+                        const hostStatus = await runWithBoundedTimeout(
+                            this.codeManagementService.getReviewStatusByPullRequest(
+                                codeManagementRequestData,
+                            ),
+                            FINAL_PROVIDER_TIMEOUT_MS,
+                            'approval provider-status lookup',
+                        ).catch((error) => {
+                            this.logger.warn({
+                                message:
+                                    'Could not verify approval for partial review reconciliation',
+                                context:
+                                    CheckIfPRCanBeApprovedCronProvider.name,
+                                error,
+                                metadata: {
+                                    organizationAndTeamData,
+                                    repositoryId: repository?.id,
+                                    prNumber,
+                                },
+                            });
+                            return null;
+                        });
+                        if (hostStatus == null) return false;
+                        if (hostStatus === PullRequestReviewState.APPROVED) {
+                            await this.postConditionalApprovalReason(
+                                codeManagementRequestData,
+                                platformType,
+                                reviewedDecision,
+                            );
+                            return false;
+                        }
+                    }
                     await this.postConditionalApprovalReason(
                         codeManagementRequestData,
                         platformType,

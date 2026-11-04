@@ -141,14 +141,14 @@ export class RefreshCodeAreaRiskMapCron {
             if (!repositories.length) return;
 
             // Risk approval users first. Within each group: unfinished scans,
-            // They may exhaust all 40 batches; other repositories use only
-            // remaining capacity, even when they have never been scanned.
             // then never scanned, then complete ones
             // stalest first: a fixed rotation left first scans incomplete for
             // weeks while finished repositories were refreshed, and a scan the
             // last run's budget cut short must not wait behind every repository
             // never scanned. A status that could not be read goes last instead
-            // of passing as never scanned.
+            // of passing as never scanned. Risk approval users may exhaust all
+            // 40 batches; other repositories use only remaining capacity, even
+            // when they have never been scanned.
             const limit = pLimit(STATUS_READ_CONCURRENCY);
             const statuses = await Promise.all(
                 repositories.map((repo) =>
