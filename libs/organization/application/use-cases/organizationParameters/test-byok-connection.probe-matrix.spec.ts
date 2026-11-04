@@ -126,6 +126,53 @@ describe('connection probe covers every registered provider', () => {
         expect(result.httpStatus).toBe(404);
     });
 
+    describe('native OpenAI on a base URL without an API version (#2150)', () => {
+        const notFound = () => {
+            const err: any = new Error('Not Found');
+            err.name = 'AI_APICallError';
+            err.statusCode = 404;
+            generateText.mockRejectedValue(err);
+        };
+
+        it('suggests /v1 when the 404 came from <host>/responses', async () => {
+            notFound();
+            const result = await useCase().execute({
+                provider: 'openai',
+                apiKey: 'sk-test',
+                baseURL: 'https://llm-proxy.example.com',
+                model: 'gpt-5.4-mini',
+            });
+
+            expect(result.code).toBe('not_found');
+            expect(result.message).toContain(
+                'https://llm-proxy.example.com/v1',
+            );
+        });
+
+        it('says nothing about a version the URL already has', async () => {
+            notFound();
+            const result = await useCase().execute({
+                provider: 'openai',
+                apiKey: 'sk-test',
+                baseURL: 'https://llm-proxy.example.com/v1',
+                model: 'gpt-5.4-mini',
+            });
+
+            expect(result.message).not.toContain('/v1');
+        });
+
+        it('says nothing on a direct key, which has no base URL', async () => {
+            notFound();
+            const result = await useCase().execute({
+                provider: 'openai',
+                apiKey: 'sk-test',
+                model: 'nope',
+            });
+
+            expect(result.message).not.toContain('/v1');
+        });
+    });
+
     it('treats a bad key as an auth failure', async () => {
         const err: any = new Error('invalid api key');
         err.name = 'AI_APICallError';

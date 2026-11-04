@@ -1,6 +1,7 @@
 import {
     describeBaseUrlProblem,
     describeProtocolMismatch,
+    suggestApiVersion,
 } from '@libs/llm/base-url-hygiene';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import { isPlatformFundedProvider } from '@libs/llm/platform-funded-provider';
@@ -508,7 +509,21 @@ export class TestByokConnectionUseCase {
             await assertSafeOpenAICompatibleUrl(effectiveBaseURL);
         }
 
-        return await this.probeViaRuntime(input, effectiveBaseURL);
+        const result = await this.probeViaRuntime(input, effectiveBaseURL);
+        // Native OpenAI dials `<base URL>/responses` verbatim, so a gateway URL
+        // typed without its version 404s on every call (#2150).
+        const versioned =
+            result.code === 'not_found' &&
+            byokProvider === BYOKProvider.OPENAI &&
+            effectiveBaseURL
+                ? suggestApiVersion(effectiveBaseURL)
+                : undefined;
+        return versioned
+            ? {
+                  ...result,
+                  message: `${result.message ?? ''} The base URL has no API version, and OpenAI-protocol gateways usually serve under /v1: try ${versioned}.`.trim(),
+              }
+            : result;
     }
 
     /**

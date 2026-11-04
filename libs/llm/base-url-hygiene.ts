@@ -167,3 +167,22 @@ export function describeProtocolMismatch(
         `upstream's OpenAI-compatible path instead.`
     );
 }
+
+/**
+ * The URL with `/v1` added, when its path ends without an API version
+ * (`/v1`, `/v4`, …); `undefined` when it already has one. Asked only after a
+ * 404: the SDK appends its endpoint verbatim, so `https://proxy.example.com`
+ * dials `/responses` where most OpenAI-protocol gateways serve `/v1/responses`.
+ * Never applied silently — some upstreams really do live at the bare origin.
+ */
+export function suggestApiVersion(rawUrl: string): string | undefined {
+    let parsed: URL;
+    try {
+        parsed = new URL(rawUrl);
+    } catch {
+        return undefined;
+    }
+    const path = parsed.pathname.replace(/\/+$/, '');
+    if (/\/v\d+$/i.test(path)) return undefined;
+    return `${parsed.origin}${path}/v1`;
+}
