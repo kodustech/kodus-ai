@@ -319,10 +319,10 @@ export const parseReviewDirective = (
             // Drop `--heavy`/`--balanced`/`--force` flags left ANYWHERE in the directive.
             // The head pattern only eats LEADING flags, so a flag placed after
             // (or between) the focus text — `@kody review auth --heavy` — would
-            // otherwise pollute the <ReviewFocus> hint. Ending where no word character or dash
-            // follows keeps focus words like "forced"/"--force-push" intact; the global flag handles
+            // otherwise pollute the <ReviewFocus> hint. A flag no word character or dash
+            // touches keeps "forced", "--force-push" and "well-balanced" intact; the global flag handles
             // multiple flags in any order. Whitespace is collapsed downstream.
-            .replace(/\s*--?(?:heavy|balanced|force)(?![\w-])/gi, ''),
+            .replace(/\s*(?<![\w-])--?(?:heavy|balanced|force)(?![\w-])/gi, ''),
     );
 };
 

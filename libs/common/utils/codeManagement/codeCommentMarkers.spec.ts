@@ -477,6 +477,15 @@ describe('review flags inside prose', () => {
         expect(isForceReviewCommand(text)).toBe(true);
     });
 
+    it('keeps hyphenated focus words in the directive', () => {
+        expect(
+            parseReviewDirective('@kody review the API is well-balanced.'),
+        ).toBe('the API is well-balanced.');
+        expect(
+            requestedReviewModeOf('@kody review the API is well-balanced.'),
+        ).toBeUndefined();
+    });
+
     it('reads --heavy followed by punctuation', () => {
         expect(requestedReviewModeOf('@kody review `--heavy`')).toBe('heavy');
         expect(requestedReviewModeOf('@kody review --balanced.')).toBe(
