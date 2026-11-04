@@ -113,7 +113,7 @@ function stripFence(code: string): string {
 }
 
 /** One enrichment call; past it the suggestion keeps its cited code. */
-const ENRICH_TIMEOUT_MS = 120_000;
+const ENRICH_TIMEOUT_MS = 200_000;
 
 export async function enrichOneShot(
     input: EnrichmentInput,
