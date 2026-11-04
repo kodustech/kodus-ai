@@ -581,6 +581,20 @@ describe('request assembly + byokConfig threading', () => {
         expect(runLoopMock.mock.calls[1][0].heavy).toBe(false);
     });
 
+    it('forwards the batch of a chunked review, and none for a single run', async () => {
+        await newAgent().execute(
+            makeInput({ heavy: true, batchIndex: 2, batchTotal: 3 }),
+        );
+        await newAgent().execute(
+            makeInput({ heavy: true, batchIndex: 1, batchTotal: 1 }),
+        );
+        expect(runLoopMock.mock.calls[0][0].lensBatch).toEqual({
+            index: 2,
+            total: 3,
+        });
+        expect(runLoopMock.mock.calls[1][0].lensBatch).toBeUndefined();
+    });
+
     it('forwards previousDecisions onto loopParams explicitly (issue #1313)', async () => {
         const previousDecisions = [
             {

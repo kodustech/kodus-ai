@@ -359,6 +359,7 @@ export async function runAgentLoopViaCore(
                   lensDiff,
                   claudeWording,
                   isSelfContained,
+                  input.lensBatch,
               ),
               spec: buildFinderAgentSpec({
                   systemPrompt: isSelfContained

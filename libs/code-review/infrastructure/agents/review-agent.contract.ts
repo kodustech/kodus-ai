@@ -464,6 +464,9 @@ export interface AgentLoopInput {
      *  findings join its before verify (opt-in per review via CLI `--heavy`
      *  or PR `@kody review --heavy`). */
     heavy?: boolean;
+    /** Heavy mode on a chunked review: the batch this run covers, so the
+     *  lenses are not told one batch is the whole pull request. */
+    lensBatch?: { index: number; total: number };
     /** Gated A/B knob (default off): wrap readFile so a range-less read of a
      *  large file returns a symbol outline + expand hint instead of dumping the
      *  head — fewer model tokens. Off = current behavior. */

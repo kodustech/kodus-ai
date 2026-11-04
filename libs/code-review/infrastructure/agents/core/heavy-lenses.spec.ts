@@ -74,4 +74,37 @@ describe('heavy lenses (M3)', () => {
         expect(prompt).not.toContain('grep to confirm');
         expect(prompt).toContain('only the diff');
     });
+
+    it('tell a lens of a chunked review that it sees one batch, not the whole PR', () => {
+        const whole = buildHeavyLensPrompt(HEAVY_LENSES[0], 'diff');
+        expect(whole).toContain('The diff above is the whole pull request.');
+
+        const batch = buildHeavyLensPrompt(
+            HEAVY_LENSES[0],
+            'diff',
+            false,
+            false,
+            {
+                index: 2,
+                total: 3,
+            },
+        );
+        expect(batch).not.toContain('whole pull request');
+        expect(batch).toContain('batch 2 of 3 of this pull request');
+        expect(batch).toContain('read that code with the tools');
+
+        const noSandbox = buildHeavyLensPrompt(
+            HEAVY_LENSES[0],
+            'diff',
+            false,
+            true,
+            {
+                index: 1,
+                total: 2,
+            },
+        );
+        expect(noSandbox).toContain(
+            'Do not report a defect that depends on how code outside',
+        );
+    });
 });

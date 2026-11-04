@@ -772,6 +772,14 @@ export abstract class BaseCodeReviewAgentProvider {
                     // Heavy mode (`--heavy`) — forwarded explicitly: loopParams is
                     // built field-by-field, so without this line the lenses never run.
                     heavy: this.runsHeavyLenses() && input.heavy,
+                    // A chunked review runs the lenses per batch: tell them so.
+                    ...(input.batchIndex &&
+                        (input.batchTotal ?? 0) > 1 && {
+                            lensBatch: {
+                                index: input.batchIndex,
+                                total: input.batchTotal,
+                            },
+                        }),
                     outlineFirst: input.outlineFirst,
                     // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,

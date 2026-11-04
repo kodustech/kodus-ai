@@ -249,7 +249,20 @@ export function buildHeavyLensPrompt(
     claudeSafeWording = false,
     /** No sandbox: nothing to grep, so the evidence rule points at the diff. */
     selfContained = false,
+    /** A chunked review: this diff is one batch of the pull request. */
+    batch?: { index: number; total: number },
 ): string {
+    const scope = !batch
+        ? `The diff above is the whole pull request.`
+        : `The diff above is batch ${batch.index} of ${batch.total} of this pull request: the
+  rest of its changes are reviewed in other batches, so a file this diff does not
+  show may still be changed by it. ${
+      selfContained
+          ? `Do not report a defect that depends on how code outside this diff was
+  or was not updated.`
+          : `Before reporting a defect that depends on how code outside this diff was
+  or was not updated, read that code with the tools.`
+  }`;
     const evidenceRule = selfContained
         ? `You cannot see the repository, only the diff. Never claim something is
   missing, undefined, not imported, or has the wrong signature unless the diff
@@ -282,7 +295,7 @@ ${focusBlockFor(lens)}
   be in lines added or modified by this PR — report a pre-existing issue only if
   this change makes it worse or newly reachable.
 
-  The diff above is the whole pull request. Your assignment is the block above —
+  ${scope} Your assignment is the block above —
   read the diff against it, not broadly.
 </Stance>
 
