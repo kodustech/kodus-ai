@@ -607,27 +607,40 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — heavy review mode', () =>
         expect(configs.reviewMode).toBe('heavy');
     });
 
-    it('on free, leaves heavy out and saves the other settings', async () => {
-        const configs = await buildUseCase({}, { license: FREE }).save(
-            { reviewMode: 'heavy', summary: { generatePRSummary: false } },
-            { source: 'web' },
-        );
+    it.each(['web', 'cli'])(
+        'on free, refuses a %s save asking for heavy, saying why',
+        async (source) => {
+            await expect(
+                buildUseCase({}, { license: FREE }).save(
+                    { reviewMode: 'heavy' },
+                    { source },
+                ),
+            ).rejects.toThrow(
+                'Heavy mode is available on the Teams and Enterprise plans',
+            );
+        },
+    );
 
-        expect(configs.reviewMode).toBeUndefined();
-        expect(configs.summary).toEqual({ generatePRSummary: false });
-    });
-
-    it('a save that leaves heavy out keeps the stored heavy', async () => {
+    it('on free, a kodus-config.yml sync leaves heavy out and keeps the stored mode and the other settings', async () => {
         const configs = await buildUseCase(
-            { reviewMode: 'heavy' },
+            { reviewMode: 'balanced' },
             { license: FREE },
         ).save(
             { reviewMode: 'heavy', summary: { generatePRSummary: false } },
-            { source: 'web' },
+            { source: 'sync' },
         );
 
-        expect(configs.reviewMode).toBe('heavy');
+        expect(configs.reviewMode ?? 'balanced').toBe('balanced');
         expect(configs.summary).toEqual({ generatePRSummary: false });
+    });
+
+    it('a sync replaces the stored config, so on free a stored heavy becomes Balanced', async () => {
+        const configs = await buildUseCase(
+            { reviewMode: 'heavy' },
+            { license: FREE },
+        ).save({ reviewMode: 'heavy' }, { source: 'sync' });
+
+        expect(configs.reviewMode ?? 'balanced').toBe('balanced');
     });
 
     it('on free, saves Balanced', async () => {

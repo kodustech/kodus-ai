@@ -115,7 +115,10 @@ import {
 } from '@libs/ee/license/interfaces/license.interface';
 import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
 import { isCustomAgentsPlanAllowed } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
-import { isHeavyModePlanAllowed } from '@libs/ee/heavy-mode/heavy-mode-plan';
+import {
+    HEAVY_MODE_SAVE_PLAN_REQUIRED,
+    isHeavyModePlanAllowed,
+} from '@libs/ee/heavy-mode/heavy-mode-plan';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
@@ -226,10 +229,12 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             );
 
             // Heavy mode is Teams/Enterprise only: on another plan a save
-            // asking for it leaves the review mode as it was.
+            // asking for it is refused, and a kodus-config.yml sync leaves the
+            // review mode as it was so the file's other settings still save.
             await this.leaveHeavyOutIfPlanNotAllowed(
                 organizationAndTeamData,
                 configValue,
+                body.actor?.source,
             );
 
             if (!body.skipAuthorization) {
@@ -761,6 +766,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         organizationAndTeamData: OrganizationAndTeamData,
         configValue:
             CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
+        source: string | undefined,
     ): Promise<void> {
         if (configValue?.reviewMode !== 'heavy') {
             return;
@@ -775,10 +781,24 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             return;
         }
 
+        if (source !== 'sync') {
+            this.logger.log({
+                message:
+                    'Refused a save asking for heavy review mode — plan is not Teams/Enterprise',
+                context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    teamId: organizationAndTeamData?.teamId,
+                    source,
+                },
+            });
+            throw new ForbiddenException(HEAVY_MODE_SAVE_PLAN_REQUIRED);
+        }
+
         delete configValue.reviewMode;
         this.logger.log({
             message:
-                'Left heavy review mode out of the save — plan is not Teams/Enterprise',
+                'Left heavy review mode out of the sync — plan is not Teams/Enterprise',
             context: UpdateOrCreateCodeReviewParameterUseCase.name,
             metadata: {
                 organizationId: organizationAndTeamData?.organizationId,

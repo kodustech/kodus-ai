@@ -11,6 +11,10 @@ import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-e
 
 const logger = createLogger('HeavyModePlan');
 
+/** Why a settings save asking for heavy was refused. */
+export const HEAVY_MODE_SAVE_PLAN_REQUIRED =
+    'Heavy mode is available on the Teams and Enterprise plans, and Kody could not confirm this organization is on one, so the review mode was not changed.';
+
 /** Why a review asked for heavy ran Balanced, said to the team. The license
  *  services answer a failed read as an invalid license, so the text holds for
  *  a plan without heavy and for a plan that could not be confirmed. */
