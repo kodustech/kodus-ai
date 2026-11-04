@@ -14,6 +14,13 @@ describe('formatModelLabel', () => {
         // Fireworks spells a version with p, after a k or a v too.
         ['glm-5p3-flash', 'GLM 5.3 Flash'],
         ['deepseek-v4p1-flash', 'Deepseek V4.1 Flash'],
+        // Anthropic spells a version with hyphens: the two numbers are one version.
+        ['claude-sonnet-4-6', 'Claude Sonnet 4.6'],
+        ['claude-opus-4-7', 'Claude Opus 4.7'],
+        ['claude-3-5-sonnet', 'Claude 3.5 Sonnet'],
+        ['claude-sonnet-4-5-20250929', 'Claude Sonnet 4.5 20250929'],
+        ['claude-opus-4-0613', 'Claude Opus 4'], // a trailing MMDD pin is still dropped
+        ['claude-opus-5', 'Claude Opus 5'],
     ])('%s → %s', (id, expected) => {
         expect(formatModelLabel(id)).toBe(expected);
     });
