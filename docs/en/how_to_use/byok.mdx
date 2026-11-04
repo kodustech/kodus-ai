@@ -176,13 +176,13 @@ Moonshot and Z.ai each offer a subscription plan on a **different endpoint** tha
     2. Create a new key for Kodus
     3. Add billing information
 
-    **Through your own gateway:** if your OpenAI traffic goes through an OpenAI-protocol gateway that serves the Responses API, set its address in the optional **Base URL** and use the key the gateway expects. Reviews then run exactly as on a direct OpenAI key: the Responses API, strict structured output, and your reasoning level.
+    **Through your own gateway:** if your OpenAI traffic goes through an OpenAI-protocol gateway that serves the Responses API, set its address in the optional **Base URL** and use the key the gateway expects. With OpenAI's own model ids, reviews then run as on a direct OpenAI key: the Responses API, strict structured output, and your reasoning level.
 
     - Include the API version, as in `https://your-gateway.example.com/v1`. Kodus calls `<Base URL>/responses`, and lists models from `<Base URL>/models`.
     - If the gateway only serves chat completions, connect it as **OpenAI-compatible** instead.
-    - The URL must use `https://` and resolve to a public address, because Kodus sends your key there.
+    - The URL must use `https://` and resolve to a public address, because Kodus sends your key there. Gateways on a self-hosted install's private network are not supported yet ([#2381](https://github.com/kodustech/kodus-ai/issues/2381)).
     - Requests go out with `store: false`, so neither the gateway nor OpenAI is asked to keep them.
-    - Use OpenAI's own model ids (for example `gpt-5.4`). A model the gateway renames is not recognized as a reasoning model, so its reasoning level is not sent.
+    - Use OpenAI's own model ids (for example `gpt-5.4`). A model the gateway renames is not recognized as a reasoning model, so its reasoning level is not sent ([#2382](https://github.com/kodustech/kodus-ai/issues/2382)).
     - Not supported here: gateways that need their own headers besides the key (Portkey, Cloudflare AI Gateway), and Azure OpenAI, which has its own **Azure OpenAI** provider.
   </Tab>
 
