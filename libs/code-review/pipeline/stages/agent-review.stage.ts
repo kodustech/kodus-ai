@@ -59,6 +59,7 @@ import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-
 import {
     CodeSuggestion,
     FileChange,
+    REJECTED_FIX_STATUS,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { ReviewOrchestratorService } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
@@ -1697,6 +1698,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     }
                     badFixCounts[reason] = (badFixCounts[reason] ?? 0) + 1;
                     s.improvedCode = '';
+                    if (s.fixStatus === 'local') {
+                        s.fixStatus = REJECTED_FIX_STATUS;
+                    }
                 }
                 const totalBadFix = Object.values(badFixCounts).reduce(
                     (sum: number, n) => sum + (n ?? 0),

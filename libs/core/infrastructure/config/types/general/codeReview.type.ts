@@ -156,6 +156,10 @@ export const FIX_STATUSES = [
 ] as const;
 export type FixStatus = (typeof FIX_STATUSES)[number];
 
+/** Set by the publish gate when it wipes a `local` fix it found unusable;
+ *  never offered to the model. */
+export const REJECTED_FIX_STATUS = 'rejected-fix';
+
 export type CodeSuggestion = {
     id?: string;
     relevantFile: string;
@@ -165,7 +169,7 @@ export type CodeSuggestion = {
     improvedCode: string;
     oneSentenceSummary?: string;
     /** The enrichment's answer on the fix; anything but `local` leaves `improvedCode` empty on purpose. */
-    fixStatus?: FixStatus;
+    fixStatus?: FixStatus | typeof REJECTED_FIX_STATUS;
     /** The finder's whole explanation, labels stripped; `suggestionContent` is the short body shown to people. */
     fullExplanation?: string;
     relevantLinesStart?: number;
