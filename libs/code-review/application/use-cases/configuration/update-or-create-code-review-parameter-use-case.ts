@@ -115,6 +115,7 @@ import {
 } from '@libs/ee/license/interfaces/license.interface';
 import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
 import { isCustomAgentsPlanAllowed } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
+import { isHeavyModePlanAllowed } from '@libs/ee/heavy-mode/heavy-mode-plan';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 
 @Injectable()
@@ -220,6 +221,13 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             // save leaves both lists out, so the stored ones stay as they are
             // and the other settings still save.
             await this.keepCustomAgentsIfPlanNotAllowed(
+                organizationAndTeamData,
+                configValue,
+            );
+
+            // Heavy mode is Teams/Enterprise only: on another plan a save
+            // asking for it leaves the review mode as it was.
+            await this.leaveHeavyOutIfPlanNotAllowed(
                 organizationAndTeamData,
                 configValue,
             );
@@ -745,6 +753,36 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             metadata: {
                 organizationId: organizationAndTeamData?.organizationId,
                 attemptedCount: links.length,
+            },
+        });
+    }
+
+    private async leaveHeavyOutIfPlanNotAllowed(
+        organizationAndTeamData: OrganizationAndTeamData,
+        configValue:
+            CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
+    ): Promise<void> {
+        if (configValue?.reviewMode !== 'heavy') {
+            return;
+        }
+        if (
+            await isHeavyModePlanAllowed(
+                this.licenseService,
+                organizationAndTeamData,
+                UpdateOrCreateCodeReviewParameterUseCase.name,
+            )
+        ) {
+            return;
+        }
+
+        delete configValue.reviewMode;
+        this.logger.log({
+            message:
+                'Left heavy review mode out of the save — plan is not Teams/Enterprise',
+            context: UpdateOrCreateCodeReviewParameterUseCase.name,
+            metadata: {
+                organizationId: organizationAndTeamData?.organizationId,
+                teamId: organizationAndTeamData?.teamId,
             },
         });
     }

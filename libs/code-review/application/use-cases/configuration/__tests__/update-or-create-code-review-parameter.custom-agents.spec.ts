@@ -590,3 +590,40 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — custom agents', () => {
         });
     });
 });
+
+describe('UpdateOrCreateCodeReviewParameterUseCase — heavy review mode', () => {
+    const FREE = {
+        valid: true,
+        subscriptionStatus: 'active',
+        planType: 'free_byok',
+    };
+
+    it('saves heavy on Teams', async () => {
+        const configs = await buildUseCase().save(
+            { reviewMode: 'heavy' },
+            { source: 'web' },
+        );
+
+        expect(configs.reviewMode).toBe('heavy');
+    });
+
+    it('on free, leaves heavy out and saves the other settings', async () => {
+        const configs = await buildUseCase({}, { license: FREE }).save(
+            { reviewMode: 'heavy', summary: { generatePRSummary: false } },
+            { source: 'web' },
+        );
+
+        expect(configs.reviewMode).toBeUndefined();
+        expect(configs.summary).toEqual({ generatePRSummary: false });
+    });
+
+    it('on free, saves Balanced', async () => {
+        const configs = await buildUseCase(
+            { reviewMode: 'heavy' },
+            { license: FREE },
+        ).save({ reviewMode: 'balanced' }, { source: 'web' });
+
+        // Balanced is the default, so the save stores it as no override.
+        expect(configs.reviewMode ?? 'balanced').toBe('balanced');
+    });
+});

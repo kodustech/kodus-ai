@@ -76,6 +76,14 @@ function createMocks() {
 
     // Default: what the stored global and repository levels say, i.e. no
     // directory override and no kodus-config.yml.
+    const licenseService = {
+        validateOrganizationLicense: jest.fn().mockResolvedValue({
+            valid: true,
+            subscriptionStatus: 'active',
+            planType: 'teams_byok_monthly',
+        }),
+    };
+
     const codeBaseConfigService = {
         getMergedCodeReviewConfigs: jest
             .fn()
@@ -95,10 +103,12 @@ function createMocks() {
         kodyRulesValidationService as any,
         pipelineObserver as any,
         codeBaseConfigService as any,
+        licenseService as any,
     );
 
     return {
         useCase,
+        licenseService,
         codeManagementService,
         codeBaseConfigService,
         converter,
@@ -870,6 +880,62 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(
                 seen.map((c) => c.codeReviewConfig?.reviewMode === 'fast'),
             ).toEqual([false, false, true, false]);
+
+            mockExecute.mockRestore();
+        });
+
+        it('runs Balanced and says why when the plan does not run heavy', async () => {
+            const { useCase, licenseService } = createMocks();
+            jest.spyOn(
+                useCase as any,
+                'loadUserConfigWithRules',
+            ).mockResolvedValue({
+                config: (useCase as any).getDefaultConfig(),
+                repositoryId: 'global',
+                repositoryName: null,
+            });
+            const seen: any[] = [];
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: any) => {
+                    seen.push(context);
+                    return {
+                        cliResponse: {
+                            summary: 'No issues',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 100,
+                        },
+                    };
+                });
+            licenseService.validateOrganizationLicense.mockResolvedValue({
+                valid: true,
+                subscriptionStatus: 'active',
+                planType: 'free_byok',
+            });
+
+            const asked = await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello', config: { heavy: true } } as any,
+                isTrialMode: false,
+            });
+            const notAsked = await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello', config: {} } as any,
+                isTrialMode: false,
+            });
+
+            expect(seen.map((c) => c.heavy)).toEqual([false, false]);
+            expect(asked.notices).toEqual([
+                expect.stringContaining(
+                    'Heavy mode is available on the Teams and Enterprise plans',
+                ),
+            ]);
+            expect(notAsked.notices).toBeUndefined();
 
             mockExecute.mockRestore();
         });

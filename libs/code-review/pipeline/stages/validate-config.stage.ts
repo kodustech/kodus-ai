@@ -38,6 +38,10 @@ import {
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { routeCodeReviewModel } from './route-code-review-model';
 import { isHeavyReview } from '@libs/code-review/domain/review-mode';
+import {
+    HEAVY_MODE_PLAN_REQUIRED,
+    isHeavyModePlanAllowed,
+} from '@libs/ee/heavy-mode/heavy-mode-plan';
 import { unknownCustomAgentReply } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agent-scope';
 import {
     CUSTOM_AGENTS_PLAN_REQUIRED,
@@ -111,7 +115,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 ))
             ) {
                 if (context.onlyCustomAgent) {
-                    await this.replyToCustomAgentCommand(
+                    await this.replyToReviewCommand(
                         context,
                         `\`@kody -v ${context.onlyCustomAgent}\` did not run. ${CUSTOM_AGENTS_PLAN_REQUIRED}`,
                     );
@@ -149,7 +153,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     context.onlyCustomAgent,
                 );
                 if (reply) {
-                    await this.replyToCustomAgentCommand(context, reply);
+                    await this.replyToReviewCommand(context, reply);
                     return this.updateContext(context, (draft) => {
                         draft.statusInfo = {
                             status: AutomationStatus.SKIPPED,
@@ -166,11 +170,14 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     context.organizationAndTeamData,
                 );
 
-            // The mode the command asked for, else the one in settings.
-            const heavy = isHeavyReview(
-                context.requestedReviewMode,
-                context.codeReviewConfig?.reviewMode,
-            );
+            // The mode the command asked for, else the one in settings. Heavy
+            // runs on Teams and Enterprise only; elsewhere the review runs
+            // Balanced, and a command that asked for heavy is told why.
+            const heavy =
+                isHeavyReview(
+                    context.requestedReviewMode,
+                    context.codeReviewConfig?.reviewMode,
+                ) && (await this.heavyModeAllowed(context));
 
             // The review's routed slot, or none → the env/managed default
             // resolves downstream, matching a missing config.
@@ -219,7 +226,8 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                 // Materialize the routed model into the resolved slot the pipeline
                 // threads downstream (the handle stages read their limit/telemetry
                 // metadata off).
-                draft.codeReviewConfig.resolvedModelSlot = routed.resolvedModelSlot;
+                draft.codeReviewConfig.resolvedModelSlot =
+                    routed.resolvedModelSlot;
                 draft.codeReviewConfig.byokConfig = routed.resolvedModelSlot;
             });
 
@@ -624,7 +632,37 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         }
     }
 
-    private async replyToCustomAgentCommand(
+    private async heavyModeAllowed(
+        context: CodeReviewPipelineContext,
+    ): Promise<boolean> {
+        if (
+            await isHeavyModePlanAllowed(
+                this.licenseService,
+                context.organizationAndTeamData,
+                this.stageName,
+            )
+        ) {
+            return true;
+        }
+        const askedByCommand = context.requestedReviewMode === 'heavy';
+        this.logger.log({
+            message:
+                'Heavy mode asked on a plan that is not Teams/Enterprise — the review runs Balanced',
+            context: this.stageName,
+            metadata: {
+                organizationAndTeamData: context.organizationAndTeamData,
+                prNumber: context.pullRequest?.number,
+                repositoryId: context.repository?.id,
+                askedByCommand,
+            },
+        });
+        if (askedByCommand) {
+            await this.replyToReviewCommand(context, HEAVY_MODE_PLAN_REQUIRED);
+        }
+        return false;
+    }
+
+    private async replyToReviewCommand(
         context: CodeReviewPipelineContext,
         body: string,
     ): Promise<void> {
@@ -637,7 +675,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             });
         } catch (error) {
             this.logger.error({
-                message: `Failed to reply to @kody -v on PR #${context.pullRequest?.number}`,
+                message: `Failed to reply to the review command on PR #${context.pullRequest?.number}`,
                 context: ValidateConfigStage.name,
                 error,
                 metadata: {
@@ -770,7 +808,6 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         platformType: PlatformType,
         organizationAndTeamData: OrganizationAndTeamData,
     ): IStageValidationResult {
-
         // A missing/corrupt list means we have no scope to enforce, so we let the
         // review through. An empty list is a real configuration: it narrows the
         // scope to the repository default branch, which mergeBaseBranches injects

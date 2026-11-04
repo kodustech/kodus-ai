@@ -26,6 +26,9 @@ export interface CliReviewResponse {
     issues: CliReviewIssue[];
     filesAnalyzed: number;
     duration: number;
+    /** What the team should know about how the review ran (e.g. heavy asked
+     *  on a plan that runs Balanced). */
+    notices?: string[];
 }
 
 export interface TrialCliReviewResponse extends CliReviewResponse {
