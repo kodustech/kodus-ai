@@ -472,7 +472,10 @@ export class CheckIfPRCanBeApprovedCronProvider {
                                         const execution =
                                             await this.automationExecutionService.findLatestExecutionByFilters(
                                                 {
-                                                    status: AutomationStatus.SUCCESS,
+                                                    status: [
+                                                        AutomationStatus.SUCCESS,
+                                                        AutomationStatus.PARTIAL_ERROR,
+                                                    ],
                                                     teamAutomation: {
                                                         uuid: teamAutomation.uuid,
                                                     },
@@ -855,11 +858,22 @@ export class CheckIfPRCanBeApprovedCronProvider {
         }
         const lastExecution =
             await this.automationExecutionService.findLatestExecutionByFilters({
-                status: AutomationStatus.SUCCESS,
+                status: [
+                    AutomationStatus.SUCCESS,
+                    AutomationStatus.PARTIAL_ERROR,
+                ],
                 teamAutomation: { uuid: teamAutomationId },
                 pullRequestNumber: prNumber,
                 repositoryId: repository?.id,
             });
+        // Read partial executions so a failed rerun cannot expose an older
+        // successful judgment. Partial reviews remain ineligible for approval.
+        if (
+            lastExecution?.status === AutomationStatus.PARTIAL_ERROR &&
+            !policyActive
+        ) {
+            return false;
+        }
         const lastAnalyzedCommitSha = this.getLastAnalyzedCommitSha(
             lastExecution?.dataExecution?.lastAnalyzedCommit,
         );
@@ -935,6 +949,20 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         {
                             kind: 'hold',
                             reason: 'The target branch commit could not be verified for the directory policy.',
+                        },
+                    );
+                    return false;
+                }
+                if (lastExecution.status === AutomationStatus.PARTIAL_ERROR) {
+                    await this.postConditionalApprovalReason(
+                        codeManagementRequestData,
+                        platformType,
+                        {
+                            kind: 'hold',
+                            reason:
+                                reviewedDecision?.kind === 'hold'
+                                    ? reviewedDecision.reason
+                                    : 'The latest review did not complete successfully. A new successful review is required before automatic approval.',
                         },
                     );
                     return false;

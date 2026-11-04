@@ -90,7 +90,7 @@ it.each([
     });
 });
 
-it("leaves approval enabled when risk is switched off and allows explicit approval-off", () => {
+it("undoes unsaved automatic activation and respects subsequent explicit parent choices", () => {
     render(
         <QueryClientProvider client={new QueryClient()}>
             <Settings repositoryId="repo" />
@@ -102,9 +102,31 @@ it("leaves approval enabled when risk is switched off and allows explicit approv
     });
     fireEvent.click(risk);
     fireEvent.click(risk);
-    expect(approval).toBeChecked();
+    expect(approval).not.toBeChecked();
     fireEvent.click(risk);
     fireEvent.click(approval);
     expect(approval).not.toBeChecked();
     expect(risk).toBeChecked();
+    fireEvent.click(approval);
+    fireEvent.click(risk);
+    expect(approval).toBeChecked();
+});
+
+it("keeps saved approval enabled when risk is subsequently switched off", async () => {
+    render(
+        <QueryClientProvider client={new QueryClient()}>
+            <Settings repositoryId="repo" />
+        </QueryClientProvider>,
+    );
+    const risk = screen.getByRole("switch", { name: "Assess PR risk" });
+    fireEvent.click(risk);
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    fireEvent.click(risk);
+    expect(
+        screen.getByRole("switch", { name: "Automatic PR approval" }),
+    ).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(save.mock.calls[1][0]).toEqual({ approvalRiskActive: false });
 });

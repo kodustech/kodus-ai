@@ -141,6 +141,8 @@ export class RefreshCodeAreaRiskMapCron {
             if (!repositories.length) return;
 
             // Risk approval users first. Within each group: unfinished scans,
+            // They may exhaust all 40 batches; other repositories use only
+            // remaining capacity, even when they have never been scanned.
             // then never scanned, then complete ones
             // stalest first: a fixed rotation left first scans incomplete for
             // weeks while finished repositories were refreshed, and a scan the

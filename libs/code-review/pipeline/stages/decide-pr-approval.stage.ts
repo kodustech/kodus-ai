@@ -233,7 +233,10 @@ export class DecidePrApprovalStage extends BasePipelineStage<CodeReviewPipelineC
                     stage: this.stageName,
                     severity: 'partial',
                     error: new Error(risk.reason),
-                    metadata: { reason: 'approval_risk_assessment_failed' },
+                    metadata: {
+                        reason: 'approval_risk_assessment_failed',
+                        ...risk.failure,
+                    },
                 });
             }
         });

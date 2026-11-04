@@ -1000,6 +1000,139 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it.each(['same-sha', 'new-sha'])(
+        'uses the failed rerun instead of an older low judgment (head=%s)',
+        async (head) => {
+            const { cron, deps } = makeCron();
+            const executions = [
+                {
+                    status: AutomationStatus.PARTIAL_ERROR,
+                    dataExecution: {
+                        lastAnalyzedCommit: head,
+                        approvalRisk: {
+                            level: 'unknown',
+                            reviewedHeadSha: head,
+                            reason: 'Kody could not assess risk for this PR.',
+                        },
+                        approvalDecision: {
+                            kind: 'hold',
+                            reason: 'Kody could not assess risk for the current PR head.',
+                        },
+                    },
+                },
+                {
+                    status: AutomationStatus.SUCCESS,
+                    dataExecution: {
+                        lastAnalyzedCommit: 'same-sha',
+                        approvalRisk: {
+                            level: 'low',
+                            reviewedHeadSha: 'same-sha',
+                            reason: 'Looks safe.',
+                        },
+                        approvalDecision: {
+                            kind: 'hold',
+                            reason: 'The review is not clean.',
+                        },
+                    },
+                },
+            ];
+            deps.codeManagementService.getReviewStatusByPullRequest
+                .mockResolvedValueOnce(PullRequestReviewState.NONE)
+                .mockResolvedValueOnce(PullRequestReviewState.APPROVED);
+            // Emulate the repository's newest matching row, not a constant mock.
+            deps.automationExecutionService.findLatestExecutionByFilters.mockImplementation(
+                async ({ status }) =>
+                    executions.find((execution) =>
+                        [status].flat().includes(execution.status),
+                    ),
+            );
+            deps.codeManagementService.getPullRequest.mockResolvedValue({
+                head: { sha: head },
+                user: { login: 'alice' },
+            });
+            deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+                [{ id: 1, isResolved: true }],
+            );
+            const result = await (cron as any).shouldApprovePR({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                pr: {
+                    ...makeOpenPr(77, 'repo-b'),
+                    suggestions: [{ comment: { id: 1 } }],
+                },
+                codeReviewConfig: {
+                    pullRequestApprovalActive: true,
+                    approvalRiskActive: true,
+                },
+                teamAutomationId: 'team-automation-1',
+            });
+            expect(result).toBe(false);
+            expect(
+                deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).not.toHaveBeenCalled();
+            expect(
+                deps.codeManagementService.createIssueComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    body: formatApprovalReasonComment(
+                        'hold',
+                        'Kody could not assess risk for the current PR head.',
+                    ),
+                }),
+                PlatformType.GITLAB,
+            );
+        },
+    );
+
+    it.each([false, true])(
+        'never makes partial reviews approvable when risk is enabled=%s',
+        async (assessRisk) => {
+            const { cron, deps } = makeCron();
+            deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                {
+                    status: AutomationStatus.PARTIAL_ERROR,
+                    dataExecution: {
+                        lastAnalyzedCommit: 'same-sha',
+                        approvalRisk: {
+                            level: 'low',
+                            reviewedHeadSha: 'same-sha',
+                            reason: 'Looks safe.',
+                        },
+                    },
+                },
+            );
+            deps.codeManagementService.getPullRequest.mockResolvedValue({
+                head: { sha: 'same-sha' },
+                user: { login: 'alice' },
+            });
+            deps.codeManagementService.getPullRequestReviewComments.mockResolvedValue(
+                [{ id: 1, isResolved: true }],
+            );
+            expect(
+                await (cron as any).shouldApprovePR({
+                    organizationAndTeamData: {
+                        organizationId: 'org-1',
+                        teamId: 'team-1',
+                    },
+                    pr: {
+                        ...makeOpenPr(77, 'repo-b'),
+                        suggestions: [{ comment: { id: 1 } }],
+                    },
+                    codeReviewConfig: {
+                        pullRequestApprovalActive: true,
+                        approvalRiskActive: assessRisk,
+                    },
+                    teamAutomationId: 'team-automation-1',
+                }),
+            ).toBe(false);
+            expect(
+                deps.codeManagementService.checkIfPullRequestShouldBeApproved,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
     it('holds cron approval when the saved risk assessment is stale', async () => {
         const { cron, deps } = makeCron();
         deps.automationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
@@ -1474,6 +1607,13 @@ describe('CheckIfPRCanBeApprovedCronProvider', () => {
 
         await cron.handleCron();
 
+        expect(
+            deps.automationExecutionService.findLatestExecutionByFilters,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                status: [AutomationStatus.SUCCESS, AutomationStatus.PARTIAL_ERROR],
+            }),
+        );
         expect(deps.codeBaseConfigService.getConfig).toHaveBeenCalledTimes(2);
         expect(deps.codeBaseConfigService.getConfig).toHaveBeenCalledWith(
             expect.anything(),

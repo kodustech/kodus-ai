@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { FormControl } from "@components/ui/form-control";
@@ -80,6 +80,15 @@ function EligibilityFields() {
 export function ApprovalPolicySettings() {
     const form = useFormContext<CodeReviewFormType>();
     const [guidanceOpen, setGuidanceOpen] = useState(false);
+    const autoEnabledAtDefaults = useRef<object | null>(null);
+    const approvalActive = useWatch({
+        control: form.control,
+        name: "pullRequestApprovalActive.value",
+    });
+    useEffect(() => {
+        // An explicit parent-off takes ownership away from the risk toggle.
+        if (!approvalActive) autoEnabledAtDefaults.current = null;
+    }, [approvalActive]);
     const riskAssessmentActive = useWatch({
         control: form.control,
         name: "approvalRiskActive.value",
@@ -180,15 +189,37 @@ export function ApprovalPolicySettings() {
                                         checked={field.value ?? false}
                                         disabled={field.disabled}
                                         onCheckedChange={(checked) => {
-                                            if (checked) {
+                                            if (
+                                                checked &&
+                                                !form.getValues(
+                                                    "pullRequestApprovalActive.value",
+                                                )
+                                            ) {
+                                                autoEnabledAtDefaults.current =
+                                                    form.control._defaultValues;
                                                 form.setValue(
                                                     "pullRequestApprovalActive.value",
                                                     true,
                                                     { shouldDirty: true },
                                                 );
                                             }
-                                            if (!checked)
+                                            if (!checked) {
+                                                // Undo only this unsaved activation. A save/reset
+                                                // replaces the defaults and commits the choice.
+                                                if (
+                                                    autoEnabledAtDefaults.current ===
+                                                    form.control._defaultValues
+                                                ) {
+                                                    form.setValue(
+                                                        "pullRequestApprovalActive.value",
+                                                        false,
+                                                        { shouldDirty: true },
+                                                    );
+                                                }
+                                                autoEnabledAtDefaults.current =
+                                                    null;
                                                 setGuidanceOpen(false);
+                                            }
                                             field.onChange(checked);
                                         }}
                                         className="shrink-0"

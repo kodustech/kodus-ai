@@ -99,7 +99,10 @@ it('preserves unknown risk and hold while recording an assessment failure as par
             expect.objectContaining({
                 stage: 'DecidePrApprovalStage',
                 severity: 'partial',
-                metadata: { reason: 'approval_risk_assessment_failed' },
+                metadata: expect.objectContaining({
+                    reason: 'approval_risk_assessment_failed',
+                    errorName: 'Error',
+                }),
             }),
         ]),
     );

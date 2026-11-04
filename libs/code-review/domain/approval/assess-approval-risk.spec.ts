@@ -24,6 +24,57 @@ const input = {
 
 afterEach(() => jest.clearAllMocks());
 
+it.each(['low', 'medium', 'high'])(
+    'bounds a long %s rationale without invalidating its judgment',
+    async (level) => {
+        (LLM.run as jest.Mock).mockImplementationOnce(async ({ schema }) =>
+            schema.parse({ level, reason: 'x'.repeat(10_000) }),
+        );
+        const result = await assessApprovalRisk(input);
+        expect(result.level).toBe(level);
+        expect(result.reason).toHaveLength(2_000);
+        expect(result.reason.endsWith('...')).toBe(true);
+        expect(LLM.run).toHaveBeenCalledTimes(1);
+    },
+);
+
+it.each([
+    {
+        name: 'AI_NoObjectGeneratedError',
+        message: 'response did not match schema',
+        category: 'UNKNOWN',
+        status: undefined,
+    },
+    {
+        name: 'Error',
+        message: 'Rate limit exceeded',
+        category: 'RATE_LIMIT',
+        status: 429,
+    },
+    {
+        name: 'Error',
+        message: 'Insufficient quota',
+        category: 'QUOTA_EXCEEDED',
+        status: 402,
+    },
+])(
+    'retains safe failure diagnostics for $name/$category',
+    async ({ name, message, category, status }) => {
+        const error = Object.assign(new Error(message), {
+            name,
+            statusCode: status,
+        });
+        (LLM.run as jest.Mock).mockRejectedValueOnce(error);
+        const result = await assessApprovalRisk(input);
+        expect(result).toMatchObject({
+            level: 'unknown',
+            failure: { errorName: name, category },
+        });
+        expect(result.failure).not.toHaveProperty('rawMessage');
+        expect(result.failure).not.toHaveProperty('message');
+    },
+);
+
 it.each([507, 510, 563, 691])(
     'preserves a valid %i-character reason through the production schema',
     async (length) => {

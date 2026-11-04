@@ -119,6 +119,27 @@ jobs:
             - name: Run wiring smoke
               run: node evals/wiring-smoke.js --eval-files-dir=eval-files
 
+            - name: Approval and history regression evidence
+              env:
+                  API_NODE_ENV: test
+              run: |
+                  mkdir -p eval-results
+                  pnpm exec jest --runInBand --json --outputFile=eval-results/approval-risk-regressions.json --runTestsByPath \
+                    libs/code-review/domain/approval/assess-approval-risk.spec.ts \
+                    libs/code-review/pipeline/stages/decide-pr-approval.stage.spec.ts \
+                    apps/api/src/cron/__tests__/CheckIfPRCanBeApproved.cron.spec.ts
+                  node evals/area-risk-map/run.js --set=holdout-2026 --output=eval-results/area-risk-holdout.json
+
+            - name: Upload approval and history evidence
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: approval-and-history-regressions
+                  path: |
+                      eval-results/approval-risk-regressions.json
+                      eval-results/area-risk-holdout.json
+                  retention-days: 30
+
             # The steps whose production files this PR changed: the experiments to run.
             - name: Steps this PR changes
               id: affected
