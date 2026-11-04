@@ -465,5 +465,17 @@ describe('ByokConcurrencyGateService', () => {
             await service.tryEnter(githubJob());
             expect(gatedModel()).toBe('claude-sonnet-4-5');
         });
+
+        it('reads no code review config when no model caps concurrency', async () => {
+            const service = gate({ configs: {} });
+            orgParamsService.findByKey.mockResolvedValue({
+                configValue: makeV2Config({ maxConcurrentRequests: 0 }),
+            });
+            const result = await service.tryEnter(githubJob('heavy'));
+            expect(result).toEqual({ kind: 'unlimited' });
+            expect(
+                (service as any).parametersService.findOne,
+            ).not.toHaveBeenCalled();
+        });
     });
 });

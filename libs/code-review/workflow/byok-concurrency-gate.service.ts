@@ -242,6 +242,15 @@ export class ByokConcurrencyGateService {
                     organizationAndTeamData,
                 );
 
+            // Most orgs cap nothing: answer before reading the review's route,
+            // which costs a config read on every job.
+            const models = (
+                byokParameter?.configValue as BYOKConfig | null | undefined
+            )?.models;
+            if (!models?.some((m) => (m?.maxConcurrentRequests ?? 0) > 0)) {
+                return null;
+            }
+
             const route = await this.reviewRoute(job);
 
             // Resolve the review's slot through the SAME resolution primitive
@@ -254,10 +263,7 @@ export class ByokConcurrencyGateService {
                 byokParameter?.configValue as BYOKConfig | null | undefined,
                 route.heavy ? LLM_TASK.codeReviewHeavy : LLM_TASK.codeReview,
                 {
-                    ctx: overrideContext(
-                        route.byokModelId,
-                        route.byokModel,
-                    ),
+                    ctx: overrideContext(route.byokModelId, route.byokModel),
                 },
             );
 
@@ -305,8 +311,7 @@ export class ByokConcurrencyGateService {
         const payload = (job.payload ?? {}) as Record<string, any>;
         const codeManagementPayload = payload.codeManagementPayload ?? {};
         const requested = codeManagementPayload.requestedReviewMode as
-            | RequestedReviewMode
-            | undefined;
+            RequestedReviewMode | undefined;
         const teamId = job.organizationAndTeamData?.teamId;
         if (!this.parametersService || !teamId) {
             return { heavy: isHeavyReview(requested, undefined) };
