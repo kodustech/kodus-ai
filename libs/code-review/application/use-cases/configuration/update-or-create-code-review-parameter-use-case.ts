@@ -787,12 +787,13 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     'Refused a save asking for heavy review mode — plan is not Teams/Enterprise',
                 context: UpdateOrCreateCodeReviewParameterUseCase.name,
                 metadata: {
-                    organizationId: organizationAndTeamData?.organizationId,
-                    teamId: organizationAndTeamData?.teamId,
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
                     source,
                 },
             });
-            throw new ForbiddenException(HEAVY_MODE_SAVE_PLAN_REQUIRED);
+            // 400, like the other refused saves: the web shows its reason.
+            throw new BadRequestException(HEAVY_MODE_SAVE_PLAN_REQUIRED);
         }
 
         delete configValue.reviewMode;
@@ -801,8 +802,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                 'Left heavy review mode out of the sync — plan is not Teams/Enterprise',
             context: UpdateOrCreateCodeReviewParameterUseCase.name,
             metadata: {
-                organizationId: organizationAndTeamData?.organizationId,
-                teamId: organizationAndTeamData?.teamId,
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
             },
         });
     }

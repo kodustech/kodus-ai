@@ -598,14 +598,17 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — heavy review mode', () =>
         planType: 'free_byok',
     };
 
-    it('saves heavy on Teams', async () => {
-        const configs = await buildUseCase().save(
-            { reviewMode: 'heavy' },
-            { source: 'web' },
-        );
+    it.each(['web', 'cli', 'sync'])(
+        'saves heavy on Teams from a %s save',
+        async (source) => {
+            const configs = await buildUseCase().save(
+                { reviewMode: 'heavy' },
+                { source },
+            );
 
-        expect(configs.reviewMode).toBe('heavy');
-    });
+            expect(configs.reviewMode).toBe('heavy');
+        },
+    );
 
     it.each(['web', 'cli'])(
         'on free, refuses a %s save asking for heavy, saying why',
@@ -630,7 +633,8 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — heavy review mode', () =>
             { source: 'sync' },
         );
 
-        expect(configs.reviewMode ?? 'balanced').toBe('balanced');
+        // Balanced is the default, so it is stored as no override.
+        expect(configs.reviewMode).toBeUndefined();
         expect(configs.summary).toEqual({ generatePRSummary: false });
     });
 
@@ -640,7 +644,7 @@ describe('UpdateOrCreateCodeReviewParameterUseCase — heavy review mode', () =>
             { license: FREE },
         ).save({ reviewMode: 'heavy' }, { source: 'sync' });
 
-        expect(configs.reviewMode ?? 'balanced').toBe('balanced');
+        expect(configs.reviewMode).toBeUndefined();
     });
 
     it('on free, saves Balanced', async () => {
