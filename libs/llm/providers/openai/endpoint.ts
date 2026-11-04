@@ -36,6 +36,21 @@ export function isOpenAiHost(baseURL: string | undefined): boolean {
     }
 }
 
+/** A base URL on an Azure OpenAI resource (`<name>.openai.azure.com`, or the
+ *  `cognitiveservices.azure.com` form of the same resource). */
+export function isAzureOpenAiHost(baseURL: string | undefined): boolean {
+    if (!baseURL) return false;
+    try {
+        const host = new URL(baseURL).hostname.toLowerCase();
+        return (
+            host.endsWith('.openai.azure.com') ||
+            host.endsWith('.cognitiveservices.azure.com')
+        );
+    } catch {
+        return false;
+    }
+}
+
 /** An OpenAI reasoning model on OpenAI's own host: it belongs on the native
  *  SDK (/v1/responses), not on the OpenAI-compatible one. */
 export function servedByOpenAi(

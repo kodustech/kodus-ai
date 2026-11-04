@@ -125,6 +125,24 @@ describe('native OpenAI credential with a custom base URL', () => {
         expect(up.calls[0].url).toBe(`${PROXY}/responses`);
     });
 
+    // One production credential reaches Azure OpenAI through the native id;
+    // Azure's own Responses API was not verified with `store: false` (#2150),
+    // so that host keeps the SDK default it runs on today.
+    it.each([
+        'https://acme.openai.azure.com/openai/v1',
+        'https://acme.cognitiveservices.azure.com/openai/v1',
+    ])('leaves an Azure OpenAI host (%s) as it is today', async (azure) => {
+        await LLM.run({
+            ...base,
+            byokConfig: { ...proxiedSlot(azure), apiKey: 'k' },
+            user: 'ping',
+        } as any).catch(() => undefined);
+
+        expect(up.calls[0].url).toBe(`${azure}/responses`);
+        expect(up.calls[0].body.store).toBeUndefined();
+        expect(up.calls[0].body.include).toBeUndefined();
+    });
+
     it('without a base URL still calls api.openai.com', async () => {
         await LLM.run({
             ...base,

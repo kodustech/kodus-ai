@@ -22,7 +22,7 @@ import {
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
 import { registerProvider } from '../kernel/registry';
 import { isOpenAiReasoner, openaiReasoningConfig } from './reasoning';
-import { OPENAI_API_BASE_URL } from './endpoint';
+import { OPENAI_API_BASE_URL, isAzureOpenAiHost } from './endpoint';
 import { notStoredByOpenAi } from './not-stored';
 import { openAiModelListing } from './listing';
 import type {
@@ -222,9 +222,11 @@ export const openaiModule: ProviderModule = {
                 ? { headers: { 'x-opencode-session': openCodeSessionId(cfg) } }
                 : {}),
         })(cfg.model);
-        // Nothing is stored, on OpenAI's API or behind the org's own proxy
-        // (not-stored.ts).
-        return notStoredByOpenAi(native);
+        // Nothing is stored, on OpenAI's API or behind the org's own gateway
+        // (not-stored.ts). Azure OpenAI reached through this id keeps the SDK
+        // default: its Responses API was not verified with `store: false` and
+        // an encrypted-reasoning loop, and one production credential runs on it.
+        return isAzureOpenAiHost(baseURL) ? native : notStoredByOpenAi(native);
     },
 
     reasoning(
