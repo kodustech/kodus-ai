@@ -22,7 +22,6 @@ import {
 import { isOpenCodeGoBaseUrl, openCodeSessionId } from '@libs/llm/opencode-go';
 import { registerProvider } from '../kernel/registry';
 import { isOpenAiReasoner, openaiReasoningConfig } from './reasoning';
-import { isOpenAiHost } from './endpoint';
 import { notStoredByOpenAi } from './not-stored';
 import { openAiModelListing } from './listing';
 import type {
@@ -222,11 +221,9 @@ export const openaiModule: ProviderModule = {
                 ? { headers: { 'x-opencode-session': openCodeSessionId(cfg) } }
                 : {}),
         })(cfg.model);
-        // On OpenAI's own API, nothing is stored (not-stored.ts). Another host on
-        // the native id (a gateway) keeps whatever it does today.
-        return !baseURL || isOpenAiHost(baseURL)
-            ? notStoredByOpenAi(native)
-            : native;
+        // Nothing is stored, on OpenAI's API or behind the org's own proxy
+        // (not-stored.ts).
+        return notStoredByOpenAi(native);
     },
 
     reasoning(

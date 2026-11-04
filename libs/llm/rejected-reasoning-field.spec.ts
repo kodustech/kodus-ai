@@ -431,9 +431,9 @@ describe('an OpenAI reasoning model with tools', () => {
         expect(bodies[0].include).toContain('reasoning.encrypted_content');
     });
 
-    // `store` defaults to true on /v1/responses: no native call on OpenAI's API
-    // leaves it there; a gateway on the native id keeps what it does today.
-    it('is not stored by OpenAI on any native call to its API, and a gateway is left alone', async () => {
+    // `store` defaults to true on /v1/responses: no native call leaves it there,
+    // on OpenAI's API or on a gateway the native id points at (#2150).
+    it('is not stored on any native call, on OpenAI or behind a gateway', async () => {
         const bodies: any[] = [];
         globalThis.fetch = (async (_input: any, init: any) => {
             bodies.push(init?.body ? JSON.parse(String(init.body)) : undefined);
@@ -457,7 +457,8 @@ describe('an OpenAI reasoning model with tools', () => {
         // without being recognized, and OpenAI accepts it on one that does not.
         expect(bodies[0].store).toBe(false);
         expect(bodies[0].include).toContain('reasoning.encrypted_content');
-        expect(bodies[1].store).toBeUndefined();
+        expect(bodies[1].store).toBe(false);
+        expect(bodies[1].include).toContain('reasoning.encrypted_content');
     });
 
     // One transport per stored slot: an explicit slot handed to LLM.run, and the
