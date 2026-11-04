@@ -222,6 +222,27 @@ describe('runFinderWithVerify in heavy mode', () => {
         expect(lensSignal?.aborted).toBe(true);
     });
 
+    it('stops the lenses when reading the generalist fails after it ran', async () => {
+        let lensSignal: AbortSignal | undefined;
+        const runner = {
+            run: (spec: any, _input: any, c: ToolContext) => {
+                if (spec.systemPrompt === HEAVY_LENS_SYSTEM_PROMPT) {
+                    lensSignal = c.signal;
+                    return new Promise((_r, reject) =>
+                        c.signal?.addEventListener('abort', () =>
+                            reject(new Error('aborted')),
+                        ),
+                    );
+                }
+                // A run state the findings extraction cannot read.
+                return Promise.resolve(undefined);
+            },
+        } as unknown as AiSdkAgentRunner;
+
+        await expect(run(runner)).rejects.toThrow();
+        expect(lensSignal?.aborted).toBe(true);
+    });
+
     it('goes on without a lens that fails', async () => {
         markLensStarted();
         const real = new AiSdkAgentRunner(undefined);

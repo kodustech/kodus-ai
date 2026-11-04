@@ -955,13 +955,14 @@ export async function runFinderWithVerify(
           })
         : null;
     // A generalist that fails fails the review: stop the lenses rather than
-    // let them spend tokens on it.
+    // let them spend tokens on it. Everything up to the lenses' await sits in
+    // one block, so a throw anywhere in it stops them.
     const stopLenses = (error: unknown): never => {
         lensStop.abort(error);
         throw error;
     };
-    const finderState = await params.runner
-        .run(
+    const { finderState, baseStat, recall } = await (async () => {
+        const finderState = await params.runner.run(
             params.finderSpec,
             {
                 ...input,
@@ -973,50 +974,51 @@ export async function runFinderWithVerify(
                 ),
             },
             ctx,
-        )
-        .catch(stopLenses);
-    // Main finder findings — with prose-recovery applied (the same wrapper the
-    // recall passes use, so an omission in any pass is caught consistently).
-    const baseMs = Date.now() - baseT0;
-    const base = await extractFindingsWithRecovery(
-        finderState,
-        params.recoverProse,
-        { ...params.telemetryMetadata, modelId: params.modelId },
-    );
-    // The generalist as a pass, measured like the others: without it its cost
-    // and time only showed up summed into the review total (#1821).
-    const baseStat = passStatOf(finderState, {
-        label: 'generalist-base',
-        added: base.suggestions?.length ?? 0,
-        ms: baseMs,
-        startMs: 0,
-        startEpochMs: baseT0,
-    });
-
-    // RECALL PASS: synthesis rescue — one extra finder run that re-thinks from
-    // the evidence already gathered and surfaces concrete MISSED bugs BEFORE
-    // verify filters, dedup-merged into the candidate set. (Soft coverage: the
-    // coverage-recovery + 2nd/3rd-chance passes were removed to match the
-    // validated depth-first engine — main pass only, no coverage-forced re-runs.)
-    const recall = await runRecallPasses(
-        base,
-        {
-            runner: params.runner,
-            finderSpec: params.finderSpec,
+        );
+        // Main finder findings — with prose-recovery applied (the same wrapper the
+        // recall passes use, so an omission in any pass is caught consistently).
+        const baseMs = Date.now() - baseT0;
+        const base = await extractFindingsWithRecovery(
             finderState,
-            userPrompt: input.prompt,
-            skipHeavyPasses: params.skipHeavyPasses,
-            skipSynthesisRescue: params.skipSynthesisRescue,
-            telemetryMetadata: params.telemetryMetadata,
-            modelId: params.modelId,
-            agentName: params.agentName,
-            recoverProse: params.recoverProse,
-            conventionGuides: params.conventionCheck?.guideFiles,
-            teamSystemTools: params.teamSystemTools,
-            laneScoped: !!params.laneFocus,
-        },
-        ctx,
-    ).catch(stopLenses);
+            params.recoverProse,
+            { ...params.telemetryMetadata, modelId: params.modelId },
+        );
+        // The generalist as a pass, measured like the others: without it its cost
+        // and time only showed up summed into the review total (#1821).
+        const baseStat = passStatOf(finderState, {
+            label: 'generalist-base',
+            added: base.suggestions?.length ?? 0,
+            ms: baseMs,
+            startMs: 0,
+            startEpochMs: baseT0,
+        });
+
+        // RECALL PASS: synthesis rescue — one extra finder run that re-thinks from
+        // the evidence already gathered and surfaces concrete MISSED bugs BEFORE
+        // verify filters, dedup-merged into the candidate set. (Soft coverage: the
+        // coverage-recovery + 2nd/3rd-chance passes were removed to match the
+        // validated depth-first engine — main pass only, no coverage-forced re-runs.)
+        const recall = await runRecallPasses(
+            base,
+            {
+                runner: params.runner,
+                finderSpec: params.finderSpec,
+                finderState,
+                userPrompt: input.prompt,
+                skipHeavyPasses: params.skipHeavyPasses,
+                skipSynthesisRescue: params.skipSynthesisRescue,
+                telemetryMetadata: params.telemetryMetadata,
+                modelId: params.modelId,
+                agentName: params.agentName,
+                recoverProse: params.recoverProse,
+                conventionGuides: params.conventionCheck?.guideFiles,
+                teamSystemTools: params.teamSystemTools,
+                laneScoped: !!params.laneFocus,
+            },
+            ctx,
+        );
+        return { finderState, baseStat, recall };
+    })().catch(stopLenses);
     const lensResult = lenses ? await lenses : null;
     const reasoning = recall.findings.reasoning;
     const suggestions = lensResult
