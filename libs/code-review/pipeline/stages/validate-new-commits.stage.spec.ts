@@ -233,6 +233,39 @@ describe('ValidateNewCommitsStage', () => {
         expect(result.pipelineMetadata?.forceFullRerun).toBe(true);
     });
 
+    it.each([
+        ['heavy', false, true],
+        ['balanced', true, true],
+        ['heavy', true, false],
+        ['balanced', false, false],
+    ] as const)(
+        'reviews the whole PR when --%s asks for another mode than the last review (last heavy: %s)',
+        async (requested, lastHeavy, full) => {
+            context.origin = 'command';
+            context.requestedReviewMode = requested;
+
+            mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+                {
+                    uuid: 'exec-1',
+                    dataExecution: {
+                        lastAnalyzedCommit: 'sha-1',
+                        heavy: lastHeavy,
+                    },
+                },
+            );
+            mockAutomationExecutionService.hasStageWithStatus.mockResolvedValue(
+                false,
+            );
+            mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockResolvedValue(
+                [{ sha: 'sha-1' }],
+            );
+
+            const result = await stage.execute(context);
+
+            expect(!!result.pipelineMetadata?.forceFullRerun).toBe(full);
+        },
+    );
+
     // #1721, QA MR !68: lastExecution is the last SUCCESS, so a partial
     // review's status note was never edited and each later review posted one.
     describe('status note of the previous review', () => {

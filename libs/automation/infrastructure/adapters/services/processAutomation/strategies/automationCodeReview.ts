@@ -895,6 +895,9 @@ export class AutomationCodeReviewService implements Omit<
                 automaticReviewStatus: result.automaticReviewStatus,
                 approvalDecision: result.approvalDecision,
                 approvalRisk: result.approvalRisk,
+                // The mode it ran in: `--heavy` / `--balanced` asking for the
+                // other one re-reviews the whole PR.
+                heavy: !!result.heavy,
             });
         }
 

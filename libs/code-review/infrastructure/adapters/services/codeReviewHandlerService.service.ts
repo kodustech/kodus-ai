@@ -369,6 +369,7 @@ export class CodeReviewHandlerService {
                     failovers,
                 ),
                 linkedRepositoriesMetadata: result?.linkedRepositoriesMetadata,
+                heavy: result?.heavy,
             };
         } catch (error) {
             if (initialContext) {
