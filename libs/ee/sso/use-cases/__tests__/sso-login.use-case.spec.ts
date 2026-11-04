@@ -47,8 +47,8 @@ describe('SSOLoginUseCase', () => {
         const result = await useCase.execute(profile, organizationId);
 
         expect(signUpUseCase.execute).toHaveBeenCalledWith(
-            expect.objectContaining({ email, organizationId }),
-            { preVerified: true },
+            expect.objectContaining({ email }),
+            { preVerified: true, organizationId },
         );
         // New users are already ACTIVE — no reconciliation needed.
         expect(usersService.update).not.toHaveBeenCalled();

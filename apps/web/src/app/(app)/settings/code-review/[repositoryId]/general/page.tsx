@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { ConfirmModal } from "@components/ui/confirm-modal";
+import { Link } from "@components/ui/link";
 import { magicModal } from "@components/ui/magic-modal";
 import { Page } from "@components/ui/page";
 import { toast } from "@components/ui/toaster/use-toast";
@@ -15,11 +17,25 @@ import {
 } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { Settings2Icon } from "lucide-react";
-import { FormProvider, useFormContext, useFormState } from "react-hook-form";
+import { ArrowRightIcon, LockIcon, Settings2Icon } from "lucide-react";
+import {
+    FormProvider,
+    useFormContext,
+    useFormState,
+    useWatch,
+} from "react-hook-form";
+import {
+    useCodeReviewModelData,
+    useFeatureFlags,
+    usePlatformConfig,
+} from "src/app/(app)/settings/_components/context";
 import { AsyncBoundary } from "src/core/components/async-boundary";
+import { useCanFollowGateLink } from "src/core/components/system/gate-cta-link";
+import { planCtaTarget } from "src/core/components/system/plan-cta-target";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
+import { isTeamsOrEnterprisePlan } from "src/features/ee/byok/_utils";
+import { useSubscriptionContext } from "src/features/ee/subscription/_providers/subscription-context";
 
 import { CentralizedConfigReadOnlyAlert } from "../../_components/centralized-config-readonly-alert";
 import GeneratingConfig from "../../_components/generating-config";
@@ -27,13 +43,10 @@ import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-sett
 import { FormattedConfigLevel, type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
 import {
-    useCodeReviewModelData,
-    usePlatformConfig,
-} from "../../../_components/context";
-import {
     useCodeReviewRouteParams,
     useCurrentConfigLevel,
 } from "../../../_hooks";
+import { ApprovalPolicySettings } from "./_components/approval-policy";
 import { AutomatedReviewActive } from "./_components/automated-review-active";
 import { BaseBranches } from "./_components/base-branches";
 import { BYOKModelSelectorSection } from "./_components/byok-model-selector";
@@ -79,6 +92,26 @@ export default function General() {
     const platformConfig = usePlatformConfig();
     const { byokModels } = useCodeReviewModelData();
     const form = useFormContext<CodeReviewFormType>();
+    const { license } = useSubscriptionContext();
+    const conditionalApprovalBetaEnabled =
+        useFeatureFlags().conditionalPrApproval === true;
+    const conditionalApprovalPlanAllowed = isTeamsOrEnterprisePlan(license);
+    const conditionalApprovalEnabled =
+        conditionalApprovalBetaEnabled && conditionalApprovalPlanAllowed;
+    const planCta = planCtaTarget();
+    const canOpenPlanCta = useCanFollowGateLink(planCta.href);
+    const approvalPolicyValues = useWatch({
+        control: form.control,
+        name: [
+            "approvalLabels.value",
+            "approvalAuthors.value",
+            "approvalSensitivePaths.value",
+            "approvalRiskActive.value",
+        ],
+    });
+    const hasApprovalPolicy = approvalPolicyValues.some((value) =>
+        Array.isArray(value) ? value.length > 0 : value === true,
+    );
     const { teamId } = useSelectedTeamId();
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
     const currentLevel = useCurrentConfigLevel();
@@ -200,15 +233,15 @@ export default function General() {
     }
 
     return (
-        <Page.Root>
+        <Page.Root className="min-w-0">
             {/* Sticky: this is a long column of toggles and the only way to
                 keep a change lives up here. Scrolled away, flipping something
                 near the bottom left the reader with no save in reach and
                 nothing on screen saying anything was pending. */}
-            <Page.Header sticky>
+            <Page.Header sticky className="min-w-0 gap-y-2 px-4 sm:px-8">
                 <Page.TitleContainer>
                     <Page.Title>General settings</Page.Title>
-                    <Page.Description>
+                    <Page.Description className="hidden sm:block">
                         When Kody reviews, which pull requests and files it
                         skips, and how it reports back on the pull request.
                     </Page.Description>
@@ -225,7 +258,7 @@ export default function General() {
                             leftIcon={<Settings2Icon />}
                             onClick={() => setIsCentralizedModalOpen(true)}
                             variant="helper"
-                            className="whitespace-nowrap"
+                            className="hidden whitespace-nowrap sm:inline-flex"
                             disabled={!canEdit}>
                             Configure centralized config
                         </Button>
@@ -233,11 +266,28 @@ export default function General() {
                 </Page.SaveActions>
             </Page.Header>
 
-            <Page.Content>
+            <Page.Content className="min-w-0 gap-5 px-4 sm:px-8">
                 <CentralizedConfigReadOnlyAlert />
 
-                <div data-field-name="automatedReviewActive">
-                    <AutomatedReviewActive />
+                {isGlobalGeneralView && (
+                    <Button
+                        size="sm"
+                        leftIcon={<Settings2Icon />}
+                        onClick={() => setIsCentralizedModalOpen(true)}
+                        variant="helper"
+                        className="self-start sm:hidden"
+                        disabled={!canEdit}>
+                        Configure centralized config
+                    </Button>
+                )}
+
+                <div className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 min-w-0 divide-y overflow-hidden rounded-xl border">
+                    <div data-field-name="automatedReviewActive">
+                        <AutomatedReviewActive />
+                    </div>
+                    <div data-field-name="runOnDraft">
+                        <RunOnDraft />
+                    </div>
                 </div>
 
                 {repositoryId !== "global" && (
@@ -246,39 +296,168 @@ export default function General() {
                     </div>
                 )}
 
-                <div data-field-name="kodusConfigFileOverridesWebPreferences">
-                    <KodusConfigFileOverridesWebPreferences />
-                </div>
-                <div data-field-name="pullRequestApprovalActive">
-                    <PullRequestApprovalActive />
-                </div>
-                <AsyncBoundary errorVariant="minimal">
-                    <div data-field-name="isRequestChangesActive">
-                        <IsRequestChangesActive />
+                {currentLevel !== FormattedConfigLevel.GLOBAL && (
+                    <div
+                        data-field-name="kodusConfigFileOverridesWebPreferences"
+                        className="border-card-lv3/60 bg-card-lv1 min-w-0 rounded-xl border">
+                        <KodusConfigFileOverridesWebPreferences />
                     </div>
-                </AsyncBoundary>
-                <div data-field-name="runOnDraft">
-                    <RunOnDraft />
+                )}
+                <div
+                    data-field-name="pullRequestApprovalActive"
+                    className="border-card-lv3/60 bg-card-lv1 overflow-hidden rounded-xl border">
+                    <PullRequestApprovalActive
+                        conditionalApprovalEnabled={conditionalApprovalEnabled}
+                    />
+                    {conditionalApprovalEnabled ? (
+                        <AsyncBoundary errorVariant="minimal">
+                            <ApprovalPolicySettings />
+                        </AsyncBoundary>
+                    ) : (
+                        <div className="border-card-lv3/60 border-t px-5 py-5 sm:px-6">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex min-w-0 items-start gap-3">
+                                    <div className="bg-card-lv2 text-text-secondary flex size-9 shrink-0 items-center justify-center rounded-lg">
+                                        <LockIcon
+                                            aria-hidden
+                                            className="size-4"
+                                        />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="text-text-primary flex items-center gap-2 text-sm font-semibold">
+                                            Conditional approval{" "}
+                                            <Badge>Beta</Badge>
+                                        </div>
+                                        <p className="text-text-secondary mt-1 max-w-2xl text-sm leading-5">
+                                            {conditionalApprovalPlanAllowed
+                                                ? "Beta access is not enabled for this workspace yet. Automatic approval without conditions remains available."
+                                                : "Choose which PRs Kody may approve using labels and authors. Require a person for sensitive paths or higher-risk changes."}
+                                        </p>
+                                    </div>
+                                </div>
+                                {!conditionalApprovalPlanAllowed &&
+                                    (canOpenPlanCta ? (
+                                        <Link
+                                            href={planCta.href}
+                                            className="shrink-0 self-start sm:self-center">
+                                            <Button
+                                                decorative
+                                                size="sm"
+                                                variant="primary"
+                                                rightIcon={<ArrowRightIcon />}>
+                                                {planCta.label}
+                                            </Button>
+                                        </Link>
+                                    ) : (
+                                        <p className="text-text-secondary shrink-0 text-xs leading-5 sm:max-w-44">
+                                            Ask an organization admin to upgrade
+                                            the plan.
+                                        </p>
+                                    ))}
+                            </div>
+                            {hasApprovalPolicy && (
+                                <div className="border-card-lv3/60 mt-5 border-t pt-4">
+                                    <p className="text-text-primary text-sm font-medium">
+                                        Saved conditions are holding automatic
+                                        approval.
+                                    </p>
+                                    <p className="text-text-secondary mt-1 text-xs leading-5">
+                                        Clear them to use automatic approval
+                                        without conditions.
+                                    </p>
+                                    <Button
+                                        size="sm"
+                                        variant="helper"
+                                        className="mt-2"
+                                        disabled={!canEdit}
+                                        onClick={() => {
+                                            form.setValue(
+                                                "approvalLabels.value",
+                                                [],
+                                                { shouldDirty: true },
+                                            );
+                                            form.setValue(
+                                                "approvalAuthors.value",
+                                                [],
+                                                { shouldDirty: true },
+                                            );
+                                            form.setValue(
+                                                "approvalSensitivePaths.value",
+                                                [],
+                                                { shouldDirty: true },
+                                            );
+                                            form.setValue(
+                                                "approvalRiskActive.value",
+                                                false,
+                                                { shouldDirty: true },
+                                            );
+                                            form.setValue(
+                                                "approvalRiskInstructions.value",
+                                                "",
+                                                { shouldDirty: true },
+                                            );
+                                        }}>
+                                        Clear saved conditions
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
-                <div data-field-name="showStatusFeedback">
-                    <ShowStatusFeedback />
-                </div>
-                <AsyncBoundary errorVariant="minimal">
-                    <div data-field-name="enableCommittableSuggestions">
-                        <EnableCommittableSuggestions />
+                <div className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 min-w-0 divide-y overflow-hidden rounded-xl border">
+                    <div className="px-5 py-4 sm:px-6">
+                        <h2 className="text-text-primary text-base font-semibold">
+                            Review feedback
+                        </h2>
+                        <p className="text-text-secondary mt-1 text-xs leading-5">
+                            Choose how Kody responds on a pull request.
+                        </p>
                     </div>
-                </AsyncBoundary>
-                <div data-field-name="ignorePaths">
-                    <IgnorePaths />
+                    <AsyncBoundary errorVariant="minimal">
+                        <div data-field-name="isRequestChangesActive">
+                            <IsRequestChangesActive />
+                        </div>
+                    </AsyncBoundary>
+                    <div data-field-name="showStatusFeedback">
+                        <ShowStatusFeedback />
+                    </div>
+                    <AsyncBoundary errorVariant="minimal">
+                        <div data-field-name="enableCommittableSuggestions">
+                            <EnableCommittableSuggestions />
+                        </div>
+                    </AsyncBoundary>
                 </div>
-                <div data-field-name="ignoredTitleKeywords">
-                    <IgnoredTitleKeywords />
-                </div>
-                <div data-field-name="baseBranches">
-                    <BaseBranches />
+
+                <div className="border-card-lv3/60 bg-card-lv1 divide-card-lv3/60 min-w-0 divide-y overflow-hidden rounded-xl border">
+                    <div className="px-5 py-4 sm:px-6">
+                        <h2 className="text-text-primary text-base font-semibold">
+                            Review scope
+                        </h2>
+                        <p className="text-text-secondary mt-1 text-xs leading-5">
+                            Skip files or pull requests that do not need a
+                            review.
+                        </p>
+                    </div>
+                    <div
+                        data-field-name="ignorePaths"
+                        className="min-w-0 px-5 py-4 sm:px-6">
+                        <IgnorePaths />
+                    </div>
+                    <div
+                        data-field-name="ignoredTitleKeywords"
+                        className="min-w-0 px-5 py-4 sm:px-6">
+                        <IgnoredTitleKeywords />
+                    </div>
+                    <div
+                        data-field-name="baseBranches"
+                        className="min-w-0 px-5 py-4 sm:px-6">
+                        <BaseBranches />
+                    </div>
                 </div>
                 {repositoryId === "global" && (
-                    <div data-field-name="language">
+                    <div
+                        data-field-name="language"
+                        className="border-card-lv3/60 bg-card-lv1 min-w-0 rounded-xl border px-5 py-4 sm:px-6">
                         <FormProvider {...form}>
                             <LanguageSelector />
                         </FormProvider>

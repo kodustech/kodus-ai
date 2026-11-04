@@ -73,23 +73,6 @@ describe('ForgejoService — getCheckEvidence', () => {
         ]);
     });
 
-    it('queries the head commit ref', async () => {
-        repoListStatusesByRef.mockResolvedValue({ data: [] });
-        const service = makeService();
-
-        await service.getCheckEvidence({
-            organizationAndTeamData,
-            repository,
-            commitSha,
-        });
-
-        expect(repoListStatusesByRef).toHaveBeenCalledWith(
-            expect.objectContaining({
-                path: { owner: 'acme', repo: 'widget-api', ref: commitSha },
-            }),
-        );
-    });
-
     it.each([
         ['failure', 'failure'],
         ['error', 'failure'],

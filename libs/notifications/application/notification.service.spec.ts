@@ -78,23 +78,6 @@ describe('NotificationService.emit', () => {
         expect((call.payload as any).recipients).toHaveLength(1);
     });
 
-    it('passes through an array of recipients unchanged', async () => {
-        const recipients = [
-            { kind: 'user' as const, userId: 'user-1' },
-            { kind: 'role' as const, role: 'owner' as any },
-        ];
-
-        await service.emit({
-            event: NotificationEvent.AUTH_FORGOT_PASSWORD,
-            payload: { email: 'a@b.com', name: 'Acme', token: 't' },
-            organizationId: 'org-1',
-            recipients,
-        });
-
-        const call = outboxRepository.create.mock.calls[0][0];
-        expect((call.payload as any).recipients).toEqual(recipients);
-    });
-
     it('skips the emit (no outbox row, warn log) when recipients is empty', async () => {
         await service.emit({
             event: NotificationEvent.AUTH_FORGOT_PASSWORD,

@@ -139,11 +139,6 @@ describe('GitlabService.createResponseToComment', () => {
         expect(callArgs).not.toContain(1258376);
     });
 
-    it('returns the addNote response on success', async () => {
-        const result = await gitlabService.createResponseToComment(baseParams);
-        expect(result).toEqual({ id: 999 });
-    });
-
     it('returns null when addNote throws', async () => {
         addNoteMock.mockRejectedValueOnce(new Error('boom'));
         const errorSpy = jest

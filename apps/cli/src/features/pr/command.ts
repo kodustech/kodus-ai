@@ -3,6 +3,10 @@ import chalk from 'chalk';
 import ora from 'ora';
 import fs from 'fs/promises';
 import { reviewService } from '../../services/review.service.js';
+import {
+    pullRequestReviewsService,
+    type PullRequestReviewsResult,
+} from '../../services/pr-reviews.service.js';
 import { gitService } from '../../services/git.service.js';
 import type { GlobalOptions } from '../../types/cli.js';
 import type {
@@ -41,6 +45,14 @@ type PrSuggestionsOptions = {
     fields?: string;
 };
 
+type PrReviewsOptions = {
+    repo?: string;
+    repoId?: string;
+    team?: string;
+    limit?: string;
+    json?: boolean;
+};
+
 type BusinessValidationOptions = {
     taskUrl?: string;
     taskId?: string;
@@ -66,6 +78,25 @@ export function createPrCommand(): Command {
             'Select response fields (JSON/agent mode only), e.g. summary,issues.file',
         )
         .action(prSuggestionsAction);
+
+    prCommand
+        .command('reviews')
+        .description(
+            'Review history of a pull request: every Kody run, newest first (requires kodus auth login)',
+        )
+        .argument('<pr-number>', 'Pull request number')
+        .option(
+            '--repo <repo>',
+            'Repository as owner/repo or name (default: this checkout origin)',
+        )
+        .option('--repo-id <id>', 'Repository ID (wins over --repo)')
+        .option(
+            '--team <team>',
+            'Team name or id (logged-in users with more than one team)',
+        )
+        .option('--limit <n>', 'Most recent runs to return (default 20)')
+        .option('--json', 'Output the review runs as JSON')
+        .action(prReviewsAction);
 
     prCommand
         .command('business-validation')
@@ -242,6 +273,117 @@ async function prSuggestionsAction(
     }
 }
 
+function printReviewRuns(result: PullRequestReviewsResult): void {
+    if (result.runs.length === 0) {
+        cliInfo(
+            chalk.yellow(
+                `No Kody reviews found for PR #${result.prNumber} in ${result.repository}.`,
+            ),
+        );
+        return;
+    }
+
+    const [latest] = result.runs;
+    cliInfo(chalk.bold(`PR #${result.prNumber} · ${latest.title}`));
+    cliInfo(chalk.dim(`${latest.repositoryName} · ${latest.url}`));
+    cliInfo('');
+
+    for (const run of result.runs) {
+        const execution = run.automationExecution;
+        const when = execution?.createdAt ?? 'unknown date';
+        const sent = run.suggestionsCount?.sent ?? 0;
+        const filtered = run.suggestionsCount?.filtered ?? 0;
+        const commit = run.reviewedCommitSha
+            ? ` · commit ${run.reviewedCommitSha.slice(0, 7)}`
+            : '';
+        cliInfo(
+            `${when} · ${execution?.status ?? 'unknown'} · ${sent} sent, ${filtered} filtered${commit}`,
+        );
+        // The run's own errorMessage is often empty; the failing stage of
+        // the timeline says why, as the PR page's timeline does.
+        const failedStage = run.codeReviewTimeline?.find(
+            (stage) => stage.status === 'error' && stage.message,
+        );
+        const reason = execution?.errorMessage || failedStage?.message;
+        if (reason) {
+            const stage = failedStage?.stageLabel
+                ? `${failedStage.stageLabel}: `
+                : '';
+            cliInfo(
+                chalk.red(`  ${execution?.errorMessage ? '' : stage}${reason}`),
+            );
+        }
+    }
+
+    if (result.truncated) {
+        cliInfo('');
+        cliInfo(
+            chalk.dim(
+                `Showing the ${result.runs.length} most recent runs. Pass --limit for more.`,
+            ),
+        );
+    }
+}
+
+async function prReviewsAction(
+    prNumberArg: string,
+    options: PrReviewsOptions,
+    cmd: Command,
+): Promise<void> {
+    const globalOpts = cmd.optsWithGlobals() as GlobalOptions;
+    const ctx = createCommandContext('pr reviews', globalOpts);
+
+    try {
+        const prNumber = parseOptionalNumber(prNumberArg, '<pr-number>');
+        const limit = parseOptionalNumber(options.limit, '--limit');
+
+        const result = await pullRequestReviewsService.list({
+            prNumber: prNumber as number,
+            repository: options.repo,
+            repositoryId: options.repoId,
+            team: options.team,
+            limit,
+        });
+
+        if (ctx.isAgent) {
+            await emitAgentEnvelope(
+                buildAgentSuccessEnvelope(ctx.command, result, ctx.startedAt),
+                ctx.outputFile,
+            );
+            return;
+        }
+
+        if (options.json || globalOpts.format === 'json') {
+            cliInfo(JSON.stringify(result, null, 2));
+            return;
+        }
+
+        printReviewRuns(result);
+    } catch (error) {
+        const normalized = normalizeCommandError(error);
+
+        if (ctx.isAgent) {
+            await emitAgentEnvelope(
+                buildAgentErrorEnvelope(
+                    ctx.command,
+                    {
+                        code: normalized.code,
+                        message: normalized.message,
+                        details: normalized.details,
+                    },
+                    ctx.startedAt,
+                ),
+                ctx.outputFile,
+            );
+            exitWithCode(normalized.exitCode > 0 ? normalized.exitCode : 1);
+            return;
+        }
+
+        cliError(chalk.red(normalized.message));
+        exitWithCode(normalized.exitCode);
+    }
+}
+
 async function businessValidationAction(
     files: string[],
     options: BusinessValidationOptions,
@@ -249,6 +391,10 @@ async function businessValidationAction(
 ): Promise<void> {
     const spinner = ora();
     const globalOpts = cmd.optsWithGlobals() as GlobalOptions;
+    const ctx = createCommandContext('pr business-validation', globalOpts);
+    // An agent reads the structured verdict: per requirement, its state,
+    // evidence and the change to make.
+    const structured = ctx.isAgent || globalOpts.format === 'json';
 
     try {
         if (options.taskUrl && options.taskId) {
@@ -278,6 +424,29 @@ async function businessValidationAction(
             diff,
         };
 
+        if (options.dryRun && structured) {
+            const dryRun = { dryRun: true, payload };
+            if (ctx.isAgent) {
+                await emitAgentEnvelope(
+                    buildAgentSuccessEnvelope(
+                        ctx.command,
+                        dryRun,
+                        ctx.startedAt,
+                    ),
+                    ctx.outputFile,
+                );
+            } else if (globalOpts.output) {
+                await fs.writeFile(
+                    globalOpts.output,
+                    JSON.stringify(dryRun, null, 2),
+                    'utf-8',
+                );
+            } else {
+                process.stdout.write(`${JSON.stringify(dryRun, null, 2)}\n`);
+            }
+            return;
+        }
+
         if (options.dryRun) {
             cliInfo(
                 chalk.cyan(
@@ -288,11 +457,38 @@ async function businessValidationAction(
             return;
         }
 
-        if (!globalOpts.quiet) {
+        if (!globalOpts.quiet && !structured) {
             spinner.start(chalk.cyan('Running business validation...'));
         }
 
         const response = await reviewService.triggerBusinessValidation(payload);
+
+        if (structured) {
+            const verdict = {
+                command: response.command,
+                repository: response.repositoryName,
+                task: response.taskReference,
+                ...(response.verdict ?? { result: response.result }),
+            };
+            if (ctx.isAgent) {
+                await emitAgentEnvelope(
+                    buildAgentSuccessEnvelope(
+                        ctx.command,
+                        verdict,
+                        ctx.startedAt,
+                    ),
+                    ctx.outputFile,
+                );
+                return;
+            }
+            const output = JSON.stringify(verdict, null, 2);
+            if (globalOpts.output) {
+                await fs.writeFile(globalOpts.output, output, 'utf-8');
+            } else {
+                process.stdout.write(`${output}\n`);
+            }
+            return;
+        }
 
         if (!globalOpts.quiet) {
             spinner.succeed(chalk.green('Business validation completed.'));
@@ -309,7 +505,24 @@ async function businessValidationAction(
         cliInfo('');
         cliInfo(response.result);
     } catch (error) {
-        if (!globalOpts.quiet) {
+        if (ctx.isAgent) {
+            const normalized = normalizeCommandError(error);
+            await emitAgentEnvelope(
+                buildAgentErrorEnvelope(
+                    ctx.command,
+                    {
+                        code: normalized.code,
+                        message: normalized.message,
+                        details: normalized.details,
+                    },
+                    ctx.startedAt,
+                ),
+                ctx.outputFile,
+            );
+            exitWithCode(normalized.exitCode > 0 ? normalized.exitCode : 1);
+        }
+
+        if (!globalOpts.quiet && !structured) {
             spinner.fail(chalk.red('Failed to trigger business validation'));
         }
 

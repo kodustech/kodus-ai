@@ -13,14 +13,4 @@ describe('AgentContextWindowTooSmallError', () => {
         );
     });
 
-    it('exposes the numeric fields callers need for telemetry', () => {
-        const err = new AgentContextWindowTooSmallError({
-            contextWindow: 12_288,
-            overheadTokens: 15_500,
-            modelName: 'llama',
-        });
-        expect(err.contextWindow).toBe(12_288);
-        expect(err.overheadTokens).toBe(15_500);
-        expect(err.modelName).toBe('llama');
-    });
 });

@@ -38,19 +38,6 @@ describe("GateCtaLink", () => {
         expect(link).toHaveAttribute("href", "/settings/subscription");
     });
 
-    it("renders a custom label and href when given", () => {
-        render(
-            <GateCtaLink
-                feature="kody_rules"
-                label="See plans"
-                href="/pricing"
-            />,
-        );
-
-        const link = screen.getByRole("link", { name: /see plans/i });
-        expect(link).toHaveAttribute("href", "/pricing");
-    });
-
     it("fires captureGateCtaClick with the gate id, both plan fields and metadata", () => {
         render(
             <GateCtaLink

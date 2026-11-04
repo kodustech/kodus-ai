@@ -73,6 +73,52 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         super();
     }
 
+    private async postHoldReasonIfNeeded(
+        context: CodeReviewPipelineContext,
+        reviewFailed: boolean,
+        reviewHasPartialErrors: boolean,
+    ): Promise<CodeReviewPipelineContext> {
+        if (
+            context.approvalDecision?.kind !== 'hold' ||
+            reviewFailed ||
+            reviewHasPartialErrors
+        ) {
+            return context;
+        }
+        try {
+            await this.commentManagerService.postApprovalReason(
+                context.organizationAndTeamData,
+                context.pullRequest.number,
+                context.repository,
+                context.approvalDecision.reason,
+                'hold',
+            );
+        } catch (error) {
+            this.logger.warn({
+                message: 'Could not publish automatic approval hold reason',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationId:
+                        context.organizationAndTeamData.organizationId,
+                    teamId: context.organizationAndTeamData.teamId,
+                    repositoryId: context.repository.id,
+                    prNumber: context.pullRequest.number,
+                },
+            });
+            return this.updateContext(context, (draft) => {
+                draft.errors ??= [];
+                draft.errors.push({
+                    stage: this.stageName,
+                    substage: 'approval-hold-reason-publication',
+                    severity: 'partial',
+                    error,
+                });
+            });
+        }
+        return context;
+    }
+
     /**
      * The sticky comment carrying the reasoning behind the change.
      *
@@ -371,6 +417,14 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             context.pullRequestMessagesConfig?.endReviewMessage;
 
         if (!endReviewMessage) {
+            // The default completion comment is updated in place. Keep the
+            // separate approval status current when a later review holds a PR
+            // that Kody previously approved.
+            context = await this.postHoldReasonIfNeeded(
+                context,
+                reviewFailed,
+                reviewHasPartialErrors,
+            );
             await this.commentManagerService.updateOverallComment(
                 organizationAndTeamData,
                 pullRequest.number,
@@ -389,6 +443,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
                 !!context.onlyCustomAgent,
+                context.approvalDecision,
             );
             return context;
         }
@@ -397,6 +452,11 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
             endReviewMessage.status === PullRequestMessageStatus.OFF ||
             endReviewMessage.status === PullRequestMessageStatus.INACTIVE
         ) {
+            context = await this.postHoldReasonIfNeeded(
+                context,
+                reviewFailed,
+                reviewHasPartialErrors,
+            );
             return context;
         }
 
@@ -405,6 +465,11 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 PullRequestMessageStatus.ONLY_WHEN_OPENED &&
             context.lastExecution
         ) {
+            context = await this.postHoldReasonIfNeeded(
+                context,
+                reviewFailed,
+                reviewHasPartialErrors,
+            );
             return context;
         }
 
@@ -461,6 +526,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 context.linkedRepositoriesMetadata,
                 context.reviewWarnings,
                 !!context.onlyCustomAgent,
+                context.approvalDecision,
             );
             return context;
         }
@@ -482,6 +548,15 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         ) {
             const finalCommentBody = endReviewMessage.content;
 
+            // End-review messages can be created on every push. Keep the
+            // approval reason in its marked comment so an older message does
+            // not keep showing a stale hold after a later review.
+            context = await this.postHoldReasonIfNeeded(
+                context,
+                reviewFailed,
+                reviewHasPartialErrors,
+            );
+
             await this.commentManagerService.createComment(
                 organizationAndTeamData,
                 pullRequest.number,
@@ -499,6 +574,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
                 context.reviewWarnings,
+                undefined,
             );
         }
 

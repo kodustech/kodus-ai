@@ -8,86 +8,6 @@ import { ignoredFilesForCustomAgents } from '@libs/code-review/infrastructure/ag
 import { CUSTOM_AGENTS_PLAN_REQUIRED } from '@libs/code-review/infrastructure/agents/custom-agents/custom-agents-plan';
 import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
 
-describe('ValidateConfigStage — no BYOK config', () => {
-    let stage: ValidateConfigStage;
-    let mockAutomationExecutionService: any;
-    let mockOrganizationParametersService: any;
-    let mockCodeManagementService: any;
-    let context: CodeReviewPipelineContext;
-
-    const buildContext = (
-        byokModel: string | undefined,
-    ): CodeReviewPipelineContext =>
-        ({
-            origin: 'command',
-            platformType: 'github',
-            teamAutomationId: 'team-automation-id',
-            organizationAndTeamData: {
-                organizationId: 'org-1',
-                teamId: 'team-1',
-            },
-            repository: { id: 'repo-1', name: 'repo' },
-            pullRequest: {
-                number: 1,
-                title: 'feat: something',
-                isDraft: false,
-                base: { ref: 'main' },
-                head: { ref: 'feature' },
-            },
-            codeReviewConfig: {
-                automatedReviewActive: true,
-                ignoredTitleKeywords: [],
-                baseBranches: [],
-                runOnDraft: true,
-                byokModel,
-            },
-        }) as unknown as CodeReviewPipelineContext;
-
-    beforeEach(async () => {
-        mockAutomationExecutionService = {
-            findLatestExecutionByFilters: jest.fn().mockResolvedValue(null),
-        };
-
-        mockOrganizationParametersService = {
-            findByKey: jest.fn(),
-        };
-
-        mockCodeManagementService = {
-            createSingleIssueComment: jest.fn(),
-        };
-
-        const module: TestingModule = await Test.createTestingModule({
-            providers: [
-                ValidateConfigStage,
-                {
-                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
-                    useValue: mockAutomationExecutionService,
-                },
-                {
-                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
-                    useValue: mockOrganizationParametersService,
-                },
-                {
-                    provide: CodeManagementService,
-                    useValue: mockCodeManagementService,
-                },
-            ],
-        }).compile();
-
-        stage = module.get<ValidateConfigStage>(ValidateConfigStage);
-    });
-
-    it('does not crash when there is no BYOK config', async () => {
-        mockOrganizationParametersService.findByKey.mockResolvedValue(null);
-
-        context = buildContext('gpt-5-mini');
-
-        const result = await stage.execute(context);
-
-        expect(result.codeReviewConfig.byokConfig).toBeUndefined();
-    });
-});
-
 describe('ValidateConfigStage — v2 routing', () => {
     let stage: ValidateConfigStage;
     let mockAutomationExecutionService: any;
@@ -188,18 +108,13 @@ describe('ValidateConfigStage — v2 routing', () => {
         expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
-    it('routes the codeReview task to the byokModelId id-override (top of precedence)', async () => {
-        mockOrganizationParametersService.findByKey.mockResolvedValue({
-            configValue: v2({ defaultModelId: 'm-A' }),
-        });
+    it('does not crash when there is no BYOK config', async () => {
+        mockOrganizationParametersService.findByKey.mockResolvedValue(null);
 
-        // byokModelId 'm-B' is a models[] id → routes straight to that model.
-        const result = await stage.execute(buildContext(undefined, 'm-B'));
+        const result = await stage.execute(buildContext('gpt-5-mini'));
 
-        expect(result.codeReviewConfig.byokConfig?.model).toBe(
-            'gpt-5-mini',
-        );
-        expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
+        expect(result.codeReviewConfig.byokConfig).toBeUndefined();
+        expect(result.statusInfo?.status).not.toBe('skipped');
     });
 
     it('lets byokModelId (id) win over the legacy byokModel NAME', async () => {
@@ -213,6 +128,7 @@ describe('ValidateConfigStage — v2 routing', () => {
         expect(result.codeReviewConfig.byokConfig?.model).toBe(
             'gpt-5-mini',
         );
+        expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
     it('W1: a legacy byokModel NAME override still resolves on a config', async () => {
@@ -500,12 +416,6 @@ describe('ValidateConfigStage — @kody -v naming no agent', () => {
         expect(createSingleIssueComment).not.toHaveBeenCalled();
         expect(result.statusInfo?.status).not.toBe('skipped');
     });
-
-    it('leaves a review without -v alone', async () => {
-        await stage.execute(buildContext(undefined, []));
-
-        expect(createSingleIssueComment).not.toHaveBeenCalled();
-    });
 });
 
 describe('ValidateConfigStage — custom agents plan gate', () => {
@@ -676,5 +586,6 @@ describe('ValidateConfigStage — custom agents plan gate', () => {
         await stage.execute(context);
 
         expect(validateOrganizationLicense).not.toHaveBeenCalled();
+        expect(createSingleIssueComment).not.toHaveBeenCalled();
     });
 });

@@ -91,8 +91,6 @@ export interface BuildVerifierSpecParams {
     /** System prompt override — the convention verifier passes its own. The
      *  HV2 prompt when absent. */
     systemPrompt?: string;
-    /** Provider options attached to the system message (e.g. Anthropic prompt
-     *  caching) so the verifier's system prompt is cached across steps. */
 }
 
 export function buildVerifierAgentSpec(
@@ -158,30 +156,25 @@ function repoInstructionEvidence(
     return `Label: repo_instruction\n${VERIFIER_REPO_INSTRUCTION_RULE}\n${block}`;
 }
 
-/** Format a finding into the verifier's per-run task prompt (HV2 evidence).
+/** The evidence bundle: the finding's fields the verifier receives.
  *  `previousDecisions` (issue #1313) is the PR's history, not filtered by
- *  file — see LlmVerifier.verify(). `laneFocus` (a custom agent kept to its
- *  lane, #2172) adds the out-of-focus drop criterion; absent, the prompt is
- *  unchanged. `repoInstructions` is read only for a `repo_instruction`
- *  candidate. */
-export function verifierPromptFor(
+ *  file — see LlmVerifier.verify() (#2020). `laneFocus` (a custom agent kept
+ *  to its lane, #2172) adds the out-of-focus drop criterion; absent, the
+ *  prompt is unchanged. `repoInstructions` is read only for a
+ *  `repo_instruction` candidate. */
+export function bundleFor(
     finding: FinderSuggestion,
     previousDecisions?: readonly PrDecisionRecord[],
-    options: {
-        laneFocus?: string;
-        repoInstructions?: RepoInstructionsContext;
-    } = {},
+    options: VerifierPromptOptions = {},
 ): string {
     const laneFocus =
         typeof options?.laneFocus === 'string' ? options.laneFocus : '';
-    const bundle = [
+    return [
         `File: ${finding.relevantFile}`,
         finding.relevantLinesStart != null
             ? `Lines: ${finding.relevantLinesStart}-${finding.relevantLinesEnd ?? finding.relevantLinesStart}`
             : '',
-        `Severity: ${finding.severity ?? 'unknown'}`,
         `Claim: ${finding.suggestionContent}`,
-        finding.existingCode ? `Code:\n${finding.existingCode}` : '',
         repoInstructionEvidence(finding, options?.repoInstructions),
         formatPreviousDecisions(previousDecisions),
         previousDecisions?.length ? VERIFIER_REPEAT_RULE : '',
@@ -189,7 +182,26 @@ export function verifierPromptFor(
     ]
         .filter(Boolean)
         .join('\n');
-    return buildVerifierPrompt(bundle, 0).prompt;
+}
+
+export type VerifierPromptOptions = {
+    /** A custom agent kept to its lane (#2172) adds the out-of-focus drop
+     *  criterion; absent, the prompt is unchanged. */
+    laneFocus?: string;
+    /** Read only for a `repo_instruction` candidate. */
+    repoInstructions?: RepoInstructionsContext;
+};
+
+/** Format a finding into the verifier's per-run task prompt (HV2 evidence). */
+export function verifierPromptFor(
+    finding: FinderSuggestion,
+    previousDecisions?: readonly PrDecisionRecord[],
+    options: VerifierPromptOptions = {},
+): string {
+    return buildVerifierPrompt(
+        bundleFor(finding, previousDecisions, options),
+        0,
+    ).prompt;
 }
 
 /** Extract the verdict from a verifier run: the run's materialized artifacts
@@ -320,13 +332,13 @@ export interface LlmVerifierParams {
      *  use accounts for it (a Gemini→OpenAI failover must not send strict). */
     fallbackModelId?: string;
     tools: ToolRegistry;
-    /** Depth for high-confidence findings (light verify). Default 7: six
-     *  tool steps to reach where the finding's facts are decided, and the verdict. */
+    /** Depth of every verify (light). Default 7: six tool steps to reach where
+     *  the finding's facts are decided, and the verdict. */
     lightMaxSteps?: number;
-    /** Depth for low-confidence findings (full verify). Default 10. */
+    /** Depth of the full verify. Default 10. */
     fullMaxSteps?: number;
-    /** When true, ALWAYS use full depth regardless of confidence. Used by the
-     *  evidence-gate re-verify, which forces a thorough second look. */
+    /** When true, use the full depth. Used by the evidence-gate re-verify,
+     *  which forces a thorough second look. */
     forceFull?: boolean;
     /** Provider options (reasoning/thinking config) forwarded to the model. */
     providerOptions?: Readonly<Record<string, unknown>>;
@@ -357,10 +369,9 @@ export interface LlmVerifierParams {
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
  *  the shared runner. ONE implementation of the Verifier port.
  *
- *  CONFIDENCE SPLIT (ported from the legacy loop): confidence decides DEPTH, not
- *  whether to run — high-confidence (>= 5) findings get a LIGHT verify (fewer
- *  steps), low-confidence get a FULL verify (more steps). `forceFull` overrides
- *  to full (the evidence-gate uses it).
+ *  Every finding gets the LIGHT verify; `forceFull` gives the FULL one (the
+ *  evidence gate uses it). The lean finder output (#1821) carries no
+ *  confidence, so depth no longer reads it.
  *
  *  It accumulates token usage across every verify() call so the caller can
  *  report the verify sub-step's cost. */
@@ -416,10 +427,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         candidate: FinderSuggestion,
         ctx: ToolContext,
     ): Promise<Verdict> {
-        // Confidence decides DEPTH (legacy rule): >= 5 → light, < 5 → full.
-        const useFull =
-            this.params.forceFull || (candidate.confidence ?? 5) < 5;
-        const spec = useFull ? this.fullSpec : this.lightSpec;
+        const spec = this.params.forceFull ? this.fullSpec : this.lightSpec;
 
         // Per-finding observation name so the trace shows which finding each
         // verdict judged (e.g. "finder/verify:src/x.ts#42").

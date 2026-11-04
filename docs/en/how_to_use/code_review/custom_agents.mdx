@@ -1,7 +1,6 @@
 ---
-title: "Custom Agents"
+title: "Overview"
 description: "Reviewers your team defines, each with its own instructions, files, knowledge and tools. They run next to Kody on the pull requests their files match."
-tag: 'beta'
 ---
 
 <Callout icon="alien" iconType="regular">Custom agents are in beta. Behavior and screens may still change.</Callout>
@@ -90,6 +89,8 @@ At a directory, an inherited agent opens read-only with **Override at this direc
 
 The page has a status line (on/off, the files it runs on and what it posted in the last 30 days), four cards, and the **Try it** panel. Changes on the page are kept with **Save**.
 
+When the agent's latest runs failed or stopped before finishing, the status line says so, with the reason and what fixes it: **Change the model** when the model is gone or the account can't use it, **Open AI providers** for a rejected key or an account out of credits. It clears once a run finishes.
+
 ### Instructions
 
 | Field | Notes |
@@ -103,7 +104,7 @@ The page has a status line (on/off, the files it runs on and what it posted in t
 | --- | --- |
 | **Files** | Globs the agent reviews, e.g. `src/payments/**`. Empty runs on every pull request. |
 | **Except** | Globs it skips, e.g. `**/*.test.ts`, `**/generated/**`. |
-| **Skills & docs** | The guides this agent follows, read from the pull request's target branch. See [Skills, docs and tools](/en/how_to_use/code_review/custom_agents_knowledge_and_tools). |
+| **Skills & docs** | The guides this agent follows, read from the pull request's target branch, or from another repository at its default branch or a branch or tag you set. See [Skills, docs and tools](/en/how_to_use/code_review/custom_agents_knowledge_and_tools). |
 
 Globs are matched against the path from the repository root, at every level, including at a directory.
 
@@ -174,10 +175,10 @@ Kody runs that agent alone, on the whole pull request, even while the agent is o
     Every enabled agent whose globs match at least one changed file runs. An agent with no matching file doesn't run.
   </Step>
   <Step title="Review">
-    Each agent reviews only its files, beside Kody's own review, and reports only what its instructions ask for. It reads skills and docs from the target branch and uses its tools.
+    Each agent reviews only its files, beside Kody's own review, and reports only what its instructions ask for. It reads skills and docs from the target branch (a guide of another repository from the branch set for it) and uses its tools.
   </Step>
   <Step title="Check every finding">
-    A convention finding must quote the rule it applies, from a linked guide or from the agent's instructions. A quote that is not in the guide on the target branch is dropped. A quote shortened with "..." passes when each part is there, in order. A verifier then drops findings outside the agent's focus or without support in the code. An ast-grep match counts as proof on its own.
+    A convention finding must quote the rule it applies, from a linked guide or from the agent's instructions. A quote that is not in the guide, on the branch it is read from, is dropped. A quote shortened with "..." passes when each part is there, in order. A verifier then drops findings outside the agent's focus or without support in the code. An ast-grep match counts as proof on its own.
   </Step>
   <Step title="Apply the agent's settings">
     The agent's minimum severity, then its comment limit (the most severe are kept).
@@ -220,17 +221,24 @@ Each agent's comments carry its tag, so the pull request shows which agent said 
   <Accordion title="Why was a finding dropped?">
     Run the agent with **Try it** on the same pull request: each dropped finding shows its reason. The usual ones:
 
-    - The quote is not in the guide on the target branch (paraphrased, or the guide changed only in the pull request).
+    - The quote is not in the guide on the branch it is read from (paraphrased, or the guide changed only in the pull request).
     - The finding is outside what the agent's instructions ask for.
     - The verifier found no support for it in the code.
     - It was below the agent's minimum severity, or over its comment limit.
     - Kody's review reported the same problem and kept its comment.
   </Accordion>
+  <Accordion title="Why is a guide from another repository not applied?">
+    **Try it** shows, under **Warnings**, which file was not read and why. The usual reasons:
+
+    - The repository is no longer connected to Kodus (unselected in Git settings, renamed, or its access revoked). Connect it again, then pick it under **Other repository…**.
+    - The integration's repositories could not be listed at that moment. The next review tries again.
+    - The file is not on that repository's default branch, or on the branch or tag you set.
+  </Accordion>
   <Accordion title="Can I configure agents in kodus-config.yml?">
     No. `customAgents` and `knowledge` in `kodus-config.yml` are not read. The closing comment says: "kodus-config.yml: customAgents is not read from this file; configure custom agents in the app."
   </Accordion>
   <Accordion title="Can a pull request change the rules it is judged by?">
-    No. Skills, docs and ast-grep rule files are read from the pull request's target branch. Edits to them in the pull request apply after it merges.
+    No. Skills, docs and ast-grep rule files are read from the pull request's target branch. Edits to them in the pull request apply after it merges. A skill or doc of another repository is read at that repository's default branch, or the branch or tag the team set, never at a ref the pull request names.
   </Accordion>
   <Accordion title="What happens to past comments when I delete an agent?">
     Its findings stay on past pull requests. The skills and docs stay registered on the Skills & docs page.

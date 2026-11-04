@@ -1,0 +1,48 @@
+{
+ "caseId": "unified-storage-performance-optimizations-grafana-codex",
+ "items": [
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#02",
+   "defectStatement": "TotalDocs iterates b.cache without cacheMu while BuildIndex can modify that map, causing a data race and potentially a fatal concurrent map iteration/write. The startup log calls TotalDocs after starting the event goroutine that can build indexes; Prometheus collection also calls it.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": true,
+   "obligations": [
+    "Synchronize all cache map access in TotalDocs with BuildIndex's cacheMu-protected writes.",
+    "Preserve summing successful document counts and skipping indexes whose DocCount returns an error.",
+    "Release any acquired lock on return and preserve BuildIndex's protected cache insertion."
+   ],
+   "exampleFix": "\tb.cacheMu.Lock()\n\tb.cache[key] = idx\n\tb.cacheMu.Unlock()\n\treturn idx, nil\n}\n\n// TotalDocs returns the total number of documents across all indices\nfunc (b *bleveBackend) TotalDocs() int64 {\n\tb.cacheMu.RLock()\n\tdefer b.cacheMu.RUnlock()\n\n\tvar totalDocs int64\n\tfor _, v := range b.cache {\n\t\tc, err := v.index.DocCount()\n\t\tif err != nil {\n\t\t\tcontinue\n\t\t}\n\t\ttotalDocs += int64(c)\n\t}\n\treturn totalDocs",
+   "notes": "The finding's historical claim is incorrect: locking only BuildIndex never synchronized an unlocked TotalDocs reader. An exclusive lock or copying index references under the lock before counting is also valid. The closing brace at line 154 is outside the replacement."
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#01",
+   "defectStatement": "BuildIndex locks only cache publication, allowing concurrent calls for the same key to create and populate indexes simultaneously. This duplicates expensive work, races creation of the same disk directory, and allows successful builds to overwrite each other's cached index.",
+   "anchorCoversDefect": true,
+   "fixability": "needs-wider-change",
+   "contextSufficient": true,
+   "obligations": [
+    "Prevent same-key builds from executing index creation, population, and flushing concurrently.",
+    "Keep cache publication synchronized and publish only successfully populated and flushed indexes.",
+    "Release build synchronization on every return path and preserve error propagation."
+   ],
+   "exampleFix": null,
+   "notes": "Synchronization must begin before index creation; changing lines 137–140 cannot prevent work already performed. The diff provides enough context to restore whole-function locking, although per-key synchronization permits unrelated builds to proceed independently. Serialization alone does not coalesce queued requests. The actual disk path is Root/Namespace/Resource.Group."
+  },
+  {
+   "issueId": "unified-storage-performance-optimizations-grafana-codex#sncc-01",
+   "defectStatement": "The PostgreSQL-specific skip prevents the integration test from exercising storage-server startup and eager initialization. The test's resource database configuration hardcodes localhost, whereas Drone runs PostgreSQL at the host supplied by POSTGRES_HOST.",
+   "anchorCoversDefect": true,
+   "fixability": "local",
+   "contextSufficient": false,
+   "obligations": [
+    "Run the integration test when GRAFANA_TEST_DB is postgres instead of skipping it.",
+    "Use the PostgreSQL test endpoint, preserving localhost:5432 defaults.",
+    "Preserve eager initialization and the existing startup and metrics assertions.",
+    "Keep connection overrides scoped to this test and preserve other database behavior."
+   ],
+   "exampleFix": "\tif dbType == \"postgres\" {\n\t\thost := os.Getenv(\"POSTGRES_HOST\")\n\t\tif host == \"\" {\n\t\t\thost = \"localhost\"\n\t\t}\n\t\tport := os.Getenv(\"POSTGRES_PORT\")\n\t\tif port == \"\" {\n\t\t\tport = \"5432\"\n\t\t}\n\t\tt.Setenv(\"GF_RESOURCE_API_DB_HOST\", host+\":\"+port)\n\t}",
+   "notes": "Repository inspection confirms that the resource database dynamically honors GF_RESOURCE_API_DB_HOST. This permits a local replacement, but that mechanism and Drone's endpoint variables are absent from the frozen input. Deleting the skip alone leaves the connection mismatch; fixing addStorageServerToConfig is an alternative requiring wider edits."
+  }
+ ]
+}

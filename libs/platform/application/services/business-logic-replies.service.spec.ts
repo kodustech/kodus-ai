@@ -145,6 +145,38 @@ describe('BusinessLogicReplies', () => {
         }
     });
 
+    it('reads a reply that names an open finding by the state the comment shows it in', async () => {
+        // The comment labels rows MISSING, PARTIAL…; "AC #2 MISSING is
+        // wrong" answers it even without the task id or a quote.
+        for (const message of [
+            '@kody AC #2 MISSING is wrong: the drag handle takes arrow keys',
+            '@kody the MISSING row is covered in useDrag.ts',
+        ]) {
+            const { replies, service } = build({ intent: 'other' });
+            await replies.handle({
+                request,
+                sender: { login: 'nina' },
+                message,
+            });
+            expect(service.classifyReply).toHaveBeenCalled();
+        }
+    });
+
+    it('leaves a state label no open finding is in, or a constant, to the chat', async () => {
+        for (const message of [
+            '@kody why is it PARTIAL?',
+            '@kody where does MISSING_FIELD come from?',
+        ]) {
+            const { replies, service } = build({ intent: 'other' });
+            await replies.handle({
+                request,
+                sender: { login: 'nina' },
+                message,
+            });
+            expect(service.classifyReply).not.toHaveBeenCalled();
+        }
+    });
+
     it('asks who the sender is only when a reply accepts', async () => {
         const access = jest.fn(async () => ({ canWrite: false }));
         const { replies, publisher } = build({

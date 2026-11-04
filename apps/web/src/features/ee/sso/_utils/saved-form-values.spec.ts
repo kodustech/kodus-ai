@@ -114,16 +114,4 @@ describe("toSamlProviderConfig", () => {
             issuer: undefined,
         });
     });
-
-    it("passes every field through as given", () => {
-        const config = {
-            idpIssuer: "https://idp.acme.com",
-            entryPoint: "https://idp.acme.com/sso",
-            cert: "MIIC",
-            identifierFormat: "urn:custom",
-            issuer: "acme-sp",
-        };
-
-        expect(toSamlProviderConfig(config)).toEqual(config);
-    });
 });

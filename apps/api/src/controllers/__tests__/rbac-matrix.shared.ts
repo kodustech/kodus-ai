@@ -245,7 +245,10 @@ function joinPath(base: string, sub: string): string {
     return '/' + parts.join('/');
 }
 
-function collectEndpoints(file: string): Endpoint[] {
+/** Every handler in a controller file, gated or not (`specs` null when ungated). */
+function collectHandlers(
+    file: string,
+): Array<Omit<Endpoint, 'specs'> & { specs: HandlerSpec[] | null }> {
     const text = fs.readFileSync(file, 'utf8');
     const source = ts.createSourceFile(
         file,
@@ -255,7 +258,9 @@ function collectEndpoints(file: string): Endpoint[] {
     );
     const consts = localConstSpecs(source);
     const relFile = path.basename(file);
-    const endpoints: Endpoint[] = [];
+    const handlers: Array<
+        Omit<Endpoint, 'specs'> & { specs: HandlerSpec[] | null }
+    > = [];
 
     const visit = (node: ts.Node) => {
         if (ts.isClassDeclaration(node)) {
@@ -290,24 +295,31 @@ function collectEndpoints(file: string): Endpoint[] {
                         source,
                         consts,
                     ) ?? classSpecs;
-                if (!specs) continue; // ungated
 
-                endpoints.push({
+                handlers.push({
                     key: `${relFile}#${member.name.getText(source)}`,
                     httpMethod,
                     urlPath: joinPath(base, sub),
-                    specs,
+                    specs: specs ?? null,
                 });
             }
         }
         ts.forEachChild(node, visit);
     };
     visit(source);
-    return endpoints;
+    return handlers;
+}
+
+export function collectAllRoutes(): Array<Omit<Endpoint, 'specs'>> {
+    return listControllerFiles(CONTROLLERS_DIR)
+        .flatMap(collectHandlers)
+        .map(({ key, httpMethod, urlPath }) => ({ key, httpMethod, urlPath }));
 }
 
 export function collectAllEndpoints(): Endpoint[] {
-    return listControllerFiles(CONTROLLERS_DIR).flatMap(collectEndpoints);
+    return listControllerFiles(CONTROLLERS_DIR)
+        .flatMap(collectHandlers)
+        .filter((h): h is Endpoint => h.specs !== null); // ungated dropped
 }
 
 const fakeReq = (role: Role) => ({

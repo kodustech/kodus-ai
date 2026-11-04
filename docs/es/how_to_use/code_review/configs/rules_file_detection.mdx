@@ -39,19 +39,17 @@ La opción se guarda como `repoInstructionsEnabled` en la configuración de revi
 
 Los archivos de configuración de herramientas (`.claude/settings.json`, `.opencode.json`, `.aider.conf.yml`, `.aiderignore`) se reconocen pero nunca se leen, porque no contienen instrucciones contra las que revisar el código.
 
+Las skills de Claude (`.claude/skills/**`) tampoco se leen: Claude carga una skill solo cuando una tarea la necesita.
+
 ## Cómo los usa una revisión
 
 - **Solo los archivos que cubren el cambio.** Un archivo en la raíz del repositorio cubre todos los archivos. Un archivo anidado como `services/billing/CLAUDE.md` cubre `services/billing/**`. Una regla de Cursor con `globs:` (y sin `alwaysApply: true`) o un archivo de Copilot con `applyTo:` cubre solo los archivos que declara. Una regla de Cursor sin ninguno de los dos, que Cursor solo carga cuando su agente la pide, no se lee.
 - **Se leen desde la rama de destino del pull request.** Un pull request se revisa con las instrucciones ya fusionadas en ella; los cambios que haga en las instrucciones solo cuentan después de fusionarse.
 - **Se siguen las referencias.** Un archivo que apunta a otro archivo del repositorio, con una línea que solo tiene una ruta (`AI-AGENTS.md`) o un import de Claude Code (`@docs/guide.md`), se sigue en la rama de destino: se lee el archivo al que apunta en su lugar, con los mismos límites. Las rutas fuera del repositorio se ignoran.
-- **Con límites.** Como máximo 8 archivos y 64 KB por revisión, primero los archivos de la raíz; un archivo más largo se recorta. La revisión registra en el log lo que quedó fuera.
+- **Con límites.** Como máximo 8 archivos y 64 KB por revisión, primero los archivos más cercanos al código modificado; un archivo más largo se recorta. La revisión registra en el log lo que quedó fuera.
 - **Los hallazgos llevan la etiqueta Repo Instruction.** Kody reporta uno solo cuando la instrucción aplica al archivo modificado y la línea que la incumple fue agregada o modificada por el pull request. El comentario cita la instrucción y nombra el archivo.
 - **Se aplican los filtros de la revisión.** Los hallazgos Repo Instruction pasan por el filtro de severidad y los límites de sugerencias del equipo como cualquier otro hallazgo; uno por debajo del umbral no se publica. La opción permite que Kody lea los archivos, no publicar por encima de esos límites.
 - **Nunca son instrucciones para Kody.** Los archivos se tratan como texto del repositorio contra el que se revisa el diff. Cualquier cosa que le pidan al revisor se ignora, y nunca cambian cómo se evalúan los bugs ni los problemas de seguridad o rendimiento.
-
-<Note>
-El modo de revisión profunda ejecuta revisores separados de bugs, seguridad y rendimiento, y no lee las instrucciones para agentes de código.
-</Note>
 
 ## Reglas importadas antes de este cambio
 

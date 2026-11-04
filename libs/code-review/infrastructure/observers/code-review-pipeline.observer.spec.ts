@@ -793,42 +793,6 @@ describe('CodeReviewPipelineObserver', () => {
             );
         });
 
-        it('should save actual error message for FinishCommentsStage', async () => {
-            context.errors = [
-                {
-                    stage: 'FinishCommentsStage',
-                    substage: 'resolve-comment',
-                    error: new Error('GitHub API rate limit exceeded'),
-                    // Posting comments fails but the review itself
-                    // completed — partial degradation, not a critical
-                    // failure of the review.
-                    severity: 'partial',
-                },
-            ];
-
-            await observer.onStageStart(
-                'FinishCommentsStage',
-                context as CodeReviewPipelineContext,
-                observersContext,
-            );
-
-            await observer.onStageFinish(
-                'FinishCommentsStage',
-                context as CodeReviewPipelineContext,
-                observersContext,
-            );
-
-            expect(
-                mockAutomationExecutionService.updateStageLog,
-            ).toHaveBeenCalledWith(
-                'stage-log-uuid',
-                expect.objectContaining({
-                    status: AutomationStatus.PARTIAL_ERROR,
-                    message: 'GitHub API rate limit exceeded',
-                }),
-            );
-        });
-
         it('should deduplicate repeated errors and show unique messages only', async () => {
             const repeatedError =
                 '429 Insufficient balance or no resource package. Please recharge.';

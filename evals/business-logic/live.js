@@ -30,6 +30,8 @@ if (!args.model) {
 
 const root = path.join(__dirname, '../..');
 require('dotenv').config({ path: path.join(root, '.env'), quiet: true });
+// libs/common/utils/crypto.ts reads API_CRYPTO_KEY at import time; CI has no .env.
+if (!process.env.API_CRYPTO_KEY) process.env.API_CRYPTO_KEY = '0'.repeat(64);
 const { orgRouteOrExit } = require('../shared/model-route');
 orgRouteOrExit(String(args.model));
 

@@ -36,6 +36,8 @@ El token debe incluir **todos** los siguientes permisos para funcionar correctam
 | `notification` | **Leer** | Ver notificaciones |
 | `user` | **Leer** | Leer información básica del usuario |
 
+El usuario del token también debe ser **admin de cada repositorio** que Kody revisa. Forgejo solo permite que un admin del repositorio cree webhooks y descarte revisiones; sin eso, Kody no puede registrar el webhook automáticamente ni retirar su aprobación cuando una revisión posterior la retiene.
+
 > ⚠️ Concede solo estos permisos necesarios; evita otorgar más de lo necesario para reducir riesgos de seguridad.
 
 ---

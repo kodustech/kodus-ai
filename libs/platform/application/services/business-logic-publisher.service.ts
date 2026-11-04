@@ -506,6 +506,7 @@ export class BusinessLogicPublisher {
         await this.pullRequestsService
             .addPrLevelSuggestions(
                 request.pullRequest.number,
+                String(request.repository.id),
                 request.repository.name,
                 [
                     {

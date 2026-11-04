@@ -385,7 +385,8 @@ export class BusinessLogicReplies {
 /**
  * Whether a comment answers the Business Logic comment, before any model is
  * asked: it is posted in that comment's thread, quotes it, or names one of
- * its findings (the task id, a state, or a run of the finding's words).
+ * its findings (the task id, the state label an open finding shows in, or a
+ * run of the finding's words).
  */
 function answersTheComment(
     input: BusinessLogicReplyInput,
@@ -409,8 +410,22 @@ function answersTheComment(
     return open.some(
         ({ finding }) =>
             namesId(message, normalized(finding.taskId)) ||
+            namesState(input.message, finding.state) ||
             sharesWords(message, normalized(finding.text), 4),
     );
+}
+
+/**
+ * The state as the comment labels it (`MISSING`, `NOT IN TASK`), in capitals
+ * and as whole words: "the null check is missing" or `MISSING_FIELD` is a
+ * question for the chat.
+ */
+function namesState(message: string, state: string): boolean {
+    const label = state.toUpperCase().replace(/_/g, ' ');
+    return new RegExp(
+        `(?<![\\p{L}\\p{N}_])${label}(?![\\p{L}\\p{N}_])`,
+        'u',
+    ).test(message);
 }
 
 /** The id as a whole word: `#1` is not in `#12`, nor `KOD-1` in `KOD-10`. */

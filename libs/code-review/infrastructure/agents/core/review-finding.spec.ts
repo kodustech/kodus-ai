@@ -35,6 +35,7 @@ function result(over: Partial<FinderWithVerifyResult> = {}): FinderWithVerifyRes
         finderState: { steps: [], usage: {} } as any,
         verifyUsage: {} as any,
         recallUsage: {} as any,
+        passStats: [],
         ...over,
     };
 }
@@ -91,12 +92,6 @@ describe('review-finding', () => {
                 outcome: 'dropped',
                 reason: 'not reachable in this path',
             });
-        });
-
-        it('carries self-confidence from the payload into provenance', () => {
-            const r = result({ kept: [sugg({ confidence: 7 })] });
-            const [f] = buildFindingsFromVerify(r, { agent: 'bug', pass: 'initial' });
-            expect(f.provenance.selfConfidence).toBe(7);
         });
     });
 

@@ -1,14 +1,13 @@
 ---
 title: "Skills, Docs and Tools"
 description: "Give a custom agent your repository's guides, read-only plugins, your team's CLIs and ast-grep rules."
-tag: 'beta'
 ---
 
 <Callout icon="alien" iconType="regular">Custom agents are in beta. Behavior and screens may still change.</Callout>
 
 ## Skills & docs
 
-Skills and docs are guides that already live in your repository. Kodus doesn't copy them: it reads them from the **pull request's target branch** on every review, so edits on that branch apply without coming back to the settings, and a pull request can't change the rule that judges it.
+Skills and docs are guides that already live in your repository. Kodus doesn't copy them: it reads them from the **pull request's target branch** on every review, so edits on that branch apply without coming back to the settings, and a pull request can't change the rule that judges it. A guide can also come from another repository, such as a shared rules repository (see **From another repository** below).
 
 | | Skill | Doc |
 | --- | --- | --- |
@@ -54,6 +53,22 @@ There are two places to link a skill or doc:
 
 At the global level, the Skills & docs page only accepts paths typed by hand. Each repository is read separately, so open a repository's settings to see whether each path exists there.
 
+### Cited by dropped findings
+
+When reviews drop findings because they quote a file the agent doesn't follow ("is not a guide linked to this review"), the agent's **Skills & docs** shows that file under **Cited by dropped findings**, with how many findings were dropped. **Follow** links it, from this repository or the repository it lives in. Only files that exist are offered.
+
+### From another repository
+
+Teams often keep their rules in one repository and apply them to many. Pick it under **From** when adding a skill or doc on an agent's page: the repository's linked repositories come first, and **Other repository…** lists every repository connected to Kodus (selected in Git settings). Connect the rules repository there first if it is not listed.
+
+- A guide of another repository is read from that repository's **default branch**, or from the branch or tag you set with **Use a branch or tag instead**. One branch or tag per repository. A pull request never changes it.
+- It is for custom agents only. The main review reads guides of the reviewed repository and its coding-agent instructions, not another repository's, so **Main review** is not offered for it on the Skills & docs page.
+- It loads like a guide of the reviewed repository, on every review, with no sandbox and whether or not the change touches the other repository.
+- The agent cites it as `owner/repo:path`, and the comment links the file.
+- When the rules repository is private and the reviewed one is public, the comment names the file without quoting it.
+
+When an agent's instructions name a linked repository it follows nothing from, its page says so and offers **Browse its rules**.
+
 <Warning>
   A file marked **Also a Kody Rules source** already feeds Kody Rules. Linking it to an agent too can make the same rule comment twice.
 </Warning>
@@ -78,6 +93,8 @@ A convention finding must **quote** the rule it applies. Kodus checks the quote 
 **Rule** (`docs/ledger.md`):
 > A reversal is a new entry, never an UPDATE of the original.
 ```
+
+A rule of another repository is cited as `owner/repo:path`, with a link to the file on the branch it was read from.
 
 ## Plugins (MCP)
 

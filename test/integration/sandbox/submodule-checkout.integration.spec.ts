@@ -239,11 +239,6 @@ describe('sandbox checkout of a repository with submodules', () => {
             await publish(dir, name);
         };
 
-        await buildSuper('super', `http://127.0.0.1:${port}/commons.git`);
-        await buildSuper(
-            'super-foreign',
-            `http://127.0.0.1:${foreignPort}/commons.git`,
-        );
         /**
          * A crafted `.gitmodules`: git's config parser accepts a variable on
          * the same line as the section header, so this declares TWO
@@ -276,7 +271,6 @@ describe('sandbox checkout of a repository with submodules', () => {
             await git(['-C', dir, 'commit', '-m', 'super-crafted']);
             await publish(dir, 'super-crafted');
         };
-        await buildSuperCrafted();
 
         /**
          * A pull request that ADDS a submodule: the base branch (`clean`) has
@@ -313,18 +307,6 @@ describe('sandbox checkout of a repository with submodules', () => {
             await git(['-C', dir, 'commit', '-m', 'add the submodule']);
             await publish(dir, 'super-adds');
         };
-        await buildSuperAdds();
-
-        // The idiomatic form, and the one this fix stopped resolving itself:
-        // origin is `<host>/super-relative.git`, so git resolves `../` to
-        // `<host>/commons.git`.
-        await buildSuper('super-relative', '../commons.git');
-        // An over-deep chain: git turns this into the scp-like `.:…`, NOT into
-        // an http url on the repo host the way WHATWG resolution would.
-        await buildSuper(
-            'super-escape',
-            '../../../../../../evil.example/commons.git',
-        );
 
         /** A superproject declaring two submodules at two paths. */
         const buildSuperTwo = async (
@@ -360,27 +342,12 @@ describe('sandbox checkout of a repository with submodules', () => {
             await publish(dir, name);
         };
 
-        // A legitimate submodule NEXT TO one whose relative url git cannot
-        // resolve — `git submodule init` is all-or-nothing.
-        await buildSuperTwo('super-mixed', {
-            path: 'packages/broken',
-            url: '../../../../../../evil.example/x.git',
-            sha: subSha.trim(),
-        });
-        // Two reachable submodules; the test denies one to model an
-        // installation that covers `brain` but not `commons`.
-        await buildSuperTwo('super-two', {
-            path: 'packages/brain',
-            url: `http://127.0.0.1:${port}/brain.git`,
-            sha: sub2Sha.trim(),
-        });
-
         // A submodule pinned to a commit that is NOT the branch tip, on a
         // server that does not serve unadvertised objects — the ordinary state
         // of a pinned submodule. This provider's recovery differs from E2B's:
         // it removes the leftover shallow gitdir with fs.rm, not a shell
         // `rm -rf`, so it needs its own end-to-end proof.
-        {
+        const buildPinned = async () => {
             const pinned = join(scratch, 'pinned-sub');
             await git(['init', '-b', 'main', pinned]);
             await writeFile(
@@ -425,7 +392,46 @@ describe('sandbox checkout of a repository with submodules', () => {
             ]);
             await git(['-C', dir, 'commit', '-m', 'pinned']);
             await publish(dir, 'super-pinned');
-        }
+        };
+
+        // Every fixture repository below is independent of the others, so
+        // they are built concurrently: sequential git spawns were most of this
+        // suite's wall time.
+        await Promise.all([
+            buildSuper('super', `http://127.0.0.1:${port}/commons.git`),
+            buildSuper(
+                'super-foreign',
+                `http://127.0.0.1:${foreignPort}/commons.git`,
+            ),
+            buildSuperCrafted(),
+            buildSuperAdds(),
+            // The idiomatic form, and the one this fix stopped resolving
+            // itself: origin is `<host>/super-relative.git`, so git resolves
+            // `../` to `<host>/commons.git`.
+            buildSuper('super-relative', '../commons.git'),
+            // An over-deep chain: git turns this into the scp-like `.:…`, NOT
+            // into an http url on the repo host the way WHATWG resolution
+            // would.
+            buildSuper(
+                'super-escape',
+                '../../../../../../evil.example/commons.git',
+            ),
+            // A legitimate submodule NEXT TO one whose relative url git cannot
+            // resolve — `git submodule init` is all-or-nothing.
+            buildSuperTwo('super-mixed', {
+                path: 'packages/broken',
+                url: '../../../../../../evil.example/x.git',
+                sha: subSha.trim(),
+            }),
+            // Two reachable submodules; the test denies one to model an
+            // installation that covers `brain` but not `commons`.
+            buildSuperTwo('super-two', {
+                path: 'packages/brain',
+                url: `http://127.0.0.1:${port}/brain.git`,
+                sha: sub2Sha.trim(),
+            }),
+            buildPinned(),
+        ]);
 
         sandboxService = new LocalSandboxService({
             get: jest.fn(),
@@ -460,26 +466,6 @@ describe('sandbox checkout of a repository with submodules', () => {
             platform: PlatformType.GITHUB,
         } as any);
 
-    it('populates a submodule hosted on the repository’s own server', async () => {
-        const sandbox = await checkout('super');
-        try {
-            // The real proof: this file only exists if the submodule was
-            // actually fetched. Before the fix the directory was empty.
-            const read = await sandbox.run('cat packages/commons/date.ts');
-            expect(read.exitCode).toBe(0);
-            expect(read.stdout).toContain('coerceToDate');
-
-            // And the tools the agent uses now find it.
-            const grep = await sandbox.remoteCommands.grep(
-                'coerceToDate',
-                'packages/commons',
-            );
-            expect(grep).toContain('date.ts');
-        } finally {
-            await sandbox.cleanup?.();
-        }
-    });
-
     it('populates a submodule declared with a RELATIVE url, the idiomatic form', async () => {
         const sandbox = await checkout('super-relative');
         try {
@@ -508,28 +494,6 @@ describe('sandbox checkout of a repository with submodules', () => {
                 'git config --get submodule.packages/commons.url',
             );
             expect(cfg.stdout.trim()).toBe('');
-        } finally {
-            await sandbox.cleanup?.();
-        }
-    });
-
-    it('degrades to an unpopulated submodule when the token does not cover it', async () => {
-        // The GitHub App installation includes the superproject but not the
-        // submodule repository — the installation token is scoped to the
-        // installation, so this is not something the fetch can work around.
-        denied = new Set(['commons.git']);
-        const sandbox = await checkout('super');
-        try {
-            // The review still happens: the superproject is checked out.
-            const app = await sandbox.run('cat app.ts');
-            expect(app.exitCode).toBe(0);
-
-            // And the submodule is simply empty — which the uninitialized
-            // marker then explains to the agent instead of letting it read the
-            // emptiness as proof.
-            expect(
-                await readdir(join(sandbox.repoDir, 'packages', 'commons')),
-            ).toEqual([]);
         } finally {
             await sandbox.cleanup?.();
         }
@@ -588,11 +552,24 @@ describe('sandbox checkout of a repository with submodules', () => {
         }
     });
 
-    it('the agent tools see the fetched submodule, and say nothing about it', async () => {
-        // Step 3 and step 2 composed: once the content is really there, the
-        // tools find it and the "never fetched" marker must stay quiet.
+    it('populates a submodule hosted on the repository’s own server, and the agent tools see it', async () => {
         const sandbox = await checkout('super');
         try {
+            // The real proof: this file only exists if the submodule was
+            // actually fetched. Before the fix the directory was empty.
+            const read = await sandbox.run('cat packages/commons/date.ts');
+            expect(read.exitCode).toBe(0);
+            expect(read.stdout).toContain('coerceToDate');
+
+            // And the tools the agent uses now find it.
+            const direct = await sandbox.remoteCommands.grep(
+                'coerceToDate',
+                'packages/commons',
+            );
+            expect(direct).toContain('date.ts');
+
+            // Step 3 and step 2 composed: once the content is really there,
+            // the tools find it and the "never fetched" marker stays quiet.
             const tools = buildAgentTools(sandbox.remoteCommands);
             const grep = await tools.grep.execute({
                 pattern: 'coerceToDate',
@@ -611,13 +588,24 @@ describe('sandbox checkout of a repository with submodules', () => {
         }
     });
 
-    it('the agent tools explain the submodule the token could not reach', async () => {
-        // The other half of the same contract: when the fetch genuinely could
-        // not happen, the emptiness must stop reading as proof of absence —
-        // this is the exact search that produced the critical false positive.
+    it('degrades to an unpopulated submodule the agent tools explain when the token does not cover it', async () => {
+        // The GitHub App installation includes the superproject but not the
+        // submodule repository — the installation token is scoped to the
+        // installation, so this is not something the fetch can work around.
         denied = new Set(['commons.git']);
         const sandbox = await checkout('super');
         try {
+            // The review still happens: the superproject is checked out.
+            const app = await sandbox.run('cat app.ts');
+            expect(app.exitCode).toBe(0);
+            // And the submodule is simply empty.
+            expect(
+                await readdir(join(sandbox.repoDir, 'packages', 'commons')),
+            ).toEqual([]);
+
+            // When the fetch genuinely could not happen, the emptiness must
+            // stop reading as proof of absence — this is the exact search
+            // that produced the critical false positive.
             const tools = buildAgentTools(sandbox.remoteCommands);
             const grep = await tools.grep.execute({
                 pattern: 'coerceToDate',

@@ -283,6 +283,9 @@ export class OrganizationParametersController {
                 baseURL: { type: 'string' },
                 awsBearerToken: { type: 'string' },
                 awsRegion: { type: 'string' },
+                // Which saved credential to list with when the provider has
+                // several (two OpenAI-compatible gateways).
+                credentialId: { type: 'string' },
             },
         },
     })
@@ -300,6 +303,7 @@ export class OrganizationParametersController {
             baseURL?: string;
             awsBearerToken?: string;
             awsRegion?: string;
+            credentialId?: string;
         },
     ): Promise<ModelResponse> {
         const organizationId = this.request?.user?.organization?.uuid;
@@ -312,6 +316,7 @@ export class OrganizationParametersController {
                 awsBearerToken: body.awsBearerToken,
                 awsRegion: body.awsRegion,
             },
+            body.credentialId,
         );
     }
 
@@ -462,6 +467,9 @@ export class OrganizationParametersController {
                 // host (see TestByokModelUseCase).
                 awsRegion: { type: 'string' },
                 vertexLocation: { type: 'string' },
+                // Which saved credential to probe when the provider has
+                // several (two OpenAI-compatible gateways).
+                credentialId: { type: 'string' },
             },
         },
     })
@@ -477,6 +485,7 @@ export class OrganizationParametersController {
             model: string;
             awsRegion?: string;
             vertexLocation?: string;
+            credentialId?: string;
         },
     ): Promise<TestByokResult> {
         const organizationId = this.request?.user?.organization?.uuid;
@@ -490,6 +499,7 @@ export class OrganizationParametersController {
             model: body.model,
             awsRegion: body.awsRegion,
             vertexLocation: body.vertexLocation,
+            credentialId: body.credentialId,
             organizationAndTeamData: { organizationId },
         });
     }

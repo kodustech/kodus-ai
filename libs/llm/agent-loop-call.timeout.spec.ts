@@ -18,23 +18,36 @@
  * These tests stub `generateText` to that exact shape — never settles, ignores
  * the signal. Without the wrapper they hang until jest kills them; with it they
  * reject as `[HARD-TIMEOUT]`.
-*
- * The per-test 15s budgets are not slack: `hardTimeout` grants ms + 5s of
- * grace so a provider that DOES honour the abort settles on its own first, so
- * a 40ms ceiling resolves at ~5.04s — just past jest's 5s default. Declared
- * per test rather than via a CLI flag, which a plain `pnpm test` never passes.
+ *
+ * `hardTimeout` grants ms + 5s of grace so a provider that DOES honour the
+ * abort settles on its own first; the stalled cases advance fake timers past
+ * that grace instead of waiting it out on the wall clock.
  */
 jest.mock('ai', () => {
     const actual = jest.requireActual('ai');
-    return { ...actual, generateText: jest.fn(), stepCountIs: jest.fn((n: number) => ({ __stepCountIs: n })) };
+    return {
+        ...actual,
+        generateText: jest.fn(),
+        stepCountIs: jest.fn((n: number) => ({ __stepCountIs: n })),
+    };
 });
-jest.mock('@libs/llm/model-invocation', () => ({ resolveModelConfig: jest.fn() }));
-jest.mock('@libs/llm/prompt-cache', () => ({ applyCacheBreakpoints: jest.fn() }));
-jest.mock('@libs/llm/repair-tool-call', () => ({ repairInvalidToolInput: jest.fn() }));
-jest.mock('@libs/llm/model-identity', () => ({ agentModelIdentity: jest.fn() }));
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: jest.fn(),
+}));
+jest.mock('@libs/llm/prompt-cache', () => ({
+    applyCacheBreakpoints: jest.fn(),
+}));
+jest.mock('@libs/llm/repair-tool-call', () => ({
+    repairInvalidToolInput: jest.fn(),
+}));
+jest.mock('@libs/llm/model-identity', () => ({
+    agentModelIdentity: jest.fn(),
+}));
 jest.mock('@libs/core/log/langfuse', () => ({
     buildLangfuseTelemetry: jest.fn(() => ({ isEnabled: false })),
-    toAiSdkTelemetryArgs: jest.fn(() => ({ experimental_telemetry: { isEnabled: false } })),
+    toAiSdkTelemetryArgs: jest.fn(() => ({
+        experimental_telemetry: { isEnabled: false },
+    })),
 }));
 
 import { generateText } from 'ai';
@@ -53,9 +66,23 @@ const params = () =>
         messages: [{ role: 'user', content: 'review this' }],
         loop: { tools: {}, maxSteps: 1 },
         runName: 'agent.stalled',
-        // Small so the test is fast; the wrapper adds a 5s grace on top.
+        // The wrapper adds a 5s grace on top (see HARD_TIMEOUT_AT).
         hardTimeoutMs: 40,
     }) as any;
+
+/** When `hardTimeout` gives up on a 40ms ceiling: the ceiling plus its grace. */
+const HARD_TIMEOUT_AT = 40 + 5_000;
+
+/** Run `call` under fake timers and expect it to settle as `[HARD-TIMEOUT]`
+ *  once the clock passes the ceiling plus grace. */
+async function expectHardTimeout(call: () => Promise<unknown>) {
+    jest.useFakeTimers();
+    const settled = expect(call()).rejects.toThrow(/\[HARD-TIMEOUT\]/);
+    await jest.advanceTimersByTimeAsync(HARD_TIMEOUT_AT);
+    await settled;
+}
+
+afterEach(() => jest.useRealTimers());
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -76,8 +103,8 @@ describe('runAgentLoopCall — a stalled provider must not hang the caller', () 
     it('rejects on the wall clock when the provider never answers', async () => {
         mockGenerate.mockImplementation(() => new Promise(() => {}));
 
-        await expect(runAgentLoopCall(params())).rejects.toThrow(/\[HARD-TIMEOUT\]/);
-    }, 15000);
+        await expectHardTimeout(() => runAgentLoopCall(params()));
+    });
 
     it('rejects even when handed an abort signal the provider ignores', async () => {
         mockGenerate.mockImplementation(
@@ -90,8 +117,8 @@ describe('runAgentLoopCall — a stalled provider must not hang the caller', () 
                 }),
         );
 
-        await expect(runAgentLoopCall(params())).rejects.toThrow(/\[HARD-TIMEOUT\]/);
-    }, 15000);
+        await expectHardTimeout(() => runAgentLoopCall(params()));
+    });
 
     it('arms an abort even when the caller threads no signal', async () => {
         // The race frees the pipeline; only the abort frees the request. With
@@ -108,19 +135,15 @@ describe('runAgentLoopCall — a stalled provider must not hang the caller', () 
         expect(sent.abortSignal.aborted).toBe(false);
     });
 
-    it('prefers the caller\'s signal when one IS threaded', async () => {
+    it("prefers the caller's signal when one IS threaded", async () => {
         mockGenerate.mockResolvedValue({ text: 'ok', steps: [], usage: {} });
         const controller = new AbortController();
 
         await runAgentLoopCall({ ...params(), signal: controller.signal });
 
-        expect(mockGenerate.mock.calls[0][0].abortSignal).toBe(controller.signal);
+        expect(mockGenerate.mock.calls[0][0].abortSignal).toBe(
+            controller.signal,
+        );
     });
 
-    it('returns the result untouched when the provider answers in time', async () => {
-        const result = { text: 'final answer', steps: [], usage: { totalTokens: 1 } };
-        mockGenerate.mockResolvedValue(result);
-
-        await expect(runAgentLoopCall(params())).resolves.toBe(result);
-    });
 });

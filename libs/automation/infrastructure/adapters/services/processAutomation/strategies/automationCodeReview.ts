@@ -760,13 +760,14 @@ export class AutomationCodeReviewService implements Omit<
                 : 'Code review failed.';
         }
 
-        return result?.statusInfo?.message || 'Automation completed successfully.';
+        return (
+            result?.statusInfo?.message || 'Automation completed successfully.'
+        );
     }
 
     private deriveFinalStatus(result: any): AutomationStatus {
         const statusInfoStatus = result?.statusInfo?.status as
-            | AutomationStatus
-            | undefined;
+            AutomationStatus | undefined;
 
         if (statusInfoStatus === AutomationStatus.SKIPPED) {
             return AutomationStatus.SKIPPED;
@@ -883,10 +884,15 @@ export class AutomationCodeReviewService implements Omit<
         if (validLastAnalyzedCommit) {
             Object.assign(baseData, {
                 lastAnalyzedCommit: result.lastAnalyzedCommit,
+                // What the reviewed commit was compared against; a rebase
+                // reads its earlier diff against the same branch (#2037).
+                reviewedBaseBranch: pullRequest?.base?.ref,
                 commentId: result.commentId,
                 noteId: result.noteId,
                 threadId: result.threadId,
                 automaticReviewStatus: result.automaticReviewStatus,
+                approvalDecision: result.approvalDecision,
+                approvalRisk: result.approvalRisk,
             });
         }
 

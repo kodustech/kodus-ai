@@ -187,10 +187,24 @@ jobs:
                           -t "ghcr.io/$OWNER/kodus-mcp-manager:$TAG" \
                           "ghcr.io/kodustech/kodus-mcp-manager:$BASE" || \
                           echo "::warning::could not mirror kodus-mcp-manager:$BASE"
-                      docker buildx imagetools create \
-                          -t "ghcr.io/$OWNER/kodus-rabbitmq:4.2.2-kodus" \
-                          "ghcr.io/kodustech/kodus-rabbitmq:4.2.2-kodus" || \
-                          echo "::warning::could not mirror kodus-rabbitmq"
+                      # Mirror the rabbitmq tag(s) the installer pins, read from
+                      # its compose: a tag hardcoded here went stale when the
+                      # installer moved to 4.2.2-kodus.1 (installer#67), and
+                      # every on-demand cell then died pulling a tag that was
+                      # never mirrored.
+                      RABBIT_TAGS=$(gh api repos/kodustech/kodus-installer/contents/docker-compose.yml \
+                          --jq .content | base64 -d \
+                          | grep -oE 'kodus-rabbitmq:[A-Za-z0-9._-]+' | cut -d: -f2 | sort -u || true)
+                      if [ -z "$RABBIT_TAGS" ]; then
+                          echo "::warning::could not read the kodus-rabbitmq pin from kodus-installer; mirroring 4.2.2-kodus.1"
+                          RABBIT_TAGS="4.2.2-kodus.1"
+                      fi
+                      for rabbit_tag in $RABBIT_TAGS; do
+                          docker buildx imagetools create \
+                              -t "ghcr.io/$OWNER/kodus-rabbitmq:$rabbit_tag" \
+                              "ghcr.io/kodustech/kodus-rabbitmq:$rabbit_tag" || \
+                              echo "::warning::could not mirror kodus-rabbitmq:$rabbit_tag"
+                      done
                   else
                       for image in kodus-ai-api kodus-ai-webhook kodus-ai-worker kodus-ai-web; do
                           docker buildx imagetools create \

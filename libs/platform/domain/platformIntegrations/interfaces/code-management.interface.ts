@@ -1,6 +1,9 @@
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
-import { Repository } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    FileChange,
+    Repository,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { TreeItem } from '@libs/core/infrastructure/config/types/general/tree.type';
@@ -141,6 +144,7 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        includeLabels?: boolean;
     }): Promise<PullRequest | null>;
     getRepositories(params: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -177,6 +181,18 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
 
     getFilesByPullRequestId(params): Promise<any[] | null>;
     getChangedFilesSinceLastCommit(params: any): Promise<any | null>;
+    /**
+     * The PR's diff as it stood when `headSha` was its head: from the merge
+     * base of `baseBranch` and `headSha` to `headSha`. Null when the host
+     * can't give it whole (commit gone, response capped, no such API).
+     */
+    getPullRequestFilesAtCommit(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string; project?: { id: string } };
+        prNumber: number;
+        baseBranch: string;
+        headSha: string;
+    }): Promise<FileChange[] | null>;
     createReviewComment(params: any): Promise<any | null>;
     createCommentInPullRequest(params): Promise<any[] | null>;
     getRepositoryContentFile(params: any): Promise<any | null>;
@@ -254,6 +270,12 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
             excludePatterns?: string[];
             maxFiles?: number;
         };
+        /**
+         * Throw a `RepositoryListingError` instead of returning `[]` when the
+         * repository cannot be listed, so a failure is not read as a
+         * repository without the files.
+         */
+        throwOnError?: boolean;
     }): Promise<RepositoryFile[]>;
     getCloneParams(params: any): Promise<GitCloneParams>;
     mergePullRequest(params: any): Promise<any>;
@@ -362,12 +384,14 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
      */
     /**
      * Whether one user can push to the repository (GitLab: Developer or
-     * above). Undefined when the provider can't say.
+     * above; GitHub: write or admin). Undefined when the provider can't say.
      */
     userCanWrite?(params: {
         organizationAndTeamData: OrganizationAndTeamData;
-        repository: { id: string };
-        userId: string | number;
+        repository: { id: string; name?: string; owner?: string };
+        userId?: string | number;
+        /** GitHub reads the permission by login. */
+        login?: string;
     }): Promise<boolean | undefined>;
 
     diagnoseRepositoryAccess?(params: {
@@ -416,6 +440,13 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
         repository: Partial<Repository>;
         prNumber: number;
     }): Promise<PullRequestReviewState | null>;
+
+    dismissOwnPullRequestApprovals?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        reason: string;
+    }): Promise<number>;
 
     addReactionToPR?(params: {
         organizationAndTeamData: OrganizationAndTeamData;

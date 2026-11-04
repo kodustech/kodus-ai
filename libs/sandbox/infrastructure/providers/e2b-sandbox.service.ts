@@ -16,9 +16,12 @@ import {
     buildDropReviewUserPrivilegesScript,
     confirmsPrivilegesDropped,
     DROP_PRIVILEGES_TIMEOUT_MS,
+    ROOT_ONLY_DIR,
+    SS_LOCAL_CONFIG_FILE,
 } from '@libs/sandbox/infrastructure/providers/review-user-privileges';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
+import { readWithinRootCommand } from './read-within-root';
 import {
     fetchSubmodules,
     isContainedRelativePath,
@@ -47,7 +50,18 @@ export function e2bDeploymentTag(apiNodeEnv: string | undefined): string {
 const REPO_DIR = '/home/user/repo';
 
 const TIMEOUTS = {
-    CLONE_MS: 300_000, // 5 min — large repos (cal.com, grafana) need more time for shallow clone
+    // Shallow `git fetch` of the PR head / base branch. Kept at 5 min: the
+    // largest repositories need it on a healthy path, and lowering it would
+    // review them without a sandbox on every PR. Fail-fast on a degraded
+    // proxy comes from not retrying a timeout and from the breaker
+    // (SandboxLeaseManager), not from a shorter fetch.
+    CLONE_MS: 300_000,
+    // Re-syncing a reused sandbox's checkout to the new head. Kept at 5 min:
+    // a timeout here is not a fallback but a review on the stale checkout
+    // (#1313), so this path trades latency for correctness.
+    SYNC_MS: 300_000,
+    // apt-get on sandboxes created without the pre-built template.
+    INSTALL_MS: 300_000,
     PROXY_DAEMON_MS: 10_000,
     PROXY_CONFIG_MS: 5_000,
     VERIFY_MS: 10_000,
@@ -74,14 +88,29 @@ export interface BuildE2BRemoteCommandsOptions {
  * '..' traversal. Shared by every RemoteCommands implementation so the
  * path-isolation contract cannot silently diverge.
  */
-function resolveRepoPath(path: string): string {
+function resolveRepoPath(path: string, root: string = REPO_DIR): string {
     if (path.startsWith('/')) {
         throw new Error('Absolute paths are not allowed');
     }
     if (path.includes('..')) {
         throw new Error('Path traversal using ".." is not allowed');
     }
-    return `${REPO_DIR}/${path}`;
+    return `${root}/${path}`;
+}
+
+/** Linked repositories are cloned next to the PR's (resolve-linked-repositories). */
+const LINKED_DIR = '/home/user/_linked';
+
+function readRoot(root: string | undefined): string {
+    if (root === undefined || root === REPO_DIR) return REPO_DIR;
+    if (
+        root.startsWith(`${LINKED_DIR}/`) &&
+        !root.includes('..') &&
+        root.length > LINKED_DIR.length + 1
+    ) {
+        return root;
+    }
+    throw new Error(`Not a repository root of this sandbox: ${root}`);
 }
 
 /**
@@ -156,13 +185,17 @@ export function buildE2BRemoteCommands(
             path: string,
             start: number,
             end: number,
+            root?: string,
         ): Promise<string> => {
-            const escapedPath = resolveRepoPath(path).replace(/'/g, "'\\''");
-            // GNU sed rejects address 0, so start=end=0 means "whole file" (cat).
-            const cmd =
-                start === 0 && end === 0
-                    ? `cat '${escapedPath}'`
-                    : `sed -n '${start < 1 ? 1 : start},${end}p' '${escapedPath}'`;
+            // GNU sed rejects address 0, so start=end=0 means "whole file"
+            // (cat). Neither follows a symlink the repository commits.
+            const base = readRoot(root);
+            const cmd = readWithinRootCommand(
+                resolveRepoPath(path, base),
+                base,
+                start,
+                end,
+            );
             const result = await runCmd(cmd, {
                 timeoutMs: TIMEOUTS.COMMAND_SHORT_MS,
             });
@@ -429,7 +462,7 @@ export async function syncE2BSandboxRepo(
         platform,
         checkoutSha,
     } = params;
-    const { logger, logContext, timeoutMs = TIMEOUTS.CLONE_MS } = opts;
+    const { logger, logContext, timeoutMs = TIMEOUTS.SYNC_MS } = opts;
 
     // Same precedence as the create path (checkoutSha > PR refspec > branch
     // tip) — CLI-origin reviews set checkoutSha and leave prNumber undefined,
@@ -810,7 +843,7 @@ export class E2BSandboxService implements ISandboxProvider {
     private async installDependencies(sandbox: Sandbox): Promise<void> {
         const installResult = await sandbox.commands.run(
             'apt-get update -qq && apt-get install -y -qq git ripgrep shadowsocks-libev > /dev/null 2>&1',
-            { timeoutMs: TIMEOUTS.CLONE_MS, user: 'root' },
+            { timeoutMs: TIMEOUTS.INSTALL_MS, user: 'root' },
         );
         this.logger.log({
             message: `[DEBUG] apt-get install exitCode=${installResult.exitCode}`,
@@ -1166,13 +1199,21 @@ export class E2BSandboxService implements ISandboxProvider {
             );
         }
 
-        // Start ss-local daemon listening on SOCKS5 port 1080
+        // Start ss-local daemon listening on SOCKS5 port 1080. The password
+        // goes in a root-only config file: a process's arguments are readable
+        // by every user of the sandbox, the review user included. `-f` is how
+        // shadowsocks-libev daemonizes; it has no `-d start`.
+        const config = `${ROOT_ONLY_DIR}/${SS_LOCAL_CONFIG_FILE}`;
         await sandbox.commands.run(
-            `ss-local -s ${host} -p ${port} -l 1080 -k "$SS_PASSWORD" -m ${method} -d start`,
+            [
+                `umask 077 && mkdir -p ${ROOT_ONLY_DIR}`,
+                `printf '%s' "$SS_CONFIG" > ${config}`,
+                `ss-local -c ${config} -s ${shSingleQuote(host)} -p ${shSingleQuote(port)} -l 1080 -m ${shSingleQuote(method)} -f /run/ss-local.pid`,
+            ].join(' && '),
             {
                 timeoutMs: TIMEOUTS.PROXY_DAEMON_MS,
                 user: 'root',
-                envs: { SS_PASSWORD: password },
+                envs: { SS_CONFIG: JSON.stringify({ password }) },
             },
         );
 

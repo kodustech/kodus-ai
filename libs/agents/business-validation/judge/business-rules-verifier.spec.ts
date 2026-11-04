@@ -28,22 +28,6 @@ const claim: ValidationResult = {
 describe('BusinessRulesVerifier.verify', () => {
     const ctx = { runId: 'x', signal: new AbortController().signal } as any;
 
-    it('returns keep=false when the verifier refutes the claim', async () => {
-        const runner = {
-            run: jest.fn(async () =>
-                runStateWithVerdict(false, 'diff covers it'),
-            ),
-        };
-        const verifier = new BusinessRulesVerifier(runner as any, {
-            modelId: 'resolved',
-            diff: '+ revokeSessions(userId)',
-            taskContext: 'on soft-delete, revoke sessions',
-        });
-        const verdict = await verifier.verify(claim, ctx);
-        expect(verdict.keep).toBe(false);
-        expect(verdict.rationale).toContain('covers');
-    });
-
     it('passes the diff, task, and analyzer claim into the verify prompt', async () => {
         const runner = { run: jest.fn(async () => runStateWithVerdict(true)) };
         const verifier = new BusinessRulesVerifier(runner as any, {
@@ -300,95 +284,6 @@ describe('MATRIX A — output-shape zoo (payload that is not D)', () => {
         expect(verdict.confidence).toBe('medium');
     });
 
-    it('row 1 — exact D with keep:true recovers keep=true', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload({ keep: true, rationale: 'holds' }),
-        );
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe('holds');
-    });
-
-    it('row 2 — bare array of the inner object degrades to observable default', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload([{ keep: false, rationale: 'x' }]),
-        );
-        assertBooleanGate(verdict);
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-    });
-
-    it('row 4 — wrapper keys ({result|data|output|response|json}) degrade observably', async () => {
-        for (const key of ['result', 'data', 'output', 'response', 'json']) {
-            const { verdict } = await verdictFrom(
-                stateWithPayload({ [key]: { keep: false, rationale: 'x' } }),
-            );
-            expect(verdict.keep).toBe(true);
-            expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-        }
-    });
-
-    it('row 5 — double wrapper degrades observably', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload({ result: { result: { keep: false } } }),
-        );
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-    });
-
-    it('row 6 — numeric/opaque single-key wrap ({"0"|content}) degrades observably', async () => {
-        for (const key of ['0', 'content']) {
-            const { verdict } = await verdictFrom(
-                stateWithPayload({ [key]: { keep: false } }),
-            );
-            expect(verdict.keep).toBe(true);
-            expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-        }
-    });
-
-    it('row 7 — stringified JSON payload is NOT parsed; degrades observably', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload('{"keep":false,"rationale":"x"}'),
-        );
-        assertBooleanGate(verdict);
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-    });
-
-    it('row 8 — markdown-fenced string payload degrades observably', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload('```json\n{"keep":false}\n```'),
-        );
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-    });
-
-    it('row 9 — prose-wrapped string payload degrades observably', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload('Here is the verdict: {"keep":false}. Thanks!'),
-        );
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-    });
-
-    it('row 10 — right data under renamed keys degrades observably (no silent drop)', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload({ shouldKeep: false, reason: 'diff covers it' }),
-        );
-        assertBooleanGate(verdict);
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-    });
-
-    it('row 11 — case/convention mismatch (Keep/KEEP) degrades observably', async () => {
-        for (const key of ['Keep', 'KEEP']) {
-            const { verdict } = await verdictFrom(
-                stateWithPayload({ [key]: false }),
-            );
-            expect(verdict.keep).toBe(true);
-            expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-        }
-    });
-
     it('row 12 — partial object with just keep recovers; without keep degrades', async () => {
         const present = await verdictFrom(stateWithPayload({ keep: false }));
         expect(present.verdict.keep).toBe(false);
@@ -400,129 +295,14 @@ describe('MATRIX A — output-shape zoo (payload that is not D)', () => {
         expect(absent.verdict.keep).toBe(true);
         expect(absent.verdict.rationale).toBe(NO_VERDICT_MARKER);
     });
-
-    it('row 13 — extra unknown keys tolerated; still recovers keep', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload({
-                keep: false,
-                rationale: 'r',
-                confidence: 'low',
-                foo: 'bar',
-                nested: { a: 1 },
-            }),
-        );
-        expect(verdict.keep).toBe(false);
-        expect(verdict.rationale).toBe('r');
-        expect(verdict.confidence).toBe('low');
-    });
-
-    it('row 14 — empty object degrades to observable default', async () => {
-        const { verdict } = await verdictFrom(stateWithPayload({}));
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-    });
-
-    it('row 15 — empty array degrades to observable default', async () => {
-        const { verdict } = await verdictFrom(stateWithPayload([]));
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-    });
-
-    it('row 16 — empty / whitespace string degrades to observable default', async () => {
-        for (const s of ['', '   ', '\n\t']) {
-            const { verdict } = await verdictFrom(stateWithPayload(s));
-            expect(verdict.keep).toBe(true);
-            expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-        }
-    });
-
-    it('row 17 — null / undefined payload degrades to observable default', async () => {
-        for (const p of [null, undefined]) {
-            const { verdict } = await verdictFrom(stateWithPayload(p));
-            expect(verdict.keep).toBe(true);
-            expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-        }
-    });
-
-    it('row 18 — primitive payload (true/0/"ok") degrades to observable default', async () => {
-        for (const p of [true, 0, 'ok']) {
-            const { verdict } = await verdictFrom(stateWithPayload(p));
-            assertBooleanGate(verdict);
-            expect(verdict.keep).toBe(true);
-            expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-        }
-    });
-
-    it('row 19 — provider envelope leak (choices/message/content) degrades observably', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload({
-                choices: [{ message: { content: '{"keep":false}' } }],
-            }),
-        );
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-    });
-
-    it('row 20 — thinking/reasoning leak inside rationale: keep still recovers', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload({
-                keep: false,
-                rationale: '<thinking>let me reason…</thinking> diff covers it',
-            }),
-        );
-        // The gate is honored; the leaked reasoning rides in the (non-gating)
-        // rationale — the boundary does not strip it, but the decision is safe.
-        expect(verdict.keep).toBe(false);
-        expect(verdict.rationale).toContain('diff covers it');
-    });
 });
 
 describe('MATRIX B — semantic-but-wrong (valid JSON, wrong value encoding)', () => {
-    it('row 21 — boolean-as-string keep:"false"/"true" does NOT drop; observable default', async () => {
-        for (const v of ['false', 'true']) {
-            const { verdict } = await verdictFrom(
-                stateWithPayload({ keep: v, rationale: 'x' }),
-            );
-            assertBooleanGate(verdict);
-            // "false" would silently DROP if coerced — the boundary refuses to
-            // coerce a non-boolean gate and fail-opens with the marker instead.
-            expect(verdict.keep).toBe(true);
-            expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-        }
-    });
-
-    it('row 22 — boolean-as-yes/no keep:"no"/"yes" does NOT drop; observable default', async () => {
-        for (const v of ['no', 'yes']) {
-            const { verdict } = await verdictFrom(
-                stateWithPayload({ keep: v }),
-            );
-            expect(verdict.keep).toBe(true);
-            expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-        }
-    });
-
-    it('row 23 — boolean-as-number keep:0/1 does NOT drop; observable default', async () => {
-        for (const v of [0, 1]) {
-            const { verdict } = await verdictFrom(
-                stateWithPayload({ keep: v }),
-            );
-            assertBooleanGate(verdict);
-            expect(verdict.keep).toBe(true);
-            expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-        }
-    });
-
     // row 24 — off-enum confidence. The gate is safe (keep honored), but the
     // parser passes `confidence` through VERBATIM with no enum validation
     // (llm-verdict.ts L126: `confidence: obj.confidence as ...`), so an off-enum
     // value ships silently on the Verdict. Pinned as the correct behavior that
     // the fix would introduce (normalize/drop off-enum confidence).
-    it('row 24 — off-enum confidence: keep gate stays safe', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload({ keep: false, confidence: 'URGENT' }),
-        );
-        expect(verdict.keep).toBe(false); // gate never corrupted
-    });
     it.failing(
         'row 24 — off-enum confidence should NOT ship verbatim (llm-verdict.ts:126)',
         async () => {
@@ -538,35 +318,9 @@ describe('MATRIX B — semantic-but-wrong (valid JSON, wrong value encoding)', (
             ).toBe(true);
         },
     );
-
-    it('row 27 — unicode / emoji / escaped newlines in rationale survive verbatim', async () => {
-        const rationale = 'já cobre ✅\n\tlinha dois — ação';
-        const { verdict } = await verdictFrom(
-            stateWithPayload({ keep: false, rationale }),
-        );
-        expect(verdict.keep).toBe(false);
-        expect(verdict.rationale).toBe(rationale);
-        // and it flows verbatim into the user-facing summary on drop
-        const applied = applyBusinessRulesVerdict(matrixClaim, verdict);
-        expect(applied.summary).toBe(rationale);
-    });
 });
 
 describe('MATRIX C — unparseable / transport (fail-safe layer)', () => {
-    it('row 28 — truncated JSON string payload degrades to observable default', async () => {
-        const { verdict } = await verdictFrom(stateWithPayload('{"keep":fal'));
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-    });
-
-    it('row 29 — malformed JSON string payload degrades to observable default', async () => {
-        for (const s of ['{keep: false,}', "{'keep':false}"]) {
-            const { verdict } = await verdictFrom(stateWithPayload(s));
-            expect(verdict.keep).toBe(true);
-            expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-        }
-    });
-
     it('row 30 — runner.run throws: verify() propagates (fail-safe is the caller)', async () => {
         // The verify boundary does NOT catch runner.run errors (L108, no
         // try/catch); the fail-open safety net is the caller,
@@ -578,37 +332,6 @@ describe('MATRIX C — unparseable / transport (fail-safe layer)', () => {
         await expect(verifier.verify(matrixClaim, matrixCtx)).rejects.toThrow(
             'network down',
         );
-    });
-
-    it('row 31 — {error} object payload fails open with observable default', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload({ error: 'rate_limit_exceeded' }),
-        );
-        assertBooleanGate(verdict);
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-    });
-
-    it('row 31 — error status with no artifacts fails open', async () => {
-        const state = {
-            ...stateWithPayload(null),
-            status: 'error',
-            artifacts: [],
-        } as unknown as RunState;
-        const { verdict } = await verdictFrom(state);
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-    });
-
-    it('row 32 — empty success (no submitVerdict artifact) fails open', async () => {
-        const state = {
-            ...stateWithPayload(null),
-            status: 'completed',
-            artifacts: [],
-        } as unknown as RunState;
-        const { verdict } = await verdictFrom(state);
-        expect(verdict.keep).toBe(true);
-        expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
     });
 
     it('row 33 — refusal (model produced prose, never called submitVerdict) fails open', async () => {
@@ -658,13 +381,6 @@ describe('MATRIX D — input variants (happy runner, assert the invariant)', () 
         expect(prompt).toContain('(none provided)');
     });
 
-    it('row 36 — single candidate: happy path returns the model keep verbatim', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload({ keep: false }),
-        );
-        expect(verdict.keep).toBe(false);
-    });
-
     it('row 37 — large diff crossing any chunk boundary is passed whole (no truncation)', async () => {
         const bigDiff = '+ line\n'.repeat(80_000); // ~560k chars
         const run = happy();
@@ -695,124 +411,49 @@ describe('MATRIX D — input variants (happy runner, assert the invariant)', () 
         expect(diffSection).toContain('   \t  ');
         expect(diffSection).not.toContain('(none provided)');
     });
-
-    it('row 40 — special/binary-ish chars in diff survive verbatim into the prompt', async () => {
-        const weird = 'diff --git\x00\x01<script>💥 end';
-        const run = happy();
-        const verifier = makeVerifier(run, { diff: weird });
-        await verifier.verify(matrixClaim, matrixCtx);
-        expect((run.mock.calls as any[])[0][1].prompt).toContain(weird);
-    });
-
-    it('row 42 — metamorphic: reordering candidate keys yields an identical prompt', async () => {
-        const runA = happy();
-        const runB = happy();
-        const a: ValidationResult = {
-            needsMoreInfo: false,
-            summary: 'S',
-            reason: 'analysis_ready' as any,
-            confidence: 'high',
-        };
-        const b: ValidationResult = {
-            confidence: 'high',
-            reason: 'analysis_ready' as any,
-            summary: 'S',
-            needsMoreInfo: false,
-        } as ValidationResult;
-        await makeVerifier(runA).verify(a, matrixCtx);
-        await makeVerifier(runB).verify(b, matrixCtx);
-        expect((runA.mock.calls as any[])[0][1].prompt).toBe(
-            (runB.mock.calls as any[])[0][1].prompt,
-        );
-    });
-});
-
-describe('MATRIX E — provider/model policy (parse layer is model-agnostic)', () => {
-    const STRICT = [
-        'openai/gpt-4o',
-        'anthropic/claude-3-5-sonnet',
-        'google/gemini-1.5',
-        'moonshotai/kimi-k2',
-    ];
-    const FALLBACK = ['kimi-k2', 'glm-4.6', 'deepseek-chat', 'z-ai/glm-4'];
-
-    // Model policy (strict json_schema vs json_object fallback) is decided by the
-    // runner from byokConfig — constructed by the caller, NOT by this boundary.
-    // buildVerifierAgentSpec accepts modelId but the AgentSpec carries no model
-    // field, so the assembled spec is provably model-INDEPENDENT: the parse layer
-    // never branches on the provider, which is exactly why the off-schema zoo
-    // above must be validated the same way for every model.
-    it('assembles a model-independent spec across strict-schema models', async () => {
-        const specs = [];
-        for (const modelId of STRICT) {
-            const run = jest.fn(async () => stateWithPayload({ keep: true }));
-            await makeVerifier(run, { modelId }).verify(matrixClaim, matrixCtx);
-            specs.push((run.mock.calls as any[])[0][0]);
-        }
-        for (const s of specs) {
-            expect(s.resultToolName).toBe(VERIFY_DONE_TOOL);
-            expect(s.maxSteps).toBe(4);
-            expect(s.systemPrompt).toBe(specs[0].systemPrompt);
-        }
-    });
-
-    it('assembles a model-independent spec across json_object-fallback models', async () => {
-        const specs = [];
-        for (const modelId of FALLBACK) {
-            const run = jest.fn(async () => stateWithPayload({ keep: true }));
-            await makeVerifier(run, { modelId }).verify(matrixClaim, matrixCtx);
-            specs.push((run.mock.calls as any[])[0][0]);
-        }
-        for (const s of specs) {
-            expect(s.resultToolName).toBe(VERIFY_DONE_TOOL);
-            expect(s.maxSteps).toBe(4);
-            expect(s.systemPrompt).toBe(specs[0].systemPrompt);
-        }
-    });
-
-    it('off-schema (keep:"false") degrades IDENTICALLY under strict and fallback models', async () => {
-        // The boundary never trusts model policy: it validates the payload the
-        // same way regardless of which provider produced it.
-        for (const modelId of [...STRICT, ...FALLBACK]) {
-            const { verdict } = await verdictFrom(
-                stateWithPayload({ keep: 'false' }),
-                { modelId },
-            );
-            expect(verdict.keep).toBe(true);
-            expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
-        }
-    });
-
-    it('exact D is recovered IDENTICALLY under strict and fallback models', async () => {
-        for (const modelId of [...STRICT, ...FALLBACK]) {
-            const { verdict } = await verdictFrom(
-                stateWithPayload({ keep: false, rationale: 'covered' }),
-                { modelId },
-            );
-            expect(verdict.keep).toBe(false);
-            expect(verdict.rationale).toBe('covered');
-        }
-    });
 });
 
 describe('BOUNDARY — request assembly & return-shape guarantees', () => {
-    it('always returns a Verdict with a boolean keep, across every payload shape', async () => {
-        const zoo: unknown[] = [
-            { keep: true },
-            { keep: false },
-            { keep: 'true' },
-            { keep: 0 },
-            {},
+    // Every payload whose `keep` is not a real boolean — wrapped, renamed,
+    // stringified, fenced, truncated, coerced ("false" would silently DROP if
+    // coerced), empty or primitive — fails open with the observable marker.
+    it('fails open with the marker on every payload whose keep is not a boolean', async () => {
+        const offSchema: unknown[] = [
+            [{ keep: false, rationale: 'x' }],
             [],
+            {},
             null,
             undefined,
-            'prose',
-            42,
+            '',
+            '   ',
+            true,
+            0,
+            'ok',
+            '{"keep":false,"rationale":"x"}',
+            '```json\n{"keep":false}\n```',
+            'Here is the verdict: {"keep":false}. Thanks!',
+            '{"keep":fal',
+            "{'keep':false}",
             { result: { keep: false } },
+            { result: { result: { keep: false } } },
+            { '0': { keep: false } },
+            { content: { keep: false } },
+            { shouldKeep: false, reason: 'diff covers it' },
+            { Keep: false },
+            { KEEP: false },
+            { keep: 'false', rationale: 'x' },
+            { keep: 'true' },
+            { keep: 'no' },
+            { keep: 0 },
+            { keep: 1 },
+            { error: 'rate_limit_exceeded' },
+            { choices: [{ message: { content: '{"keep":false}' } }] },
         ];
-        for (const payload of zoo) {
+        for (const payload of offSchema) {
             const { verdict } = await verdictFrom(stateWithPayload(payload));
             assertBooleanGate(verdict);
+            expect(verdict.keep).toBe(true);
+            expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
         }
     });
 

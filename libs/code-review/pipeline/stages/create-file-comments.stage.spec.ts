@@ -87,12 +87,14 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
     it('persists changedFiles even when there are no valid AND no discarded suggestions', async () => {
         // The bug: this exact combination (both arrays empty) used to skip
         // the save call entirely and leave files: [] in the document.
+        // baseContext() is Immer-frozen, so this also guards c886e369a (a
+        // direct write to the frozen pullRequest threw before the save).
         const ctx = baseContext({
             validSuggestions: [],
             discardedSuggestions: [],
         } as any);
 
-        await stage.execute(ctx);
+        const result = await stage.execute(ctx);
 
         expect(
             mockPullRequestService.aggregateAndSaveDataStructure,
@@ -101,44 +103,59 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
         const callArgs =
             mockPullRequestService.aggregateAndSaveDataStructure.mock.calls[0];
         // Signature: (pullRequest, repository, enrichedFiles, prioritized,
-        //            unused, platformType, organizationAndTeamData, commits)
+        //            unused, platformType, organizationAndTeamData, commits,
+        //            prLevelSuggestions, options)
         const enrichedFiles = callArgs[2];
         const orgAndTeam = callArgs[6];
 
+        expect(callArgs[0].number).toBe(99);
         expect(enrichedFiles).toHaveLength(1);
         expect(enrichedFiles[0].filename).toBe('src/foo.ts');
         expect(orgAndTeam.organizationId).toBe('org-A');
-    });
+        // The pull request here is the one the review started with: the save
+        // keeps a close or merge stored while it ran.
+        expect(callArgs[9]).toEqual({ keepStoredState: true });
 
-    it('persists when the context (incl. pullRequest) is Immer-frozen (regression)', async () => {
-        // In production the pipeline context is Immer-frozen (auto-freeze)
-        // after any earlier stage's produce(). A direct write to it (once
-        // `pullRequest.heavy = …`, c886e369a) threw before
-        // aggregateAndSaveDataStructure: comments were posted, but no
-        // suggestion was persisted. baseContext() is frozen, so the guard is
-        // the default, not this one case.
-        await stage.execute(baseContext());
-
+        // An empty (not missing) lineComments is what lets
+        // RequestChangesOrApproveStage approve a clean PR.
+        expect(result.lineComments).toEqual([]);
+        // Comments on suggestions implemented since the last run are
+        // resolved on every review, even one with nothing new to post.
         expect(
-            mockPullRequestService.aggregateAndSaveDataStructure,
-        ).toHaveBeenCalledTimes(1);
-        const savedPullRequest =
-            mockPullRequestService.aggregateAndSaveDataStructure.mock
-                .calls[0][0];
-        expect(savedPullRequest.number).toBe(99);
+            mockSuggestionService.resolveImplementedSuggestionsOnPlatform,
+        ).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationAndTeamData: expect.objectContaining({
+                    organizationId: 'org-A',
+                }),
+                prNumber: 99,
+            }),
+        );
     });
 
-    it('still persists when validSuggestions=0 but discardedSuggestions has items (regression for the prior happy path)', async () => {
+    it('records the reviewed head as analyzed, not whichever commit sorts last (#2037)', async () => {
+        // Rebased commits share one committer date, so a date-sorted list can
+        // end on the oldest commit. Bitbucket's head sha is 12 characters.
+        const head = 'abcdef123456' + '0'.repeat(28);
         const ctx = baseContext({
-            validSuggestions: [],
-            discardedSuggestions: [{ id: 'd-1' } as any],
+            pullRequest: { number: 99, head: { sha: 'abcdef123456' } },
+            prAllCommits: [{ sha: head }, { sha: 'oldest' }],
         } as any);
 
-        await stage.execute(ctx);
+        const result = await stage.execute(ctx);
 
-        expect(
-            mockPullRequestService.aggregateAndSaveDataStructure,
-        ).toHaveBeenCalledTimes(1);
+        expect(result.lastAnalyzedCommit).toEqual({ sha: head });
+    });
+
+    it('falls back to the last listed commit when the head is not in the list', async () => {
+        const ctx = baseContext({
+            pullRequest: { number: 99, head: { sha: 'gone-by-force-push' } },
+            prAllCommits: [{ sha: 'commit-1' }, { sha: 'commit-2' }],
+        } as any);
+
+        const result = await stage.execute(ctx);
+
+        expect(result.lastAnalyzedCommit).toEqual({ sha: 'commit-2' });
     });
 
     it('aborts early (no save) when there are no commits', async () => {

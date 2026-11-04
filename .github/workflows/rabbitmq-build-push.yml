@@ -18,9 +18,17 @@ on:
     workflow_dispatch:
         inputs:
             tag:
-                description: "Additional tag to publish (e.g. '4.2.2-delayed-4.2.0'). :latest is always updated."
+                description: "New fixed tag to publish (e.g. '4.2.2-kodus.2'); refused if it already exists. :latest is always updated."
                 required: false
                 default: ""
+
+# Two dispatches of the same new tag would both pass the "already exists"
+# check below before either pushes. Serializing them per tag makes the later
+# one see the published tag and fail. Runs without a tag key on the commit,
+# so push runs are not queued behind (or replace) a pending dispatch.
+concurrency:
+    group: rabbitmq-build-push-${{ inputs.tag || github.sha }}
+    cancel-in-progress: false
 
 jobs:
     build-and-push:
@@ -54,15 +62,28 @@ jobs:
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
+            # A fixed tag is what kodus-installer pins. Overwriting it never
+            # reaches an existing install (compose only pulls a tag it lacks,
+            # helm does not roll an unchanged spec), so a change ships under a
+            # new tag that the installer then bumps.
             - name: Compute image tags
               id: tags
+              env:
+                  INPUT_TAG: ${{ inputs.tag }}
               run: |
                   set -euo pipefail
                   OWNER="${{ github.repository_owner }}"
                   IMAGE="ghcr.io/${OWNER}/kodus-rabbitmq"
                   TAGS="${IMAGE}:latest,${IMAGE}:sha-${GITHUB_SHA::7}"
-                  if [ -n "${{ inputs.tag }}" ]; then
-                    TAGS="${TAGS},${IMAGE}:${{ inputs.tag }}"
+                  if [ -n "${INPUT_TAG}" ]; then
+                    if out=$(docker buildx imagetools inspect "${IMAGE}:${INPUT_TAG}" 2>&1); then
+                      echo "::error::${IMAGE}:${INPUT_TAG} already exists. Publish a new tag (e.g. -kodus.N+1) and bump the pin in kodus-installer."
+                      exit 1
+                    elif ! printf '%s' "$out" | grep -q ': not found'; then
+                      echo "::error::Could not check whether ${IMAGE}:${INPUT_TAG} exists: ${out}"
+                      exit 1
+                    fi
+                    TAGS="${TAGS},${IMAGE}:${INPUT_TAG}"
                   fi
                   echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
                   echo "Publishing: ${TAGS}"

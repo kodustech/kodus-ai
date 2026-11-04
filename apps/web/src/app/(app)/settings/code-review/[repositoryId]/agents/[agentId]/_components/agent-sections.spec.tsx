@@ -12,6 +12,15 @@ import {
     InstructionsCard,
 } from "./agent-sections";
 
+// The knowledge card lists other repositories through the resolve endpoint.
+jest.mock("@services/custom-agents/hooks", () => ({
+    useResolveCustomAgent: () => ({
+        isLoading: false,
+        isFetching: false,
+        data: undefined,
+    }),
+}));
+
 jest.mock("@services/organizationParameters/fetch", () => ({
     getBYOK: jest.fn(),
 }));
@@ -77,16 +86,6 @@ const renderFiles = (scope: CustomAgent["scope"]) =>
     );
 
 describe("FilesAndKnowledge", () => {
-    it("names the globs 'Files' and links the skills & docs page", () => {
-        renderFiles({});
-        expect(screen.getByLabelText("Files")).toBeInTheDocument();
-        expect(screen.queryByText("Runs on")).toBeNull();
-        expect(screen.queryByText("Follows")).toBeNull();
-        expect(
-            screen.getByRole("link", { name: "Manage skills & docs" }),
-        ).toHaveAttribute("href", "/settings/code-review/repo-1/skills");
-    });
-
     it("explains that brackets and parentheses also match literally", () => {
         renderFiles({ include: ["src/app/(shop)/[id]/**"] });
         expect(screen.getByRole("note")).toHaveTextContent(

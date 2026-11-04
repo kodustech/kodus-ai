@@ -1,7 +1,13 @@
-import { IsEmail, IsString, IsEnum } from 'class-validator';
+import {
+    IsEmail,
+    IsEnum,
+    IsObject,
+    IsOptional,
+    IsString,
+} from 'class-validator';
 
 import { AuthProvider } from '@libs/core/domain/enums/auth-provider.enum';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateUserOrganizationOAuthDto {
     @IsString()
@@ -24,4 +30,14 @@ export class CreateUserOrganizationOAuthDto {
         example: AuthProvider.GOOGLE,
     })
     public authProvider: AuthProvider;
+
+    @ApiPropertyOptional({
+        type: 'object',
+        additionalProperties: true,
+        description:
+            'First-touch attribution from the kodus_first_touch cookie. Stored only when this login creates the organization.',
+    })
+    @IsOptional()
+    @IsObject()
+    public firstTouch?: Record<string, unknown>;
 }

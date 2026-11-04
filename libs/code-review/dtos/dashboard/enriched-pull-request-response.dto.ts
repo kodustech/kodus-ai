@@ -54,6 +54,11 @@ export interface EnrichedPullRequestResponse {
     reviewedCommitUrl?: string;
     compareUrl?: string;
     executionId?: string;
+    approvalReasonDeliveryFailure?: {
+        decision: 'hold' | 'approve';
+        reason: string;
+        occurredAt: string;
+    } | null;
 
     // Dados da execução de automação (do PostgreSQL)
     automationExecution: {

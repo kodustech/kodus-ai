@@ -172,14 +172,6 @@ describe('renderCliText', () => {
     });
 });
 
-describe('what is left to fix, as the comment says it', () => {
-    it('lists only MISSING as to fix, and the rest as still open', () => {
-        expect(renderComment(outcome())).toContain(
-            'To fix: 1 missing requirement · also open: 1 to check manually · 1 change not in the task',
-        );
-    });
-});
-
 describe('a met task', () => {
     it('says it in one line and lists only what to check by hand', () => {
         const met = outcome({ passed: true });

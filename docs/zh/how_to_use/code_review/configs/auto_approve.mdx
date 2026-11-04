@@ -1,0 +1,90 @@
+---
+title: "自动批准"
+description: "Kody 何时批准 pull request，如何限制它可以批准哪些 PR，以及它暂缓批准时会做什么。"
+---
+
+在 **Code review → General** 中开启 **Automatic PR approval**（`pullRequestApprovalActive`，默认关闭）。Kody 通过您的 Git 平台的审查功能进行批准，从不合并 PR。
+
+## Kody 何时批准
+
+Kody 会在以下两个时机之一批准 PR：
+
+- **审查结果干净之后。** 审查没有发布任何建议，且所有步骤都没有失败。只有 PR 摘要生成失败不会阻止批准。
+- **它的评论全部解决之后。** Kody 每 2 分钟检查一次过去 7 天内审查过的未关闭 PR，并批准其中 Kody 留下的所有评论都已解决的 PR。
+
+无论哪种情况，Kody 批准的都是它审查过的那个提交：如果在 Kody 最后一次审查之后有人推送了新提交，它会等待下一次审查。通过 `@kody -v <agent>` 启动的运行只会执行该自定义智能体，因此永远不会批准。
+
+## 条件批准（Beta）
+
+适用于开通了 Beta 访问权限的 **Teams 和 Enterprise** 套餐。这些条件显示在 **Automatic PR approval** 下方，并且与其他设置一样，可以在 Global、Repository 或 Directory 范围内设置。它们作用于整个 PR，而不仅是 Kody 上次审查之后的提交。
+
+### 哪些 PR 可以被自动批准？
+
+默认情况下，所有 PR 都符合条件。如需限制：
+
+- **PR labels**（`approvalLabels`）：PR 必须带有其中至少一个标签。
+- **PR authors**（`approvalAuthors`）：PR 必须由其中某个 Git 平台登录名创建。
+
+不区分大小写。如果两者都设置，PR 必须同时满足。标签和作者最多各 50 个。
+
+Kody 在批准前会重新检查标签，因此您可以在审查之后再添加批准标签：只要此后没有新的推送，Kody 会在几分钟内批准。
+
+### 什么时候需要人工批准？
+
+- **Paths requiring human approval**（`approvalSensitivePaths`）：glob 模式，例如 `src/auth/**`，最多 100 个。只要有任何变更文件匹配，Kody 就会暂缓批准。被重命名的文件会同时按旧路径和新路径匹配。
+- **Assess PR risk**（`approvalRiskActive`）：Kody 只批准它评估为低风险的 PR。参见[风险评估](#风险评估)。
+- **Additional team guidance**（`approvalRiskInstructions`）：开启 **Assess PR risk** 后显示。为评估补充最多 4,000 个字符的上下文，例如 *支付重试逻辑的变更需要由人工批准*。
+
+### 风险评估
+
+Kody 使用您的代码审查模型（如果配置了 BYOK 模型，则使用该模型）进行评估。它会读取完整的 PR diff（最多 50,000 个字符）、标题和描述、您的团队指引，以及每个变更文件和目录的历史：有多少已合并的 PR 修改过它，其中又有多少修复了 bug。
+
+如果一个已合并的 PR 关闭了带有 `bug`、`defect` 或 `regression` 标签的 issue，或者标题中包含 fix、bug、regression 或 hotfix，它就会被计为 bug 修复。Kody 每 2 小时在后台收集一次该历史，仅限 **GitHub 和 GitLab**。首次扫描覆盖最近 30 天，此后历史会逐步累积，最长一年。可以在 **Cockpit → Code hotspots** 中查看。
+
+只有**低**风险会被批准；**中**和**高**风险的 PR 会暂缓，等待人工处理。在以下情况下，Kody 也会暂缓批准：
+
+- PR 修改了源代码文件中的控制流（`if`、`return`、`throw`），但没有添加任何测试；
+- 评估无法运行，例如模型调用失败。
+
+没有历史的文件不会被视为安全。在 Bitbucket、Azure Repos 和 Forgejo 上，以及首次扫描完成之前，Kody 会在没有历史的情况下进行评估。
+
+<Note>
+  开启 **Assess PR risk** 不会撤销已有的批准：Kody 已经批准的 PR 会保留对该提交的批准，Kody 从下一个提交开始评估。Kody 之前审查过但未批准的 PR 会等待下一个提交。
+</Note>
+
+### Kody 在 PR 上发布的内容
+
+设置了条件时，审查结束评论的末尾会显示 **Automatic approval eligible** 或 **Automatic approval held** 以及原因。Kody 还会维护一条单独的评论（**Automatic approval completed** 或 **Automatic approval held**），并在之后的审查中编辑它，而不是发布新评论。不符合标签或作者筛选条件的 PR 不会收到这条单独的评论，除非 Kody 之前批准过它或在上面评论过。
+
+当后续审查暂缓了一个 Kody 已批准的 PR 时（例如新提交收到了建议或修改了敏感路径，或者 PR 失去了批准标签），Kody 会撤回自己的批准。人工批准不受影响。
+
+如果 Kody 无法确认评论已发布，该 PR 会在 **Reviews → Pull requests** 中显示 **Approval note unverified**，并附上 Kody 尝试发布的原因。请检查 PR 评论和仓库集成的权限。
+
+<Note>
+  如果您的组织失去 Beta 访问权限或不再使用 Teams 和 Enterprise 套餐，已保存的条件会继续暂缓批准；Kody 不会退回到批准所有干净 PR 的行为。此时 **Code review → General** 会显示 **Saved conditions are holding automatic approval** 和 **Clear saved conditions** 按钮。
+</Note>
+
+### 平台支持
+
+| 平台 | 标签 | 代码历史 | 说明 |
+| --- | --- | --- | --- |
+| GitHub | 支持 | 支持 | |
+| GitLab | 支持 | 支持 | |
+| Forgejo | 支持 | 不支持 | 要撤回批准，令牌用户必须是仓库管理员。参见 [Forgejo 访问令牌](/zh/how_to_use/code_review/general_config/forgejo_pat)。 |
+| Bitbucket | 忽略 | 不支持 | 其他条件仍然生效。 |
+| Azure Repos | 不支持 | 不支持 | 只要配置了标签，所有 PR 都会等待人工批准。 |
+
+## kodus-config.yml
+
+只有在开启 **kodus Config File Overrides Web Preferences** 时，Kody 才会读取这些键。参见[配置优先级](/zh/how_to_use/code_review/configs/general#配置优先级)。
+
+```yaml
+pullRequestApprovalActive: true
+approvalLabels: ['docs', 'chore'] # 匹配任意一个；留空 = 所有 PR
+approvalAuthors: [] # Git 平台登录名；留空 = 任意作者
+approvalSensitivePaths:
+    - 'src/auth/**'
+    - '**/migrations/**'
+approvalRiskActive: true
+approvalRiskInstructions: '支付重试逻辑的变更需要由人工批准。'
+```

@@ -22,6 +22,10 @@ import './providers';
  * asked again only when the refused field was a top-level key of the body that
  * went out, the retry may differ from it by that field and nothing else, and an
  * upstream that accepts the body costs exactly one request.
+ *
+ * Every slot sends its first request once; the refusal checks then run on one
+ * slot per distinct request shape (see `shapeOf`), since slots that differ only
+ * in model name or host repeat the same branch.
  */
 
 const FIELDS: ReasoningField[] = ['thinking', 'reasoning_effort'];
@@ -186,6 +190,7 @@ type Responder = (body: any, n: number) => unknown | undefined;
 
 interface Outcome {
     bodies: any[];
+    urls: string[];
     rejected: boolean;
 }
 
@@ -196,12 +201,14 @@ async function call(
     organizationId = 'org-matrix',
 ): Promise<Outcome> {
     const bodies: any[] = [];
+    const urls: string[] = [];
     const realFetch = globalThis.fetch;
     globalThis.fetch = (async (input: any, init: any) => {
         const url =
             typeof input === 'string' ? input : String(input?.url ?? input);
         const body = init?.body ? JSON.parse(String(init.body)) : undefined;
         bodies.push(body);
+        urls.push(url);
         const error = respond(body, bodies.length);
         return new Response(JSON.stringify(error ?? okFor(url, body, mode)), {
             status: error ? 400 : 200,
@@ -226,7 +233,7 @@ async function call(
     } finally {
         globalThis.fetch = realFetch;
     }
-    return { bodies, rejected };
+    return { bodies, urls, rejected };
 }
 
 const has = (body: any, field: string) =>
@@ -277,117 +284,168 @@ const refusing =
         return f ? wording(f) : undefined;
     };
 
-/** Run `check` for every slot and mode; collect what broke instead of stopping
- *  at the first, so one red run names every model it broke. */
-async function everySlot(
-    check: (slot: any, mode: Mode) => Promise<string | undefined>,
+/** What one slot sends, and what it costs, with nothing refused. */
+interface Baseline {
+    slot: any;
+    mode: Mode;
+    url: string;
+    body: any;
+    requests: number;
+    rejected: boolean;
+}
+
+/** The protocol a request speaks, read off its URL the way `okFor` answers it. */
+const protocolOf = (url: string) =>
+    /\/converse\b/.test(url)
+        ? 'converse'
+        : /\/responses\b/.test(url)
+          ? 'responses'
+          : /generateContent/.test(url)
+            ? 'generateContent'
+            : /\/messages\b/.test(url)
+              ? 'messages'
+              : 'chat';
+
+/**
+ * Two slots whose first request has the same provider, protocol, top-level
+ * keys and `thinking` shape take the same path through the retry: the oracle
+ * only reads the body's top-level fields, so a model name, a host or an effort
+ * value cannot tell them apart. The refusal checks run once per shape; the
+ * accepted path still runs for every slot in the corpus.
+ */
+const shapeOf = (b: Baseline) =>
+    [
+        b.slot.provider,
+        b.mode,
+        protocolOf(b.url),
+        Object.keys(b.body ?? {})
+            .sort()
+            .join(','),
+        JSON.stringify(b.body?.thinking, (_k, v) =>
+            typeof v === 'number' ? 0 : v,
+        ),
+    ].join(' | ');
+
+const BASELINE: Baseline[] = [];
+const SHAPES: Baseline[] = [];
+
+/** Run `check` for one slot of every request shape; collect what broke instead
+ *  of stopping at the first, so one red run names every model it broke. */
+async function everyShape(
+    check: (slot: any, mode: Mode, sent: any) => Promise<string | undefined>,
 ): Promise<string[]> {
     const broken: string[] = [];
-    for (const slot of SLOTS) {
-        for (const mode of MODES) {
-            clearRefusals();
-            const problem = await check(slot, mode);
-            if (problem) broken.push(`${label(slot, mode)} :: ${problem}`);
-        }
+    for (const { slot, mode, body } of SHAPES) {
+        clearRefusals();
+        const problem = await check(slot, mode, body);
+        if (problem) broken.push(`${label(slot, mode)} :: ${problem}`);
     }
     clearRefusals();
     return broken;
 }
 
-/** What each slot sends with nothing refused, computed once. */
-const firstBodies = new Map<string, any>();
-async function firstBody(slot: any, mode: Mode) {
-    const key = label(slot, mode);
-    if (!firstBodies.has(key)) {
-        const { bodies } = await call(slot, mode, () => undefined);
-        firstBodies.set(key, bodies[0]);
-    }
-    return firstBodies.get(key);
-}
-
 const MATRIX_TIMEOUT = 600000;
 
 describe('reasoning-field refusals — every production slot × protocol × executor', () => {
-    afterEach(() => clearRefusals());
-
-    it(
-        'covers the corpus it claims to',
-        async () => {
-            // A filter that silently emptied the corpus would make every check below
-            // a green assertion over nothing.
-            expect(SLOTS.length).toBeGreaterThan(250);
-            const providers = new Set(SLOTS.map((s) => s.provider));
-            for (const p of [
-                'openai_compatible',
-                'open_router',
-                'openai',
-                'anthropic',
-                'anthropic_compatible',
-                'google_gemini',
-                'amazon_bedrock',
-                'novita',
-            ]) {
-                expect(providers).toContain(p);
-            }
-
-            // The retry path is exercised on real shapes, not just on a fixture:
-            // count the slots that actually send each field.
-            const sending: Record<string, number> = {};
-            for (const slot of SLOTS) {
-                for (const mode of MODES) {
-                    const body = await firstBody(slot, mode);
-                    for (const f of FIELDS) {
-                        if (has(body, f)) sending[f] = (sending[f] ?? 0) + 1;
-                    }
-                }
-            }
-            expect(sending.thinking).toBeGreaterThan(20);
-            expect(sending.reasoning_effort).toBeGreaterThan(20);
-        },
-        MATRIX_TIMEOUT,
-    );
-
-    it(
-        'an upstream that accepts the body costs exactly one request',
-        async () => {
-            const broken = await everySlot(async (slot, mode) => {
-                const { bodies, rejected } = await call(
+    beforeAll(async () => {
+        for (const slot of SLOTS) {
+            for (const mode of MODES) {
+                clearRefusals();
+                const { bodies, urls, rejected } = await call(
                     slot,
                     mode,
                     () => undefined,
                 );
-                if (rejected) return 'the call failed';
-                if (bodies.length !== 1) return `${bodies.length} requests`;
-            });
-            expect(broken).toEqual([]);
-        },
-        MATRIX_TIMEOUT,
-    );
+                BASELINE.push({
+                    slot,
+                    mode,
+                    url: urls[0] ?? '',
+                    body: bodies[0],
+                    requests: bodies.length,
+                    rejected,
+                });
+            }
+        }
+        clearRefusals();
+        const byShape = new Map<string, Baseline>();
+        for (const b of BASELINE) {
+            if (!byShape.has(shapeOf(b))) byShape.set(shapeOf(b), b);
+        }
+        SHAPES.push(...byShape.values());
+    }, MATRIX_TIMEOUT);
+
+    afterEach(() => clearRefusals());
+
+    it('covers the corpus it claims to', () => {
+        // A filter that silently emptied the corpus would make every check below
+        // a green assertion over nothing.
+        expect(SLOTS.length).toBeGreaterThan(250);
+        const providers = new Set(SLOTS.map((s) => s.provider));
+        for (const p of [
+            'openai_compatible',
+            'open_router',
+            'openai',
+            'anthropic',
+            'anthropic_compatible',
+            'google_gemini',
+            'amazon_bedrock',
+            'novita',
+        ]) {
+            expect(providers).toContain(p);
+        }
+        // Every provider keeps at least one shape in the refusal checks.
+        expect(new Set(SHAPES.map((s) => s.slot.provider))).toEqual(providers);
+
+        // The retry path is exercised on real shapes, not just on a fixture:
+        // count the slots, and the shapes, that actually send each field.
+        const sending = (rows: Baseline[], f: string) =>
+            rows.filter((b) => has(b.body, f)).length;
+        expect(sending(BASELINE, 'thinking')).toBeGreaterThan(20);
+        expect(sending(BASELINE, 'reasoning_effort')).toBeGreaterThan(20);
+        for (const f of FIELDS) {
+            expect(sending(SHAPES, f)).toBeGreaterThan(0);
+        }
+    });
+
+    it('an upstream that accepts the body costs exactly one request', () => {
+        const broken = BASELINE.flatMap(
+            ({ slot, mode, requests, rejected }) => {
+                const problem = rejected
+                    ? 'the call failed'
+                    : requests !== 1
+                      ? `${requests} requests`
+                      : undefined;
+                return problem ? [`${label(slot, mode)} :: ${problem}`] : [];
+            },
+        );
+        expect(broken).toEqual([]);
+    });
 
     for (const [name, wording] of Object.entries(WORDINGS)) {
         for (const field of FIELDS) {
             it(
                 `a ${name}-worded refusal of \`${field}\` is retried only when the body carried it, and only without it`,
                 async () => {
-                    const broken = await everySlot(async (slot, mode) => {
-                        const sent = await firstBody(slot, mode);
-                        const { bodies, rejected } = await call(
-                            slot,
-                            mode,
-                            refusing([field], wording),
-                        );
-                        if (!has(sent, field)) {
-                            // Nothing of ours to drop: the upstream never refuses,
-                            // so this is the accepted path and must stay one call.
-                            if (bodies.length !== 1)
+                    const broken = await everyShape(
+                        async (slot, mode, sent) => {
+                            const { bodies, rejected } = await call(
+                                slot,
+                                mode,
+                                refusing([field], wording),
+                            );
+                            if (!has(sent, field)) {
+                                // Nothing of ours to drop: the upstream never refuses,
+                                // so this is the accepted path and must stay one call.
+                                if (bodies.length !== 1)
+                                    return `${bodies.length} requests`;
+                                return rejected ? 'the call failed' : undefined;
+                            }
+                            if (bodies.length !== 2)
                                 return `${bodies.length} requests`;
-                            return rejected ? 'the call failed' : undefined;
-                        }
-                        if (bodies.length !== 2)
-                            return `${bodies.length} requests`;
-                        if (rejected) return 'the retry failed';
-                        return retryProblem(bodies[0], bodies[1], [field]);
-                    });
+                            if (rejected) return 'the retry failed';
+                            return retryProblem(bodies[0], bodies[1], [field]);
+                        },
+                    );
                     expect(broken).toEqual([]);
                 },
                 MATRIX_TIMEOUT,
@@ -398,8 +456,7 @@ describe('reasoning-field refusals — every production slot × protocol × exec
     it(
         'an upstream that refuses both fields costs one request per field it refuses',
         async () => {
-            const broken = await everySlot(async (slot, mode) => {
-                const sent = await firstBody(slot, mode);
+            const broken = await everyShape(async (slot, mode, sent) => {
                 const present = FIELDS.filter((f) => has(sent, f));
                 const { bodies, rejected } = await call(
                     slot,
@@ -420,8 +477,7 @@ describe('reasoning-field refusals — every production slot × protocol × exec
         'an upstream that refuses whatever it receives cannot make a loop',
         async () => {
             for (const field of FIELDS) {
-                const broken = await everySlot(async (slot, mode) => {
-                    const sent = await firstBody(slot, mode);
+                const broken = await everyShape(async (slot, mode, sent) => {
                     const { bodies, rejected } = await call(slot, mode, () =>
                         goRefusal(field),
                     );
@@ -439,7 +495,7 @@ describe('reasoning-field refusals — every production slot × protocol × exec
     it(
         'an upstream that names a different field every time stops at the cap',
         async () => {
-            const broken = await everySlot(async (slot, mode) => {
+            const broken = await everyShape(async (slot, mode) => {
                 const { bodies, rejected } = await call(slot, mode, (_b, n) =>
                     goRefusal(FIELDS[(n - 1) % FIELDS.length]),
                 );
@@ -483,7 +539,7 @@ describe('reasoning-field refusals — every production slot × protocol × exec
                 },
             };
             for (const [what, error] of Object.entries(others)) {
-                const broken = await everySlot(async (slot, mode) => {
+                const broken = await everyShape(async (slot, mode) => {
                     const { bodies, rejected } = await call(
                         slot,
                         mode,
@@ -502,8 +558,7 @@ describe('reasoning-field refusals — every production slot × protocol × exec
     it(
         'a refusal is remembered for the slot and org that got it, and only for them',
         async () => {
-            const broken = await everySlot(async (slot, mode) => {
-                const sent = await firstBody(slot, mode);
+            const broken = await everyShape(async (slot, mode, sent) => {
                 const field = FIELDS.find((f) => has(sent, f));
                 if (!field) return undefined;
                 await call(slot, mode, refusing([field]), 'org-a');

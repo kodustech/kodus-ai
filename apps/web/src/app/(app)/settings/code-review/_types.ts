@@ -99,6 +99,11 @@ export type CodeReviewGlobalConfig = {
     summary: CodeReviewSummary;
     suggestionControl?: SuggestionControlConfig;
     pullRequestApprovalActive: boolean;
+    approvalLabels?: string[];
+    approvalAuthors?: string[];
+    approvalRiskActive?: boolean;
+    approvalRiskInstructions?: string;
+    approvalSensitivePaths?: string[];
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive: boolean;
     kodyRulesGeneratorEnabled?: boolean;

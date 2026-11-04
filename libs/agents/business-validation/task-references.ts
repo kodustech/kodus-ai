@@ -467,7 +467,12 @@ function fromUrl(url: string, source: ReferenceSource): Candidate | undefined {
     }
 
     // GitHub, GitLab (`/-/issues/`), Bitbucket, Forgejo: …/<owner>/<repo>/issues/<n>.
-    const issue = path.match(/^\/(.+?)\/([^/]+)(?:\/-)?\/issues\/(\d+)\/?$/);
+    // GitLab 18 and 19 serve the same issue at `…/-/work_items/<iid>`, and a
+    // group's work items (epics) share that shape under `/groups/`, where
+    // there is no repository to read an issue from.
+    const issue =
+        path.match(/^\/(.+?)\/([^/]+)(?:\/-)?\/issues\/(\d+)\/?$/) ??
+        path.match(/^\/(?!groups\/)(.+?)\/([^/]+)\/-\/work_items\/(\d+)\/?$/);
     if (issue) {
         const owner = issue[1];
         return {

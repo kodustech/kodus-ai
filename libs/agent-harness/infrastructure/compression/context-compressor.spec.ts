@@ -12,7 +12,14 @@ import {
     type ModelMessage,
 } from './context-compressor';
 
-/** Build a realistic tool-loop window: head user (diff) + N assistant/tool rounds. */
+/**
+ * Build a realistic tool-loop window: head user (diff) + N assistant/tool rounds.
+ *
+ * Keep `resultChars` modest: the estimator runs tiktoken, and BPE on one long
+ * run of the same character is quadratic (a 200k-char result took ~22s). Any
+ * result above the 500-char hard-clamp cap leaves phase 1 with byte-identical
+ * content, so larger inputs exercise nothing extra.
+ */
 function buildWindow(rounds: number, resultChars: number): ModelMessage[] {
     const msgs: ModelMessage[] = [
         { role: 'user', content: 'Review this diff:\n' + 'x'.repeat(2_000) },
@@ -77,8 +84,8 @@ describe('clampMessagesToBudget', () => {
     });
 
     it('clamps an overflowing window to at or below the budget', () => {
-        // 30 rounds × ~8K-char results — far over any small budget.
-        const msgs = buildWindow(30, 8_000);
+        // 30 rounds × 2K-char results (~15K tokens) — far over a small budget.
+        const msgs = buildWindow(30, 2_000);
         const before = estimateMessagesTokens(msgs);
         const budget = 5_000;
         const clamped = clampMessagesToBudget(msgs, budget);
@@ -88,21 +95,21 @@ describe('clampMessagesToBudget', () => {
     });
 
     it('preserves the head (first user diff turn)', () => {
-        const msgs = buildWindow(30, 8_000);
+        const msgs = buildWindow(30, 2_000);
         const clamped = clampMessagesToBudget(msgs, 5_000);
         expect(clamped[0].role).toBe('user');
         expect(String(clamped[0].content)).toContain('Review this diff');
     });
 
     it('never produces an orphaned tool result', () => {
-        const msgs = buildWindow(30, 8_000);
+        const msgs = buildWindow(30, 2_000);
         const clamped = clampMessagesToBudget(msgs, 5_000);
         expect(hasOrphanToolResult(clamped)).toBe(false);
     });
 
     it('fits even when a single recent round alone exceeds the budget', () => {
-        // One massive round; budget smaller than it → phase 3 (truncate) fires.
-        const msgs = buildWindow(1, 200_000);
+        // One round (~2K tokens) bigger than the whole budget.
+        const msgs = buildWindow(1, 8_000);
         const budget = 1_000;
         const clamped = clampMessagesToBudget(msgs, budget);
         expect(estimateMessagesTokens(clamped)).toBeLessThanOrEqual(budget);
@@ -156,14 +163,14 @@ describe('structured tool-result output survives truncation (PR#302 regression)'
     }
 
     it('clampMessagesToBudget keeps output a { type, value } object, not a string', () => {
-        const clamped = clampMessagesToBudget(structuredWindow(40_000), 50);
+        const clamped = clampMessagesToBudget(structuredWindow(4_000), 50);
         const out = firstToolOutput(clamped);
 
         expect(typeof out).toBe('object');
         expect(out.type).toBe('text');
         expect(typeof out.value).toBe('string');
         // inner text was actually shrunk (compression still does its job)...
-        expect(out.value.length).toBeLessThan(40_000);
+        expect(out.value.length).toBeLessThan(4_000);
         expect(out.value.endsWith('…[truncated]')).toBe(true);
     });
 

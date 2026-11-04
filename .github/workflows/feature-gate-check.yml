@@ -5,6 +5,7 @@ on:
         paths:
             - "release/features.yaml"
             - "release/features-snapshot.json"
+            - "libs/feature-gate/infrastructure/features-snapshot.generated.ts"
             - "scripts/feature-gate/**"
             - ".github/workflows/feature-gate-check.yml"
 

@@ -8,6 +8,14 @@ import type {
     ConfigTeam,
 } from '../../types/config.js';
 import type { RepositorySettings } from '../../types/repo-config.js';
+import type {
+    CodeReviewScope,
+    FormattedCodeReviewParameter,
+    LLMConfigStatus,
+    SaveCodeReviewConfigParams,
+    SaveCodeReviewConfigResult,
+    TestByokModelResult,
+} from '../../types/review-settings.js';
 import type { IConfigApi } from './api.interface.js';
 import { requestBinaryWithRetry, requestWithRetry } from './api-core.js';
 
@@ -215,5 +223,82 @@ export class RealConfigApi implements IConfigApi {
             method: 'GET',
             headers: this.buildAuthHeaders(accessToken),
         });
+    }
+
+    // The endpoints below are the ones Settings > Code Review uses; they
+    // take a user token and apply the web's role checks.
+
+    async getFormattedCodeReviewParameter(
+        accessToken: string,
+        teamId: string,
+        options: { includeFileOverlay?: boolean } = {},
+    ): Promise<FormattedCodeReviewParameter> {
+        const overlay =
+            options.includeFileOverlay === false
+                ? '&includeFileOverlay=false'
+                : '';
+        return this.requester<FormattedCodeReviewParameter>(
+            `/parameters/code-review-parameter?teamId=${encodeURIComponent(teamId)}${overlay}`,
+            {
+                headers: this.buildAuthHeaders(accessToken),
+            },
+        );
+    }
+
+    async getCodeReviewScopes(
+        accessToken: string,
+        teamId: string,
+    ): Promise<CodeReviewScope[]> {
+        return this.requester<CodeReviewScope[]>(
+            `/parameters/code-review-scopes?teamId=${encodeURIComponent(teamId)}`,
+            {
+                headers: this.buildAuthHeaders(accessToken),
+            },
+        );
+    }
+
+    async saveCodeReviewConfig(
+        accessToken: string,
+        params: SaveCodeReviewConfigParams,
+    ): Promise<SaveCodeReviewConfigResult> {
+        return this.requester<SaveCodeReviewConfigResult>(
+            '/parameters/create-or-update-code-review',
+            {
+                method: 'POST',
+                headers: this.buildAuthHeaders(accessToken),
+                body: JSON.stringify({
+                    configValue: params.configValue,
+                    organizationAndTeamData: {
+                        teamId: params.teamId,
+                    },
+                    repositoryId: params.repositoryId,
+                    directoryId: params.directoryId,
+                    directoryPaths: params.directoryPaths,
+                }),
+            },
+        );
+    }
+
+    async getLLMConfigStatus(accessToken: string): Promise<LLMConfigStatus> {
+        return this.requester<LLMConfigStatus>(
+            '/organization-parameters/llm-config/status',
+            {
+                headers: this.buildAuthHeaders(accessToken),
+            },
+        );
+    }
+
+    async testByokModel(
+        accessToken: string,
+        params: { provider: string; model: string },
+    ): Promise<TestByokModelResult> {
+        return this.requester<TestByokModelResult>(
+            '/organization-parameters/test-byok-model',
+            {
+                method: 'POST',
+                headers: this.buildAuthHeaders(accessToken),
+                body: JSON.stringify(params),
+            },
+        );
     }
 }

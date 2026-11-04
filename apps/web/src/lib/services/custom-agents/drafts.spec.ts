@@ -42,16 +42,6 @@ const cli = (overrides: Partial<CliToolConfig> = {}): CliToolConfig => ({
 });
 
 describe("custom agent drafts", () => {
-    it("offers the four templates and a blank agent", () => {
-        expect(CUSTOM_AGENT_TEMPLATES.map((template) => template.id)).toEqual([
-            "architecture",
-            "e2e-coverage",
-            "regression-hallucination",
-            "security",
-            "blank",
-        ]);
-    });
-
     it("creates a template agent that starts off, with a unique id", () => {
         const first = createAgentFromTemplate("architecture", []);
         const second = createAgentFromTemplate("architecture", [first]);

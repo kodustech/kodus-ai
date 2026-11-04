@@ -4,11 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import {
-    buildSubmoduleUpdatePlan,
-    parseDeclaredSubmodules,
-    sshRewriteFor,
-} from '@libs/sandbox/infrastructure/providers/submodule-fetch';
+import { sshRewriteFor } from '@libs/sandbox/infrastructure/providers/submodule-fetch';
 
 const execFileAsync = promisify(execFile);
 
@@ -18,10 +14,10 @@ const execFileAsync = promisify(execFile);
  * fetched by rewriting it onto https with `url.<https>.insteadOf`, same host
  * only.
  *
- * This file pins the two halves against real git: that the plan emits the
- * pair as CONFIG (never as an argument), and that a pair of that shape
+ * This file pins, against real git, that a pair of the shape the plan emits
  * actually makes git fetch a submodule whose registered url is scp-like —
- * which it does not without one.
+ * which it does not without one. That the plan emits the pair as CONFIG
+ * (never as an argument) is covered in submodule-fetch.spec.ts.
  */
 const GIT_ENV = {
     GIT_TERMINAL_PROMPT: '0',
@@ -57,41 +53,6 @@ maybe('an ssh submodule is fetched over https', () => {
     });
     afterAll(async () => {
         await rm(scratch, { recursive: true, force: true });
-    });
-
-    it('the plan carries the rewrite as config, beside the scoped header', () => {
-        const declared = parseDeclaredSubmodules(
-            'submodule.commons.path vendor/commons\n' +
-                'submodule.commons.url git@github.com:acme/commons.git\n',
-        );
-        const plan = buildSubmoduleUpdatePlan({
-            declared,
-            resolvedUrls: new Map([
-                ['commons', 'git@github.com:acme/commons.git'],
-            ]),
-            repoCloneUrl: 'https://github.com/acme/app.git',
-            baseDeclared: declared,
-            authHeader: 'Authorization: Basic SECRET',
-        });
-
-        expect(plan.paths).toEqual(['vendor/commons']);
-        const pairs = [...Array(Number(plan.env.GIT_CONFIG_COUNT))].map(
-            (_, i) => [
-                plan.env[`GIT_CONFIG_KEY_${i}`],
-                plan.env[`GIT_CONFIG_VALUE_${i}`],
-            ],
-        );
-        expect(pairs).toEqual(
-            expect.arrayContaining([
-                ['url.https://github.com/.insteadOf', 'git@github.com:'],
-                [
-                    'http.https://github.com/.extraHeader',
-                    'Authorization: Basic SECRET',
-                ],
-            ]),
-        );
-        // Same rule as the token: config, never the command line.
-        expect(JSON.stringify(plan.updateArgs)).not.toContain('insteadOf');
     });
 
     it('git fetches a scp-like submodule ONLY with the rewrite', async () => {

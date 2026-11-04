@@ -154,6 +154,66 @@ function activateTeam(teamId: string): void {
     );
 }
 
+/** Give the preview's Teams trial its normal minimum of five review seats. */
+function ensurePreviewTrialSeats(organizationId: string, teamId: string): void {
+    const uuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuid.test(organizationId) || !uuid.test(teamId)) {
+        throw new Error('preview trial identifiers must be UUIDs');
+    }
+
+    // Billing creates a Teams trial with totalLicenses=0. That lets the
+    // first PR through as a freebie but skips later PRs by the same author,
+    // making approval QA look broken. Touch only this seeded trial; a paid
+    // subscription keeps its Stripe-managed seat quantity.
+    const sql = `update billing.organization_licenses set "totalLicenses" = greatest("totalLicenses", 5) where "organizationId" = '${organizationId}' and "teamId" = '${teamId}' and "subscriptionStatus" = 'trial' and "stripeSubscriptionId" is null and "trialEnd" > now()`;
+    const out = execFileSync(
+        'docker',
+        [
+            'exec',
+            '-i',
+            'db_postgres',
+            'sh',
+            '-c',
+            'PGPASSWORD=$POSTGRES_PASSWORD psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"',
+        ],
+        { encoding: 'utf8', input: sql, stdio: ['pipe', 'pipe', 'pipe'] },
+    );
+    console.log(
+        `seed:preview: Teams trial seats ready (${out.trim().split('\n').pop()})`,
+    );
+}
+
+/** The preview skips the browser onboarding step that normally creates a trial. */
+async function startPreviewTrial(token: string, teamId: string): Promise<void> {
+    const payload = JSON.parse(
+        Buffer.from(token.split('.')[1], 'base64url').toString('utf8'),
+    ) as { organizationId?: string };
+    if (!payload.organizationId) {
+        throw new Error('preview token has no organizationId');
+    }
+
+    // Billing is only present in the cloud shape. The first seed may run
+    // before its container is ready; up-profile runs this seed again after
+    // readiness checks, so leave that first attempt non-fatal.
+    const billing = await fetch('http://127.0.0.1:3992/api/billing/trial', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            organizationId: payload.organizationId,
+            teamId,
+            byok: false,
+        }),
+        signal: AbortSignal.timeout(10_000),
+    });
+    if (billing.ok || billing.status === 409) {
+        ensurePreviewTrialSeats(payload.organizationId, teamId);
+        console.log('seed:preview: billing trial available');
+        return;
+    }
+    throw new Error(`billing trial returned HTTP ${billing.status}`);
+}
+
 async function main(): Promise<void> {
     if (!PASSWORD) {
         console.log(
@@ -208,7 +268,16 @@ async function main(): Promise<void> {
     }
     try {
         const teamId = await finishOnboarding(token);
-        if (teamId) activateTeam(teamId);
+        if (teamId) {
+            activateTeam(teamId);
+            try {
+                await startPreviewTrial(token, teamId);
+            } catch (error: any) {
+                console.warn(
+                    `seed:preview: billing trial unavailable for team ${teamId} (timeout 10000 ms): ${error?.message ?? error}`,
+                );
+            }
+        }
     } catch (e: any) {
         console.warn(
             `seed:preview: could not finish onboarding (${e?.message ?? e}) — the preview will open on the setup wizard`,

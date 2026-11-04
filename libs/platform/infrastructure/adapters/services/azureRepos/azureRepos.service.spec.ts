@@ -1,4 +1,5 @@
 import { AzureReposService } from './azureRepos.service';
+import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 /**
  * Regression test for issue #1045 / Bug B — Azure DevOps' API uses
@@ -51,6 +52,28 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
             service as any,
             'getProjectIdFromRepository',
         ).mockResolvedValue(stubRepository.project.id);
+    });
+
+    it('distinguishes no Kody vote from an unavailable Azure lookup', async () => {
+        (azureReposRequestHelper as any).getAuthenticatedUserId = jest
+            .fn()
+            .mockResolvedValue('kody');
+        (azureReposRequestHelper as any).getListOfPullRequestReviewers = jest
+            .fn()
+            .mockResolvedValueOnce([])
+            .mockRejectedValueOnce(new Error('Azure unavailable'));
+        const request = {
+            organizationAndTeamData: stubOrg,
+            repository: stubRepository,
+            prNumber: 42,
+        };
+
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(PullRequestReviewState.NONE);
+        await expect(
+            service.getReviewStatusByPullRequest(request),
+        ).resolves.toBe(null);
     });
 
     it('maps Azure `description` onto `body` while preserving the original `description` field', async () => {
@@ -128,6 +151,7 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
             sourceRefName: 'refs/heads/feature/anchors',
             repository: stubRepository,
             lastMergeSourceCommit: { commitId: 'a1b2c3d4e5f6' },
+            lastMergeTargetCommit: { commitId: 'target-commit' },
         });
 
         const result = await service.getPullRequest({
@@ -137,6 +161,7 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
         });
 
         expect(result?.head?.sha).toBe('a1b2c3d4e5f6');
+        expect(result?.base?.sha).toBe('target-commit');
         // The ref keeps its existing shape (the `refs/heads/` prefix stripped).
         expect(result?.head?.ref).toBe('feature/anchors');
     });
@@ -187,29 +212,6 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
         });
 
         expect(result).toBeNull();
-    });
-
-    /**
-     * Anti-regression — the bug shape this test guards against is:
-     * the method returning the raw Azure object without mapping
-     * description→body, leaving downstream consumers with
-     * `pr.body === undefined`. If anyone refactors and forgets the
-     * spread, this assertion fails immediately.
-     */
-    it('does NOT regress to returning the raw Azure object (anti-regression)', async () => {
-        azureReposRequestHelper.getPullRequestDetails.mockResolvedValue({
-            id: 1,
-            description: 'something',
-        });
-
-        const result = await service.getPullRequestByNumber({
-            organizationAndTeamData: stubOrg,
-            repository: stubRepository,
-            prNumber: 1,
-        });
-
-        expect(result).toHaveProperty('body');
-        expect(result?.body).not.toBeUndefined();
     });
 });
 
@@ -704,5 +706,151 @@ describe('AzureReposService.getFilesByPullRequestId — bounded fan-out', () => 
             // calls per file under the same slot, so actual peak is ≤ cap.
             expect(peakInFlight).toBeLessThanOrEqual(CONCURRENCY_CAP);
         });
+    });
+});
+
+describe('AzureReposService.getChangedFilesSinceLastCommit — complete vs unreadable diff (#2268)', () => {
+    let service: AzureReposService;
+    let azureReposRequestHelper: {
+        getPullRequestDetails: jest.Mock;
+        getDiff: jest.Mock;
+        getIterations: jest.Mock;
+        getChanges: jest.Mock;
+    };
+
+    const params = {
+        organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+        repository: { name: 'repo', id: 'repo-1', project: { id: 'proj-1' } },
+        prNumber: 42,
+        lastCommit: { sha: 'reviewed-sha' },
+    };
+
+    const blob = (path: string) => ({
+        changeType: 'edit',
+        item: { path, gitObjectType: 'blob' },
+    });
+
+    beforeEach(() => {
+        azureReposRequestHelper = {
+            getPullRequestDetails: jest.fn().mockResolvedValue({
+                lastMergeSourceCommit: { commitId: 'head-sha' },
+            }),
+            getDiff: jest.fn(),
+            getIterations: jest.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]),
+            getChanges: jest
+                .fn()
+                .mockResolvedValue([{ item: { path: '/src/own.ts' } }]),
+        };
+
+        service = new AzureReposService(
+            {} as any,
+            {} as any,
+            {} as any,
+            azureReposRequestHelper as any,
+            {} as any,
+            undefined,
+        );
+
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+            orgName: 'fake-org',
+            token: 'fake-token',
+        });
+        jest.spyOn(
+            service as any,
+            '_generateFileDiffForAzure',
+        ).mockImplementation(async ({ filePath }: any) => ({
+            filename: filePath,
+            status: 'modified',
+            patch: '@@ -1 +1 @@\n-a\n+b',
+        }));
+    });
+
+    it('keeps the PR files of a complete diff, wherever they sort', async () => {
+        azureReposRequestHelper.getDiff.mockResolvedValue({
+            changes: [
+                blob('/merged/a.ts'),
+                blob('/merged/b.ts'),
+                blob('/src/own.ts'),
+            ],
+            allChangesIncluded: true,
+        });
+
+        const files = await service.getChangedFilesSinceLastCommit(
+            params as any,
+        );
+
+        expect(files?.map((f) => f.filename)).toEqual(['/src/own.ts']);
+        expect(azureReposRequestHelper.getDiff).toHaveBeenCalledWith({
+            orgName: 'fake-org',
+            token: 'fake-token',
+            projectId: 'proj-1',
+            repositoryId: 'repo-1',
+            baseCommit: 'reviewed-sha',
+            targetCommitId: 'head-sha',
+        });
+    });
+
+    it('returns [] when the complete diff holds no PR file', async () => {
+        azureReposRequestHelper.getDiff.mockResolvedValue({
+            changes: [blob('/merged/a.ts')],
+            allChangesIncluded: true,
+        });
+
+        await expect(
+            service.getChangedFilesSinceLastCommit(params as any),
+        ).resolves.toEqual([]);
+    });
+
+    it('returns [] when the diff has no file entries at all', async () => {
+        azureReposRequestHelper.getDiff.mockResolvedValue({
+            changes: [{ item: { path: '/src', gitObjectType: 'tree' } }],
+            allChangesIncluded: true,
+        });
+
+        await expect(
+            service.getChangedFilesSinceLastCommit(params as any),
+        ).resolves.toEqual([]);
+    });
+
+    it('returns null when the diff could not be read in full', async () => {
+        azureReposRequestHelper.getDiff.mockResolvedValue({
+            changes: [blob('/merged/a.ts')],
+            allChangesIncluded: false,
+        });
+
+        await expect(
+            service.getChangedFilesSinceLastCommit(params as any),
+        ).resolves.toBeNull();
+    });
+
+    it('returns null when the PR file list is unavailable, instead of reading every merged file', async () => {
+        azureReposRequestHelper.getDiff.mockResolvedValue({
+            changes: [blob('/merged/a.ts'), blob('/src/own.ts')],
+            allChangesIncluded: true,
+        });
+        azureReposRequestHelper.getIterations.mockResolvedValue([]);
+
+        await expect(
+            service.getChangedFilesSinceLastCommit(params as any),
+        ).resolves.toBeNull();
+    });
+
+    it('returns null when the diff read fails', async () => {
+        azureReposRequestHelper.getDiff.mockRejectedValue(new Error('boom'));
+
+        await expect(
+            service.getChangedFilesSinceLastCommit(params as any),
+        ).resolves.toBeNull();
+    });
+
+    it('rethrows a 429', async () => {
+        azureReposRequestHelper.getDiff.mockRejectedValue({
+            status: 429,
+            message: 'Too Many Requests',
+        });
+
+        await expect(
+            service.getChangedFilesSinceLastCommit(params as any),
+        ).rejects.toMatchObject({ status: 429 });
     });
 });

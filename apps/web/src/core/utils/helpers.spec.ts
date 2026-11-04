@@ -181,4 +181,21 @@ describe("codeReviewConfigRemovePropertiesNotInType", () => {
         expect(kept.customAgents).toEqual(customAgents);
         expect(kept.knowledge).toEqual(knowledge);
     });
+
+    // A field missing from the whitelist is silently dropped: the save answers
+    // 201 and the backend never sees it (it happened with the old IDE-sync
+    // toggle-off action).
+    it.each([
+        ["repoInstructionsEnabled", false],
+        ["kodyRulesGeneratorEnabled", false],
+        // Denylist of git reviewers excluded from past-review learning.
+        ["kodyLearningExcludedReviewers", ["bot-reviewer"]],
+        ["kodyKnowledgeApproval", { enabled: true }],
+    ])("keeps %s so the field reaches the backend", (key, value) => {
+        const kept = codeReviewConfigRemovePropertiesNotInType({
+            [key]: value,
+        } as never) as Record<string, unknown>;
+
+        expect(kept[key]).toEqual(value);
+    });
 });

@@ -40,6 +40,9 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         platformType: string,
         organizationAndTeamData: OrganizationAndTeamData,
         commits: ICommit[],
+        prLevelSuggestions?: ISuggestionByPR[],
+        /** The review's save: keep the stored status, merged and closedAt. */
+        options?: { keepStoredState?: boolean },
     ): Promise<IPullRequests | null>;
 
     extractUser(
@@ -57,6 +60,7 @@ export interface IPullRequestsService extends IPullRequestsRepository {
 
     addPrLevelSuggestions(
         pullRequestNumber: number,
+        repositoryId: string,
         repositoryName: string,
         prLevelSuggestions: ISuggestionByPR[],
         organizationAndTeamData: OrganizationAndTeamData,

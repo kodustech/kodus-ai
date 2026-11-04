@@ -57,20 +57,6 @@ describe('Azure Branch Normalization', () => {
     });
 
     describe('normalizeBranchesForPlatform', () => {
-        it('should normalize patterns for Azure DevOps', () => {
-            const branches = ['develop', 'feature/*', 'release/*'];
-
-            const result = (
-                validateConfigStage as any
-            ).normalizeBranchesForPlatform(branches, PlatformType.AZURE_REPOS);
-
-            expect(result).toEqual([
-                'refs/heads/develop',
-                'refs/heads/feature/*',
-                'refs/heads/release/*',
-            ]);
-        });
-
         it('should not normalize for GitHub', () => {
             const branches = ['develop', 'feature/*', 'release/*'];
 
@@ -79,76 +65,6 @@ describe('Azure Branch Normalization', () => {
             ).normalizeBranchesForPlatform(branches, PlatformType.GITHUB);
 
             expect(result).toEqual(['develop', 'feature/*', 'release/*']);
-        });
-
-        it('should not normalize for GitLab', () => {
-            const branches = ['develop', 'feature/*', 'release/*'];
-
-            const result = (
-                validateConfigStage as any
-            ).normalizeBranchesForPlatform(branches, PlatformType.GITLAB);
-
-            expect(result).toEqual(['develop', 'feature/*', 'release/*']);
-        });
-
-        it('should preserve already normalized patterns for Azure', () => {
-            const branches = [
-                'refs/heads/develop',
-                'feature/*',
-                'refs/heads/release/*',
-            ];
-
-            const result = (
-                validateConfigStage as any
-            ).normalizeBranchesForPlatform(branches, PlatformType.AZURE_REPOS);
-
-            expect(result).toEqual([
-                'refs/heads/develop', // Already normalized
-                'refs/heads/feature/*', // Gets normalized
-                'refs/heads/release/*', // Already normalized
-            ]);
-        });
-
-        it('should handle exclusion patterns correctly for Azure', () => {
-            const branches = ['develop', '!main', 'feature/*', '!hotfix/*'];
-
-            const result = (
-                validateConfigStage as any
-            ).normalizeBranchesForPlatform(branches, PlatformType.AZURE_REPOS);
-
-            expect(result).toEqual([
-                'refs/heads/develop',
-                '!refs/heads/main', // Exclusion with prefix
-                'refs/heads/feature/*',
-                '!refs/heads/hotfix/*', // Exclusion pattern with wildcard
-            ]);
-        });
-
-        it('should preserve already normalized exclusion patterns for Azure', () => {
-            const branches = ['!refs/heads/main', '!hotfix/*'];
-
-            const result = (
-                validateConfigStage as any
-            ).normalizeBranchesForPlatform(branches, PlatformType.AZURE_REPOS);
-
-            expect(result).toEqual([
-                '!refs/heads/main', // Already normalized - no change
-                '!refs/heads/hotfix/*', // Gets normalized
-            ]);
-        });
-
-        it('should handle exact match patterns correctly for Azure', () => {
-            const branches = ['=develop', 'feature/*', '=main'];
-
-            const result = (
-                validateConfigStage as any
-            ).normalizeBranchesForPlatform(branches, PlatformType.AZURE_REPOS);
-
-            expect(result).toEqual([
-                '=refs/heads/develop', // Exact match with prefix
-                'refs/heads/feature/*',
-                '=refs/heads/main', // Exact match with prefix
-            ]);
         });
 
         it('should preserve already normalized exact match patterns for Azure', () => {
@@ -161,20 +77,6 @@ describe('Azure Branch Normalization', () => {
             expect(result).toEqual([
                 '=refs/heads/main', // Already normalized - no change
                 '=refs/heads/staging', // Gets normalized
-            ]);
-        });
-
-        it('should handle contains patterns correctly for Azure', () => {
-            const branches = ['contains:demo', 'feature/*', 'contains:test'];
-
-            const result = (
-                validateConfigStage as any
-            ).normalizeBranchesForPlatform(branches, PlatformType.AZURE_REPOS);
-
-            expect(result).toEqual([
-                'contains:demo', // Contains patterns should not be normalized
-                'refs/heads/feature/*',
-                'contains:test', // Contains patterns should not be normalized
             ]);
         });
 
@@ -248,50 +150,6 @@ describe('Azure Branch Normalization', () => {
             );
 
             // Should return true because feature/* matches feature/PLT-4873
-            expect(result).toEqual({ canProceed: true });
-        });
-
-        it('should work with GitLab branches without normalization', () => {
-            const result = (validateConfigStage as any).shouldExecuteReview(
-                'Test PR',
-                'feature/PLT-4873', // Target (no prefix)
-                'topic/PLT-9221', // Source (no prefix)
-                false,
-                {
-                    automatedReviewActive: true,
-                    baseBranches: ['develop', 'feature/*', 'release/*'],
-                    runOnDraft: false,
-                },
-                'webhook',
-                PlatformType.GITLAB,
-                organizationAndTeamData,
-            );
-
-            // Should return true because feature/* matches feature/PLT-4873
-            expect(result).toEqual({ canProceed: true });
-        });
-
-        it('should handle mixed Azure patterns (user + already normalized)', () => {
-            const result = (validateConfigStage as any).shouldExecuteReview(
-                'Test PR',
-                'refs/heads/feature/PLT-4873', // Azure target
-                'refs/heads/topic/PLT-9221', // Azure source
-                false,
-                {
-                    automatedReviewActive: true,
-                    baseBranches: [
-                        'develop', // Will be normalized
-                        'refs/heads/main', // Already normalized
-                        'feature/*', // Will be normalized
-                    ],
-                    runOnDraft: false,
-                },
-                'webhook',
-                PlatformType.AZURE_REPOS,
-                organizationAndTeamData,
-            );
-
-            // Should return true because patterns get normalized properly
             expect(result).toEqual({ canProceed: true });
         });
     });

@@ -22,6 +22,8 @@ describe("isIdeRuleSource", () => {
         ".rules/naming.md",
         ".kody/rules/memory.md",
         "docs/coding-standards/typescript.md",
+        ".agents/rules/architecture.md",
+        "applications/sales/.agents/rules/style.md",
     ])("classifies %s as an IDE rule source", (sourcePath) => {
         expect(isIdeRuleSource(sourcePath)).toBe(true);
     });
@@ -57,6 +59,15 @@ describe("inferRuleOrigin", () => {
             origin: "user",
         });
         expect(result).toBe("Agent file");
+    });
+
+    it('returns "Agent file" for a nested .agents/rules file with no origin', () => {
+        expect(
+            inferRuleOrigin({
+                origin: null,
+                sourcePath: "applications/sales/.agents/rules/style.md",
+            }),
+        ).toBe("Agent file");
     });
 
     // Local reproduction: 3 rules from fast-sync on a fresh account where

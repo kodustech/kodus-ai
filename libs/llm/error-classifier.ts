@@ -157,6 +157,8 @@ export function isAbortOrHardTimeout(err: unknown): boolean {
     return /\[HARD-TIMEOUT\]|aborted|timed?\s*out|timeout/i.test(text);
 }
 
+const RETRIES_EXHAUSTED = Symbol.for('kodus.llm.retriesExhausted');
+
 /**
  * True when the executor already spent ALL of its same-model retries on this
  * error — the AI SDK's `RetryError` with `reason: 'maxRetriesExceeded'`.
@@ -176,12 +178,37 @@ export function isAbortOrHardTimeout(err: unknown): boolean {
  *
  * `errorNotRetryable` is deliberately NOT exhaustion: the SDK declined to
  * retry at all, so nothing about the failure has been tested by repetition.
+ *
+ * One-shot calls pin the SDK's retry to 0 and own their retry instead
+ * (structured-review-call), so they mark the error with `markRetriesExhausted`
+ * when that retry is spent or the slot's cooldown forbids it.
  * Pure — safe in any catch block.
  */
 export function retriesWereExhausted(err: unknown): boolean {
     if (!err || typeof err !== 'object') return false;
+    if ((err as Record<symbol, unknown>)[RETRIES_EXHAUSTED] === true) {
+        return true;
+    }
     const e = err as { name?: string; reason?: string };
     return e.name === 'AI_RetryError' && e.reason === 'maxRetriesExceeded';
+}
+
+/** Flags an error whose app-level retry was spent, so `retriesWereExhausted`
+ *  reads it the same as the SDK's own `maxRetriesExceeded`. */
+export function markRetriesExhausted<E>(err: E): E {
+    if (err && typeof err === 'object') {
+        try {
+            Object.defineProperty(err, RETRIES_EXHAUSTED, {
+                value: true,
+                enumerable: false,
+                writable: false,
+                configurable: true,
+            });
+        } catch {
+            // Frozen errors — leave unmarked; the call fails as it did before.
+        }
+    }
+    return err;
 }
 
 /**
@@ -296,7 +323,9 @@ function matchByHttpStatus(
         // Most other provider 404s on the inference endpoint are model-not-found.
         return LlmErrorCategory.MODEL_NOT_FOUND;
     }
-    if (status >= 500 && status < 600) {
+    // 499 is the gateway status for a request its upstream dropped (nginx,
+    // LiteLLM and Codex-account proxies use it): the same call can succeed.
+    if ((status >= 500 && status < 600) || status === 499) {
         return LlmErrorCategory.TRANSIENT;
     }
     return LlmErrorCategory.UNKNOWN;
@@ -359,6 +388,10 @@ function looksLikeQuota(lower: string): boolean {
         // failure mode of matching the exact phrase is exactly that delay --
         // if Anthropic rewords the cap, we wait instead of mislabelling.
         lower.includes('specified api usage limits') ||
+        // Z.AI's weekly/monthly cap (code 1310, #2104), matched on its exact
+        // wording for the same reason. Its short-window sibling ("Usage limit
+        // reached for 5 hour") reopens within hours and stays a rate limit.
+        lower.includes('weekly/monthly limit exhausted') ||
         lower.includes('failure to pay') ||
         lower.includes('past invoices') ||
         lower.includes('past due')
@@ -433,7 +466,9 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('token limit') ||
         lower.includes('too many tokens') ||
         // OpenAI: "Your input exceeds the context window of this model."
-        lower.includes('exceeds the context window')
+        lower.includes('exceeds the context window') ||
+        // A gateway that caps the body: "The total text input size exceeds 8 MB".
+        lower.includes('input size exceeds')
     ) {
         return LlmErrorCategory.CONTEXT_OVERFLOW;
     }

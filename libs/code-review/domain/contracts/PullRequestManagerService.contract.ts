@@ -1,6 +1,7 @@
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { Commit } from '@libs/core/infrastructure/config/types/general/commit.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import type { RebaseInterdiffResult } from '@libs/code-review/infrastructure/adapters/services/rebase-interdiff';
 import { PullRequestAuthor } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 export const PULL_REQUEST_MANAGER_SERVICE_TOKEN = Symbol(
@@ -20,6 +21,7 @@ export interface IPullRequestManagerService {
         pullRequest: any,
         ignorePaths: string[],
         lastCommit?: string,
+        reviewedBaseBranch?: string,
     ): Promise<FileChange[]>;
 
     /**
@@ -31,6 +33,8 @@ export interface IPullRequestManagerService {
         repository: { name: string; id: any; project?: { id: any } },
         pullRequest: any,
         lastCommit?: string,
+        /** Base branch of the last review; a retargeted PR is read whole. */
+        reviewedBaseBranch?: string,
     ): Promise<FileChange[]>;
 
     /**
@@ -48,6 +52,23 @@ export interface IPullRequestManagerService {
         organizationAndTeamData: OrganizationAndTeamData,
         determineBots?: boolean,
     ): Promise<PullRequestAuthor[]>;
+
+    /**
+     * After a rebase: the current PR files with only the hunks that were not
+     * in the PR diff at `previousHeadSha`. Null when that diff can't be read.
+     */
+    getRebaseInterdiff(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repository: { name: string; id: any; project?: { id: any } },
+        pullRequest: any,
+        previousHeadSha: string,
+    ): Promise<
+        | (RebaseInterdiffResult & {
+              /** The current PR diff the interdiff was read from. */
+              currentFiles: FileChange[];
+          })
+        | null
+    >;
 
     getNewCommitsSinceLastExecution(
         organizationAndTeamData: OrganizationAndTeamData,

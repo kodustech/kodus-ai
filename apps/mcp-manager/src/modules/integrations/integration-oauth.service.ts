@@ -11,6 +11,7 @@ import {
     generateState,
     getCanonicalResourceUri,
     OAuthAuthorizationServerMetadata,
+    OAuthGrantRejectedError,
     OAuthProtectedResourceMetadata,
     registerOauthClient,
     TokenData,
@@ -168,11 +169,26 @@ export class IntegrationOAuthService {
             return oauthState;
         }
 
+        const current = tokens as TokenData;
+        // An expiry the provider stated, already passed, with nothing to
+        // refresh it: the token is dead until the user connects again.
+        const expiredForGood =
+            !current.refreshToken &&
+            current.expiresIn !== undefined &&
+            (current.expiresAt ?? 0) < Date.now();
+        if (expiredForGood) {
+            return this.markGrantLost(
+                organizationId,
+                integrationId,
+                oauthState,
+            );
+        }
+
         try {
             const newTokens = await checkAndRefreshOAuth(
                 asMetadata.token_endpoint,
                 {
-                    tokens: tokens as TokenData,
+                    tokens: current,
                     clientId,
                     clientSecret,
                     redirectUri,
@@ -197,6 +213,26 @@ export class IntegrationOAuthService {
 
             return oauthState;
         } catch (error) {
+            if (error instanceof OAuthGrantRejectedError) {
+                // A rotating refresh token is spent by the first refresh: a
+                // concurrent request that got here first has already saved the
+                // new grant, and this refusal is only about the old token.
+                const stored = await this.getOAuthState(
+                    organizationId,
+                    integrationId,
+                );
+                const storedRefresh = (stored?.tokens as TokenData)
+                    ?.refreshToken;
+                if (storedRefresh && storedRefresh !== current.refreshToken) {
+                    return stored;
+                }
+                return this.markGrantLost(
+                    organizationId,
+                    integrationId,
+                    oauthState,
+                    error.message,
+                );
+            }
             this.logger.error('Error checking/refreshing OAuth token:', {
                 organizationId,
                 integrationId,
@@ -204,6 +240,37 @@ export class IntegrationOAuthService {
             });
             return oauthState;
         }
+    }
+
+    /**
+     * The grant can no longer be refreshed: mark it INACTIVE (the UI then asks
+     * the user to connect again) and stop handing out its token. Connecting
+     * again saves a fresh ACTIVE grant.
+     */
+    private async markGrantLost(
+        organizationId: string,
+        integrationId: string,
+        oauthState: IntegrationOAuthState,
+        reason = 'access token expired and there is no refresh token',
+    ): Promise<IntegrationOAuthState> {
+        this.logger.warn(
+            'OAuth grant lost; the integration must be connected again',
+            {
+                organizationId,
+                integrationId,
+                reason,
+            },
+        );
+        // Drop the tokens too: other read paths (custom integrations'
+        // getValidAccessToken) read the stored state without its status.
+        const lost = { ...oauthState, tokens: undefined };
+        await this.saveOAuthState(
+            organizationId,
+            integrationId,
+            MCPIntegrationOAuthStatus.INACTIVE,
+            lost,
+        );
+        return lost;
     }
 
     async refreshIntegrationOAuthIfNeeded(
@@ -496,6 +563,11 @@ export class IntegrationOAuthService {
             organizationId,
             integrationId,
         );
+
+        const status = await this.getOAuthStatus(organizationId, integrationId);
+        if (status === MCPIntegrationOAuthStatus.INACTIVE) {
+            return {};
+        }
 
         if (oauthState?.tokens) {
             oauthState = await this.refreshOAuthStateIfNeeded({

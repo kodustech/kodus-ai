@@ -47,6 +47,11 @@ reviewCadence:
     timeWindow: 15 # 分钟
     pushesToTrigger: 3
 pullRequestApprovalActive: false
+approvalLabels: []
+approvalAuthors: []
+approvalRiskActive: false
+approvalRiskInstructions: ''
+approvalSensitivePaths: []
 isRequestChangesActive: false # GitLab 上不可用
 runOnDraft: true
 ignorePaths:
@@ -156,7 +161,7 @@ Kody 可以在 PR 打开时自动审查,或仅在您评论 `@kody start-review` 
 ### PR 工作流
 
 #### 自动批准 PR
-**Enable Pull Request Approval** —— 当未发现问题时,Kody 会批准 PR。
+**Automatic PR approval** —— Kody 会在审查结果干净后，或在它留下的评论全部解决后批准 PR。它从不合并 PR。**Conditional approval (Beta)** 可以限制 Kody 能批准哪些 PR，以及何时必须改由人工批准。参见[自动批准](/zh/how_to_use/code_review/configs/auto_approve)。
 
 **平台:** GitHub, GitLab, Bitbucket, Azure Repos, Forgejo
 

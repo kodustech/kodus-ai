@@ -54,6 +54,8 @@ describe('PipelineExecutor', () => {
             expect.anything(),
             expect.anything(),
         );
+        expect(mockObserver.onStageStart).toHaveBeenCalledTimes(1);
+        expect(mockObserver.onStageFinish).toHaveBeenCalledTimes(1);
     });
 
     it('should notify observer on stage error', async () => {
@@ -342,30 +344,6 @@ describe('PipelineExecutor', () => {
 
             expect(mockObserver.onPipelineStart).toHaveBeenCalledTimes(1);
             expect(mockObserver.onPipelineFinish).toHaveBeenCalledTimes(1);
-        });
-
-        it('default (silent omitted) behaves as before — observer events fire', async () => {
-            const context: PipelineContext = {
-                statusInfo: { status: AutomationStatus.IN_PROGRESS },
-                errors: [],
-            } as any;
-            // silent flag omitted → falsy → observer should be called
-            const ordinary: jest.Mocked<PipelineStage<PipelineContext>> = {
-                stageName: 'OrdinaryStage',
-                execute: jest.fn(async (ctx) => ctx),
-            } as any;
-
-            await executor.execute(
-                context,
-                [ordinary],
-                'TestPipeline',
-                undefined,
-                undefined,
-                [mockObserver],
-            );
-
-            expect(mockObserver.onStageStart).toHaveBeenCalledTimes(1);
-            expect(mockObserver.onStageFinish).toHaveBeenCalledTimes(1);
         });
     });
 });

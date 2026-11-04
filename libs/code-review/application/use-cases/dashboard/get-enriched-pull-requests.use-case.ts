@@ -714,6 +714,8 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             reviewedCommitUrl: commitInfo.reviewedCommitUrl,
                             compareUrl: commitInfo.compareUrl,
                             executionId: execution.uuid,
+                            approvalReasonDeliveryFailure:
+                                pullRequest.approvalReasonDeliveryFailure,
                             automationExecution: {
                                 uuid: execution.uuid,
                                 status: execution.status,

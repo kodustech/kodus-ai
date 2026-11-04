@@ -22,7 +22,18 @@ import { CrossFileContextPlannerSchemaType } from '@libs/common/utils/prompts/co
  */
 export interface RemoteCommands {
     grep: (pattern: string, path: string, glob?: string) => Promise<string>;
-    read: (path: string, start: number, end: number) => Promise<string>;
+    /**
+     * Read a file, or a 1-based line range of it, without following a
+     * symlink or leaving the root. `root` is a linked repository's clone
+     * root from LinkedRepoAccess (never model input); `path` stays relative
+     * to it. Without it, the PR's repository.
+     */
+    read: (
+        path: string,
+        start: number,
+        end: number,
+        root?: string,
+    ) => Promise<string>;
     listDir: (path: string, maxDepth: number) => Promise<string>;
     /**
      * Run an arbitrary read-only shell command in the sandbox.

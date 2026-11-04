@@ -13,6 +13,13 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
     autoIndex: true,
 })
 export class PullRequestsModel extends CoreDocument {
+    @Prop({ type: Object, required: false, default: null })
+    public approvalReasonDeliveryFailure?: {
+        decision: 'hold' | 'approve';
+        reason: string;
+        occurredAt: string;
+    } | null;
+
     @Prop({ type: String, required: true })
     public title: string;
 

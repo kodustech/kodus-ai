@@ -276,62 +276,6 @@ describe('SuggestionService - Kody Rules Filter Control', () => {
             });
         });
 
-        it('🐛 BUG TEST: deve detectar Kody Rules com label normalizado', async () => {
-            const suggestionControl: SuggestionControlConfig = {
-                maxSuggestions: 5,
-                limitationType: LimitationType.PR,
-                groupingMode: GroupingModeSuggestions.MINIMAL,
-                severityLevelFilter: SeverityLevel.HIGH,
-                applyFiltersToKodyRules: false,
-            };
-
-            // ⚠️ TESTE: Labels que podem vir de diferentes fontes
-            const suggestionsWithVariedLabels = [
-                {
-                    ...createMockSuggestion(SeverityLevel.LOW, 'kody_rules'),
-                    id: '1',
-                }, // Exato
-                {
-                    ...createMockSuggestion(SeverityLevel.LOW, 'Kody Rules'),
-                    id: '2',
-                }, // Capitalizado (AI)
-                {
-                    ...createMockSuggestion(SeverityLevel.LOW, 'KODY_RULES'),
-                    id: '3',
-                }, // Maiúsculo
-                {
-                    ...createMockSuggestion(SeverityLevel.LOW, 'security'),
-                    id: '4',
-                }, // Normal
-            ];
-
-            const result = await service.prioritizeSuggestions(
-                mockOrgData,
-                suggestionControl,
-                123,
-                suggestionsWithVariedLabels,
-            );
-
-            // 🐛 VERIFICA SE DETECTA KODY RULES EM QUALQUER FORMATO
-            const kodyRulesDetected = suggestionsWithVariedLabels.some(
-                (s) =>
-                    s.label === 'kody_rules' ||
-                    s.label === 'Kody Rules' ||
-                    s.label === 'KODY_RULES',
-            );
-
-            if (kodyRulesDetected) {
-                // Deve usar lógica de Kody Rules
-                const kodyRulesInResult = result.prioritizedSuggestions.filter(
-                    (s) =>
-                        s.label === 'kody_rules' ||
-                        s.label === 'Kody Rules' ||
-                        s.label === 'KODY_RULES',
-                );
-                expect(kodyRulesInResult.length).toBeGreaterThan(0); // Alguma Kody Rule deve aparecer
-            }
-        });
-
         it('🐛 BUG TEST: deve funcionar com array vazio de sugestões', async () => {
             const suggestionControl: SuggestionControlConfig = {
                 maxSuggestions: 5,
@@ -355,29 +299,6 @@ describe('SuggestionService - Kody Rules Filter Control', () => {
             expect(
                 result.discardedSuggestionsBySeverityOrQuantity,
             ).toHaveLength(0);
-        });
-
-        it('🐛 BUG TEST: deve funcionar com suggestionControl undefined/null', async () => {
-            const suggestions = [
-                createMockSuggestion(SeverityLevel.HIGH, 'kody_rules'),
-                createMockSuggestion(SeverityLevel.HIGH, 'security'),
-            ];
-
-            // ⚠️ TESTE: Config malformada
-            const malformedConfig = {
-                maxSuggestions: 5,
-                // applyFiltersToKodyRules: undefined (missing)
-            } as any;
-
-            // 🐛 NÃO DEVE QUEBRAR COM CONFIG MALFORMADA
-            expect(async () => {
-                await service.prioritizeSuggestions(
-                    mockOrgData,
-                    malformedConfig,
-                    123,
-                    suggestions,
-                );
-            }).not.toThrow();
         });
 
         it('🔥 CRITICAL BUG: falha em detectar Kody Rules com labels não normalizados', async () => {

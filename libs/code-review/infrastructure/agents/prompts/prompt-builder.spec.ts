@@ -4,6 +4,7 @@
  * edit that silently drops a section is caught.
  */
 import {
+    buildCompactUserPrompt,
     buildSystemPrompt,
     buildUserPrompt,
     formatTraceDecisions,
@@ -515,25 +516,6 @@ describe('repository instructions block', () => {
         expect(sys).toContain('readRepoInstruction');
     });
 
-    it('tells the generalist to read every listed file, not only when it needs one', () => {
-        const sys = buildSystemPrompt(
-            baseInput({ repoInstructions }),
-            generalistMeta,
-        );
-        expect(sys).toMatch(
-            /Before you finish, read each file listed here with readRepoInstruction/,
-        );
-        expect(sys).not.toContain('when you need what it says');
-    });
-
-    it('says readRepoInstruction works without the other tools', () => {
-        const sys = buildSystemPrompt(
-            baseInput({ remoteCommands: undefined, repoInstructions }),
-            generalistMeta,
-        );
-        expect(sys).toMatch(/readRepoInstruction[^.]*even[^.]*no other tools/);
-    });
-
     it('leaves the file content out of the finder prompt', () => {
         const sys = buildSystemPrompt(
             baseInput({ repoInstructions }),
@@ -609,5 +591,27 @@ describe('CrossRepoBoundary lane', () => {
             'Do not report boundary mismatches your instructions do not cover.',
         );
         expect(prompt).toContain('acme/web');
+    });
+});
+
+describe('custom agent output format', () => {
+    const agentMeta = { ...meta, conventionGuides: [] };
+
+    it.each([
+        ['full', buildUserPrompt],
+        ['compact', buildCompactUserPrompt],
+    ])('asks a custom agent for the full finding (%s prompt)', (_, build) => {
+        const prompt = build(baseInput(), agentMeta);
+        expect(prompt).toContain('Assign a confidence score (1-10)');
+        if (build === buildUserPrompt) {
+            expect(prompt).toContain('"existingCode"');
+            expect(prompt).toContain('"severity": "critical|high|medium|low"');
+        }
+    });
+
+    it('asks the finder for the five fields only', () => {
+        const prompt = buildUserPrompt(baseInput(), meta);
+        expect(prompt).not.toContain('"existingCode"');
+        expect(prompt).not.toContain('Assign a confidence score');
     });
 });

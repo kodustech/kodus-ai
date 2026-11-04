@@ -168,6 +168,7 @@ describe('astGrep tool', () => {
             exec.mockRejectedValueOnce(new Error('sandbox gone'));
             const r = await tool.execute({ pattern: 'a', language: 'ts' }, ctx);
             expect(r.isError).toBe(true);
+            expect(r.output).toContain('sandbox gone');
             expect(removeDir).toHaveBeenCalledWith(WORK_DIR);
         });
 
@@ -287,14 +288,6 @@ describe('astGrep tool', () => {
         const r = await tool.execute({ pattern: 'x', language: 'cobol' }, ctx);
         expect(r.isError).toBe(true);
         expect(r.output).toContain('invalid value');
-    });
-
-    it('returns a thrown exec as an error result instead of throwing', async () => {
-        const { tool, exec } = setup();
-        exec.mockRejectedValueOnce(new Error('sandbox gone'));
-        const r = await tool.execute({ pattern: 'x', language: 'ts' }, ctx);
-        expect(r.isError).toBe(true);
-        expect(r.output).toContain('sandbox gone');
     });
 
     it('logs a thrown exec with the review identifiers', async () => {
@@ -458,14 +451,6 @@ describe('astGrep tool', () => {
                 'ast-grep warnings: Warning: src/legacy.ts could not be parsed',
             );
             expect(r.output).not.toContain('error(s) found');
-        });
-
-        it('teaches the citation that makes a rule match proof, in rules mode only', () => {
-            expect(setup().tool.description).not.toContain('ast-grep:<ruleId>');
-            const { tool } = setup({ rules: RULES });
-            expect(tool.description).toContain('kind "convention"');
-            expect(tool.description).toContain('"ast-grep:<ruleId>"');
-            expect(tool.description).toContain("rule's message");
         });
 
         it('ends a rules run with the citation of each matched rule, which the proof check accepts', async () => {

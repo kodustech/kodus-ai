@@ -155,6 +155,35 @@ describe('BusinessLogicValidationStage', () => {
         expect(diff).not.toContain('old.ts');
     });
 
+    it('judges the whole PR after a rebase, not only what the rebase changed (#2037)', async () => {
+        const { stage, service, pullRequests } = build(validated(true), [
+            { filename: 'filter.ts', status: 'added', patch: '+filter' },
+            { filename: 'a.ts', status: 'modified', patch: '+x' },
+        ]);
+
+        await stage.execute(
+            context({
+                // The orphaned-base path clears the commit and narrows the
+                // review to the lines the rebase changed.
+                lastExecution: { lastAnalyzedCommit: undefined },
+                rebaseInterdiffFiles: [
+                    { filename: 'a.ts', status: 'modified', patch: '+x' },
+                ],
+                codeReviewConfig: {
+                    reviewOptions: { business_logic: true },
+                    businessLogic: { recheckOn: 'push' },
+                },
+            } as any),
+        );
+
+        expect(pullRequests.getChangedFilesMetadata).toHaveBeenCalled();
+        expect(service.validate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                diff: expect.stringContaining('filter.ts'),
+            }),
+        );
+    });
+
     it('uses the files it already has on the first review', async () => {
         const { stage, pullRequests } = build(validated(true));
 
@@ -226,14 +255,6 @@ describe('BusinessLogicValidationStage', () => {
             { codeReviewConfig: { reviewOptions: { business_logic: false } } },
         ],
         [
-            'already_validated',
-            {
-                pipelineMetadata: {
-                    lastExecution: { businessLogicValidatedAt: 'x' },
-                },
-            },
-        ],
-        [
             // #2172: only a custom agent reviews the ignored files.
             'no_reviewed_files',
             {
@@ -283,9 +304,12 @@ describe('BusinessLogicValidationStage', () => {
 
         expect(publisher.lastVerdictFailed).not.toHaveBeenCalled();
         expect(service.validate).not.toHaveBeenCalled();
+        expect(publisher.publish).not.toHaveBeenCalled();
         expect(result.businessLogicOutcome).toMatchObject({
+            kind: 'skipped',
             reason: 'already_validated',
         });
+        expect(result.businessLogicResults).toEqual([]);
     });
 
     it('re-checks a PR already validated on a push while its last check failed, when the team chose that', async () => {
@@ -314,30 +338,6 @@ describe('BusinessLogicValidationStage', () => {
         expect(publisher.publish).toHaveBeenCalledWith(
             expect.objectContaining({ trigger: 'push' }),
         );
-    });
-
-    it('re-checks only on request when the team chose that, even after a failed check', async () => {
-        const { stage, service } = build(validated(true), [], {
-            lastVerdictFailed: true,
-        });
-
-        const result = await stage.execute(
-            context({
-                codeReviewConfig: {
-                    reviewOptions: { business_logic: true },
-                    businessLogic: { recheckOn: 'request' },
-                },
-                pipelineMetadata: {
-                    lastExecution: { businessLogicValidatedAt: 'x' },
-                },
-            } as any),
-        );
-
-        expect(service.validate).not.toHaveBeenCalled();
-        expect(result.businessLogicOutcome).toMatchObject({
-            kind: 'skipped',
-            reason: 'already_validated',
-        });
     });
 
     it('fails the review outcome when no task is referenced and the repository requires one', async () => {

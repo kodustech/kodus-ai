@@ -10,6 +10,14 @@ import type {
 } from '../../types/config.js';
 import type { RepositorySettings } from '../../types/repo-config.js';
 import type {
+    CodeReviewScope,
+    FormattedCodeReviewParameter,
+    LLMConfigStatus,
+    SaveCodeReviewConfigParams,
+    SaveCodeReviewConfigResult,
+    TestByokModelResult,
+} from '../../types/review-settings.js';
+import type {
     BusinessValidationResponse,
     PullRequestSuggestionsResponse,
     ReviewConfig,
@@ -17,10 +25,13 @@ import type {
     TrialReviewResult,
 } from '../../types/review.js';
 import type {
+    ChangeKodyRulesStatusRequest,
     CreateKodyRuleRequest,
     KodyRule,
     KodyRuleMutationResult,
+    KodyRulesStatusResult,
     UpdateKodyRuleRequest,
+    UserKodyRulePayload,
     ViewKodyRulesRequest,
 } from '../../types/rules.js';
 import type { SessionApiEvent } from '../../types/session-events.js';
@@ -148,6 +159,24 @@ export interface IConfigApi {
         accessToken: string,
     ): Promise<CentralizedConfigActionResponse>;
     downloadCentralizedConfig(accessToken: string): Promise<Uint8Array>;
+    getFormattedCodeReviewParameter(
+        accessToken: string,
+        teamId: string,
+        options?: { includeFileOverlay?: boolean },
+    ): Promise<FormattedCodeReviewParameter>;
+    getCodeReviewScopes(
+        accessToken: string,
+        teamId: string,
+    ): Promise<CodeReviewScope[]>;
+    saveCodeReviewConfig(
+        accessToken: string,
+        params: SaveCodeReviewConfigParams,
+    ): Promise<SaveCodeReviewConfigResult>;
+    getLLMConfigStatus(accessToken: string): Promise<LLMConfigStatus>;
+    testByokModel(
+        accessToken: string,
+        params: { provider: string; model: string },
+    ): Promise<TestByokModelResult>;
 }
 
 export interface ISessionsApi {
@@ -168,6 +197,18 @@ export interface IRulesApi {
         accessToken: string,
         query?: ViewKodyRulesRequest,
     ): Promise<KodyRule[]>;
+    findRulesAsUser(
+        accessToken: string,
+        query?: ViewKodyRulesRequest,
+    ): Promise<KodyRule[]>;
+    saveRuleAsUser(
+        accessToken: string,
+        payload: UserKodyRulePayload,
+    ): Promise<KodyRuleMutationResult>;
+    changeStatusAsUser(
+        accessToken: string,
+        payload: ChangeKodyRulesStatusRequest,
+    ): Promise<KodyRulesStatusResult>;
 }
 
 export interface IKodusApi {

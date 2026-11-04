@@ -46,6 +46,34 @@ describe('CockpitReviewAnalyticsService', () => {
             expect(rows[1].rate).toBe(0.5);
         });
 
+        it('sums string counters numerically and keeps first-seen week order', async () => {
+            query.mockResolvedValue([
+                { week_start: '2026-05-11', severity: 'critical', sent: '4', implemented: '1' },
+                { week_start: '2026-05-11', severity: 'high', sent: 2, implemented: 2 },
+                { week_start: '2026-05-04', severity: 'low', sent: 5, implemented: 0 },
+            ]);
+
+            const rows = await service.getImplementationRateWeekly(baseQuery);
+
+            expect(rows.map((r) => r.weekStart)).toEqual([
+                '2026-05-11',
+                '2026-05-04',
+            ]);
+            expect(rows[0]).toMatchObject({ sent: 6, implemented: 3, rate: 0.5 });
+            expect(rows[0].bySeverity.critical).toEqual({
+                sent: 4,
+                implemented: 1,
+                rate: 0.25,
+            });
+            expect(rows[1].rate).toBe(0);
+        });
+
+        it('returns an empty array when there are no rows', async () => {
+            expect(await service.getImplementationRateWeekly(baseQuery)).toEqual(
+                [],
+            );
+        });
+
         it('scopes by org, closed PRs and sent suggestions', async () => {
             await service.getImplementationRateWeekly(baseQuery);
 
@@ -81,6 +109,23 @@ describe('CockpitReviewAnalyticsService', () => {
             expect(rows).toEqual([
                 { category: 'Security', sent: 48, implemented: 31, rate: 0.65 },
                 { category: 'Code Style', sent: 25, implemented: 4, rate: 0.16 },
+            ]);
+        });
+
+        it('coerces string counters and answers 0 for a category with nothing sent', async () => {
+            query.mockResolvedValue([
+                { category: 'security', sent: '10', implemented: '5' },
+                { category: 'Unknown', sent: 0, implemented: 0 },
+                { category: 'Single', sent: 1, implemented: 1 },
+            ]);
+
+            const rows =
+                await service.getImplementationRateByCategory(baseQuery);
+
+            expect(rows).toEqual([
+                { category: 'security', sent: 10, implemented: 5, rate: 0.5 },
+                { category: 'Unknown', sent: 0, implemented: 0, rate: 0 },
+                { category: 'Single', sent: 1, implemented: 1, rate: 1 },
             ]);
         });
     });
@@ -124,6 +169,33 @@ describe('CockpitReviewAnalyticsService', () => {
             // medium: full 0.52 inflated by rules; native is 0.22
             expect(rows[1].rate).toBe(0.52);
             expect(rows[1].nativeRate).toBe(0.22);
+        });
+
+        it('coerces string counters and answers a 0 native rate when nothing native was sent', async () => {
+            query.mockResolvedValue([
+                {
+                    severity: 'low',
+                    sent: '2',
+                    implemented: '1',
+                    native_sent: 0,
+                    native_implemented: 0,
+                },
+            ]);
+
+            const rows =
+                await service.getImplementationRateBySeverity(baseQuery);
+
+            expect(rows).toEqual([
+                {
+                    severity: 'low',
+                    sent: 2,
+                    implemented: 1,
+                    rate: 0.5,
+                    nativeSent: 0,
+                    nativeImplemented: 0,
+                    nativeRate: 0,
+                },
+            ]);
         });
     });
 

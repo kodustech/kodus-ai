@@ -421,7 +421,7 @@ async function seedTenant(
     let onboardingFinished = false;
     if (tenant.provider === "github-app") {
         console.log(
-            `  [info] skipping PAT connectProvider for github-app tenant — scenario will connect via OAuth at runtime`,
+            `  [info] skipping PAT connectProvider for github-app tenant — link the App installation once in the browser (see README "GitHub App tenants"); runs reuse that link`,
         );
     } else {
         const result = await connectProvider(target, session, tenant);

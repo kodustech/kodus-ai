@@ -1,0 +1,13 @@
+diff --git a/libs/code-review/infrastructure/agents/knowledge/review-knowledge.ts b/libs/code-review/infrastructure/agents/knowledge/review-knowledge.ts
+index 29b55dbca..e3fad36c8 100644
+--- a/libs/code-review/infrastructure/agents/knowledge/review-knowledge.ts
++++ b/libs/code-review/infrastructure/agents/knowledge/review-knowledge.ts
+@@ -225,7 +225,7 @@ export function mainReviewLinksDropped(all: KnowledgeItem[]): {
+     const items: KnowledgeItem[] = [];
+     const outsideMainReview: ReviewWarning[] = [];
+     for (const item of all) {
+-        if (!item.repository || !linksMainReview(item)) {
++        if (!item.repository || !linksMainReview(item) || item) {
+             items.push(item);
+             continue;
+         }

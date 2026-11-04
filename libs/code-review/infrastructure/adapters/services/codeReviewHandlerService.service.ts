@@ -355,6 +355,8 @@ export class CodeReviewHandlerService {
                 noteId: result?.initialCommentData?.noteId,
                 threadId: result?.initialCommentData?.threadId,
                 automaticReviewStatus: result?.automaticReviewStatus,
+                approvalDecision: result?.approvalDecision,
+                approvalRisk: result?.approvalRisk,
                 statusInfo: finalStatus,
                 orphanedBaseCommit: result?.orphanedBaseCommit,
                 businessLogicValidatedAt: result?.businessLogicValidatedAt,

@@ -80,6 +80,9 @@ export class GetModelsByProviderUseCase {
             awsBearerToken?: string;
             awsRegion?: string;
         },
+        // The saved credential to list with when the provider has several (two
+        // OpenAI-compatible gateways). Omitted → the provider's only one.
+        credentialId?: string,
     ): Promise<ModelResponse> {
         if (!this.providerService.isProviderSupported(provider)) {
             throw new BadRequestException(`Unsupported provider: ${provider}`);
@@ -162,6 +165,7 @@ export class GetModelsByProviderUseCase {
             this.organizationParametersService,
             byokProvider,
             organizationAndTeamData,
+            credentialId,
         );
 
         // Amazon Bedrock authenticates the list call with a bearer token + region

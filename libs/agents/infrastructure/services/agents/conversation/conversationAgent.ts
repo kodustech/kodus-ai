@@ -169,6 +169,19 @@ export class ConversationAgentProvider {
         // the harness as-is by AiSdkToolRegistry (no schema round-trip).
         const mcp = await this.connectMcp(organizationAndTeamData);
 
+        this.logger.log({
+            message: 'Conversation agent MCP tools connected',
+            context: ConversationAgentProvider.name,
+            metadata: {
+                organizationAndTeamData,
+                threadId: thread?.id?.toString(),
+                mcpToolCount: Object.keys(mcp.tools).length,
+                proactiveTools: Object.entries(mcp.metadata)
+                    .filter(([, meta]) => meta.proactiveHint)
+                    .map(([name]) => name),
+            },
+        });
+
         // What this turn actually changed. Drives both the honesty note the
         // model sees mid-run and the footer the developer reads at the end.
         const writes: WriteToolEvent[] = [];

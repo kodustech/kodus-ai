@@ -1,0 +1,90 @@
+---
+title: "自動承認"
+description: "Kody が pull request を承認するタイミング、承認できる PR を絞り込む方法、承認を保留したときの動作。"
+---
+
+**Code review → General** で **Automatic PR approval** をオンにします（`pullRequestApprovalActive`、デフォルトはオフ）。Kody は Git プロバイダーのレビュー機能を通じて承認します。マージは行いません。
+
+## Kody が承認するタイミング
+
+Kody は次のいずれかのタイミングで PR を承認します：
+
+- **クリーンなレビューの後。** レビューがサジェストを投稿せず、どのステップも失敗しなかった場合です。PR サマリーの生成失敗だけは承認を妨げません。
+- **Kody のコメントが解決された後。** Kody は 2 分ごとに、過去 7 日間にレビューしたオープンな PR を確認し、Kody が残したコメントがすべて解決済みの PR を承認します。
+
+いずれの場合も、Kody が承認するのはレビューしたコミットです。Kody の最後のレビューの後に誰かがプッシュした場合は、次のレビューを待ちます。`@kody -v <agent>` で開始した実行はそのカスタムエージェントだけを実行するため、承認は行いません。
+
+## 条件付き承認（Beta）
+
+**Teams と Enterprise** プランで、ベータアクセスがある場合に利用できます。条件は **Automatic PR approval** の下に表示され、他の設定と同様に Global、Repository、Directory のスコープで設定できます。条件は Kody の最後のレビュー以降のコミットだけでなく、PR 全体に適用されます。
+
+### どの PR を自動承認できるか
+
+デフォルトでは、すべての PR が対象です。絞り込むには：
+
+- **PR labels**（`approvalLabels`）：PR にこれらのラベルのいずれかが付いている必要があります。
+- **PR authors**（`approvalAuthors`）：PR がこれらのプロバイダーログインのいずれかによって作成されている必要があります。
+
+大文字と小文字は区別されません。両方を設定した場合、PR は両方に一致する必要があります。ラベルと作成者はそれぞれ最大 50 件です。
+
+Kody は承認の前にラベルを再確認するため、レビューの後に承認ラベルを追加することもできます。それ以降にプッシュがなければ、Kody は数分以内に承認します。
+
+### 人による承認が必要になるのはいつか
+
+- **Paths requiring human approval**（`approvalSensitivePaths`）：`src/auth/**` のような glob パターン（最大 100 件）。変更されたファイルのいずれかが一致すると、Kody は承認を保留します。リネームされたファイルは、旧パスと新パスの両方で判定されます。
+- **Assess PR risk**（`approvalRiskActive`）：Kody は低リスクと評価した PR だけを承認します。[リスク評価](#リスク評価)を参照してください。
+- **Additional team guidance**（`approvalRiskInstructions`）：**Assess PR risk** をオンにすると表示されます。評価に加えるコンテキストを最大 4,000 文字まで記述できます。例：*決済のリトライ処理の変更は人が承認すること*。
+
+### リスク評価
+
+Kody はコードレビューに使うモデル（BYOK モデルを設定している場合はそのモデル）で評価を行います。PR の差分全体（最大 50,000 文字）、タイトルと説明、チームのガイダンス、そして変更された各ファイルとディレクトリの履歴（それを変更したマージ済み PR の数と、そのうちバグを修正した PR の数）を読み取ります。
+
+マージ済み PR は、`bug`、`defect`、`regression` のラベルが付いた issue をクローズする場合、またはタイトルに fix、bug、regression、hotfix が含まれる場合に、バグ修正として数えられます。Kody はこの履歴を **GitHub と GitLab** でのみ、バックグラウンドで 2 時間ごとに収集します。最初のスキャンは過去 30 日間を対象とし、その後、履歴は最大 1 年分まで蓄積されます。**Cockpit → Code hotspots** で確認できます。
+
+承認されるのはリスクが**低**の場合だけで、**中**と**高**の PR は人の判断のために保留されます。Kody は次の場合にも保留します：
+
+- PR がソースファイルの制御フロー（`if`、`return`、`throw`）を変更し、テストを追加していない場合
+- 評価を実行できなかった場合（例：モデルの呼び出しが失敗した）
+
+履歴のないファイルは安全とはみなされません。Bitbucket、Azure Repos、Forgejo では、また最初のスキャンが終わる前は、Kody は履歴なしで評価します。
+
+<Note>
+  **Assess PR risk** をオンにしても、既存の承認は取り消されません。Kody がすでに承認した PR はそのコミットに対する承認を維持し、Kody は次のコミットから評価します。以前にレビューしたものの承認しなかった PR は、次のコミットを待ちます。
+</Note>
+
+### Kody が PR に投稿する内容
+
+条件を設定している場合、レビュー終了時のコメントの末尾に **Automatic approval eligible** または **Automatic approval held** と理由が表示されます。Kody はこれとは別のコメント（**Automatic approval completed** または **Automatic approval held**）を 1 つ維持し、以降のレビューでは新しく投稿せずにそのコメントを編集します。ラベルや作成者のフィルターに一致しない PR には、Kody が以前に承認またはコメントしていない限り、この別コメントは投稿されません。
+
+Kody が承認した PR を後のレビューが保留にした場合（新しいコミットにサジェストが付いた、センシティブなパスを変更した、または PR から承認ラベルが外れた場合など）、Kody は自分の承認を取り消します。人による承認はそのまま残ります。
+
+コメントが投稿されたことを Kody が確認できない場合、**Reviews → Pull requests** でその PR に **Approval note unverified** が表示され、Kody が投稿しようとした理由も確認できます。PR のコメントとリポジトリ連携の権限を確認してください。
+
+<Note>
+  組織がベータアクセスを失った場合や Teams・Enterprise プランでなくなった場合も、保存済みの条件は承認を保留し続けます。Kody がクリーンな PR をすべて承認する動作に戻ることはありません。このとき **Code review → General** には **Saved conditions are holding automatic approval** と **Clear saved conditions** ボタンが表示されます。
+</Note>
+
+### 対応プラットフォーム
+
+| プロバイダー | ラベル | コード履歴 | 備考 |
+| --- | --- | --- | --- |
+| GitHub | 対応 | 対応 | |
+| GitLab | 対応 | 対応 | |
+| Forgejo | 対応 | 非対応 | 承認を取り消すには、トークンのユーザーがリポジトリの管理者である必要があります。[Forgejo アクセストークン](/ja/how_to_use/code_review/general_config/forgejo_pat)を参照してください。 |
+| Bitbucket | 無視 | 非対応 | 他の条件は引き続き適用されます。 |
+| Azure Repos | 非対応 | 非対応 | ラベルが設定されている間は、すべての PR が人の承認待ちになります。 |
+
+## kodus-config.yml
+
+Kody がこれらのキーを読み込むのは、**kodus Config File Overrides Web Preferences** がオンの場合だけです。[設定の優先度](/ja/how_to_use/code_review/configs/general#設定の優先度)を参照してください。
+
+```yaml
+pullRequestApprovalActive: true
+approvalLabels: ['docs', 'chore'] # いずれかに一致; 空 = すべての PR
+approvalAuthors: [] # プロバイダーのログイン; 空 = すべての作成者
+approvalSensitivePaths:
+    - 'src/auth/**'
+    - '**/migrations/**'
+approvalRiskActive: true
+approvalRiskInstructions: '決済のリトライ処理の変更は人が承認すること。'
+```

@@ -11,6 +11,7 @@
 import {
     buildRepoLookup,
     RepoLookupUnavailableError,
+    toRepoPath,
 } from './repo-lookup';
 import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
 import type { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
@@ -35,13 +36,6 @@ const realHandle = (
     }) as unknown as SandboxInstance;
 
 describe('buildRepoLookup — availability derived from the sandbox handle (KRC-01)', () => {
-    it('reports unavailable when there is no sandbox handle at all', () => {
-        expect(buildRepoLookup(undefined).available).toBe(false);
-        expect(buildRepoLookup(undefined).unavailableReason).toBe(
-            'no sandbox handle',
-        );
-    });
-
     it('reports unavailable for the null sandbox, which answers empty AND success', () => {
         // The whole point: NULL_SANDBOX_INSTANCE.grep resolves '' without
         // throwing, so nothing downstream can tell it from a real empty result.
@@ -102,55 +96,10 @@ describe('an unavailable lookup raises instead of answering empty (KRC-02)', () 
 });
 
 describe('an available lookup delegates to the sandbox', () => {
-    it('grep forwards the pattern, path and glob and returns the output', async () => {
-        const grep = jest.fn().mockResolvedValue('src/a.ts:4:hit\n');
-        const lookup = buildRepoLookup(realHandle({ grep }));
-
-        await expect(lookup.grep('formatDate', 'src', '*.ts')).resolves.toBe(
-            'src/a.ts:4:hit\n',
-        );
-        expect(grep).toHaveBeenCalledWith('formatDate', 'src', '*.ts');
-    });
-
     it('grep defaults to the repository root when no path is given', async () => {
         const grep = jest.fn().mockResolvedValue('');
         await buildRepoLookup(realHandle({ grep })).grep('formatDate');
         expect(grep).toHaveBeenCalledWith('formatDate', '.', undefined);
-    });
-
-    it('read forwards the line window and returns the content', async () => {
-        const read = jest.fn().mockResolvedValue('line 4\nline 5\n');
-        const lookup = buildRepoLookup(realHandle({ read }));
-
-        await expect(lookup.read('src/a.ts', 4, 5)).resolves.toBe(
-            'line 4\nline 5\n',
-        );
-        expect(read).toHaveBeenCalledWith('src/a.ts', 4, 5);
-    });
-
-    it('exists is true when the parent listing contains the path', async () => {
-        const listDir = jest
-            .fn()
-            .mockResolvedValue(
-                'src/routes/orders.controller.ts\nsrc/routes/orders.controller.spec.ts\n',
-            );
-        const lookup = buildRepoLookup(realHandle({ listDir }));
-
-        await expect(
-            lookup.exists('src/routes/orders.controller.spec.ts'),
-        ).resolves.toBe(true);
-        expect(listDir).toHaveBeenCalledWith('src/routes', 1);
-    });
-
-    it('exists is false when the listing succeeded and the path is not in it', async () => {
-        const listDir = jest
-            .fn()
-            .mockResolvedValue('src/routes/orders.controller.ts\n');
-        const lookup = buildRepoLookup(realHandle({ listDir }));
-
-        await expect(
-            lookup.exists('src/routes/orders.controller.spec.ts'),
-        ).resolves.toBe(false);
     });
 
     it('exists propagates a listing failure instead of reporting "not there"', async () => {
@@ -167,30 +116,6 @@ describe('an available lookup delegates to the sandbox', () => {
 });
 
 describe('probe — an available lookup that answers with silence is not available (KRC-22)', () => {
-    it('flips availability off when a known changed file reads back empty', async () => {
-        const lookup = buildRepoLookup(realHandle({ read: async () => '' }));
-        expect(lookup.available).toBe(true);
-
-        await lookup.probe('src/orders/order-mapper.ts');
-
-        expect(lookup.available).toBe(false);
-        expect(lookup.unavailableReason).toBe(
-            'a read of a known changed file came back empty',
-        );
-    });
-
-    it('keeps the lookup off for the REST of the review, not just for the probe', async () => {
-        const lookup = buildRepoLookup(realHandle({ read: async () => '' }));
-        await lookup.probe('src/orders/order-mapper.ts');
-
-        await expect(lookup.grep('formatDate')).rejects.toBeInstanceOf(
-            RepoLookupUnavailableError,
-        );
-        await expect(lookup.read('src/a.ts', 1, 2)).rejects.toBeInstanceOf(
-            RepoLookupUnavailableError,
-        );
-    });
-
     it('records the flip with the file that exposed it', async () => {
         const warn = jest.fn();
         const lookup = buildRepoLookup(realHandle({ read: async () => '   \n' }), {
@@ -227,17 +152,6 @@ describe('probe — an available lookup that answers with silence is not availab
         expect(warn.mock.calls[0][0].metadata).toMatchObject({ err: 'ENOENT' });
     });
 
-    it('leaves a healthy lookup available when the probe reads real content', async () => {
-        const lookup = buildRepoLookup(
-            realHandle({ read: async () => 'export const x = 1;\n' }),
-        );
-
-        await lookup.probe('src/orders/order-mapper.ts');
-
-        expect(lookup.available).toBe(true);
-        await expect(lookup.grep('x')).resolves.toContain('formatDate');
-    });
-
     it('is a no-op on an already unavailable lookup (no sandbox to probe with)', async () => {
         const warn = jest.fn();
         const lookup = buildRepoLookup(NULL_SANDBOX_INSTANCE, { warn });
@@ -247,5 +161,77 @@ describe('probe — an available lookup that answers with silence is not availab
         expect(lookup.available).toBe(false);
         expect(lookup.unavailableReason).toBe('null sandbox');
         expect(warn).not.toHaveBeenCalled();
+    });
+});
+
+describe('paths reach the sandbox relative to the repository root', () => {
+    // Azure Repos names changed files with a leading "/", and both sandboxes
+    // reject absolute paths.
+    it('read forwards a name without its leading slash', async () => {
+        const read = jest.fn().mockResolvedValue('line 1\n');
+        const lookup = buildRepoLookup(realHandle({ read }));
+
+        await lookup.read('/src/a.ts', 1, 1);
+
+        expect(read).toHaveBeenCalledWith('src/a.ts', 1, 1);
+    });
+
+    it('read keeps the spaces a file name carries', async () => {
+        const read = jest.fn().mockResolvedValue('line 1\n');
+        const lookup = buildRepoLookup(realHandle({ read }));
+
+        await lookup.read('/src/ notes.ts ', 1, 1);
+
+        expect(read).toHaveBeenCalledWith('src/ notes.ts ', 1, 1);
+    });
+
+    it('probe forwards a name without its leading slash', async () => {
+        const read = jest.fn().mockResolvedValue('line 1\n');
+        const lookup = buildRepoLookup(realHandle({ read }));
+
+        await lookup.probe('/src/a.ts');
+
+        expect(read).toHaveBeenCalledWith('src/a.ts', 0, 0);
+        expect(lookup.available).toBe(true);
+    });
+
+    it('exists lists the parent directory without the leading slash and matches the entry', async () => {
+        const listDir = jest
+            .fn()
+            .mockResolvedValue('src/a.ts\nsrc/a.spec.ts\n');
+        const lookup = buildRepoLookup(realHandle({ listDir }));
+
+        await expect(lookup.exists('/src/a.spec.ts')).resolves.toBe(true);
+        expect(listDir).toHaveBeenCalledWith('src', 1);
+    });
+
+    it('exists of a root-level file lists the repository root', async () => {
+        const listDir = jest.fn().mockResolvedValue('README.md\n');
+        const lookup = buildRepoLookup(realHandle({ listDir }));
+
+        await expect(lookup.exists('/README.md')).resolves.toBe(true);
+        expect(listDir).toHaveBeenCalledWith('.', 1);
+    });
+
+    it('grep forwards a search path without its leading slash', async () => {
+        const grep = jest.fn().mockResolvedValue('');
+        const lookup = buildRepoLookup(realHandle({ grep }));
+
+        await lookup.grep('formatDate', '/src');
+
+        expect(grep).toHaveBeenCalledWith('formatDate', 'src', undefined);
+    });
+});
+
+describe('toRepoPath', () => {
+    it.each([
+        ['/src/a.ts', 'src/a.ts'],
+        ['//src/a.ts', 'src/a.ts'],
+        ['./src/a.ts', 'src/a.ts'],
+        ['src/a.ts', 'src/a.ts'],
+        // A file name may legitimately start or end with a space.
+        ['/src/ a.ts ', 'src/ a.ts '],
+    ])('%j -> %j', (input, expected) => {
+        expect(toRepoPath(input)).toBe(expected);
     });
 });

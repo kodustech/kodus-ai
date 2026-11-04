@@ -1,7 +1,4 @@
-import {
-    CONVERSATION_FALLBACK_MESSAGE,
-    normalizeConversationResponse,
-} from './conversation-response.util';
+import { normalizeConversationResponse } from './conversation-response.util';
 
 describe('normalizeConversationResponse', () => {
     it('returns a plain string answer unchanged', () => {
@@ -18,6 +15,9 @@ describe('normalizeConversationResponse', () => {
         expect(normalizeConversationResponse({ content: 'real answer' })).toBe(
             'real answer',
         );
+        expect(
+            normalizeConversationResponse({ content: 'x', extra: { a: 1 } }),
+        ).toBe('x');
     });
 
     it('unwraps a JSON-string { content } envelope', () => {
@@ -57,7 +57,31 @@ describe('normalizeConversationResponse', () => {
         expect(normalizeConversationResponse('{"foo":1}')).toBe('{"foo":1}');
     });
 
-    it('exposes a non-empty fallback message', () => {
-        expect(CONVERSATION_FALLBACK_MESSAGE.trim().length).toBeGreaterThan(0);
+    // Only a `content` key is an envelope; any other non-string shape nulls out
+    // so the caller posts the fallback, never a wrong answer.
+    it('returns null for any non-string shape without a content key', () => {
+        for (const value of [
+            ['a', 'b'],
+            [],
+            { result: 'x' },
+            { Content: 'x' },
+            { choices: [{ message: { content: 'buried' } }] },
+            { error: 'boom' },
+            true,
+            0,
+        ]) {
+            expect(normalizeConversationResponse(value)).toBeNull();
+        }
+    });
+
+    it('keeps text that only looks like an envelope as the literal reply', () => {
+        for (const text of [
+            '```json\n{"content":"x"}\n```',
+            'Here is the result: {"content":"x"}',
+            '{"content":"ans',
+            '{content: "x"}',
+        ]) {
+            expect(normalizeConversationResponse(text)).toBe(text);
+        }
     });
 });

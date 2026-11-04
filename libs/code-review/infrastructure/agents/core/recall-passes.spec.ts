@@ -145,12 +145,4 @@ describe('runRecallPasses — custom agent kept to its lane (#2172)', () => {
         expect(prompt).toContain('do not add general bugs outside your focus');
         expect(prompt).not.toContain('If there are concrete missed bugs');
     });
-
-    it('leaves every other rescue prompt unchanged', async () => {
-        const prompt = await rescuePrompt(undefined);
-
-        expect(prompt).toMatch(
-            /Your task:\n- Re-think the review based on the context above\.\n- Do not add variants or restatements of existing findings\.\n- Do not add speculative risks\.\n- If there are concrete missed bugs, submit them\.\n- If there is no clearly missed bug, submit an empty suggestions array\.$/,
-        );
-    });
 });

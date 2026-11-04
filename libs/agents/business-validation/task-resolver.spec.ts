@@ -157,6 +157,64 @@ describe('resolveTasks', () => {
         expect(result.kind).toBe('tracker_unavailable');
     });
 
+    it('does not call a task a typo when the tracker answered something it could not read', async () => {
+        // A server that returns its error as plain text content (no isError)
+        // reads as "answered, without the issue": that is no proof the task
+        // is missing, so the author must not be told DEV-5400 is a typo.
+        const jira = {
+            ...tracker('Jira', {}, { teams: ['DEV'] }),
+            read: async (): Promise<TrackerLookup> => ({
+                status: 'not_found',
+                unread: true,
+            }),
+        };
+        const result = await resolveTasks(
+            refs('', 'feat(DEV-5400): export invoices'),
+            [jira],
+            context,
+        );
+        expect(result.kind).toBe('tracker_unavailable');
+        expect(result.attempts[0]).toMatchObject({
+            tracker: 'Jira',
+            status: 'error',
+        });
+    });
+
+    it('keeps an unreadable answer from a tracker that does not own the key a miss, not an outage', async () => {
+        // A custom plugin that says "no such task" in plain text, for a key of
+        // a project it doesn't have: the PR is told the task wasn't found, and
+        // no admin is told the plugin is down.
+        const plugin = {
+            ...tracker('Plugin', {}, { teams: [] }),
+            read: async (): Promise<TrackerLookup> => ({
+                status: 'not_found',
+                unread: true,
+            }),
+        };
+        const result = await resolveTasks(
+            refs('', 'feat(DEV-5400): export invoices'),
+            [plugin],
+            context,
+        );
+        expect(result).toMatchObject({
+            kind: 'not_found',
+            looksIntended: false,
+        });
+    });
+
+    it('still calls it a typo when the tracker read cleanly that the task does not exist', async () => {
+        const jira = tracker('Jira', {}, { teams: ['DEV'] });
+        const result = await resolveTasks(
+            refs('', 'feat(DEV-5400): export invoices'),
+            [jira],
+            context,
+        );
+        expect(result).toMatchObject({
+            kind: 'not_found',
+            looksIntended: true,
+        });
+    });
+
     it('treats a plugin with no read tool as unreadable, not as an outage to retry', async () => {
         const plugin: TaskTracker = {
             name: 'Acme',

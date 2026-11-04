@@ -13,7 +13,7 @@ import {
     cloudFallbackOnPosthogError,
     evaluateCatalogGate,
 } from '../domain/decision';
-import type { FeatureKey } from '../domain/feature-keys';
+import { FEATURE_KEYS, type FeatureKey } from '../domain/feature-keys';
 import type { ReleaseTrack } from '../domain/release-track';
 import type { FeaturesSnapshot } from '../domain/snapshot.types';
 import { loadSnapshot } from '../infrastructure/feature-snapshot.loader';
@@ -37,18 +37,27 @@ export interface FeatureCheckContext {
     releaseTrack?: ReleaseTrack;
 }
 
+export const FEATURE_GATE_SERVICE_TOKEN = Symbol.for(
+    'FEATURE_GATE_SERVICE_TOKEN',
+);
+
+export interface IFeatureGateService {
+    isEnabled(feature: FeatureKey, ctx: FeatureCheckContext): Promise<boolean>;
+}
+
 /**
  * NestJS adapter around the pure `evaluateCatalogGate` decision in
  * `libs/feature-gate/domain/decision.ts`. Loads the snapshot, decides
  * cloud vs self-hosted from `environment.API_CLOUD_MODE`, then either
- * delegates to PostHog (cloud) or short-circuits (self-hosted).
+ * uses the release track for cloud beta, PostHog for cloud alpha/GA/legacy,
+ * and the catalog plus BETA_FEATURES for self-hosted.
  *
  * The web mirror at `apps/web/src/core/feature-gate/resolver.ts` calls
  * the same `evaluateCatalogGate` — there's exactly one source of gate
  * logic, even though the runtime adapters differ.
  */
 @Injectable()
-export class FeatureGateService {
+export class FeatureGateService implements IFeatureGateService {
     private readonly logger = createLogger(FeatureGateService.name);
     private readonly snapshot: FeaturesSnapshot;
     private readonly betaFeaturesEnabled: boolean;
@@ -67,11 +76,18 @@ export class FeatureGateService {
     ): Promise<boolean> {
         const entry = this.snapshot.features[feature];
         const audience = environment.API_CLOUD_MODE ? 'cloud' : 'self-hosted';
+        const releaseTrackBeta = feature === FEATURE_KEYS.conditionalPrApproval;
         const decision = evaluateCatalogGate({
             entry,
             audience,
-            track: ctx.releaseTrack,
-            selfHostedBetaEnabled: this.betaFeaturesEnabled,
+            track:
+                entry?.stage === 'beta' && !releaseTrackBeta
+                    ? 'beta'
+                    : ctx.releaseTrack,
+            selfHostedBetaEnabled:
+                releaseTrackBeta || entry?.stage !== 'beta'
+                    ? this.betaFeaturesEnabled
+                    : true,
         });
 
         if (decision === 'deny') return false;
@@ -79,6 +95,10 @@ export class FeatureGateService {
         if (audience === 'self-hosted') {
             return true; // pass or compat-pass: catalog already gated us.
         }
+
+        // Beta is controlled by the release track in the catalog. PostHog
+        // remains available for private alpha and legacy rollout flags.
+        if (entry?.stage === 'beta' && releaseTrackBeta) return true;
 
         const evaluationContext: FeatureEvaluationContext | undefined =
             ctx.groups ? { groups: ctx.groups } : undefined;

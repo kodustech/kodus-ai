@@ -31,6 +31,12 @@ export const PipelineReasons = {
             message: 'Too Many Files',
             action: 'Reduce PR size for better review quality',
         } as PipelineReason,
+        UNREADABLE: {
+            message: 'Changes Unreadable',
+            description:
+                "The Git provider's diff of this PR could not be read in full; the review was not run",
+            action: 'Re-run the review',
+        } as PipelineReason,
     },
     COMMITS: {
         NO_NEW: {
@@ -40,6 +46,11 @@ export const PipelineReasons = {
         ONLY_MERGE: {
             message: 'Only Merge Commits',
             description: 'Merge commits are skipped to avoid noise',
+        } as PipelineReason,
+        REBASE_NO_CHANGES: {
+            message: 'Rebase Without Changes',
+            description:
+                'The rebase changed nothing in the code already reviewed',
         } as PipelineReason,
         PROVIDER_RATE_LIMITED: {
             message: 'Provider Rate Limited',

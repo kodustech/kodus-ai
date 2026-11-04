@@ -8,12 +8,14 @@ export const tabs = {
     // Pull requests checked against their task (Business Logic runs).
     "intent": "Delivered as asked",
     "productivity": "Productivity",
+    "code-areas": "Code hotspots",
 } satisfies Record<string, string>;
 
 // URL search-param keys that carry the dashboard's current view, so it
 // can be deep-linked/shared. The URL is the source of truth; cookies
 // only provide the cross-session default when a param is absent.
 export const COCKPIT_PARAM = {
+    areaRepository: "areaRepo",
     repository: "repository",
     start: "start",
     end: "end",

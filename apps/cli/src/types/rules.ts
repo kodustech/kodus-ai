@@ -1,6 +1,13 @@
 export type KodyRuleSeverity = 'low' | 'medium' | 'high' | 'critical';
 
-export type KodyRuleScope = 'pull request' | 'file';
+/**
+ * What the API stores and the review pipeline compares against
+ * (`KodyRulesScope` in libs/kodyRules/domain/interfaces/kodyRules.interface.ts).
+ * `'pull request'` is still accepted as input for older scripts.
+ */
+export type KodyRuleScope = 'pull-request' | 'file';
+
+export type KodyRuleStatus = 'active' | 'paused' | 'deleted';
 
 export interface KodyRule {
     uuid: string;
@@ -10,6 +17,11 @@ export interface KodyRule {
     severity?: KodyRuleSeverity;
     scope?: KodyRuleScope;
     path?: string;
+    status?: string;
+    type?: string;
+    directoryId?: string;
+    // The plan's active-rule limit kept it paused (create-or-update.use-case.ts).
+    lockedByPlan?: boolean;
 }
 
 export interface CentralizedPrResponse {
@@ -55,3 +67,31 @@ export interface ViewKodyRulesRequest {
     ruleId?: string;
     repositoryId?: string;
 }
+
+/** Body of POST /kody-rules/create-or-update (CreateKodyRuleDto). */
+export interface UserKodyRulePayload {
+    uuid?: string;
+    title: string;
+    rule: string;
+    type: string;
+    severity: KodyRuleSeverity;
+    scope?: KodyRuleScope;
+    path?: string;
+    repositoryId?: string;
+    origin?: string;
+    status?: string;
+    examples?: unknown[];
+    directoryId?: string;
+    sourcePath?: string;
+    sourceAnchor?: string;
+    inheritance?: unknown;
+    teamId: string;
+}
+
+export interface ChangeKodyRulesStatusRequest {
+    ruleIds: string[];
+    status: KodyRuleStatus;
+    teamId: string;
+}
+
+export type KodyRulesStatusResult = KodyRule[] | CentralizedPrResponse;

@@ -241,7 +241,13 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         startDate: Date,
         endDate: Date,
         teamAutomationId: string,
-    ): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>> {
+    ): Promise<
+        Array<{
+            repositoryId: string;
+            pullRequestNumber: number;
+            mayAllowNoComments: boolean;
+        }>
+    > {
         return this.automationExecutionRepository.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId(
             startDate,
             endDate,

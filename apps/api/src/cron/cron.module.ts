@@ -34,6 +34,12 @@ import { SpendLimitAlertCronProvider } from './spendLimitAlert.cron';
 import { SSOTestSessionCleanupCronProvider } from './ssoTestSessionCleanup.cron';
 import { StaleReviewWatchdogCronProvider } from './staleReviewWatchdog.cron';
 import { SSOModule } from '@libs/ee/sso/sso.module';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
+import { FeatureGateModule } from '@libs/feature-gate';
+import { LicenseModule } from '@libs/ee/license/license.module';
+import { OrganizationModule } from '@libs/organization/modules/organization.module';
 
 @Module({
     imports: [
@@ -55,8 +61,16 @@ import { SSOModule } from '@libs/ee/sso/sso.module';
         forwardRef(() => SSOModule),
         SpendLimitModule,
         KodusCreditsModule,
+        PlatformDataModule,
+        FeatureGateModule,
+        forwardRef(() => LicenseModule),
+        forwardRef(() => OrganizationModule),
     ],
     providers: [
+        {
+            provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+            useClass: ConditionalApprovalAccessService,
+        },
         CheckIfPRCanBeApprovedCronProvider,
         ClassifyOrphanedSessionsCronProvider,
         CodeReviewFeedbackCronProvider,

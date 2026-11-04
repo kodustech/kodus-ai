@@ -758,7 +758,18 @@ describe('every code platform: same host allowed, foreign host skipped', () => {
         },
     );
 
-    it.each(PLATFORMS)(
+    // The foreign-host refusal and the header pass-through do not depend on
+    // the platform, only on how the repo URL parses: the default port, an
+    // explicit port, and userinfo cover every shape above.
+    const REPRESENTATIVE = PLATFORMS.filter(([name]) =>
+        [
+            'GitHub',
+            'GitLab self-hosted on a port',
+            'Azure DevOps with userinfo',
+        ].includes(name),
+    );
+
+    it.each(REPRESENTATIVE)(
         '%s: a submodule on another host is skipped',
         (_name, repo) => {
             const d = decideOne('https://evil.example/acme/x.git', { repo });
@@ -777,7 +788,7 @@ describe('every code platform: same host allowed, foreign host skipped', () => {
         },
     );
 
-    it.each(PLATFORMS)(
+    it.each(REPRESENTATIVE)(
         '%s: whatever Authorization the clone built is what gets scoped',
         (_name, repo, sub) => {
             // Each platform builds a different header (x-access-token for

@@ -1,6 +1,6 @@
 ---
 name: kodus-kody-rules
-description: Use when the user wants to create, update or view Kody Rules via `kodus rules` command.
+description: Use when the user wants to create, update, view, pause, resume or delete Kody Rules via `kodus rules` command.
 ---
 
 # Kodus Kody Rules
@@ -13,11 +13,16 @@ Kody Rules are a set of guidelines that Kody follows when generating code. They 
 
 Manage Kody Rules through Kodus CLI only. Do not suggest creating rule files manually.
 
-ALWAYS Use `kodus rules` subcommands for all create, update, and view operations. All these rules are ALWAYS managed by the `kodus rules` command from the CLI. Do NOT suggest creating files or storing rules in any other way. When the user wants to create, update or view Kody Rules, utilize the `kodus rules` command with the appropriate subcommands and options as outlined in the instructions files.
+ALWAYS Use `kodus rules` subcommands for all create, update, view, pause, resume and delete operations. All these rules are ALWAYS managed by the `kodus rules` command from the CLI. Do NOT suggest creating files or storing rules in any other way. When the user wants to create, update, view, pause, resume or delete Kody Rules, utilize the `kodus rules` command with the appropriate subcommands and options as outlined in the instructions files.
+
+## Authentication
+
+- Logged in (`kodus auth login`): every subcommand works, with the same permissions the user has in the web app. If the organization has more than one team, pass `--team <name|id>`; the error lists the team names.
+- Team key (`kodus auth team-key`): `create`, `update` and `view` only. `pause`, `resume` and `delete` answer with an auth error asking for `kodus auth login`; relay that to the user instead of retrying.
 
 ## Centralized Config Convention
 
-When centralized config is enabled for the selected team/repository scope, `kodus rules create` and `kodus rules update` may return centralized PR metadata instead of directly created/updated rule records.
+When centralized config is enabled for the selected team/repository scope, `kodus rules create`, `update`, `pause`, `resume` and `delete` may return centralized PR metadata instead of directly changed rule records.
 
 - Treat this as success, not failure.
 - Prioritize reporting `prUrl` (and `prNumber` when available).
@@ -32,6 +37,9 @@ When centralized config is enabled for the selected team/repository scope, `kodu
 - `create`: add a new rule.
 - `update`: modify an existing rule.
 - `view`: list all rules or fetch a specific rule.
+- `pause`: stop enforcing a rule in reviews but keep it (reversible with `resume`).
+- `resume`: enforce a paused rule again.
+- `delete`: remove a rule. Prefer `pause` when the user only wants it to stop firing.
 
 2. Resolve repository scope:
 
@@ -49,7 +57,7 @@ Then select and pass `--repo-id <id>`.
 - `title`: short and specific.
 - `rule`: clear and actionable guidance.
 - `severity`: `low | medium | high | critical`.
-- `scope`: `file | pull request`.
+- `scope`: `file | pull-request`.
 - `path`: optional glob, default effectively `**/*`.
 
 4. Execute the proper command and report results clearly.
@@ -61,10 +69,11 @@ Read individual instructions files for detailed explanations and examples:
 - [instructions/create-kody-rule.md](instructions/create-kody-rule.md): Guidelines for creating new Kody Rules.
 - [instructions/update-kody-rule.md](instructions/update-kody-rule.md): Guidelines for updating existing Kody Rules.
 - [instructions/view-kody-rules.md](instructions/view-kody-rules.md): Guidelines for viewing and retrieving Kody Rules.
+- [instructions/change-kody-rule-status.md](instructions/change-kody-rule-status.md): Guidelines for pausing, resuming and deleting Kody Rules.
 
-You MUST always load at least one of these instructions files to handle the specific user request related to Kody Rules. Each file contains detailed steps and examples for the corresponding action (create, update, view). Always ensure that you are following the instructions in these files when managing Kody Rules through the `kodus rules` command.
+You MUST always load at least one of these instructions files to handle the specific user request related to Kody Rules. Each file contains detailed steps and examples for the corresponding action (create, update, view, pause/resume/delete). Always ensure that you are following the instructions in these files when managing Kody Rules through the `kodus rules` command.
 
-Should the user request an action that is not covered by these instructions, you should first clarify the user's intent and then determine if it falls under create, update, or view operations. If it does, proceed to load the corresponding instructions file to ensure that you are following the correct workflow for managing Kody Rules through the `kodus rules` command.
+Should the user request an action that is not covered by these instructions, you should first clarify the user's intent and then determine if it falls under create, update, view, pause, resume or delete operations. If it does, proceed to load the corresponding instructions file to ensure that you are following the correct workflow for managing Kody Rules through the `kodus rules` command.
 
 Should the user request a new action related to Kody Rules that differs from the initial action, you should load the appropriate instructions file for that new action to ensure that you are following the correct workflow for managing Kody Rules through the `kodus rules` command.
 
@@ -81,9 +90,10 @@ A Kody Rule typically consists of the following components:
     - **Medium**: The rule should be followed, but violations are not critical. Default severity level.
     - **High**: The rule is important and should be followed to avoid potential issues.
     - **Critical**: The rule is essential and must be followed to prevent severe issues or failures.
-- **Scope**: The level at which the rule applies (one of "pull request" or "file").
+- **Scope**: The level at which the rule applies (one of "pull-request" or "file").
     - **Pull Request**: The rule applies to the entire pull request and is evaluated based on the overall changes in the PR.
     - **File**: The rule applies to individual files and is evaluated on a per-file basis. Default scope level.
+- **Status**: `active` (enforced in reviews) or `paused` (kept, not enforced).
 - **Path**: An optional glob pattern indicating which files the rule applies to.
     - For example, `src/**/*.js` would apply the rule to all JavaScript files in the `src` directory and its subdirectories.
     - Default is all files, `**/*`.

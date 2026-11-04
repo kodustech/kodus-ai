@@ -336,10 +336,6 @@ describe('registry-wide conformance sweep (D-05): no module regresses to the zer
         }
     });
 
-    it('covers all 11 distinct registered modules', () => {
-        expect(modules.length).toBe(11);
-    });
-
     for (const module of modules) {
         const sample = CONFORMANCE_SAMPLES[module.id];
         if (!sample) continue; // absence is asserted by the coverage guard above

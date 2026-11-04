@@ -1,6 +1,10 @@
 import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 
-import { is429Error, isTransientFetchError } from './rate-limit-retry';
+import {
+    is429Error,
+    isTransientFetchError,
+    with429Retry,
+} from './rate-limit-retry';
 
 /**
  * Regression coverage for the class of bug fixed in
@@ -186,5 +190,44 @@ describe('is429Error', () => {
             expect(/\b429\b/.test(translated.message)).toBe(false);
             expect(is429Error(translated)).toBe(true);
         });
+    });
+});
+
+describe('with429Retry waits for what the error says', () => {
+    afterEach(() => jest.useRealTimers());
+
+    // A translated RateLimitError has no headers, only resetAt; without
+    // reading it the retry fell back to a sub-second jitter.
+    it.each([
+        [
+            'retryAfterMs',
+            () =>
+                Object.assign(new Error('429'), {
+                    status: 429,
+                    retryAfterMs: 20_000,
+                }),
+        ],
+        [
+            'RateLimitError.resetAt',
+            () =>
+                new RateLimitError({
+                    resetAt: new Date(Date.now() + 20_000),
+                    message: 'GitLab refused the request rate',
+                }),
+        ],
+    ])('sleeps for %s before retrying', async (_label, makeError) => {
+        jest.useFakeTimers({ now: 1_000_000 });
+        const fn = jest
+            .fn()
+            .mockRejectedValueOnce(makeError())
+            .mockResolvedValueOnce('ok');
+
+        const run = with429Retry(fn, { label: 'spec' });
+        await jest.advanceTimersByTimeAsync(19_000);
+        expect(fn).toHaveBeenCalledTimes(1);
+        await jest.advanceTimersByTimeAsync(1_000);
+
+        await expect(run).resolves.toBe('ok');
+        expect(fn).toHaveBeenCalledTimes(2);
     });
 });

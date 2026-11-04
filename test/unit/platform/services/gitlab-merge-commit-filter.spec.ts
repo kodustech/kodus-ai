@@ -291,5 +291,28 @@ describe('GitLab getChangedFilesSinceLastCommit - integration tests for merge co
 
             expect(result).toHaveLength(0);
         });
+
+        it('returns null when the compare timed out and its diffs are partial (#2268)', async () => {
+            mockGitlabAPI.MergeRequests.allCommits.mockResolvedValue([
+                { id: 'commit-a1', created_at: '2024-01-02T00:00:00Z' },
+                { id: 'merge-main', created_at: '2024-01-06T00:00:00Z' },
+            ]);
+            mockGitlabAPI.Repositories.compare.mockResolvedValue({
+                diffs: [{ new_path: 'src/from-main.ts', diff: '+x' }],
+                compare_timeout: true,
+            });
+            mockGitlabAPI.MergeRequests.allDiffs.mockResolvedValue([
+                { new_path: 'zz/own.ts' },
+            ]);
+
+            const result = await gitlabService.getChangedFilesSinceLastCommit({
+                organizationAndTeamData: { organizationId: 'org-1' },
+                repository: { id: 'project-123' },
+                prNumber: 456,
+                lastCommit: { sha: 'commit-a1' },
+            });
+
+            expect(result).toBeNull();
+        });
     });
 });

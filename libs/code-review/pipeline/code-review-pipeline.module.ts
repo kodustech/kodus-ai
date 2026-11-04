@@ -1,3 +1,4 @@
+import { CustomAgentRunsModule } from '@libs/code-review/modules/custom-agent-runs.module';
 import { CloneParamsResolverService } from './services/clone-params-resolver.service';
 import { Module, forwardRef } from '@nestjs/common';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
@@ -14,6 +15,10 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
 import { UserCoreModule } from '@libs/identity/modules/user-core.module';
 
 import { RequestChangesOrApproveStage } from './stages/finish-process-review.stage';
+import { DecidePrApprovalStage } from './stages/decide-pr-approval.stage';
+import { ConditionalApprovalAccessService } from '@libs/code-review/infrastructure/approval/conditional-approval-access.service';
+import { CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN } from '@libs/code-review/domain/approval/conditional-approval-access.contract';
+import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import { InitialCommentStage } from './stages/initial-comment.stage';
 import { BusinessLogicValidationStage } from './stages/business-logic-validation.stage';
 import { ResolveConfigStage } from './stages/resolve-config.stage';
@@ -88,6 +93,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
 
 @Module({
     imports: [
+        CustomAgentRunsModule,
         // Explicit even though FeatureGateModule is @Global(): the pipeline
         // (AgentReviewStage) injects FeatureGateService, so declaring it here
         // guarantees availability for any consumer instead of relying on a
@@ -105,6 +111,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         forwardRef(() => AgentsModule),
         forwardRef(() => AIEngineModule),
         forwardRef(() => PlatformModule),
+        forwardRef(() => PlatformDataModule),
         forwardRef(() => AutomationModule),
         forwardRef(() => GithubModule),
         forwardRef(() => ForgejoModule),
@@ -127,6 +134,10 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         TraceContextModule,
     ],
     providers: [
+        {
+            provide: CONDITIONAL_APPROVAL_ACCESS_SERVICE_TOKEN,
+            useClass: ConditionalApprovalAccessService,
+        },
         // Strategy
         CodeReviewPipelineStrategy,
 
@@ -163,6 +174,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         CreatePrLevelCommentsStage,
         CreateFileCommentsStage,
         AggregateResultsStage,
+        DecidePrApprovalStage,
         UpdateCommentsAndGenerateSummaryStage,
         RequestChangesOrApproveStage,
         ValidateSuggestionsStage,

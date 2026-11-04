@@ -124,6 +124,9 @@ describe('applyCacheBreakpoints — implicit-cache / unknown providers (no inlin
         ['openai_compatible', 'some-model'],
         ['novita', 'meta-llama/llama-3-70b'],
         ['open_router', 'anthropic/claude-3.5-sonnet'], // Claude via OpenRouter → still no anthropic hint
+        ['google_gemini', 'gemini-2.5-pro'],
+        ['moonshot', 'kimi-k2'], // anthropic-protocol brand, but Kimi caches implicitly
+        ['zai', 'glm-4.6'],
     ])('%s / %s passes everything through untouched', (provider, model) => {
         const messages = [userMsg()];
         const t = tools();

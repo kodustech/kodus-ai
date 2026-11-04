@@ -85,6 +85,19 @@ describe('ListAgentInstructionFilesUseCase', () => {
         ]);
     });
 
+    it('asks the git host to fail loudly, so an unlisted repository shows as unavailable', async () => {
+        const { useCase, codeManagementService } = build({
+            repositories: [{ id: 'r1', name: 'api' }],
+            files: { r1: ['CLAUDE.md'] },
+        });
+
+        await useCase.execute({ teamId: 't1' });
+
+        expect(
+            codeManagementService.getRepositoryAllFiles.mock.calls[0][0],
+        ).toMatchObject({ throwOnError: true });
+    });
+
     it('only lists repositories the user may read', async () => {
         const { useCase, codeManagementService } = build({
             repositories: [

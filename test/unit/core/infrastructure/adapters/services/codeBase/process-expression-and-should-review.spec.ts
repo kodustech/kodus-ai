@@ -63,6 +63,19 @@ describe('processExpression - Unit Tests', () => {
             });
         });
 
+        it('should keep a !== rule as an exclusion keyed by its raw text', () => {
+            const result = processExpression('=main, !==develop');
+
+            expect(result).toEqual({
+                reviewRules: {
+                    '*': {
+                        'main': true,
+                        '!==develop': false,
+                    },
+                },
+            });
+        });
+
         it('should process contains patterns', () => {
             const expression = 'contains:demo, contains:test';
             const result = processExpression(expression);
@@ -478,6 +491,15 @@ describe('shouldReviewBranches - Unit Tests', () => {
             expect(shouldReviewBranches('feature/test', '', config)).toBe(
                 false,
             );
+        });
+
+        it('should return false for an invalid regex pattern instead of throwing', () => {
+            const result = shouldReviewBranches('feature/xyz', 'develop', {
+                reviewRules: {
+                    'invalid[pattern': { '*': true },
+                },
+            });
+            expect(result).toBe(false);
         });
 
         it('should return false for config without reviewRules', () => {

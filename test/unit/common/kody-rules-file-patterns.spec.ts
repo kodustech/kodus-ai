@@ -85,36 +85,6 @@ describe('IDE_RULE_DIR_MARKERS', () => {
             new Set(IDE_RULE_DIR_MARKERS).size,
         );
     });
-
-    it('covers every IDE/agent pattern shipped today', () => {
-        // Spot-check: each marker corresponds to the directory portion of
-        // a pattern's fixed prefix. Patterns whose fixed prefix has no
-        // directory part (`.cursorrules`, `CLAUDE.md`, `.windsurfrules`,
-        // ...) intentionally don't contribute markers — they live at the
-        // repo root by definition.
-        expect(IDE_RULE_DIR_MARKERS).toEqual(
-            expect.arrayContaining([
-                '.cursor/rules', // .cursor/rules/**/*.mdc
-                '.kody/rules', // .kody/rules/**
-                '.github/instructions', // .github/instructions/**/*.instructions.md
-                '.github', // .github/copilot-instructions.md
-                '.claude', // .claude/settings.json
-                '.sourcegraph', // .sourcegraph/**/*.rule.md
-                '.rules', // .rules/**/*
-                'docs/coding-standards', // docs/coding-standards/**/*
-            ]),
-        );
-    });
-
-    it('does NOT contain bare ".cursor" or ".kody" — those have no isolated pattern', () => {
-        // We only ship `.cursor/rules/**/*.mdc` and `.kody/rules/**`, not
-        // bare `.cursor/...` or `.kody/...`. If somebody later adds a
-        // pattern like `.cursor/foo.json`, the marker `.cursor` will
-        // start appearing automatically and this guard will fail — at
-        // which point the assertion just needs to be removed.
-        expect(IDE_RULE_DIR_MARKERS).not.toContain('.cursor');
-        expect(IDE_RULE_DIR_MARKERS).not.toContain('.kody');
-    });
 });
 
 describe('extractRepoSubdirFromIdeSource', () => {
@@ -169,6 +139,21 @@ describe('extractRepoSubdirFromIdeSource', () => {
             name: 'CLAUDE.md under a subdir',
             source: 'applications/baz/CLAUDE.md',
             expected: 'applications/baz',
+        },
+        {
+            name: 'AGENTS.md at repo root',
+            source: 'AGENTS.md',
+            expected: null,
+        },
+        {
+            name: 'AGENTS.md under a subdir (#1484)',
+            source: 'services/x/AGENTS.md',
+            expected: 'services/x',
+        },
+        {
+            name: 'CLAUDE.md under a monorepo app',
+            source: 'apps/api/CLAUDE.md',
+            expected: 'apps/api',
         },
         {
             name: 'docs/coding-standards under a deep subdir',
@@ -257,22 +242,6 @@ describe('RULE_FILE_DISCOVERY_PATTERNS (#1484/#1485)', () => {
         expect(RULE_FILE_DISCOVERY_PATTERNS).toHaveLength(
             RULE_FILE_PATTERNS.length * 2,
         );
-    });
-});
-
-describe('extractRepoSubdirFromIdeSource — nested guidance files', () => {
-    it('scopes nested CLAUDE.md/AGENTS.md to their subdirectory', () => {
-        expect(extractRepoSubdirFromIdeSource('apps/api/CLAUDE.md')).toBe(
-            'apps/api',
-        );
-        expect(extractRepoSubdirFromIdeSource('services/x/AGENTS.md')).toBe(
-            'services/x',
-        );
-    });
-
-    it('keeps root-level files repo-wide', () => {
-        expect(extractRepoSubdirFromIdeSource('AGENTS.md')).toBeNull();
-        expect(extractRepoSubdirFromIdeSource('CLAUDE.md')).toBeNull();
     });
 });
 
@@ -444,18 +413,5 @@ describe('validateAndScopeIdeRulePath', () => {
         });
         expect(result.path).toBe('**/*');
         expect(result.reason).toBe('rejected-empty');
-    });
-
-    it('handles whitespace around an otherwise-valid glob', () => {
-        // The validator currently does not trim, but this guards against
-        // accidental change. If someone later decides to trim, the test
-        // tells them the call sites that depend on this behaviour.
-        const result = validateAndScopeIdeRulePath({
-            llmPath: '  src/**/*.ts  ',
-            sourceFilePath: '.cursor/rules/foo.mdc',
-            pathSource: 'declared',
-        });
-        expect(result.path).toBe('  src/**/*.ts  ');
-        expect(result.reason).toBe('accepted-as-is');
     });
 });

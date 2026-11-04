@@ -24,6 +24,10 @@ import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engi
 import type { CustomAgentCliProvisioning } from '@libs/code-review/infrastructure/agents/custom-agent-cli/custom-agent-cli.provisioner';
 import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
 import { PlatformType } from '@libs/core/domain/enums';
+import type {
+    ApprovalDecision,
+    ApprovalRiskAssessment,
+} from '@libs/code-review/domain/approval/approval-decision';
 import {
     AnalysisContext,
     AutomaticReviewStatus,
@@ -46,6 +50,8 @@ export type PullRequestType = {
             fullName: string;
         };
         ref: string;
+        /** The target branch's commit, when the host's pull request has it. */
+        sha?: string;
     };
     head?: {
         sha: string;
@@ -115,6 +121,16 @@ export interface CodeReviewPipelineContext extends PipelineContext {
         noteId?: any;
         threadId?: any;
         lastAnalyzedCommit?: any;
+        /** Base branch the last review read the PR against. */
+        reviewedBaseBranch?: string;
+    };
+    /** The status note of the latest finished run, partial or failed ones
+     *  included, which the next run edits (#1721). `lastExecution` is the
+     *  latest SUCCESS only, since it also decides what is reviewed again. */
+    previousStatusNote?: {
+        commentId?: any;
+        noteId?: any;
+        threadId?: any;
     };
     pipelineMetadata?: {
         // Inherited from PipelineContext.pipelineMetadata — re-declared here
@@ -172,7 +188,25 @@ export interface CodeReviewPipelineContext extends PipelineContext {
         previousSha: string;
         currentHeadSha?: string;
         totalCommits: number;
+        /** What the rebase left to review (#2037), or why it fell back to a full review. */
+        interdiff?:
+            | {
+                  filesToReview: number;
+                  unchangedFiles: number;
+                  partialFiles: number;
+                  uncomparedFiles: number;
+                  hunksKept: number;
+                  hunksDropped: number;
+              }
+            | { fallback: string };
     };
+
+    /**
+     * After a rebase, the PR files with only the hunks that changed since the
+     * last review (#2037). ResolveConfigStage reviews these instead of the
+     * whole PR diff.
+     */
+    rebaseInterdiffFiles?: FileChange[];
 
     validSuggestionsByPR?: ISuggestionByPR[];
     validCrossFileSuggestions?: CodeSuggestion[];
@@ -215,6 +249,10 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     businessLogicPrBodyHash?: string;
 
     lineComments?: CommentResult[];
+
+    /** Approval policy result for this reviewed head; reused by the finish stage. */
+    approvalDecision?: ApprovalDecision;
+    approvalRisk?: ApprovalRiskAssessment;
 
     // Resultados dos comentários de nível de PR
     prLevelCommentResults?: Array<CommentResult>;

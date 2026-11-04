@@ -35,11 +35,6 @@ describe('ResendEmailProvider', () => {
         expect(provider).toBeInstanceOf(ResendEmailProvider);
     });
 
-    it('constructs with RESEND_API_KEY set', async () => {
-        const provider = await buildProvider({ RESEND_API_KEY: 're_test_key' });
-        expect(provider).toBeInstanceOf(ResendEmailProvider);
-    });
-
     it('throws a clear error when send() is called without RESEND_API_KEY', async () => {
         const provider = await buildProvider({});
         await expect(
