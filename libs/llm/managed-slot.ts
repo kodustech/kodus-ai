@@ -736,7 +736,7 @@ export function getModelName(
     if (env) {
         // An invalid config can come from `auto` with no model set.
         return env.kind === 'invalid'
-            ? (process.env.API_LLM_PROVIDER_MODEL ?? 'auto').trim()
+            ? process.env.API_LLM_PROVIDER_MODEL?.trim() || 'auto'
             : `${env.name}:${env.model ?? process.env.API_LLM_PROVIDER_MODEL}`;
     }
 

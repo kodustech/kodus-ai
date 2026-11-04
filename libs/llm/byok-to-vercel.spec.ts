@@ -362,6 +362,9 @@ describe('getModelName — resolved slot vs env default', () => {
 
             delete process.env.API_LLM_PROVIDER_MODEL;
             expect(getModelName(undefined)).toBe('auto');
+
+            process.env.API_LLM_PROVIDER_MODEL = '   ';
+            expect(getModelName(undefined)).toBe('auto');
         } finally {
             for (const [k, v] of Object.entries(saved)) {
                 if (v === undefined) delete process.env[k];
