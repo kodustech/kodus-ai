@@ -469,6 +469,21 @@ describe('review flags inside prose', () => {
         ).toBeUndefined();
     });
 
+    it.each([
+        '@kody review --force, please',
+        '@kody review `--force`',
+        '@kody review (--force)',
+    ])('reads a flag followed by punctuation: %s', (text) => {
+        expect(isForceReviewCommand(text)).toBe(true);
+    });
+
+    it('reads --heavy followed by punctuation', () => {
+        expect(requestedReviewModeOf('@kody review `--heavy`')).toBe('heavy');
+        expect(requestedReviewModeOf('@kody review --balanced.')).toBe(
+            'balanced',
+        );
+    });
+
     it('still reads the flags in any order, and keeps the prose ones in the directive', () => {
         const text = '@kody review check the --force-push path --heavy --force';
 

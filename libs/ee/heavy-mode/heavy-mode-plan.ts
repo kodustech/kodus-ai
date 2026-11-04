@@ -32,10 +32,8 @@ export function isHeavyModeTierAllowed(
     license: OrganizationLicenseValidationResult | null | undefined,
 ): boolean {
     if (!license?.valid) return false;
-    const plan =
-        typeof license.planType === 'string'
-            ? license.planType.toLowerCase()
-            : '';
+    const rawPlan = license.planType;
+    const plan = typeof rawPlan === 'string' ? rawPlan.toLowerCase() : '';
     const paid = isPlan(plan, 'teams') || isPlan(plan, 'enterprise');
 
     switch (license.subscriptionStatus) {
