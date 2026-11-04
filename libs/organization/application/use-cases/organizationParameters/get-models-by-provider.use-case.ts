@@ -245,12 +245,20 @@ export class GetModelsByProviderUseCase {
             if (fb) return fb;
         }
 
-        if (listing.requiresBaseURL) {
-            if (!baseURL) {
-                throw new BadRequestException(
-                    `baseURL is required for ${provider}.`,
-                );
-            }
+        if (listing.requiresBaseURL && !baseURL) {
+            throw new BadRequestException(
+                `baseURL is required for ${provider}.`,
+            );
+        }
+        // A listing lands somewhere other than its own default when the base URL
+        // came from the user: a custom endpoint, or a native provider pointed at
+        // the org's proxy (native OpenAI, #2150). A fixed-URL listing that
+        // ignores the stored base URL never does.
+        const targetsUserEndpoint =
+            !!baseURL &&
+            (listing.requiresBaseURL ||
+                targetOrigin !== listingOrigin(listing.defaultBaseURL));
+        if (targetsUserEndpoint) {
             // SSRF guard: a stored baseURL is user-controlled, so reject
             // private/reserved IPs, the cloud metadata endpoint, and non-https
             // before the request — the same guard the connection probe uses.
@@ -267,9 +275,9 @@ export class GetModelsByProviderUseCase {
                         awsBearerToken,
                         awsRegion,
                     }),
-                    // baseURL-driven providers: never follow redirects (a public URL
+                    // A user-supplied endpoint: never follow redirects (a public URL
                     // could 302 onto a private IP / metadata endpoint past the guard).
-                    ...(listing.requiresBaseURL ? { maxRedirects: 0 } : {}),
+                    ...(targetsUserEndpoint ? { maxRedirects: 0 } : {}),
                     ...(listing.timeoutMs
                         ? { timeout: listing.timeoutMs }
                         : {}),
@@ -301,11 +309,24 @@ export class GetModelsByProviderUseCase {
                         message: `Live model listing for ${provider} failed; served curated fallback`,
                         context: GetModelsByProviderUseCase.name,
                         error: error as Error,
-                        metadata: { provider },
+                        metadata: { provider, host: targetOrigin },
                     });
                     return fb;
                 }
             }
+            this.logger.warn({
+                message: `Live model listing for ${provider} failed`,
+                context: GetModelsByProviderUseCase.name,
+                error: error as Error,
+                metadata: {
+                    provider,
+                    host: targetOrigin,
+                    userEndpoint: targetsUserEndpoint,
+                    status: axios.isAxiosError(error)
+                        ? error.response?.status
+                        : undefined,
+                },
+            });
             throw new BadRequestException(
                 `Error fetching ${provider} models: ${(error as Error).message}`,
             );

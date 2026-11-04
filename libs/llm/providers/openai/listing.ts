@@ -19,14 +19,19 @@ export function isOpenAiChatModelId(id: string): boolean {
     return !NON_CHAT_OPENAI_MODEL.test(id);
 }
 
-/** Native OpenAI: fixed endpoint, Bearer, reasoning derived from the cap table. */
+const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
+
+/** Native OpenAI: OpenAI's API, or the credential's own OpenAI-protocol proxy
+ *  when it carries a base URL. Bearer, reasoning derived from the cap table. */
 const nativeListing: ModelListing = {
     kind: 'http',
     apiKeyEnv: 'API_OPEN_AI_API_KEY',
+    defaultBaseURL: OPENAI_API_BASE_URL,
     // Bound the live /models call so a hung request rejects (→ the UI's manual
     // fallback) instead of leaving the connect form stuck on "Loading models…".
     timeoutMs: 15_000,
-    url: () => 'https://api.openai.com/v1/models',
+    url: ({ baseURL }) =>
+        openAiCompatibleModelsUrl(baseURL || OPENAI_API_BASE_URL),
     headers: ({ apiKey }) => bearerHeaders(apiKey),
     parse: (body) =>
         parseOpenAiIds(body)
