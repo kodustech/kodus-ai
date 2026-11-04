@@ -6,6 +6,7 @@ import {
     knowledgeChoices,
     knowledgeKey,
     mentionedButNotFollowed,
+    mentionedFilesNotFollowed,
     prepareKnowledgeForSave,
     sameKnowledge,
     setAgentKnowledge,
@@ -183,6 +184,106 @@ describe("mentionedButNotFollowed", () => {
         expect(
             mentionedButNotFollowed(
                 "Follow irrigation-rules-v2 conventions.",
+                [RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([]);
+    });
+});
+
+describe("mentionedFilesNotFollowed", () => {
+    // The shape production agents use (#2384): the rule file is named in the
+    // instructions and never linked, so the agent reads it only if it decides
+    // to, and a finding cannot cite it.
+    const readThisFile =
+        "A regra completa está no repositório greenhouse/irrigation-rules, branch main, arquivo stack/rails/rules/watering-queries.mdc. Leia esse arquivo antes de comentar.";
+
+    it("offers the file the instructions name, in the linked repository named before it", () => {
+        expect(
+            mentionedFilesNotFollowed(readThisFile, [RULES], [], "valves"),
+        ).toEqual([
+            {
+                path: "stack/rails/rules/watering-queries.mdc",
+                kind: "doc",
+                repository: RULES,
+            },
+        ]);
+        expect(
+            mentionedFilesNotFollowed(
+                "Olhe as regras no linked repository irrigation-rules. Comece por global/rules/boas-praticas.mdc.",
+                [RULES, OTHER_RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([
+            {
+                path: "global/rules/boas-praticas.mdc",
+                kind: "doc",
+                repository: RULES,
+            },
+        ]);
+    });
+
+    it("stops once this agent follows that file, and not for another file of the repository", () => {
+        const followed: KnowledgeItem = {
+            path: "stack/rails/rules/watering-queries.mdc",
+            kind: "doc",
+            repository: RULES,
+            linkedTo: [{ agentId: "valves" }],
+        };
+        expect(
+            mentionedFilesNotFollowed(
+                readThisFile,
+                [RULES],
+                [followed],
+                "valves",
+            ),
+        ).toEqual([]);
+        expect(
+            mentionedFilesNotFollowed(
+                readThisFile,
+                [RULES],
+                [{ ...followed, linkedTo: [{ agentId: "pumps" }] }],
+                "valves",
+            ),
+        ).toHaveLength(1);
+        expect(
+            mentionedFilesNotFollowed(
+                readThisFile,
+                [RULES],
+                [remote],
+                "valves",
+            ),
+        ).toHaveLength(1);
+    });
+
+    it("places a file in the reviewed repository when the instructions name no repository", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Follow docs/conventions.md and skills/billing/SKILL.md; see docs/conventions.md again.",
+                [RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([
+            { path: "docs/conventions.md", kind: "doc" },
+            { path: "skills/billing", kind: "skill" },
+        ]);
+    });
+
+    it("guesses nothing: a repository that is not linked, a code file, a URL", () => {
+        expect(
+            mentionedFilesNotFollowed(
+                "Read rules.md in the pump-rules repository.",
+                [RULES],
+                [],
+                "valves",
+            ),
+        ).toEqual([]);
+        expect(
+            mentionedFilesNotFollowed(
+                "Check db/schema.rb and https://example.com/guide.md before flagging.",
                 [RULES],
                 [],
                 "valves",

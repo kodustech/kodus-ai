@@ -11,10 +11,12 @@ import {
     knowledgeKey,
     knowledgeTargetKey,
     mentionedButNotFollowed,
+    mentionedFilesNotFollowed,
     repositoryKey,
     sameKnowledge,
     setAgentKnowledge,
     skillFolderName,
+    type MentionedFile,
 } from "@services/custom-agents/drafts";
 import { useResolveCustomAgent } from "@services/custom-agents/hooks";
 import type {
@@ -585,14 +587,37 @@ export const AgentKnowledgeField = ({
         item: Pick<KnowledgeItem, "path" | "kind" | "repository">,
     ) => reportOf(item)?.description ?? candidateOf(item)?.description;
     const linkedRepositories = resolved?.linkedRepositories ?? [];
-    const mentioned = instructions
-        ? mentionedButNotFollowed(
+    // A file the instructions name comes first: one click follows exactly
+    // it, so its repository's broader "browse" note would say the same twice.
+    const mentionedFiles = instructions
+        ? mentionedFilesNotFollowed(
               instructions,
               linkedRepositories,
               knowledge,
               agentId,
           )
         : [];
+    const mentioned = (
+        instructions
+            ? mentionedButNotFollowed(
+                  instructions,
+                  linkedRepositories,
+                  knowledge,
+                  agentId,
+              )
+            : []
+    ).filter(
+        (repository) =>
+            !mentionedFiles.some(
+                (file) => repositoryKey(file) === repository.toLowerCase(),
+            ),
+    );
+    const followMentioned = (file: MentionedFile) => {
+        const ref = file.repository
+            ? pinnedRef(readKnowledge ?? knowledge, file.repository)
+            : undefined;
+        follow({ ...file, ...(ref && { ref }) }, true);
+    };
     const browse = (repository: string) => {
         const ref = pinnedRef(readKnowledge ?? knowledge, repository);
         setSource({ repository, ...(ref && { ref }) });
@@ -629,6 +654,29 @@ export const AgentKnowledgeField = ({
             {unavailable && (
                 <p className="text-text-secondary text-xs">{unavailable}</p>
             )}
+            {canEdit &&
+                mentionedFiles.map((file) => (
+                    <div
+                        key={knowledgeKey(file)}
+                        role="note"
+                        className="border-primary-light/40 bg-primary-light/5 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                        <span className="text-text-secondary text-xs">
+                            The instructions name{" "}
+                            <span className="text-text-primary font-mono font-medium">
+                                {file.path}
+                            </span>
+                            {file.repository && <> in {file.repository}</>}, but
+                            this agent does not follow it: it reads the file
+                            only if it decides to, and findings cannot cite it.
+                        </span>
+                        <Button
+                            size="xs"
+                            variant="helper"
+                            onClick={() => followMentioned(file)}>
+                            Follow it
+                        </Button>
+                    </div>
+                ))}
             {canEdit &&
                 mentioned.map((repository) => (
                     <div

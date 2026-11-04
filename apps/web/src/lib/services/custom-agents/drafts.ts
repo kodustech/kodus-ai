@@ -1126,6 +1126,77 @@ export const mentionedButNotFollowed = (
     });
 };
 
+/** A file the instructions name, as the item that would follow it. */
+export type MentionedFile = Pick<KnowledgeItem, "path" | "kind" | "repository">;
+
+/** A text file named in prose: `rules/x.mdc`, `CLAUDE.md`, never a URL or a
+ *  code file (instructions name code to look at, not rules to follow). */
+const MENTIONED_FILE =
+    /(?:^|[\s`'"(\[<])((?:[\w.-]+\/)*[\w.-]+\.(?:mdc|mdx|md|markdown|txt))(?=$|[\s`'".,;:!?)\]>])/gi;
+
+const REPOSITORY_WORD = /\b(reposit[óo]rio|repository|repo)\b/i;
+
+const escapeRegExp = (value: string) =>
+    value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Text files the agent's instructions name that it does not follow, as the
+ * item each would be: "read stack/rails/rules/performance-queries.mdc in our
+ * rules repository" left to the agent's judgment whether it reads the file,
+ * and a finding cannot cite a rule from a file the agent does not follow. A
+ * followed doc goes into the agent's prompt whole (#2384).
+ *
+ * A file is placed only where the text says it is: in the linked repository
+ * named last before it, or in the reviewed repository when the instructions
+ * name no repository at all. A file after a repository that is not linked is
+ * left out rather than guessed.
+ */
+export const mentionedFilesNotFollowed = (
+    instructions: string,
+    repositories: string[],
+    knowledge: KnowledgeItem[],
+    agentId: string,
+): MentionedFile[] => {
+    const text = instructions.toLowerCase();
+    const mentions = repositories
+        .flatMap((repository) => {
+            const full = repository.toLowerCase();
+            const name = full.split("/").pop() ?? full;
+            const pattern = new RegExp(
+                `(^|[^a-z0-9_.-])(${escapeRegExp(full)}|${escapeRegExp(name)})($|[^a-z0-9_-])`,
+                "g",
+            );
+            return [...text.matchAll(pattern)].map((match) => ({
+                repository,
+                at: (match.index ?? 0) + match[1].length,
+            }));
+        })
+        .sort((a, b) => a.at - b.at);
+    const namesNoRepository =
+        mentions.length === 0 && !REPOSITORY_WORD.test(text);
+    const found: MentionedFile[] = [];
+    for (const match of instructions.matchAll(MENTIONED_FILE)) {
+        const item = knowledgeItemFromPath(match[1]);
+        if (!item) continue;
+        const at = (match.index ?? 0) + match[0].indexOf(match[1]);
+        const before = mentions.filter((mention) => mention.at < at).pop();
+        if (!before && !namesNoRepository) continue;
+        const file: MentionedFile = {
+            ...item,
+            ...(before && { repository: before.repository }),
+        };
+        const followed = knowledge.some(
+            (entry) =>
+                sameKnowledge(entry, file) && isLinked(entry, { agentId }),
+        );
+        if (followed || found.some((other) => sameKnowledge(other, file))) {
+            continue;
+        }
+        found.push(file);
+    }
+    return found;
+};
+
 export const withoutSecretValues = (agent: CustomAgent): CustomAgent => {
     const [prepared] = prepareAgentsForSave([agent]);
     if (!prepared.tools.cli?.length) return prepared;

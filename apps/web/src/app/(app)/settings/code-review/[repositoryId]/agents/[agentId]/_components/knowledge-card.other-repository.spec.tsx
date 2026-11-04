@@ -155,6 +155,42 @@ describe("AgentKnowledgeField with another repository", () => {
         ]);
     });
 
+    it("follows the file the instructions name in one click, at the ref its repository is pinned to (#2384)", () => {
+        const onChange = field([], jest.fn(), {
+            instructions:
+                "The full rule is in irrigation-rules, file stack/node/rules/valves.md. Read it before commenting.",
+            readKnowledge: [
+                {
+                    path: "stack/node/rules/pumps.md",
+                    kind: "doc",
+                    repository: RULES,
+                    ref: "v2",
+                    linkedTo: [{ agentId: "pumps" }],
+                },
+            ],
+        });
+
+        const note = screen.getByRole("note");
+        expect(note).toHaveTextContent(
+            `The instructions name stack/node/rules/valves.md in ${RULES}, but this agent does not follow it`,
+        );
+        // The repository's broader note would say the same thing twice.
+        expect(
+            screen.queryByRole("button", { name: "Browse its rules" }),
+        ).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole("button", { name: "Follow it" }));
+        expect(onChange).toHaveBeenCalledWith([
+            {
+                path: "stack/node/rules/valves.md",
+                kind: "doc",
+                repository: RULES,
+                ref: "v2",
+                linkedTo: [{ agentId: "valves" }],
+            },
+        ]);
+    });
+
     it("names where a followed item lives and stops pointing out its repository", () => {
         field([
             {
