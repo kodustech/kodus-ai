@@ -21,6 +21,11 @@ describe('formatModelLabel', () => {
         ['claude-sonnet-4-5-20250929', 'Claude Sonnet 4.5 20250929'],
         ['claude-opus-4-0613', 'Claude Opus 4'], // a trailing MMDD pin is still dropped
         ['claude-opus-5', 'Claude Opus 5'],
+        // A -YYYY-MM-DD snapshot date is a pin: month and day must not fuse into a version.
+        ['gpt-4o-2024-08-06', 'GPT 4o'],
+        ['o3-mini-2025-01-31', 'O3 Mini'],
+        ['gpt-4o-mini-2024-07-18', 'GPT 4o Mini'],
+        ['gpt-4.1-2025-04-14', 'GPT 4.1'],
     ])('%s → %s', (id, expected) => {
         expect(formatModelLabel(id)).toBe(expected);
     });
