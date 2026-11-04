@@ -156,6 +156,8 @@ export type EnvProviderResolution = (
 ) & {
     /** The operator stated the provider (API_LLM_PROVIDER). */
     declared?: boolean;
+    /** The declared model id, trimmed. */
+    model?: string;
     reasoningEffort?: ReasoningEffort;
 };
 
@@ -163,6 +165,7 @@ export type EnvProviderResolution = (
 function fromDeclared(config: DeclaredEnvModel): EnvProviderResolution {
     const tags = {
         declared: true,
+        model: config.model,
         ...(config.reasoningEffort
             ? { reasoningEffort: config.reasoningEffort }
             : {}),
@@ -242,9 +245,8 @@ export function declaredEnvModel():
           reasoningEffort?: ReasoningEffort;
       }
     | undefined {
-    return resolveEnvProvider()?.declared
-        ? envManagedReasoningDescriptor()
-        : undefined;
+    const env = resolveEnvProvider();
+    return env?.declared ? envManagedReasoningDescriptor(env) : undefined;
 }
 
 /**
@@ -272,9 +274,6 @@ function vertexProjectFromEnv(): string | undefined {
 }
 
 export function resolveEnvProvider(): EnvProviderResolution | null {
-    const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
-    if (envMode === 'auto') return null;
-
     const declared = resolveDeclaredEnvProvider(process.env);
     if (declared.kind === 'invalid') {
         return { kind: 'invalid', name: 'invalid', reason: declared.reason };
@@ -282,6 +281,9 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
     if (declared.kind === 'declared') {
         return fromDeclared(declared.config);
     }
+
+    const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
+    if (envMode === 'auto') return null;
 
     const isGemini = GEMINI_MODEL_PATTERN.test(envMode);
     const isClaude = CLAUDE_MODEL_PATTERN.test(envMode);
@@ -333,7 +335,7 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
             kind: 'claude_anthropic',
             name: 'anthropic',
             apiKey: openaiKey,
-            baseURL: openaiBaseURL || undefined,
+            baseURL: repairBaseUrl(openaiBaseURL || undefined),
         };
     }
     if (isClaude && vertexKey && !viaProxy) {
@@ -374,7 +376,9 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
             kind: 'openai_compat',
             name: 'openai_compatible',
             apiKey: openaiKey,
-            baseURL: openaiBaseURL || 'https://api.openai.com/v1',
+            baseURL: repairBaseUrl(
+                openaiBaseURL || 'https://api.openai.com/v1',
+            )!,
         };
     }
     return null;
@@ -406,16 +410,15 @@ const ENV_KIND_TO_PROVIDER: Record<
  * model would — the "uniform env + BYOK" the one funnel promises. `undefined` on
  * cloud (`API_LLM_PROVIDER_MODEL` unset/auto) → the caller's own default decides.
  */
-export function envManagedReasoningDescriptor():
+export function envManagedReasoningDescriptor(env = resolveEnvProvider()):
     | {
           provider: BYOKProvider;
           model: string;
           reasoningEffort?: ReasoningEffort;
       }
     | undefined {
-    const env = resolveEnvProvider();
     if (!env || env.kind === 'invalid') return undefined;
-    const model = process.env.API_LLM_PROVIDER_MODEL;
+    const model = env.model ?? process.env.API_LLM_PROVIDER_MODEL;
     if (!model) return undefined;
     return {
         provider: ENV_KIND_TO_PROVIDER[env.kind],
@@ -488,7 +491,8 @@ export function resolveManagedSlot(
     // Fireworks/managed default below.
     const env = resolveEnvProvider();
     if (env) {
-        const envMode = process.env.API_LLM_PROVIDER_MODEL as string;
+        const envMode =
+            env.model ?? (process.env.API_LLM_PROVIDER_MODEL as string);
         switch (env.kind) {
             case 'gemini_studio':
                 return managedSlot(
@@ -511,9 +515,7 @@ export function resolveManagedSlot(
                     BYOKProvider.ANTHROPIC,
                     env.apiKey,
                     envMode,
-                    {
-                        baseURL: repairBaseUrl(env.baseURL),
-                    },
+                    { baseURL: env.baseURL },
                 );
             case 'anthropic_compat':
                 // The anthropic module's compatible build: /v1 normalization,
@@ -522,7 +524,7 @@ export function resolveManagedSlot(
                     BYOKProvider.ANTHROPIC_COMPATIBLE,
                     env.apiKey,
                     envMode,
-                    { baseURL: repairBaseUrl(env.baseURL) },
+                    { baseURL: env.baseURL },
                 );
             case 'openai_native':
                 // The openai module's native build: the SDK's own
@@ -532,9 +534,7 @@ export function resolveManagedSlot(
                     BYOKProvider.OPENAI,
                     env.apiKey,
                     envMode,
-                    env.baseURL
-                        ? { baseURL: repairBaseUrl(env.baseURL) }
-                        : undefined,
+                    env.baseURL ? { baseURL: env.baseURL } : undefined,
                 );
             case 'openai_compat': {
                 // INLINE EXCEPTION (self-hosted OpenAI-compatible): name
@@ -546,7 +546,7 @@ export function resolveManagedSlot(
                 // pointed at OpenCode Go (issue #1880) needs the same
                 // x-opencode-session header attached here — the provider
                 // module's build() never runs on this inline path.
-                const baseURL = repairBaseUrl(env.baseURL);
+                const baseURL = env.baseURL;
                 return {
                     kind: 'inline',
                     model: createOpenAICompatible({
