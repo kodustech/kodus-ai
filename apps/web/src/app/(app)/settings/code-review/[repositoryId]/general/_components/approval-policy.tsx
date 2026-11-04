@@ -180,6 +180,13 @@ export function ApprovalPolicySettings() {
                                         checked={field.value ?? false}
                                         disabled={field.disabled}
                                         onCheckedChange={(checked) => {
+                                            if (checked) {
+                                                form.setValue(
+                                                    "pullRequestApprovalActive.value",
+                                                    true,
+                                                    { shouldDirty: true },
+                                                );
+                                            }
                                             if (!checked)
                                                 setGuidanceOpen(false);
                                             field.onChange(checked);

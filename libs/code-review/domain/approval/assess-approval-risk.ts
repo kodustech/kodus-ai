@@ -9,7 +9,8 @@ import type { ApprovalRiskAssessment } from './approval-decision';
 
 export const approvalRiskOutputSchema = z.object({
     level: z.enum(['low', 'medium', 'high']),
-    reason: z.string().min(8).max(500),
+    // Length alone must not discard a valid risk judgment.
+    reason: z.string().min(8),
 });
 
 const MAX_DIFF_CHARS = 50_000;

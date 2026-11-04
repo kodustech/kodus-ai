@@ -24,6 +24,39 @@ const input = {
 
 afterEach(() => jest.clearAllMocks());
 
+it.each([507, 510, 563, 691])(
+    'preserves a valid %i-character reason through the production schema',
+    async (length) => {
+        const reason = 'A consequential change requires review. '.padEnd(
+            length,
+            'x',
+        );
+        (LLM.run as jest.Mock).mockImplementationOnce(async ({ schema }) =>
+            schema.parse({ level: 'high', reason }),
+        );
+        expect(await assessApprovalRisk(input)).toMatchObject({
+            level: 'high',
+            reason,
+            reviewedHeadSha: input.headSha,
+        });
+        expect(LLM.run).toHaveBeenCalledTimes(1);
+    },
+);
+
+it.each([
+    { level: 'safe', reason: 'A sufficiently long explanation.' },
+    { level: 'low' },
+    { level: 'low', reason: '        ' },
+])('keeps invalid output unknown: %j', async (output) => {
+    (LLM.run as jest.Mock).mockImplementationOnce(async ({ schema }) =>
+        schema.parse(output),
+    );
+    expect(await assessApprovalRisk(input)).toMatchObject({
+        level: 'unknown',
+        reviewedHeadSha: input.headSha,
+    });
+});
+
 it('uses the production model slot and includes area evidence and coverage', async () => {
     (LLM.run as jest.Mock).mockResolvedValue({
         level: 'medium',
