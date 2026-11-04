@@ -114,6 +114,10 @@ export function classifyLLMError(
     err: unknown,
     provider?: string,
 ): ClassifiedErrorInfo {
+    // Classified where it was thrown (e.g. CONFIG_INVALID): that knows more
+    // than any status or wording match below.
+    const attached = getClassification(err);
+    if (attached) return attached;
     // `err.message` is typed string but at runtime can be null (malformed
     // Error-like objects) — guard so the `rawMessage.toLowerCase()` fallback
     // never throws "Cannot read properties of null (reading 'toLowerCase')".
@@ -247,7 +251,8 @@ export function isTerminalCategory(category: LlmErrorCategory): boolean {
         category === LlmErrorCategory.AUTH_INVALID ||
         category === LlmErrorCategory.QUOTA_EXCEEDED ||
         category === LlmErrorCategory.MODEL_NOT_FOUND ||
-        category === LlmErrorCategory.MODEL_ACCESS_DENIED
+        category === LlmErrorCategory.MODEL_ACCESS_DENIED ||
+        category === LlmErrorCategory.CONFIG_INVALID
     );
 }
 

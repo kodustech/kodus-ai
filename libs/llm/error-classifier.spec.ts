@@ -732,6 +732,19 @@ describe('attachClassification / getClassification', () => {
         expect(retrieved?.provider).toBe('anthropic');
     });
 
+    it('classifyLLMError keeps the classification attached where the error was thrown', () => {
+        const err = attachClassification(new Error('bad env'), {
+            category: LlmErrorCategory.CONFIG_INVALID,
+            rawMessage: 'bad env',
+            friendlyMessage: 'bad env',
+        });
+        expect(classifyLLMError(err).category).toBe(
+            LlmErrorCategory.CONFIG_INVALID,
+        );
+        expect(llmErrorLogLevel(err)).toBe('warn');
+        expect(shouldFailoverToNextModel(err)).toBe(false);
+    });
+
     it('returns undefined when no classification is attached', () => {
         expect(getClassification(new Error('untagged'))).toBeUndefined();
         expect(getClassification(null)).toBeUndefined();
