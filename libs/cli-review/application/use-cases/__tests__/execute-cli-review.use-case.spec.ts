@@ -84,6 +84,10 @@ function createMocks() {
             ),
     };
 
+    const permissionValidationService = {
+        resolveTaskSlot: jest.fn().mockResolvedValue(undefined),
+    };
+
     const useCase = new ExecuteCliReviewUseCase(
         converter as any,
         pipelineStrategy as any,
@@ -95,6 +99,7 @@ function createMocks() {
         kodyRulesValidationService as any,
         pipelineObserver as any,
         codeBaseConfigService as any,
+        permissionValidationService as any,
     );
 
     return {
@@ -109,6 +114,7 @@ function createMocks() {
         kodyRulesService,
         kodyRulesValidationService,
         pipelineObserver,
+        permissionValidationService,
     };
 }
 
@@ -933,6 +939,145 @@ describe('ExecuteCliReviewUseCase', () => {
             });
 
             expect(captured.reviewDirective).toBeUndefined();
+            mockExecute.mockRestore();
+        });
+
+        it('threads the resolved BYOK slot into the pipeline context when resolveTaskSlot returns one', async () => {
+            const {
+                useCase,
+                parametersService,
+                kodyRulesService,
+                kodyRulesValidationService,
+                permissionValidationService,
+            } = createMocks();
+
+            const byokSlot = {
+                provider: 'anthropic',
+                model: 'claude-sonnet-4-20250514',
+                apiKey: 'encrypted-ciphertext',
+                route: 'codeReview',
+                usedFallback: false,
+            };
+            permissionValidationService.resolveTaskSlot.mockResolvedValue(byokSlot);
+
+            parametersService.findByKey.mockResolvedValue({
+                toObject: () => ({
+                    configValue: {
+                        configs: {
+                            byokModelId: 'model-id-123',
+                            byokModel: 'legacy-name',
+                        },
+                    },
+                }),
+            });
+
+            kodyRulesService.findByOrganizationId.mockResolvedValue(null);
+            kodyRulesValidationService.filterKodyRules.mockReturnValue({
+                standardRules: [],
+                memoryRules: [],
+            });
+
+            let captured: any;
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: any) => {
+                    captured = context;
+                    return {
+                        cliResponse: {
+                            summary: 'ok',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 1,
+                        },
+                    };
+                });
+
+            await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello' },
+            });
+
+            // Both fields are set on the context config
+            expect(captured.codeReviewConfig.byokConfig).toBe(byokSlot);
+            expect(captured.codeReviewConfig.resolvedModelSlot).toBe(byokSlot);
+
+            // byokModelId (the id) wins over byokModel (the legacy name):
+            // overrideContext stamps byId: true so the resolver treats it as
+            // an id, not a model name to send to the provider.
+            expect(permissionValidationService.resolveTaskSlot).toHaveBeenCalledWith(
+                orgAndTeam,
+                expect.anything(), // LLM_TASK.codeReview
+                expect.objectContaining({
+                    ctx: expect.objectContaining({
+                        override: expect.objectContaining({
+                            modelId: 'model-id-123',
+                            byId: true,
+                        }),
+                    }),
+                }),
+            );
+
+            mockExecute.mockRestore();
+        });
+
+        it('leaves byokConfig and resolvedModelSlot undefined when resolveTaskSlot returns nothing', async () => {
+            const {
+                useCase,
+                parametersService,
+                kodyRulesService,
+                kodyRulesValidationService,
+            } = createMocks();
+
+            // Default mock already resolves to undefined — no BYOK slot
+            parametersService.findByKey.mockResolvedValue({
+                toObject: () => ({
+                    configValue: {
+                        configs: {
+                            byokModelId: 'model-id-123',
+                            byokModel: 'legacy-name',
+                        },
+                    },
+                }),
+            });
+
+            kodyRulesService.findByOrganizationId.mockResolvedValue(null);
+            kodyRulesValidationService.filterKodyRules.mockReturnValue({
+                standardRules: [],
+                memoryRules: [],
+            });
+
+            let captured: any;
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: any) => {
+                    captured = context;
+                    return {
+                        cliResponse: {
+                            summary: 'ok',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 1,
+                        },
+                    };
+                });
+
+            await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello' },
+            });
+
+            // No slot resolved → both fields stay undefined (managed default)
+            expect(captured.codeReviewConfig.byokConfig).toBeUndefined();
+            expect(captured.codeReviewConfig.resolvedModelSlot).toBeUndefined();
+
             mockExecute.mockRestore();
         });
     });

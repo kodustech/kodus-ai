@@ -50,6 +50,9 @@ import {
 } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { LLM_TASK } from '@libs/llm/byok-config';
+import { overrideContext } from '@libs/llm/routing-strategy';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 
 interface GitContext {
     remote?: string;
@@ -114,6 +117,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
         private readonly pipelineObserver: CodeReviewPipelineObserver,
         @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
         private readonly codeBaseConfigService: ICodeBaseConfigService,
+        private readonly permissionValidationService: PermissionValidationService,
     ) {}
 
     async execute(params: ExecuteCliReviewInput): Promise<CliReviewResponse> {
@@ -207,6 +211,42 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 ? { ...codeReviewConfig, reviewMode: 'fast' as const }
                 : codeReviewConfig;
 
+            // 4b. Resolve the org's BYOK slot for the codeReview task and thread
+            //     it into the pipeline context. The PR pipeline does this in
+            //     ValidateConfigStage; the CLI pipeline has no such stage, so
+            //     without this `codeReviewConfig.byokConfig` stays undefined and
+            //     every secondary LLM pass (severity classification, suggestion
+            //     dedup, fix verification) silently degrades to the managed
+            //     default. On self-hosted deployments without a managed (e.g.
+            //     Fireworks) key that 401s, the severity classifier defaults
+            //     every finding to "medium" and a configured severity filter
+            //     (e.g. "high") then discards all of them — producing
+            //     "No issues found" on diffs that contain real defects.
+            //     Mirrors ValidateConfigStage: byokModelId (id) wins over the
+            //     legacy byokModel NAME; overrideContext stamps byId so a stale
+            //     id is skipped rather than sent to the provider as a model
+            //     name. Non-UUID org ids (CLI trial) resolve to undefined and
+            //     keep the existing managed-default behavior.
+            const codeReviewByokSlot =
+                (await this.permissionValidationService.resolveTaskSlot(
+                    organizationAndTeamData,
+                    LLM_TASK.codeReview,
+                    {
+                        ctx: overrideContext(
+                            codeReviewConfig.byokModelId,
+                            codeReviewConfig.byokModel,
+                        ),
+                    },
+                )) ?? undefined;
+
+            const effectiveConfigWithByok = codeReviewByokSlot
+                ? {
+                      ...effectiveConfig,
+                      byokConfig: codeReviewByokSlot,
+                      resolvedModelSlot: codeReviewByokSlot,
+                  }
+                : effectiveConfig;
+
             const resolvedPlatform = await this.resolveCliPlatform(
                 organizationAndTeamData,
                 gitContext,
@@ -222,7 +262,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
 
                 // Required by CodeReviewPipelineContext (dummy values for CLI)
                 organizationAndTeamData,
-                codeReviewConfig: effectiveConfig,
+                codeReviewConfig: effectiveConfigWithByok,
                 changedFiles,
                 // CLI equivalent of `@kody review focus on X` — same sanitize +
                 // cap as the PR-comment path. Steers the finder when set.
