@@ -325,7 +325,12 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
 
                 const summaryPR =
                     await this.commentManagerService.generateSummaryPR(
-                        { ...pullRequest, body: currentPR?.body },
+                        {
+                            ...pullRequest,
+                            // Some code hosts answer a failed read with null; the
+                            // webhook's description beats replacing it with none.
+                            body: currentPR ? currentPR.body : pullRequest.body,
+                        },
                         repository,
                         changedFiles,
                         organizationAndTeamData,

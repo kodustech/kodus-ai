@@ -578,6 +578,28 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
             ).toEqual({ number: 7, body: 'current description' });
         });
 
+        it('keeps the webhook description when the code host returns no PR', async () => {
+            const { stage, commentManagerService, codeManagementService } =
+                makeStage();
+            commentManagerService.generateSummaryPR.mockResolvedValue(
+                'summary',
+            );
+            codeManagementService.getPullRequestByNumber.mockResolvedValue(
+                null,
+            );
+
+            await (stage as any).executeStage(
+                frozenContext({
+                    ...summaryFailContext(),
+                    pullRequest: { number: 7, body: 'Closes #993' },
+                } as any),
+            );
+
+            expect(
+                commentManagerService.generateSummaryPR.mock.calls[0][0].body,
+            ).toBe('Closes #993');
+        });
+
         it('reports a refused read as the code host failure and never calls the model', async () => {
             const { stage, commentManagerService, codeManagementService } =
                 makeStage();
